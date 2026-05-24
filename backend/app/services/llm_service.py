@@ -8,7 +8,7 @@ class LLMService:
     def __init__(self):
         self.client = OpenAI(
             api_key=settings.QWEN_API_KEY,
-            base_url=settings.QWEN_API_BASE
+            base_url=settings.QWEN_BASE_URL
         )
     
     async def generate(self, prompt: str, max_tokens: int = 2000, **kwargs) -> str:

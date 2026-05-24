@@ -1,11 +1,28 @@
+# Web Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
+
+# Database
 sqlalchemy==2.0.25
 pymysql==1.1.0
+alembic==1.13.1
+
+# Configuration
 pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# LLM & AI
 openai==1.10.0
+
+# Vector Search
 faiss-cpu==1.7.4
 sentence-transformers==2.3.0
 numpy==1.26.3
+
+# File Processing
 python-multipart==0.0.6
-python-dotenv==1.0.0
+python-docx==1.1.0
+PyPDF2==3.0.1
+
+# Utilities
+python-dateutil==2.8.2

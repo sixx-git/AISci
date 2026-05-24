@@ -10,10 +10,10 @@ settings = get_settings()
 
 class VectorService:
     def __init__(self):
-        self.index_path = settings.FAISS_INDEX_PATH
+        self.index_path = settings.VECTOR_STORE_PATH
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
         
-        self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
         self.dimension = 384
         
         self.index = None
@@ -68,20 +68,29 @@ class VectorService:
         context = "\n\n".join(results)
         return context, list(set(references))
     
-    def _split_text(self, text: str, chunk_size: int = 500) -> List[str]:
+    def _split_text(self, text: str) -> List[str]:
+        chunk_size = settings.CHUNK_SIZE
+        chunk_overlap = settings.CHUNK_OVERLAP
+        
         chunks = []
         words = text.split()
         current_chunk = []
         current_length = 0
         
-        for word in words:
+        for i, word in enumerate(words):
             current_chunk.append(word)
             current_length += len(word) + 1
             
             if current_length >= chunk_size:
                 chunks.append(" ".join(current_chunk))
-                current_chunk = []
-                current_length = 0
+                # 处理重叠
+                if chunk_overlap > 0 and len(current_chunk) > 0:
+                    overlap_words = current_chunk[-chunk_overlap:] if len(current_chunk) > chunk_overlap else current_chunk
+                    current_chunk = overlap_words.copy()
+                    current_length = sum(len(w) + 1 for w in current_chunk)
+                else:
+                    current_chunk = []
+                    current_length = 0
         
         if current_chunk:
             chunks.append(" ".join(current_chunk))
