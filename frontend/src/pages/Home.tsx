@@ -1,0 +1,137 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
+import { projectApi } from '../lib/api';
+import { formatDate } from '../lib/utils';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { StatusBadge } from '../components/StatusBadge';
+import type { Project } from '../types';
+
+export function Home() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const response = await projectApi.list();
+      if (response.code === 200) {
+        setProjects(response.data || []);
+      }
+    } catch (error) {
+      console.error('加载项目失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">项目工作台</h1>
+          <p className="text-gray-400">管理您的 AI 科研项目</p>
+        </div>
+        <Link to="/projects/new">
+          <Button icon={<Plus className="w-4 h-4" />}>
+            创建新项目
+          </Button>
+        </Link>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="text-center">
+          <div className="text-3xl font-bold text-primary-400 mb-2">
+            {projects.length}
+          </div>
+          <div className="text-gray-400">总项目数</div>
+        </Card>
+        <Card className="text-center">
+          <div className="text-3xl font-bold text-green-400 mb-2">
+            {projects.filter(p => p.status === 'completed').length}
+          </div>
+          <div className="text-gray-400">已完成</div>
+        </Card>
+        <Card className="text-center">
+          <div className="text-3xl font-bold text-yellow-400 mb-2">
+            {projects.filter(p => p.status === 'running').length}
+          </div>
+          <div className="text-gray-400">运行中</div>
+        </Card>
+      </div>
+
+      {/* Project List */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-white">我的项目</h2>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <div className="h-4 bg-dark-700 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-dark-700 rounded w-1/2" />
+                <div className="h-3 bg-dark-700 rounded w-1/4 mt-4" />
+              </Card>
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
+          <Card className="text-center py-12">
+            <FlaskConical className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-300 mb-2">还没有项目</h3>
+            <p className="text-gray-500 mb-6">创建您的第一个 AI 科研项目</p>
+            <Link to="/projects/new">
+              <Button icon={<Plus className="w-4 h-4" />}>
+                创建项目
+              </Button>
+            </Link>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((project) => (
+              <Link
+                key={project.id}
+                to={`/projects/${project.id}`}
+                className="block group"
+              >
+                <Card className="h-full hover:border-primary-600/50 transition-all duration-200 group-hover:shadow-xl group-hover:shadow-primary-900/10">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
+                      <FlaskConical className="w-5 h-5 text-white" />
+                    </div>
+                    <StatusBadge
+                      status={(project.status as any) || 'draft'}
+                    />
+                  </div>
+                  <h3 className="font-semibold text-white mb-2 group-hover:text-primary-400 transition-colors">
+                    {project.name}
+                  </h3>
+                  {project.description && (
+                    <p className="text-sm text-gray-400 line-clamp-2 mb-4">
+                      {project.description}
+                    </p>
+                  )}
+                  <div className="flex items-center text-gray-500 text-sm">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    {formatDate(project.created_at)}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-dark-700 flex items-center justify-between">
+                    <span className="text-sm text-primary-400">查看详情</span>
+                    <ArrowRight className="w-4 h-4 text-primary-400 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
