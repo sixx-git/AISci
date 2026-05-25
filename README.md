@@ -734,6 +734,127 @@ curl -X POST http://localhost:8000/api/v1/agents/knowledge-gap \
 
 ---
 
+### HypothesisGenerationAgent - 假设生成智能体
+
+假设生成智能体用于基于研究问题、事实、知识缺口和约束条件生成科学假设。
+
+#### 核心功能
+- 使用归纳推理：从现有事实中总结规律，提出可验证的假设
+- 使用演绎推理：基于现有理论或知识缺口，推导出新的假设
+- 生成 3-5 条科学假设
+- 每条假设包含：hypothesis、rationale、novelty、testability、required_data、possible_method、risk
+- 避免空泛套话，要求假设具体、明确
+- 自动保存生成的假设到数据库
+
+#### 工作流程
+1. 接收研究问题、事实、知识缺口和约束条件
+2. 使用归纳推理和演绎推理生成假设
+3. 验证并标准化结果
+4. 保存到 Hypothesis 表
+5. 返回结构化结果
+
+#### 基本用法
+
+```python
+from app.agents import get_hypothesis_generation_agent
+from app.services.hypothesis_service import get_hypothesis_service
+
+# 获取智能体实例
+agent = get_hypothesis_generation_agent()
+
+# 准备数据
+research_question = "机器学习在医学影像中的应用效果如何？"
+facts = [
+    {"content": "卷积神经网络在医学影像分类中表现优异", "source_paper_title": "深度学习医学影像综述"}
+]
+knowledge_gaps = [
+    {"description": "缺乏 CNN 与 Transformer 的对比研究", "potential_value": "帮助选择更合适的模型"}
+]
+constraints = ["计算资源有限", "需要在 3 个月内完成"]
+
+# 生成假设
+result = agent.generate(
+    research_question=research_question,
+    facts=facts,
+    knowledge_gaps=knowledge_gaps,
+    constraints=constraints,
+    project_id="your-project-id"
+)
+
+# 查看结果
+print(f"生成了 {len(result.hypotheses)} 条假设")
+for idx, hypo in enumerate(result.hypotheses, 1):
+    print(f"\n假设 {idx}: {hypo.hypothesis}")
+    print(f"理由: {hypo.rationale}")
+    print(f"创新点: {hypo.novelty}")
+    print(f"可测试性: {hypo.testability}")
+```
+
+#### API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+| POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
+| POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
+| POST | `/api/v1/agents/hypothesis-generation` | 假设生成 |
+| GET | `/api/v1/agents/hypotheses/{project_id}` | 获取项目假设列表 |
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8000/api/v1/agents/hypothesis-generation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "project-123",
+    "research_question": "机器学习在医学影像中的应用效果如何？",
+    "facts": [
+      {
+        "content": "卷积神经网络在医学影像分类中表现优异",
+        "source_paper_title": "深度学习医学影像综述"
+      }
+    ],
+    "knowledge_gaps": [
+      {
+        "description": "缺乏 CNN 与 Transformer 的对比研究",
+        "potential_value": "帮助选择更合适的模型"
+      }
+    ],
+    "constraints": ["计算资源有限", "需要在 3 个月内完成"]
+  }'
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "message": "假设生成成功，生成 3 条假设",
+  "data": {
+    "hypotheses": [
+      {
+        "hypothesis": "混合 CNN-Transformer 模型在医学影像任务中优于单一模型",
+        "rationale": "基于归纳推理：CNN 提取空间特征，Transformer 处理长距离依赖，两者结合可以互补",
+        "novelty": "首次系统对比三种模型架构在特定医学影像任务上的性能",
+        "testability": "可以通过构建三个模型，在相同数据集上进行训练和测试，对比准确率、召回率等指标",
+        "required_data": "公开医学影像数据集（如 ChestX-ray14），标注数据",
+        "possible_method": "实现三个模型：纯 CNN、纯 Transformer、混合模型，进行对比实验",
+        "risk": "混合模型可能计算复杂度高，训练时间长，可能存在过拟合风险"
+      }
+    ],
+    "summary": "生成了 3 条科学假设，涵盖模型架构、数据增强和迁移学习三个方向"
+  }
+}
+```
+
+#### Prompt 模板
+
+智能体使用的 Prompt 模板主要强调：
+- 使用归纳推理和演绎推理
+- 每条假设包含 7 个必要字段
+- 避免空泛套话
+- 假设必须具体、明确、可检验
+
+---
+
 ## 🖥️ 手动启动 (不使用脚本)
 
 ### 后端启动
@@ -784,6 +905,8 @@ npm run dev
 | POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
 | POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
 | POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
+| POST | `/api/v1/agents/hypothesis-generation` | 假设生成 |
+| GET | `/api/v1/agents/hypotheses/{project_id}` | 获取项目假设列表 |
 
 ---
 
@@ -803,6 +926,7 @@ npm run dev
 - [x] ProblemUnderstandingAgent 智能体
 - [x] LiteratureMiningAgent 智能体
 - [x] KnowledgeGapAgent 智能体
+- [x] HypothesisGenerationAgent 智能体
 
 ### Phase 2: 功能增强
 - [ ] 用户认证系统

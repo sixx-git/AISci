@@ -24,6 +24,12 @@ from app.agents.knowledge_gap_agent import (
     PossibleConnectionItem,
     ResearchOpportunityItem
 )
+from app.agents.hypothesis_generation_agent import (
+    HypothesisGenerationAgent,
+    HypothesisItem,
+    HypothesisGenerationResult,
+    get_hypothesis_generation_agent
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
@@ -43,4 +49,8 @@ __all__ = [
     'ContradictionItem',
     'PossibleConnectionItem',
     'ResearchOpportunityItem',
+    'HypothesisGenerationAgent',
+    'HypothesisItem',
+    'HypothesisGenerationResult',
+    'get_hypothesis_generation_agent',
 ]
