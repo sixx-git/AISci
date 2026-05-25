@@ -14,6 +14,16 @@ from app.agents.literature_mining_agent import (
     EvidenceItem,
     CitationMapItem
 )
+from app.agents.knowledge_gap_agent import (
+    KnowledgeGapAgent,
+    KnowledgeGapRequest,
+    KnowledgeGapResponse,
+    KnownFactSummary,
+    KnowledgeGapItem,
+    ContradictionItem,
+    PossibleConnectionItem,
+    ResearchOpportunityItem
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
@@ -25,4 +35,12 @@ __all__ = [
     'ScienceFact',
     'EvidenceItem',
     'CitationMapItem',
+    'KnowledgeGapAgent',
+    'KnowledgeGapRequest',
+    'KnowledgeGapResponse',
+    'KnownFactSummary',
+    'KnowledgeGapItem',
+    'ContradictionItem',
+    'PossibleConnectionItem',
+    'ResearchOpportunityItem',
 ]

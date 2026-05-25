@@ -587,6 +587,153 @@ curl -X POST http://localhost:8000/api/v1/agents/literature-mining \
 
 ---
 
+### KnowledgeGapAgent - 知识缺口智能体
+
+知识缺口智能体用于从文献事实中识别知识缺口、矛盾和研究机会。
+
+#### 核心功能
+- 分析已知事实，构建知识图谱
+- 识别知识缺口（每个缺口都说明依据和可能价值）
+- 发现文献之间的矛盾和不一致
+- 识别不同事实之间可能的潜在联系
+- 提出有前景的研究机会
+
+#### 工作流程
+1. 接收 LiteratureMiningAgent 输出的 facts 和 uncertain_points
+2. 格式化输入并调用 Qwen
+3. 分析知识缺口、矛盾、可能联系和研究机会
+4. 返回结构化结果
+
+#### 基本用法
+
+```python
+from app.agents import (
+    KnowledgeGapAgent,
+    KnowledgeGapRequest,
+    KnowledgeGapResponse,
+    get_knowledge_gap_agent
+)
+
+# 获取智能体实例
+agent = get_knowledge_gap_agent()
+
+# 分析知识缺口（需要先运行 LiteratureMiningAgent）
+result: KnowledgeGapResponse = agent.analyze(
+    facts=literature_mining_result.facts,
+    uncertain_points=literature_mining_result.uncertain_points
+)
+
+# 查看结果
+print(f"发现 {len(result.knowledge_gaps)} 个知识缺口")
+print(f"发现 {len(result.research_opportunities)} 个研究机会")
+
+for gap in result.knowledge_gaps:
+    print(f"\n知识缺口: {gap.description}")
+    print(f"  依据: {gap.basis}")
+    print(f"  研究价值: {gap.potential_value}")
+
+for opportunity in result.research_opportunities:
+    print(f"\n研究机会: {opportunity.title}")
+    print(f"  描述: {opportunity.description}")
+    print(f"  预期影响: {opportunity.expected_impact}")
+    print(f"  可行性: {opportunity.feasibility}")
+```
+
+#### API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+| POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
+| POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8000/api/v1/agents/knowledge-gap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "facts": [
+      {
+        "fact_id": "fact_001",
+        "content": "卷积神经网络在医学影像分类中表现优异",
+        "source_chunk_id": "chunk_123",
+        "source_paper_title": "深度学习医学影像综述",
+        "source_page": 10
+      },
+      {
+        "fact_id": "fact_002",
+        "content": "Transformer 模型在序列数据处理中有优势",
+        "source_chunk_id": "chunk_456",
+        "source_paper_title": "NLP 技术进展",
+        "source_page": 20
+      }
+    ],
+    "uncertain_points": [
+      "不同模型在医学影像任务中的对比研究不足"
+    ]
+  }'
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "message": "知识缺口分析成功，发现 2 个知识缺口",
+  "data": {
+    "known_facts": [
+      {
+        "fact_id": "fact_001",
+        "content": "卷积神经网络在医学影像分类中表现优异",
+        "source_paper_title": "深度学习医学影像综述"
+      },
+      {
+        "fact_id": "fact_002",
+        "content": "Transformer 模型在序列数据处理中有优势",
+        "source_paper_title": "NLP 技术进展"
+      }
+    ],
+    "knowledge_gaps": [
+      {
+        "gap_id": "gap_001",
+        "description": "缺乏 CNN 与 Transformer 在医学影像任务的直接对比研究",
+        "basis": ["fact_001", "fact_002"],
+        "potential_value": "帮助研究者选择更合适的模型架构，提升任务性能"
+      }
+    ],
+    "contradictions": [],
+    "possible_connections": [
+      {
+        "connection_id": "connect_001",
+        "fact_ids": ["fact_001", "fact_002"],
+        "description": "可以探索将 Transformer 思想应用于医学影像任务",
+        "confidence": 0.7
+      }
+    ],
+    "research_opportunities": [
+      {
+        "opportunity_id": "opp_001",
+        "title": "混合 CNN-Transformer 模型在医学影像中的应用",
+        "description": "结合 CNN 的空间特征提取能力和 Transformer 的长距离依赖建模能力",
+        "related_gap_ids": ["gap_001"],
+        "expected_impact": "显著提升医学影像分析性能",
+        "feasibility": 0.8
+      }
+    ]
+  }
+}
+```
+
+#### Prompt 模板
+
+智能体使用的 Prompt 模板主要强调：
+- 每个知识缺口都必须说明依据（引用相关事实ID）
+- 每个知识缺口都需要说明可能的研究价值
+- 识别文献之间的矛盾和不一致
+- 发现不同事实之间可能的潜在联系
+- 提出有前景的研究机会
+
+---
+
 ## 🖥️ 手动启动 (不使用脚本)
 
 ### 后端启动
@@ -636,6 +783,7 @@ npm run dev
 | GET | `/api/v1/vector-search/index/{project_id}/stats` | 获取索引统计 |
 | POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
 | POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
+| POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
 
 ---
 
@@ -654,6 +802,7 @@ npm run dev
 - [x] 自动化脚本
 - [x] ProblemUnderstandingAgent 智能体
 - [x] LiteratureMiningAgent 智能体
+- [x] KnowledgeGapAgent 智能体
 
 ### Phase 2: 功能增强
 - [ ] 用户认证系统

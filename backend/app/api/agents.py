@@ -15,6 +15,11 @@ from app.agents.literature_mining_agent import (
     LiteratureMiningResponse,
     get_literature_mining_agent
 )
+from app.agents.knowledge_gap_agent import (
+    KnowledgeGapRequest,
+    KnowledgeGapResponse,
+    get_knowledge_gap_agent
+)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -67,6 +72,32 @@ async def literature_mining(
         return success(
             result,
             message=f"文献挖掘成功，提取 {len(result.facts)} 个科学事实"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/knowledge-gap", response_model=ApiResponse[KnowledgeGapResponse])
+async def knowledge_gap(
+    request: KnowledgeGapRequest
+):
+    """
+    知识缺口智能体
+    
+    输入文献挖掘智能体输出的 facts 和 uncertain_points，分析当前领域中的矛盾、空白、未验证关系和潜在研究机会。
+    每个 gap 都说明依据和可能价值。
+    """
+    try:
+        agent = get_knowledge_gap_agent()
+        
+        result = agent.analyze(
+            facts=request.facts,
+            uncertain_points=request.uncertain_points
+        )
+        
+        return success(
+            result,
+            message=f"知识缺口分析成功，发现 {len(result.knowledge_gaps)} 个知识缺口"
         )
     except Exception as e:
         return error(str(e))
