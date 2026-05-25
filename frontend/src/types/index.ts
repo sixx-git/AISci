@@ -64,3 +64,45 @@ export interface ReportGenerationRequest {
   experiment_design: any;
   small_validation?: any;
 }
+
+// ============ 结果展示相关类型 ============
+
+export interface Hypothesis {
+  id: string;
+  title: string;
+  description: string;
+  score: number;
+  scores: {
+    novelty: number;
+    feasibility: number;
+    scientific_value: number;
+    clarity: number;
+    testability: number;
+  };
+}
+
+export interface LiteratureEvidence {
+  id: string;
+  title: string;
+  author: string;
+  year: string;
+  content: string;
+  source_type: 'citation' | 'quote' | 'concept';
+  relevance: number;
+}
+
+export interface ExperimentDesign {
+  id: string;
+  step: number;
+  name: string;
+  description: string;
+  expected_result: string;
+  success_criteria: string;
+}
+
+export interface ResearchResult {
+  hypotheses: Hypothesis[];
+  literature_evidence: LiteratureEvidence[];
+  experiment_design: ExperimentDesign[];
+  final_report?: string;
+}

@@ -22,6 +22,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PipelineVisualization, PipelineStage as VisualPipelineStage } from '@/components/PipelineVisualization';
+import { ResearchResults } from '@/components/ResearchResults';
 import type { Project, Document } from '@/types';
 
 // 完整的 Pipeline 阶段定义（按用户要求的顺序）
@@ -45,6 +46,7 @@ export function ProjectWorkspace() {
   const [researchQuestion, setResearchQuestion] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [pipelineStages, setPipelineStages] = useState<VisualPipelineStage[]>(VISUAL_PIPELINE_STAGES);
+  const [pipelineCompleted, setPipelineCompleted] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -106,6 +108,7 @@ export function ProjectWorkspace() {
     setIsRunning(true);
     setResults(null);
     setReportUrl(null);
+    setPipelineCompleted(false);
 
     // 重置所有阶段为 pending 状态
     setPipelineStages(VISUAL_PIPELINE_STAGES.map(stage => ({
@@ -237,14 +240,8 @@ export function ProjectWorkspace() {
         ));
       }
 
-      // 生成完整结果对象
-      const finalResults = {
-        pipeline: 'completed',
-        stages: pipelineStages,
-        summary: '研究流程已完成，获得了有价值的研究发现。'
-      };
-
-      setResults(finalResults);
+      // 标记完成
+      setPipelineCompleted(true);
       setReportUrl('http://localhost:3000/api/v1/reports/download/mock-report/pdf');
     } catch (error) {
       console.error('Pipeline 运行失败:', error);
@@ -289,7 +286,7 @@ export function ProjectWorkspace() {
           <Card title="文献上传" subtitle="上传相关文献 PDF">
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-dark-600 rounded-lg p-8 text-center cursor-pointer hover:border-primary-600 transition-all"
+              className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center cursor-pointer hover:border-blue-600 transition-all"
             >
               <input
                 ref={fileInputRef}
@@ -312,9 +309,9 @@ export function ProjectWorkspace() {
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-3 p-3 bg-dark-900/50 rounded-lg"
+                    className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg"
                   >
-                    <File className="w-4 h-4 text-primary-400" />
+                    <File className="w-4 h-4 text-blue-400" />
                     <span className="text-sm text-gray-300 flex-1 truncate">
                       {doc.filename}
                     </span>
@@ -334,7 +331,7 @@ export function ProjectWorkspace() {
               onChange={(e) => setResearchQuestion(e.target.value)}
               placeholder="例如：如何利用深度学习提升药物发现效率？"
               rows={6}
-              className="input-field resize-none mb-4"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none mb-4"
               disabled={isRunning}
             />
 
@@ -342,7 +339,7 @@ export function ProjectWorkspace() {
               onClick={runPipeline}
               isLoading={isRunning}
               disabled={!researchQuestion.trim()}
-              icon={<Play className="w-4 h-4" />}
+              leftIcon={<Play className="w-4 h-4" />}
               className="w-full"
             >
               {isRunning ? '研究中...' : '运行研究 Pipeline'}
@@ -356,54 +353,20 @@ export function ProjectWorkspace() {
           <Card title="研究 Pipeline" subtitle="AI 研究流程可视化">
             <PipelineVisualization 
               stages={pipelineStages}
-              onStageClick={(stage) => console.log('Stage clicked:', stage)}
             />
           </Card>
 
-          {/* Results Display */}
-          <Card title="研究结果" subtitle="AI 生成的研究内容">
-            {results ? (
-              <div className="space-y-6">
-                {/* Download Report */}
-                {reportUrl && (
-                  <div className="p-4 bg-primary-600/10 border border-primary-600/30 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-6 h-6 text-primary-400" />
-                        <div>
-                          <p className="text-white font-medium">研究报告已生成</p>
-                          <p className="text-gray-400 text-sm">PDF 格式下载</p>
-                        </div>
-                      </div>
-                      <a
-                        href={reportUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button icon={<Download className="w-4 h-4" />}>
-                          下载报告
-                        </Button>
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                {/* Results Summary */}
-                <div className="bg-dark-900/50 p-4 rounded-lg border border-dark-700">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Sparkles className="w-5 h-5 text-primary-400" />
-                    <h4 className="font-medium text-gray-200">研究总结</h4>
-                  </div>
-                  <p className="text-gray-400 text-sm">{results.summary}</p>
-                </div>
-              </div>
-            ) : (
+          {/* Results Display - 集成新的 ResearchResults 组件 */}
+          {pipelineCompleted ? (
+            <ResearchResults />
+          ) : (
+            <Card title="研究结果" subtitle="AI 生成的研究内容">
               <div className="text-center py-12">
                 <Sparkles className="w-12 h-12 text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-400">输入研究问题并运行 Pipeline 开始研究</p>
               </div>
-            )}
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </div>
