@@ -7,54 +7,9 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.services.qwen_client import qwen_structured_chat
+from app.services.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
-
-
-HYPOTHESIS_GENERATION_PROMPT_TEMPLATE = """
-你是一位资深的科研专家，擅长基于现有文献和知识缺口生成科学假设。
-
-## 任务要求
-基于提供的研究问题、事实、知识缺口和约束条件，生成 3-5 条科学假设。
-
-## 重要原则
-1. 使用归纳推理：从现有事实中总结规律，提出可验证的假设
-2. 使用演绎推理：基于现有理论或知识缺口，推导出新的假设
-3. 避免空泛套话：每条假设必须具体、明确，有针对性
-4. 必须提供充分的理由依据
-5. 明确说明创新点、可测试性、所需数据、可能的方法和风险
-
-## 输入信息
-
-研究问题：
-{research_question}
-
-已知事实：
-{formatted_facts}
-
-知识缺口：
-{formatted_gaps}
-
-约束条件：
-{formatted_constraints}
-
-## 输出格式要求
-请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
-{{
-  "hypotheses": [
-    {{
-      "hypothesis": "清晰、具体、可检验的假设陈述",
-      "rationale": "基于归纳/演绎推理的详细理由，引用相关事实或知识缺口",
-      "novelty": "明确说明创新性，与现有研究的区别",
-      "testability": "详细说明如何验证，包括实验设计或分析方法",
-      "required_data": "具体列出所需的数据类型、来源和数量",
-      "possible_method": "可能的研究方法和技术路线",
-      "risk": "可能的风险、挑战和局限性"
-    }}
-  ],
-  "summary": "对生成假设的简要总结和建议"
-}}
-"""
 
 
 class HypothesisItem(BaseModel):
@@ -113,11 +68,15 @@ class HypothesisGenerationAgent:
             formatted_constraints = self._format_constraints(constraints)
             
             # 构建提示
-            prompt = HYPOTHESIS_GENERATION_PROMPT_TEMPLATE.format(
-                research_question=research_question,
-                formatted_facts=formatted_facts,
-                formatted_gaps=formatted_gaps,
-                formatted_constraints=formatted_constraints
+            prompt_loader = get_prompt_loader()
+            prompt = prompt_loader.render_template(
+                "hypothesis_generation",
+                {
+                    "research_question": research_question,
+                    "formatted_facts": formatted_facts,
+                    "formatted_gaps": formatted_gaps,
+                    "formatted_constraints": formatted_constraints
+                }
             )
             
             # 定义 schema 示例

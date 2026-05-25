@@ -11,6 +11,7 @@ from app.services.vector_store import (
     SearchResult
 )
 from app.services.qwen_client import qwen_structured_chat
+from app.services.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
 
@@ -53,57 +54,6 @@ class LiteratureMiningResponse(BaseModel):
     source_papers: List[str] = Field(..., description="来源论文标题列表")
     citation_map: List[CitationMapItem] = Field(..., description="引用映射")
     uncertain_points: List[str] = Field(..., description="不确定的点")
-
-
-# Prompt 模板
-LITERATURE_MINING_PROMPT_TEMPLATE = """你是一位专业的文献分析专家，擅长从学术文献中提取关键科学事实。
-
-## 任务要求
-基于提供的文献片段，提取与研究问题相关的关键科学事实。
-
-## 重要原则
-1. 每条事实必须绑定来源信息：chunk_id、论文标题、页码
-2. 禁止编造无来源的事实
-3. 仅基于提供的文献片段进行分析
-4. 标注不确定或有争议的观点
-5. 保持事实的客观性，避免主观推断
-
-## 输入信息
-研究问题：{research_question}
-
-文献片段：
-{literature_chunks}
-
-## 输出格式要求
-请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
-{{
-  "facts": [
-    {{
-      "fact_id": "fact_001",
-      "content": "事实内容",
-      "source_chunk_id": "chunk_id",
-      "source_paper_title": "论文标题",
-      "source_page": 页码
-    }}
-  ],
-  "evidence": [
-    {{
-      "evidence_id": "ev_001",
-      "fact_id": "fact_001",
-      "text": "证据原文",
-      "source_chunk_id": "chunk_id"
-    }}
-  ],
-  "source_papers": ["论文标题1", "论文标题2"],
-  "citation_map": [
-    {{
-      "paper_title": "论文标题",
-      "fact_ids": ["fact_001"],
-      "chunk_ids": ["chunk_id"]
-    }}
-  ],
-  "uncertain_points": ["不确定的点1", "不确定的点2"]
-}}"""
 
 
 class LiteratureMiningAgent:
@@ -193,20 +143,25 @@ Chunk ID: {result.chunk_id}
     ) -> dict:
         """
         调用 Qwen 提取科学事实
-        
+
         Args:
             research_question: 研究问题
             formatted_chunks: 格式化的文献片段
-            
+
         Returns:
             LLM 返回的字典
         """
-        # 构建 Prompt
-        prompt = LITERATURE_MINING_PROMPT_TEMPLATE.format(
-            research_question=research_question,
-            literature_chunks=formatted_chunks
-        )
+        prompt_loader = get_prompt_loader()
         
+        # 构建 Prompt
+        prompt = prompt_loader.render_template(
+            "literature_mining",
+            {
+                "research_question": research_question,
+                "literature_chunks": formatted_chunks
+            }
+        )
+
         # 定义 schema 示例
         schema_example = {
             "facts": [
@@ -236,7 +191,7 @@ Chunk ID: {result.chunk_id}
             ],
             "uncertain_points": ["不确定的点1"]
         }
-        
+
         # 调用 Qwen
         return qwen_structured_chat(
             prompt=prompt,

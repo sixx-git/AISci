@@ -11,58 +11,11 @@ from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
+from app.services.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
-
-SMALL_VALIDATION_PROMPT_TEMPLATE = """你是一位专业的数据科学家，擅长快速验证科学假设。请根据提供的实验设计，生成一个轻量级、可运行的小样验证方案。
-
-## 输入信息
-假设内容：{hypothesis}
-研究方法：{methods}
-数据集说明：{datasets}
-评估指标：{metrics}
-是否有 CSV 数据：{has_csv_data}
-
-## 任务要求
-根据上述信息，生成一个小样验证方案，包括：
-
-1. **分析脚本**：完整的、可运行的 Python 脚本，使用 pandas、numpy、matplotlib、seaborn 等库
-   - 如果有真实 CSV 数据：读取并分析 CSV 数据
-   - 如果没有真实数据：生成模拟数据并分析
-
-2. **模拟数据（如果需要）**：
-   - 生成合适的模拟数据（JSON 格式）
-   - 说明模拟假设（为什么这样生成数据）
-
-3. **简单图表**：
-   - 生成 2-3 个简单图表（数据格式为字典列表，每个包含图表类型、标题、数据）
-   - 例如：柱状图、折线图、散点图等
-
-4. **统计结果**：
-   - 关键统计指标（均值、标准差、p 值等）
-   - JSON 格式
-
-## 输出格式要求
-请严格按照以下 JSON 格式输出：
-
-{{
-  "has_real_data": 0,
-  "analysis_script": "# 完整的 Python 分析脚本...\\nimport pandas as pd\\nimport numpy as np\\n...",
-  "simulated_data": "[{{\"col1\": 1, \"col2\": 2}}, ...]",
-  "simulation_assumptions": "详细的模拟假设说明...",
-  "charts": "[{{\"type\": \"bar\", \"title\": \"示例图表\", \"data\": [...}}]",
-  "statistics": "{{\"mean\": 0.5, \"std\": 0.1, ...}}",
-  "run_log": "[{{\"timestamp\": \"2024-01-01 10:00:00\", \"level\": \"INFO\", \"message\": \"开始验证...\"}}]"
-}}
-
-## 注意事项
-- 分析脚本必须是完整可运行的
-- 如果没有真实数据，必须提供合理的模拟数据和假设
-- 图表和统计结果要简单明了，聚焦于验证假设
-- 代码风格要专业，包含注释
-"""
 
 
 class SmallValidationAgent:
@@ -103,12 +56,16 @@ class SmallValidationAgent:
             has_csv_data = 1 if csv_data_path and os.path.exists(csv_data_path) else 0
             
             # 构建提示
-            prompt = SMALL_VALIDATION_PROMPT_TEMPLATE.format(
-                hypothesis=hypothesis,
-                methods=methods or "未提供具体方法",
-                datasets=datasets or "未提供数据集说明",
-                metrics=metrics or "未提供评估指标",
-                has_csv_data="是" if has_csv_data else "否"
+            prompt_loader = get_prompt_loader()
+            prompt = prompt_loader.render_template(
+                "small_validation",
+                {
+                    "hypothesis": hypothesis,
+                    "methods": methods or "未提供具体方法",
+                    "datasets": datasets or "未提供数据集说明",
+                    "metrics": metrics or "未提供评估指标",
+                    "has_csv_data": "是" if has_csv_data else "否"
+                }
             )
             
             # 定义 schema 示例

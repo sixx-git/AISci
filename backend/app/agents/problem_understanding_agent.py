@@ -10,6 +10,7 @@ from app.services.qwen_client import (
     get_qwen_client,
     qwen_structured_chat
 )
+from app.services.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
 
@@ -22,46 +23,12 @@ class ProblemUnderstandingRequest(BaseModel):
 
 class ProblemUnderstandingResponse(BaseModel):
     """问题理解响应"""
-    problem_statement: str = Field(..., description="明确的研究问题陈述")
+    problem_statement: str = Field(..., description="清晰明确的研究问题陈述")
     research_domain: str = Field(..., description="研究领域")
     keywords: List[str] = Field(..., description="关键词列表")
     scope_boundary: str = Field(..., description="研究范围和边界定义")
     constraints: List[str] = Field(..., description="约束条件")
     expected_output: List[str] = Field(..., description="期望的研究输出")
-
-
-# Prompt 模板
-PROBLEM_UNDERSTANDING_PROMPT_TEMPLATE = """你是一位专业的研究顾问，擅长理解和梳理研究问题。
-
-## 任务要求
-请分析用户的研究问题，输出结构化的 JSON 格式，包含以下字段：
-- problem_statement: 明确的研究问题陈述，避免泛化
-- research_domain: 研究领域
-- keywords: 关键词列表
-- scope_boundary: 研究范围和边界定义
-- constraints: 约束条件
-- expected_output: 期望的研究输出
-
-## 重要原则
-1. 明确研究问题：将模糊的问题转化为具体、可研究的问题陈述
-2. 边界定义：清晰说明研究的范围、不研究的内容、适用场景
-3. 避免泛化：避免过于宽泛的描述，要具体、可操作
-4. 紧扣主题：所有分析都要围绕用户的研究问题展开
-
-## 用户输入
-研究问题：{research_question}
-领域描述：{domain_description}
-
-## 输出格式要求
-请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
-{{
-  "problem_statement": "string",
-  "research_domain": "string",
-  "keywords": ["keyword1", "keyword2"],
-  "scope_boundary": "string",
-  "constraints": ["constraint1", "constraint2"],
-  "expected_output": ["output1", "output2"]
-}}"""
 
 
 class ProblemUnderstandingAgent:
@@ -123,19 +90,23 @@ class ProblemUnderstandingAgent:
     ) -> str:
         """
         构建 Prompt
-        
+
         Args:
             research_question: 研究问题
             domain_description: 领域描述
-            
+
         Returns:
             完整的 Prompt 字符串
         """
         domain_str = domain_description if domain_description else "未指定"
+        prompt_loader = get_prompt_loader()
         
-        return PROBLEM_UNDERSTANDING_PROMPT_TEMPLATE.format(
-            research_question=research_question,
-            domain_description=domain_str
+        return prompt_loader.render_template(
+            "problem_understanding",
+            {
+                "research_question": research_question,
+                "domain_description": domain_str
+            }
         )
     
     def _validate_and_normalize(
