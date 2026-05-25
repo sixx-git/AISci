@@ -2,7 +2,6 @@
 数据库配置
 """
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import get_settings
 
@@ -11,7 +10,9 @@ settings = get_settings()
 # 延迟初始化
 engine = None
 SessionLocal = None
-Base = declarative_base()
+
+# 导入 Base 模型
+from app.models.core import Base
 
 
 def init_db():

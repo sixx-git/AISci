@@ -1,7 +1,42 @@
 """
 数据模型导出
 """
-from app.models.research import ResearchProject
-from app.models.chat import ChatSession, ChatMessage
-from app.models.documents import Document as OldDocument
-from app.models.project import Project, Document
+from app.models.core import Base
+from app.models.project import (
+    Project,
+    Document,
+    Chunk,
+    Hypothesis,
+    ExperimentDesign,
+    Report,
+    RunLog,
+    ProjectStatus,
+    DocumentType,
+    DocumentStatus,
+    ChunkStatus,
+    HypothesisStatus,
+    ExperimentDesignStatus,
+    ReportStatus,
+    LogLevel,
+    LogCategory,
+)
+
+__all__ = [
+    'Base',
+    'Project',
+    'Document',
+    'Chunk',
+    'Hypothesis',
+    'ExperimentDesign',
+    'Report',
+    'RunLog',
+    'ProjectStatus',
+    'DocumentType',
+    'DocumentStatus',
+    'ChunkStatus',
+    'HypothesisStatus',
+    'ExperimentDesignStatus',
+    'ReportStatus',
+    'LogLevel',
+    'LogCategory',
+]
