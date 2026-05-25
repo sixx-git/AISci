@@ -384,6 +384,95 @@ store = VectorStore(embedding=CustomEmbedding())
 
 ---
 
+## 🤖 智能体 (Agents) 使用说明
+
+### ProblemUnderstandingAgent - 问题理解智能体
+
+问题理解智能体用于分析用户的研究问题，输出结构化的分析结果。
+
+#### 核心功能
+- 明确研究问题陈述
+- 定义研究领域
+- 提取关键词
+- 界定研究范围和边界
+- 识别约束条件
+- 明确期望输出
+
+#### 设计原则
+Prompt 强调：
+1. **明确研究问题**：将模糊问题转化为具体、可研究的陈述
+2. **边界定义**：清晰说明研究范围、不研究内容、适用场景
+3. **避免泛化**：避免宽泛描述，要具体、可操作
+
+#### 基本用法
+
+```python
+from app.agents import (
+    ProblemUnderstandingAgent,
+    ProblemUnderstandingRequest,
+    ProblemUnderstandingResponse,
+    get_problem_understanding_agent
+)
+
+# 获取智能体实例
+agent = get_problem_understanding_agent()
+
+# 分析研究问题
+result: ProblemUnderstandingResponse = agent.analyze(
+    research_question="如何利用机器学习提高医学影像诊断的准确率？",
+    domain_description="医学影像、人工智能、深度学习"
+)
+
+# 查看结果
+print("问题陈述:", result.problem_statement)
+print("研究领域:", result.research_domain)
+print("关键词:", result.keywords)
+print("研究边界:", result.scope_boundary)
+print("约束条件:", result.constraints)
+print("期望输出:", result.expected_output)
+```
+
+#### API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8000/api/v1/agents/problem-understanding \
+  -H "Content-Type: application/json" \
+  -d '{
+    "research_question": "如何利用机器学习提高医学影像诊断的准确率？",
+    "domain_description": "医学影像、人工智能、深度学习"
+  }'
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "message": "问题分析成功",
+  "data": {
+    "problem_statement": "如何利用机器学习提高医学影像诊断的准确率，特别是在肿瘤检测方面的应用研究",
+    "research_domain": "医学人工智能",
+    "keywords": ["机器学习", "医学影像", "肿瘤检测", "诊断准确率"],
+    "scope_boundary": "本研究聚焦于利用机器学习算法提高胸部CT影像中肺癌结节检测的准确率，不包括其他疾病或影像模态的研究",
+    "constraints": ["需要有标注的医学影像数据", "算法性能需要达到临床可用水平"],
+    "expected_output": ["改进的检测算法", "性能评估报告", "开源代码"]
+  }
+}
+```
+
+#### Prompt 模板
+
+智能体使用的 Prompt 模板已包含在代码中，主要强调：
+- 明确研究问题陈述
+- 清晰的研究边界定义
+- 避免泛化描述
+
+---
+
 ## 🖥️ 手动启动 (不使用脚本)
 
 ### 后端启动
@@ -431,6 +520,7 @@ npm run dev
 | POST | `/api/v1/vector-search/search/{project_id}` | 向量搜索 |
 | POST | `/api/v1/vector-search/index/{project_id}/add-chunks` | 添加 Chunks 到索引 |
 | GET | `/api/v1/vector-search/index/{project_id}/stats` | 获取索引统计 |
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
 
 ---
 
@@ -447,6 +537,7 @@ npm run dev
 - [x] 学术对话
 - [x] 文献上传
 - [x] 自动化脚本
+- [x] ProblemUnderstandingAgent 智能体
 
 ### Phase 2: 功能增强
 - [ ] 用户认证系统
@@ -454,6 +545,7 @@ npm run dev
 - [ ] 研究报告导出 (PDF/Word)
 - [ ] 文献元数据提取
 - [ ] 多轮对话优化
+- [ ] 更多智能体 (文献综述、实验设计等)
 
 ### Phase 3: 高级特性
 - [ ] 文献引用网络分析
