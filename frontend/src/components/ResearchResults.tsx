@@ -212,6 +212,7 @@ ${exp.description}
           {results.hypotheses.map((hyp, idx) => (
             <HypothesisCard
               key={hyp.id}
+              variant="compact"
               hypothesis={hyp}
               index={idx}
               isSelected={selectedHypothesisId === hyp.id}

@@ -1,19 +1,9 @@
-import { GitBranch } from 'lucide-react';
-import { Card } from '@/components/Card';
+import { WorkflowPage } from '@/components/WorkflowPage';
 
 export function Workflow() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">工作流</h1>
-        <p className="text-gray-400">管理和配置 AI 研究 Pipeline 工作流</p>
-      </div>
-
-      <Card className="text-center py-16">
-        <GitBranch className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-300 mb-2">工作流管理</h3>
-        <p className="text-gray-500">工作流编排功能即将上线</p>
-      </Card>
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <WorkflowPage />
     </div>
   );
 }
