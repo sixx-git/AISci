@@ -473,6 +473,120 @@ curl -X POST http://localhost:8000/api/v1/agents/problem-understanding \
 
 ---
 
+### LiteratureMiningAgent - 文献挖掘智能体
+
+文献挖掘智能体用于从项目文献中提取关键科学事实。
+
+#### 核心功能
+- 调用 FAISS 检索相关文献片段
+- 调用 Qwen 提取关键科学事实
+- 每条事实绑定来源信息（chunk_id、论文标题、页码）
+- 禁止无来源事实
+- 生成证据列表和引用映射
+- 标注不确定的点
+
+#### 工作流程
+1. 接收 project_id 和研究问题
+2. 调用 FAISS 检索相关文献片段（默认 top_k=10）
+3. 将文献片段格式化后发送给 Qwen
+4. 提取关键科学事实、证据、来源论文、引用映射、不确定点
+5. 返回结构化结果
+
+#### 基本用法
+
+```python
+from app.agents import (
+    LiteratureMiningAgent,
+    LiteratureMiningRequest,
+    LiteratureMiningResponse,
+    get_literature_mining_agent
+)
+
+# 获取智能体实例
+agent = get_literature_mining_agent()
+
+# 挖掘文献
+result: LiteratureMiningResponse = agent.mine(
+    project_id="your-project-id",
+    research_question="机器学习在医学影像中的应用效果如何？",
+    top_k=10
+)
+
+# 查看结果
+print(f"提取了 {len(result.facts)} 个科学事实")
+print(f"来源论文: {result.source_papers}")
+
+for fact in result.facts:
+    print(f"\n事实: {fact.content}")
+    print(f"  来源: {fact.source_paper_title} (页 {fact.source_page})")
+    print(f"  Chunk ID: {fact.source_chunk_id}")
+```
+
+#### API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+| POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8000/api/v1/agents/literature-mining \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "project-123",
+    "research_question": "机器学习在医学影像中的应用效果如何？",
+    "top_k": 10
+  }'
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "message": "文献挖掘成功，提取 3 个科学事实",
+  "data": {
+    "facts": [
+      {
+        "fact_id": "fact_001",
+        "content": "卷积神经网络在医学影像分类任务中表现优异，准确率可达 95% 以上",
+        "source_chunk_id": "chunk_abc123",
+        "source_paper_title": "医学影像深度学习综述",
+        "source_page": 15
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "ev_001",
+        "fact_id": "fact_001",
+        "text": "我们的实验结果表明，CNN 模型在胸部 X 光片分类中达到了 96.2% 的准确率...",
+        "source_chunk_id": "chunk_abc123"
+      }
+    ],
+    "source_papers": ["医学影像深度学习综述", "机器学习在医疗诊断中的应用"],
+    "citation_map": [
+      {
+        "paper_title": "医学影像深度学习综述",
+        "fact_ids": ["fact_001"],
+        "chunk_ids": ["chunk_abc123"]
+      }
+    ],
+    "uncertain_points": ["不同数据集的性能差异较大，需要更多验证"]
+  }
+}
+```
+
+#### Prompt 模板
+
+智能体使用的 Prompt 模板主要强调：
+- 每条事实必须绑定来源信息（chunk_id、论文标题、页码）
+- 禁止编造无来源的事实
+- 仅基于提供的文献片段进行分析
+- 标注不确定或有争议的观点
+- 保持事实的客观性，避免主观推断
+
+---
+
 ## 🖥️ 手动启动 (不使用脚本)
 
 ### 后端启动
@@ -521,6 +635,7 @@ npm run dev
 | POST | `/api/v1/vector-search/index/{project_id}/add-chunks` | 添加 Chunks 到索引 |
 | GET | `/api/v1/vector-search/index/{project_id}/stats` | 获取索引统计 |
 | POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+| POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
 
 ---
 
@@ -538,6 +653,7 @@ npm run dev
 - [x] 文献上传
 - [x] 自动化脚本
 - [x] ProblemUnderstandingAgent 智能体
+- [x] LiteratureMiningAgent 智能体
 
 ### Phase 2: 功能增强
 - [ ] 用户认证系统
@@ -545,7 +661,7 @@ npm run dev
 - [ ] 研究报告导出 (PDF/Word)
 - [ ] 文献元数据提取
 - [ ] 多轮对话优化
-- [ ] 更多智能体 (文献综述、实验设计等)
+- [ ] 更多智能体 (文献综述生成、实验设计等)
 
 ### Phase 3: 高级特性
 - [ ] 文献引用网络分析

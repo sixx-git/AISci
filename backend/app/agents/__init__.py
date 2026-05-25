@@ -6,9 +6,23 @@ from app.agents.problem_understanding_agent import (
     ProblemUnderstandingRequest,
     ProblemUnderstandingResponse
 )
+from app.agents.literature_mining_agent import (
+    LiteratureMiningAgent,
+    LiteratureMiningRequest,
+    LiteratureMiningResponse,
+    ScienceFact,
+    EvidenceItem,
+    CitationMapItem
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
     'ProblemUnderstandingRequest',
     'ProblemUnderstandingResponse',
+    'LiteratureMiningAgent',
+    'LiteratureMiningRequest',
+    'LiteratureMiningResponse',
+    'ScienceFact',
+    'EvidenceItem',
+    'CitationMapItem',
 ]
