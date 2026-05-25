@@ -116,3 +116,57 @@ class ExperimentDesignGenerationResponse(BaseModel):
     """实验设计生成响应"""
     experiment_design: ExperimentDesignItem = Field(..., description="生成的实验设计")
     summary: Optional[str] = Field(None, description="生成摘要")
+
+
+class SmallValidationCreate(BaseModel):
+    """创建小样验证"""
+    project_id: str = Field(..., description="项目ID")
+    experiment_design_id: str = Field(..., description="实验设计ID")
+    hypothesis: str = Field(..., description="假设内容")
+    has_real_data: int = Field(0, description="是否有真实数据 0: no, 1: yes")
+    analysis_script: str = Field(..., description="pandas 分析脚本")
+    simulated_data: Optional[str] = Field(None, description="模拟数据 JSON")
+    simulation_assumptions: Optional[str] = Field(None, description="模拟假设说明")
+    charts: Optional[str] = Field(None, description="图表数据 JSON 列表")
+    statistics: Optional[str] = Field(None, description="统计结果 JSON")
+    run_log: Optional[str] = Field(None, description="运行日志")
+    status: Optional[str] = Field("draft", description="状态")
+    execution_time: Optional[float] = Field(None, description="执行时间")
+
+
+class SmallValidationDBResponse(SmallValidationCreate):
+    """小样验证数据库响应"""
+    id: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class SmallValidationRequest(BaseModel):
+    """小样验证请求"""
+    project_id: str = Field(..., description="项目ID")
+    experiment_design_id: str = Field(..., description="实验设计ID")
+    hypothesis: str = Field(..., description="假设内容")
+    methods: Optional[str] = Field(None, description="研究方法")
+    datasets: Optional[str] = Field(None, description="数据集说明")
+    metrics: Optional[str] = Field(None, description="评估指标")
+    csv_data_path: Optional[str] = Field(None, description="CSV 数据路径（如果有）")
+
+
+class SmallValidationItem(BaseModel):
+    """小样验证项"""
+    has_real_data: int = Field(..., description="是否有真实数据 0: no, 1: yes")
+    analysis_script: str = Field(..., description="pandas 分析脚本")
+    simulated_data: Optional[str] = Field(None, description="模拟数据 JSON")
+    simulation_assumptions: Optional[str] = Field(None, description="模拟假设说明")
+    charts: Optional[str] = Field(None, description="图表数据 JSON 列表")
+    statistics: Optional[str] = Field(None, description="统计结果 JSON")
+    run_log: Optional[str] = Field(None, description="运行日志")
+
+
+class SmallValidationGenerationResponse(BaseModel):
+    """小样验证生成响应"""
+    validation: SmallValidationItem = Field(..., description="生成的验证方案")
+    summary: Optional[str] = Field(None, description="生成摘要")

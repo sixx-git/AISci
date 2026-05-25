@@ -44,6 +44,30 @@ class ExperimentDesign(BaseModel):
     priority = Column(Integer, default=3, nullable=False)  # 1-5
 
 
+class SmallValidation(BaseModel):
+    """
+    小样验证模型
+    """
+    __tablename__ = "small_validations"
+    
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    experiment_design_id = Column(String(36), ForeignKey("experiment_designs.id"), nullable=False, index=True)
+    hypothesis = Column(Text, nullable=False)
+    
+    # 验证内容
+    has_real_data = Column(Integer, default=0, nullable=False)  # 0: no, 1: yes
+    analysis_script = Column(Text, nullable=False)  # pandas 分析脚本
+    simulated_data = Column(Text, nullable=True)  # 模拟数据 JSON
+    simulation_assumptions = Column(Text, nullable=True)  # 模拟假设说明
+    charts = Column(Text, nullable=True)  # 图表数据 JSON 列表
+    statistics = Column(Text, nullable=True)  # 统计结果 JSON
+    run_log = Column(Text, nullable=True)  # 运行日志
+    
+    # 元数据
+    status = Column(String(50), default="draft", nullable=False)  # draft, generated, running, completed
+    execution_time = Column(Float, nullable=True)
+
+
 class Hypothesis(BaseModel):
     """
     科学假设模型

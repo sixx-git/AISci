@@ -34,6 +34,9 @@ from app.agents.hypothesis_review_agent import (
 from app.agents.experiment_design_agent import (
     get_experiment_design_agent
 )
+from app.agents.small_validation_agent import (
+    get_small_validation_agent
+)
 from app.schemas.research import (
     HypothesisGenerationRequest,
     HypothesisGenerationResponse,
@@ -41,10 +44,15 @@ from app.schemas.research import (
     ExperimentDesignRequest,
     ExperimentDesignGenerationResponse,
     ExperimentDesignCreate,
-    ExperimentDesignDBResponse
+    ExperimentDesignDBResponse,
+    SmallValidationRequest,
+    SmallValidationGenerationResponse,
+    SmallValidationCreate,
+    SmallValidationDBResponse
 )
 from app.services.hypothesis_service import HypothesisService
 from app.services.experiment_service import ExperimentDesignService
+from app.services.small_validation_service import SmallValidationService
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -323,6 +331,92 @@ async def get_project_experiment_designs(
         return success(
             experiments,
             message=f"获取实验设计列表成功，共 {len(experiments)} 条"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/small-validation", response_model=ApiResponse[SmallValidationGenerationResponse])
+async def small_validation(
+    request: SmallValidationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    小样验证智能体
+    
+    输入实验设计，生成轻量级验证方案：
+    - 如果有 CSV 数据：自动生成 pandas 分析脚本
+    - 如果没有真实数据：生成模拟数据并说明模拟假设
+    - 输出简单图表和统计结果
+    - 保存运行日志
+    """
+    try:
+        agent = get_small_validation_agent()
+        
+        # 生成验证方案
+        validation_result = agent.generate_validation(
+            hypothesis=request.hypothesis,
+            methods=request.methods,
+            datasets=request.datasets,
+            metrics=request.metrics,
+            csv_data_path=request.csv_data_path
+        )
+        
+        # 保存到数据库
+        validation_service = SmallValidationService(db)
+        validation_create = SmallValidationCreate(
+            project_id=request.project_id,
+            experiment_design_id=request.experiment_design_id,
+            hypothesis=request.hypothesis,
+            has_real_data=validation_result["has_real_data"],
+            analysis_script=validation_result["analysis_script"],
+            simulated_data=validation_result["simulated_data"],
+            simulation_assumptions=validation_result["simulation_assumptions"],
+            charts=validation_result["charts"],
+            statistics=validation_result["statistics"],
+            run_log=validation_result["run_log"],
+            status="generated"
+        )
+        
+        validation_service.create_validation(validation_create)
+        
+        # 构建响应
+        response = SmallValidationGenerationResponse(
+            validation=validation_result,
+            summary="小样验证方案生成成功"
+        )
+        
+        return success(
+            response,
+            message="小样验证方案生成完成"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/small-validations/{project_id}", response_model=ApiResponse[List[SmallValidationDBResponse]])
+async def get_project_small_validations(
+    project_id: str,
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    获取项目的小样验证列表
+    """
+    try:
+        validation_service = SmallValidationService(db)
+        validations = validation_service.get_validations_by_project(
+            project_id=project_id,
+            status=status,
+            limit=limit,
+            offset=offset
+        )
+        
+        return success(
+            validations,
+            message=f"获取小样验证列表成功，共 {len(validations)} 条"
         )
     except Exception as e:
         return error(str(e))
