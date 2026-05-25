@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { projectApi } from '../lib/api';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
+import { projectApi } from '@/lib/api';
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 
 export function CreateProject() {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
-import React from 'react';
+
 import { Link, useLocation } from 'react-router-dom';
 import { FlaskConical, Home, FileText, Settings } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 
 export function Navbar() {
   const location = useLocation();

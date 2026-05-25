@@ -1,6 +1,5 @@
-import React from 'react';
-import { FileText, FolderOpen } from 'lucide-react';
-import { Card } from '../components/Card';
+import { FolderOpen } from 'lucide-react';
+import { Card } from '@/components/Card';
 
 export function Documents() {
   return (

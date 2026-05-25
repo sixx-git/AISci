@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
-import { projectApi } from '../lib/api';
-import { formatDate } from '../lib/utils';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
-import { StatusBadge } from '../components/StatusBadge';
-import type { Project } from '../types';
+import { projectApi } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { StatusBadge } from '@/components/StatusBadge';
+import type { Project } from '@/types';
 
 export function Home() {
   const [projects, setProjects] = useState<Project[]>([]);

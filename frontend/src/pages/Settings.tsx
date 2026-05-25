@@ -1,6 +1,6 @@
-import React from 'react';
+
 import { Settings2 } from 'lucide-react';
-import { Card } from '../components/Card';
+import { Card } from '@/components/Card';
 
 export function Settings() {
   return (

@@ -5,35 +5,35 @@ import {
   Upload,
   FileText,
   Play,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Clock,
   Download,
   Sparkles,
-  BookOpen,
-  Brain,
-  Layout,
-  FlaskConical,
-  BarChart,
   File,
+  Brain,
+  BookOpen,
+  Layout,
+  Sparkles as SparklesIcon,
+  BarChart,
+  FlaskConical,
+  CheckCircle,
+  FileText as FileTextIcon,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { projectApi, documentApi, researchApi } from '../lib/api';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
-import { StatusBadge } from '../components/StatusBadge';
-import type { Project, Document, PipelineStage } from '../types';
+import { projectApi, documentApi } from '@/lib/api';
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { StatusBadge } from '@/components/StatusBadge';
+import { PipelineVisualization, PipelineStage as VisualPipelineStage } from '@/components/PipelineVisualization';
+import type { Project, Document } from '@/types';
 
-const PIPELINE_STAGES = [
-  { id: 'problem', name: '问题理解', icon: Brain },
-  { id: 'literature', name: '文献挖掘', icon: BookOpen },
-  { id: 'gaps', name: '知识缺口分析', icon: Layout },
-  { id: 'hypothesis', name: '假设生成', icon: Sparkles },
-  { id: 'experiment', name: '实验设计', icon: FlaskConical },
-  { id: 'validation', name: '小样验证', icon: BarChart },
-  { id: 'report', name: '报告生成', icon: FileText },
+// 完整的 Pipeline 阶段定义（按用户要求的顺序）
+const VISUAL_PIPELINE_STAGES: VisualPipelineStage[] = [
+  { id: 'problem', name: '问题理解', icon: Brain, status: 'pending' },
+  { id: 'literature', name: '文献挖掘', icon: BookOpen, status: 'pending' },
+  { id: 'gaps', name: '知识缺口', icon: Layout, status: 'pending' },
+  { id: 'hypothesis', name: '假设生成', icon: SparklesIcon, status: 'pending' },
+  { id: 'evaluation', name: '假设评估', icon: BarChart, status: 'pending' },
+  { id: 'experiment', name: '实验设计', icon: FlaskConical, status: 'pending' },
+  { id: 'validation', name: '小样验证', icon: CheckCircle, status: 'pending' },
+  { id: 'report', name: '报告生成', icon: FileTextIcon, status: 'pending' },
 ];
 
 export function ProjectWorkspace() {
@@ -44,7 +44,7 @@ export function ProjectWorkspace() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [researchQuestion, setResearchQuestion] = useState('');
   const [isRunning, setIsRunning] = useState(false);
-  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<VisualPipelineStage[]>(VISUAL_PIPELINE_STAGES);
   const [results, setResults] = useState<any>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -107,91 +107,161 @@ export function ProjectWorkspace() {
     setResults(null);
     setReportUrl(null);
 
-    // 初始化 Pipeline 阶段
-    const initialStages: PipelineStage[] = PIPELINE_STAGES.map((stage) => ({
-      name: stage.name,
+    // 重置所有阶段为 pending 状态
+    setPipelineStages(VISUAL_PIPELINE_STAGES.map(stage => ({
+      ...stage,
       status: 'pending',
-    }));
-    setPipelineStages(initialStages);
+      output: undefined
+    })));
 
     try {
-      let currentStage = 0;
+      // 逐个运行阶段
+      for (let i = 0; i < VISUAL_PIPELINE_STAGES.length; i++) {
+        const startTime = Date.now();
+        
+        // 设置当前阶段为 running
+        setPipelineStages(prev => prev.map((stage, idx) => 
+          idx === i ? { ...stage, status: 'running' as const } : stage
+        ));
 
-      // 模拟 Pipeline 逐步运行
-      for (let i = 0; i < PIPELINE_STAGES.length; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        currentStage = i;
+        // 模拟阶段执行
+        await new Promise(resolve => setTimeout(resolve, 1200));
 
-        setPipelineStages((prev) => {
-          const newStages = [...prev];
-          newStages[i] = { ...newStages[i], status: 'running' };
-          if (i > 0) {
-            newStages[i - 1] = { ...newStages[i - 1], status: 'completed' };
+        const endTime = Date.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(1) + 's';
+
+        // 模拟每个阶段的输出
+        const stageOutputs = {
+          problem: {
+            analysis: '已深入理解研究问题的背景与重要性，明确了研究目标与边界条件。',
+            keyInsights: [
+              '问题具有重要的理论与实践价值',
+              '现有研究存在明确缺口',
+              '研究方案具有可行性'
+            ]
+          },
+          literature: {
+            papersAnalyzed: 23,
+            keyFindings: [
+              { id: 'f1', content: '深度学习在该领域应用广泛', source: 'Zhang et al., 2025' },
+              { id: 'f2', content: 'Transformer架构展现出强大潜力', source: 'Wang et al., 2024' },
+              { id: 'f3', content: '样本效率是核心挑战', source: 'Liu et al., 2025' }
+            ],
+            summary: '通过全面分析相关文献，确定了本领域的研究脉络与前沿动态。'
+          },
+          gaps: {
+            identifiedGaps: [
+              '混合模型在复杂场景中的探索不足',
+              '跨域迁移学习的理论框架不完善',
+              '小样本学习算法在该领域应用有限',
+              '可解释性研究相对匮乏'
+            ],
+            priority: '高',
+            impact: '解决这些缺口将推动领域显著进步'
+          },
+          hypothesis: {
+            mainHypothesis: '结合注意力机制与图神经网络的混合模型将显著提升任务性能',
+            subHypotheses: [
+              '图神经网络能够有效建模结构化知识',
+              '注意力机制增强了信息选择与组合能力',
+              '迁移学习策略降低了数据依赖'
+            ],
+            rationale: '基于文献分析与方法论创新'
+          },
+          evaluation: {
+            feasibility: 0.85,
+            novelty: 0.78,
+            impact: 0.92,
+            riskAssessment: '低风险',
+            recommendations: [
+              '优先验证核心假设',
+              '准备充足算力资源',
+              '设计多组对比实验'
+            ],
+            overallScore: 8.2
+          },
+          experiment: {
+            design: '严格的对照实验设计',
+            datasets: ['Standard Benchmark A', 'Real-world Dataset B', 'Challenge Dataset C'],
+            baselines: [
+              '传统机器学习方法',
+              '纯深度学习方法',
+              '当前SOTA方法',
+              '消融实验变体'
+            ],
+            metrics: ['准确率', '召回率', 'F1分数', '计算效率'],
+            validationStrategy: '5折交叉验证'
+          },
+          validation: {
+            experimentId: 'EXP-2025-001',
+            results: {
+              accuracy: '+12.5% 相对提升',
+              f1: '+14.2% 相对提升',
+              efficiency: '相当的推理速度'
+            },
+            statisticalSignificance: 'p < 0.01',
+            conclusion: '初步验证表明假设成立'
+          },
+          report: {
+            title: 'AI Research Report: A Hybrid Approach for Scientific Discovery',
+            sections: [
+              'Abstract',
+              'Introduction',
+              'Related Work',
+              'Methodology',
+              'Experiments',
+              'Results',
+              'Discussion',
+              'Conclusion'
+            ],
+            recommendations: [
+              '扩大实验规模',
+              '探索更多应用场景',
+              '优化计算效率',
+              '撰写学术论文投稿'
+            ],
+            generatedAt: new Date().toISOString()
           }
-          return newStages;
-        });
+        };
+
+        const currentStageId = VISUAL_PIPELINE_STAGES[i].id as keyof typeof stageOutputs;
+        
+        // 更新阶段状态为 success 并保存输出
+        setPipelineStages(prev => prev.map((stage, idx) => 
+          idx === i ? { 
+            ...stage, 
+            status: 'success' as const, 
+            output: stageOutputs[currentStageId],
+            duration 
+          } : stage
+        ));
       }
 
-      // 标记最后一个阶段为完成
-      setPipelineStages((prev) => {
-        const newStages = [...prev];
-        newStages[newStages.length - 1] = {
-          ...newStages[newStages.length - 1],
-          status: 'completed',
-        };
-        return newStages;
-      });
-
-      // 生成模拟结果
-      const mockResults = {
-        problem_understanding: {
-          analysis: '已分析研究问题，确定了核心研究方向和边界条件。',
-        },
-        literature_facts: [
-          { content: '已有研究表明深度学习在该领域具有显著优势', source: 'Paper 1' },
-          { content: '当前方法在特定场景下仍存在局限性', source: 'Paper 2' },
-        ],
-        knowledge_gaps: {
-          gaps: ['混合模型研究不足', '新数据集缺乏验证'],
-        },
-        hypothesis: {
-          hypothesis: '我们提出的混合模型在本研究任务上能够显著提升性能',
-          rationale: '基于文献分析和方法创新',
-        },
-        experiment_design: {
-          methods: '对比实验设计，使用标准数据集和评估指标',
-        },
+      // 生成完整结果对象
+      const finalResults = {
+        pipeline: 'completed',
+        stages: pipelineStages,
+        summary: '研究流程已完成，获得了有价值的研究发现。'
       };
 
-      setResults(mockResults);
+      setResults(finalResults);
       setReportUrl('http://localhost:3000/api/v1/reports/download/mock-report/pdf');
     } catch (error) {
       console.error('Pipeline 运行失败:', error);
-      setPipelineStages((prev) => {
+      setPipelineStages(prev => {
         const newStages = [...prev];
         const lastRunning = newStages.findIndex((s) => s.status === 'running');
         if (lastRunning !== -1) {
-          newStages[lastRunning] = { ...newStages[lastRunning], status: 'error' };
+          newStages[lastRunning] = { 
+            ...newStages[lastRunning], 
+            status: 'error' as const,
+            output: { error: '执行失败，请重试', timestamp: new Date().toISOString() }
+          };
         }
         return newStages;
       });
     } finally {
       setIsRunning(false);
-    }
-  };
-
-  const getStageIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="w-5 h-5 text-gray-500" />;
-      case 'running':
-        return <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />;
-      case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-green-400" />;
-      case 'error':
-        return <XCircle className="w-5 h-5 text-red-400" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
     }
   };
 
@@ -282,30 +352,12 @@ export function ProjectWorkspace() {
 
         {/* Right Column - Pipeline & Results */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Pipeline Stages */}
-          <Card title="研究 Pipeline" subtitle="AI 研究流程跟踪">
-            <div className="space-y-3">
-              {PIPELINE_STAGES.map((stage, index) => {
-                const Icon = stage.icon;
-                const stageStatus = pipelineStages[index]?.status || 'pending';
-
-                return (
-                  <div
-                    key={stage.id}
-                    className="flex items-center gap-4 p-3 rounded-lg bg-dark-900/50"
-                  >
-                    <div className="flex-shrink-0">
-                      {getStageIcon(stageStatus)}
-                    </div>
-                    <div className="flex items-center gap-3 flex-1">
-                      <Icon className="w-5 h-5 text-gray-400" />
-                      <span className="text-sm text-gray-300">{stage.name}</span>
-                    </div>
-                    <StatusBadge status={stageStatus} />
-                  </div>
-                );
-              })}
-            </div>
+          {/* Pipeline Visualization */}
+          <Card title="研究 Pipeline" subtitle="AI 研究流程可视化">
+            <PipelineVisualization 
+              stages={pipelineStages}
+              onStageClick={(stage) => console.log('Stage clicked:', stage)}
+            />
           </Card>
 
           {/* Results Display */}
@@ -336,30 +388,13 @@ export function ProjectWorkspace() {
                   </div>
                 )}
 
-                {/* Results Content */}
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <h3>问题理解</h3>
-                  <p>{results.problem_understanding?.analysis}</p>
-
-                  <h3>文献发现</h3>
-                  <ul>
-                    {results.literature_facts?.map((fact: any, i: number) => (
-                      <li key={i}>
-                        {fact.content} <span className="text-gray-500">— {fact.source}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <h3>知识缺口</h3>
-                  <ul>
-                    {results.knowledge_gaps?.gaps?.map((gap: string, i: number) => (
-                      <li key={i}>{gap}</li>
-                    ))}
-                  </ul>
-
-                  <h3>研究假设</h3>
-                  <p>{results.hypothesis?.hypothesis}</p>
-                  <p className="text-gray-400 text-sm">{results.hypothesis?.rationale}</p>
+                {/* Results Summary */}
+                <div className="bg-dark-900/50 p-4 rounded-lg border border-dark-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Sparkles className="w-5 h-5 text-primary-400" />
+                    <h4 className="font-medium text-gray-200">研究总结</h4>
+                  </div>
+                  <p className="text-gray-400 text-sm">{results.summary}</p>
                 </div>
               </div>
             ) : (
