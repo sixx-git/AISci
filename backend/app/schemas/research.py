@@ -6,6 +6,24 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class ResearchRequest(BaseModel):
+    """研究请求"""
+    topic: str = Field(..., description="研究主题")
+    keywords: Optional[List[str]] = Field(None, description="关键词列表")
+    research_type: str = Field("literature_review", description="研究类型")
+    max_tokens: Optional[int] = Field(2000, description="最大 tokens 数")
+
+
+class ResearchResponse(BaseModel):
+    """研究响应"""
+    success: bool = Field(..., description="是否成功")
+    research_id: str = Field(..., description="研究项目ID")
+    title: str = Field(..., description="研究标题")
+    content: str = Field(..., description="研究内容")
+    references: Optional[List[str]] = Field(None, description="参考文献列表")
+    execution_time: Optional[float] = Field(None, description="执行时间（秒）")
+
+
 class HypothesisCreate(BaseModel):
     """创建假设"""
     project_id: str = Field(..., description="项目ID")

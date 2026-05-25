@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 import markdown
-from weasyprint import HTML, CSS
+# weasyprint is imported lazily in _generate_pdf method
 
 from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
@@ -336,6 +336,8 @@ class ReportGenerationAgent:
             是否成功
         """
         try:
+            from weasyprint import HTML, CSS
+            
             # 1. Markdown 转 HTML
             html_content = markdown.markdown(
                 markdown_content,

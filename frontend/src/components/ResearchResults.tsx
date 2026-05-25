@@ -5,7 +5,7 @@ import { LiteratureEvidenceComponent } from '@/components/LiteratureEvidence';
 import { ExperimentDesignTable } from '@/components/ExperimentDesignTable';
 import { Button } from '@/components/Button';
 import { Download, FileText, Sparkles } from 'lucide-react';
-import type { ResearchResult, Hypothesis, LiteratureEvidence, ExperimentDesign } from '@/types';
+import type { ResearchResult } from '@/types';
 
 interface ResearchResultsProps {
   results?: ResearchResult;
@@ -143,8 +143,6 @@ export const ResearchResults = ({
   };
 
   const generateReportContent = (data: ResearchResult) => {
-    const selectedHypo = data.hypotheses.find(h => h.id === selectedHypothesisId);
-    
     return `# AI Research Report
 
 ## 研究假设
@@ -166,7 +164,7 @@ ${data.literature_evidence.map(e => `- ${e.title} (${e.author}, ${e.year}): "${e
 
 ## 实验设计
 
-${data.experiment_design.map((exp, i) => `### 步骤 ${exp.step}: ${exp.name}
+${data.experiment_design.map((exp) => `### 步骤 ${exp.step}: ${exp.name}
 ${exp.description}
 - 预期: ${exp.expected_result}
 - 标准: ${exp.success_criteria}`).join('\n\n')}

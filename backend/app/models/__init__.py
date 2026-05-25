@@ -6,19 +6,21 @@ from app.models.project import (
     Project,
     Document,
     Chunk,
-    Hypothesis,
-    ExperimentDesign,
+    HypothesisStatus,
+    ExperimentDesignStatus,
     Report,
     RunLog,
     ProjectStatus,
     DocumentType,
     DocumentStatus,
     ChunkStatus,
-    HypothesisStatus,
-    ExperimentDesignStatus,
     ReportStatus,
     LogLevel,
     LogCategory,
+)
+from app.models.research import (
+    Hypothesis,
+    ExperimentDesign,
 )
 from app.models.pipeline import (
     PipelineRun,

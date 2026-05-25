@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.documents import DocumentResponse
-from app.models.documents import Document
+from app.models import Document
 from app.services.vector_service import VectorService
 from app.core.config import get_settings
 

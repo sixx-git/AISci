@@ -179,6 +179,8 @@ class Chunk(Base):
     __table_args__ = {'comment': '文献切片表'}
 
 
+# Hypothesis 和 ExperimentDesign 模型已移至 app.models.research 模块
+# 保留枚举以保持向后兼容
 class HypothesisStatus(str, Enum):
     """假设状态枚举"""
     DRAFT = "draft"
@@ -188,60 +190,6 @@ class HypothesisStatus(str, Enum):
     MODIFIED = "modified"
 
 
-class Hypothesis(Base):
-    """
-    科学假设表
-    存储由AI生成的科学假设
-    """
-    __tablename__ = "hypotheses"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
-    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
-    
-    # 假设内容
-    title = Column(String(500), nullable=False, comment="假设标题")
-    description = Column(Text, nullable=False, comment="假设详细描述")
-    summary = Column(Text, nullable=True, comment="假设摘要")
-    
-    # 分类和标签
-    category = Column(String(100), nullable=True, comment="假设分类")
-    tags = Column(Text, nullable=True, comment="标签列表，逗号分隔")
-    
-    # 置信度和评分
-    confidence_score = Column(Float, default=0.5, comment="置信度评分（0-1）")
-    novelty_score = Column(Float, nullable=True, comment="创新性评分（0-1）")
-    feasibility_score = Column(Float, nullable=True, comment="可行性评分（0-1）")
-    
-    # 来源信息
-    source_documents = Column(Text, nullable=True, comment="来源文献ID列表")
-    source_chunks = Column(Text, nullable=True, comment="来源切片ID列表")
-    
-    # 状态和版本
-    version = Column(Integer, default=1, comment="版本号")
-    parent_id = Column(String(36), nullable=True, comment="父假设ID（用于继承关系）")
-    status = Column(SQLEnum(HypothesisStatus), default=HypothesisStatus.DRAFT, nullable=False, index=True, comment="状态")
-    
-    # 评估和验证
-    reasoning = Column(Text, nullable=True, comment="推理和论证过程")
-    evidence = Column(Text, nullable=True, comment="支持证据")
-    counterarguments = Column(Text, nullable=True, comment="反驳意见")
-    experiment_suggestions = Column(Text, nullable=True, comment="实验建议")
-    
-    # 元数据
-    generated_by = Column(String(100), nullable=True, comment="生成者（系统/用户）")
-    model_used = Column(String(100), nullable=True, comment="使用的模型")
-    extra_metadata = Column(JSON, nullable=True, comment="额外元数据")
-    
-    # 时间戳
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-    
-    # 关系
-    project = relationship("Project", back_populates="hypotheses")
-    
-    __table_args__ = {'comment': '科学假设表'}
-
-
 class ExperimentDesignStatus(str, Enum):
     """实验设计状态枚举"""
     DRAFT = "draft"
@@ -249,68 +197,6 @@ class ExperimentDesignStatus(str, Enum):
     APPROVED = "approved"
     MODIFIED = "modified"
     DEPRECATED = "deprecated"
-
-
-class ExperimentDesign(Base):
-    """
-    实验设计表
-    存储由AI生成的实验设计方案
-    """
-    __tablename__ = "experiment_designs"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
-    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
-    hypothesis_id = Column(String(36), ForeignKey("hypotheses.id"), nullable=True, index=True, comment="关联的假设ID")
-    
-    # 实验基本信息
-    title = Column(String(500), nullable=False, comment="实验设计标题")
-    description = Column(Text, nullable=False, comment="实验描述")
-    purpose = Column(Text, nullable=True, comment="实验目的")
-    
-    # 实验方案
-    design_type = Column(String(100), nullable=True, comment="实验类型")
-    variables = Column(JSON, nullable=True, comment="变量配置")
-    procedure = Column(Text, nullable=True, comment="实验步骤")
-    
-    # 材料和设备
-    materials = Column(Text, nullable=True, comment="所需材料")
-    equipment = Column(Text, nullable=True, comment="所需设备")
-    
-    # 数据收集
-    data_collection = Column(Text, nullable=True, comment="数据收集方法")
-    measurement_methods = Column(Text, nullable=True, comment="测量方法")
-    
-    # 分析计划
-    statistical_methods = Column(Text, nullable=True, comment="统计分析方法")
-    expected_results = Column(Text, nullable=True, comment="预期结果")
-    success_criteria = Column(Text, nullable=True, comment="成功判定标准")
-    
-    # 资源
-    time_estimate = Column(String(100), nullable=True, comment="时间估计")
-    budget_estimate = Column(Text, nullable=True, comment="预算估计")
-    resources_needed = Column(Text, nullable=True, comment="所需资源")
-    
-    # 风险评估
-    potential_pitfalls = Column(Text, nullable=True, comment="潜在问题")
-    contingency_plans = Column(Text, nullable=True, comment="应急预案")
-    
-    # 版本和状态
-    version = Column(Integer, default=1, comment="版本号")
-    status = Column(SQLEnum(ExperimentDesignStatus), default=ExperimentDesignStatus.DRAFT, nullable=False, index=True, comment="状态")
-    
-    # 元数据
-    generated_by = Column(String(100), nullable=True, comment="生成者")
-    model_used = Column(String(100), nullable=True, comment="使用的模型")
-    extra_metadata = Column(JSON, nullable=True, comment="额外元数据")
-    
-    # 时间戳
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-    
-    # 关系
-    project = relationship("Project", back_populates="experiment_designs")
-    
-    __table_args__ = {'comment': '实验设计表'}
 
 
 class ReportStatus(str, Enum):

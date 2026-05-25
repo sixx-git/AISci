@@ -23,7 +23,7 @@ from app.schemas.project import (
 )
 from app.services.project_service import ProjectService, DocumentService
 
-router = APIRouter(prefix="/api/projects", tags=["projects"])
+router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 def get_project_service(db: Session = Depends(get_db)) -> ProjectService:

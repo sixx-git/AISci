@@ -8,6 +8,34 @@ import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import type { Project } from '@/types';
 
+// 后端无数据时的模拟数据
+const MOCK_PROJECTS: Project[] = [
+  {
+    id: '1',
+    name: '深度学习优化研究',
+    description: '研究如何优化深度学习模型的训练效率',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    status: 'completed',
+  },
+  {
+    id: '2',
+    name: '自然语言处理应用',
+    description: '探索 NLP 在实际问题中的应用',
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
+    status: 'running',
+  },
+  {
+    id: '3',
+    name: '计算机视觉研究',
+    description: '研究 CV 领域的新算法和应用',
+    created_at: new Date(Date.now() - 172800000).toISOString(),
+    updated_at: new Date().toISOString(),
+    status: 'draft',
+  },
+];
+
 export function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,10 +48,13 @@ export function Home() {
     try {
       const response = await projectApi.list();
       if (response.code === 200) {
-        setProjects(response.data || []);
+        const data = response.data || [];
+        // 后端无数据时显示模拟数据
+        setProjects(data.length > 0 ? data : MOCK_PROJECTS);
       }
     } catch (error) {
       console.error('加载项目失败:', error);
+      setProjects(MOCK_PROJECTS);
     } finally {
       setLoading(false);
     }

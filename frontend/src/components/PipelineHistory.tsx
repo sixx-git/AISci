@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, CheckCircle, AlertCircle } from 'lucide-react';
 import type { PipelineRunSummary, PipelineRunDetail } from '@/types';
 import { pipelineApi } from '@/lib/api';

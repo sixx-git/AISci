@@ -47,8 +47,6 @@ export function ProjectWorkspace() {
   const [isRunning, setIsRunning] = useState(false);
   const [pipelineStages, setPipelineStages] = useState<VisualPipelineStage[]>(VISUAL_PIPELINE_STAGES);
   const [pipelineCompleted, setPipelineCompleted] = useState(false);
-  const [results, setResults] = useState<any>(null);
-  const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedRun, setSelectedRun] = useState<PipelineRunDetail | null>(null);
@@ -108,8 +106,6 @@ export function ProjectWorkspace() {
     if (!researchQuestion.trim() || !projectId) return;
 
     setIsRunning(true);
-    setResults(null);
-    setReportUrl(null);
     setPipelineCompleted(false);
     setSelectedRun(null);
 
@@ -124,7 +120,6 @@ export function ProjectWorkspace() {
       // 调用真实的 API
       const response = await pipelineApi.run(projectId, researchQuestion);
       if (response.code === 200) {
-        setResults(response.data);
         setPipelineCompleted(true);
         
         // 更新所有阶段状态为成功

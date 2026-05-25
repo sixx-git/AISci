@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.core.database import Base
-from app.models.core import BaseModel
+from app.models.core import Base, BaseModel
 
 
 class ResearchProject(Base):
@@ -42,6 +42,9 @@ class ExperimentDesign(BaseModel):
     # 元数据
     status = Column(String(50), default="draft", nullable=False)  # draft, ready, running, completed
     priority = Column(Integer, default=3, nullable=False)  # 1-5
+    
+    # 关系
+    project = relationship("Project", back_populates="experiment_designs")
 
 
 class SmallValidation(BaseModel):
@@ -128,3 +131,6 @@ class Hypothesis(BaseModel):
     status = Column(String(50), default="draft", nullable=False)  # draft, testing, accepted, rejected
     priority = Column(Integer, default=3, nullable=False)  # 1-5
     confidence = Column(Float, default=0.5, nullable=False)  # 0-1
+    
+    # 关系
+    project = relationship("Project", back_populates="hypotheses")
