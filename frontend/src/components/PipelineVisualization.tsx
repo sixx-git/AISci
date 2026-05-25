@@ -109,8 +109,8 @@ export function PipelineVisualization({
   return (
     <div className="space-y-6">
       {/* Horizontal Pipeline View */}
-      <div className="relative">
-        <div className="flex items-center justify-between overflow-x-auto pb-4">
+      <div className="relative overflow-x-auto">
+        <div className="flex items-center justify-between min-w-max py-2 pb-4">
           {stages.map((stage, index) => {
             const Icon = stage.icon;
             const isLast = index === stages.length - 1;
