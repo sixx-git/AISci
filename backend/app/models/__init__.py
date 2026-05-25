@@ -20,6 +20,14 @@ from app.models.project import (
     LogLevel,
     LogCategory,
 )
+from app.models.pipeline import (
+    PipelineRun,
+    PipelineStageExecution,
+    PromptVersion,
+    PipelineStatus,
+    PipelineStage,
+    PromptStatus,
+)
 
 __all__ = [
     'Base',
@@ -39,4 +47,10 @@ __all__ = [
     'ReportStatus',
     'LogLevel',
     'LogCategory',
+    'PipelineRun',
+    'PipelineStageExecution',
+    'PromptVersion',
+    'PipelineStatus',
+    'PipelineStage',
+    'PromptStatus',
 ]

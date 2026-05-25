@@ -47,9 +47,11 @@ export interface ReportGenerationResult {
   paper_abstract: string;
   markdown_content: string;
   report_id?: string;
+  pdf_url?: string;
   pdf_download_url?: string;
   md_download_url?: string;
   pdf_success?: boolean;
+  summary?: string;
   chapters: any;
 }
 
@@ -98,6 +100,41 @@ export interface ExperimentDesign {
   description: string;
   expected_result: string;
   success_criteria: string;
+}
+
+export interface PipelineStageExecutionSummary {
+  id: string;
+  pipeline_run_id: string;
+  stage: string;
+  stage_order: number;
+  status: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+  input_data?: any;
+  output_data?: any;
+  error_message?: string;
+  token_count?: number;
+}
+
+export interface PipelineRunSummary {
+  id: string;
+  run_id: string;
+  project_id: string;
+  research_question: string;
+  status: string;
+  started_at?: string;
+  completed_at?: string;
+  total_duration_ms?: number;
+  final_report_id?: string;
+  failed_stage?: string;
+  created_at: string;
+}
+
+export interface PipelineRunDetail extends PipelineRunSummary {
+  input_data?: any;
+  output_data?: any;
+  stages: PipelineStageExecutionSummary[];
 }
 
 export interface ResearchResult {

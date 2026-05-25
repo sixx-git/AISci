@@ -64,6 +64,44 @@ class PipelineRunResponse(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
 
 
+class PipelineStageExecutionSummary(BaseModel):
+    """Pipeline 阶段执行摘要"""
+    id: str
+    pipeline_run_id: str
+    stage: str
+    stage_order: int
+    status: str
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    duration_ms: Optional[int]
+    input_data: Optional[Dict[str, Any]]
+    output_data: Optional[Dict[str, Any]]
+    error_message: Optional[str]
+    token_count: Optional[int]
+
+
+class PipelineRunSummary(BaseModel):
+    """Pipeline 运行摘要（用于列表）"""
+    id: str
+    run_id: str
+    project_id: str
+    research_question: str
+    status: str
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    total_duration_ms: Optional[int]
+    final_report_id: Optional[str]
+    failed_stage: Optional[str]
+    created_at: datetime
+
+
+class PipelineRunDetail(PipelineRunSummary):
+    """Pipeline 运行详情"""
+    input_data: Optional[Dict[str, Any]]
+    output_data: Optional[Dict[str, Any]]
+    stages: List[PipelineStageExecutionSummary]
+
+
 class PipelineRunResult(BaseModel):
     """Pipeline 完整运行结果"""
     pipeline_id: str

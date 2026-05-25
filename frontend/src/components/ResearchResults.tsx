@@ -8,7 +8,7 @@ import { Download, FileText, Sparkles } from 'lucide-react';
 import type { ResearchResult, Hypothesis, LiteratureEvidence, ExperimentDesign } from '@/types';
 
 interface ResearchResultsProps {
-  results: ResearchResult;
+  results?: ResearchResult;
 }
 
 // 模拟完整的研究结果
@@ -193,14 +193,14 @@ ${exp.description}
           <Button
             variant="secondary"
             onClick={() => handleDownload('markdown')}
-            leftIcon={<FileText className="w-4 h-4" />}
+            icon={<FileText className="w-4 h-4" />}
           >
             下载 Markdown
           </Button>
           <Button
             variant="primary"
             onClick={() => handleDownload('pdf')}
-            leftIcon={<Download className="w-4 h-4" />}
+            icon={<Download className="w-4 h-4" />}
           >
             下载 PDF
           </Button>

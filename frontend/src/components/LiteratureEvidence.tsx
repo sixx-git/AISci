@@ -1,5 +1,6 @@
 import { Card } from '@/components/Card';
 import { BookOpen, Quote, Lightbulb } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { LiteratureEvidence } from '@/types';
 
 interface LiteratureEvidenceProps {
@@ -34,7 +35,7 @@ export const LiteratureEvidenceComponent = ({
       </h3>
 
       <div className="space-y-4">
-        {evidence.map((item, idx) => {
+        {evidence.map((item) => {
           const Icon = TYPE_ICONS[item.source_type];
           
           return (
@@ -82,6 +83,3 @@ export const LiteratureEvidenceComponent = ({
     </Card>
   );
 };
-
-// 添加缺失的 cn 导入
-import { cn } from '@/lib/utils';

@@ -8,7 +8,6 @@ import os
 import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field
 
 import markdown
 from weasyprint import HTML, CSS
@@ -126,7 +125,8 @@ class ReportGenerationAgent:
         knowledge_gaps: Dict[str, Any],
         final_hypothesis: Dict[str, Any],
         experiment_design: Dict[str, Any],
-        small_validation: Optional[Dict[str, Any]] = None
+        small_validation: Optional[Dict[str, Any]] = None,
+        pipeline_run_info: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         生成研究报告
@@ -140,6 +140,7 @@ class ReportGenerationAgent:
             final_hypothesis: 最终假设
             experiment_design: 实验设计
             small_validation: 小样验证结果（可选）
+            pipeline_run_info: Pipeline 运行信息（可选）
             
         Returns:
             报告生成结果
@@ -191,8 +192,15 @@ class ReportGenerationAgent:
             # 验证和标准化结果
             result = self._validate_and_normalize_result(result_dict)
             
+            # 添加运行摘要到报告
+            if pipeline_run_info:
+                result = self._append_run_summary_to_report(result, pipeline_run_info)
+            
             # 保存报告文件
-            self._save_report_files(result, project_info)
+            file_info = self._save_report_files(result, project_info)
+            
+            # 合并文件信息到结果
+            result.update(file_info)
             
             logger.info("研究报告生成完成")
             
@@ -201,6 +209,101 @@ class ReportGenerationAgent:
         except Exception as e:
             logger.error(f"生成研究报告时出错: {e}", exc_info=True)
             raise
+    
+    def _append_run_summary_to_report(self, result: Dict[str, Any], run_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        将运行摘要附加到报告
+        
+        Args:
+            result: 原始报告结果
+            run_info: 运行信息
+            
+        Returns:
+            更新后的结果
+        """
+        try:
+            # 构建运行摘要部分
+            summary_content = self._build_run_summary_content(run_info)
+            
+            # 附加到 markdown 内容
+            original_markdown = result.get("markdown_content", "")
+            result["markdown_content"] = original_markdown + "\n" + summary_content
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"添加运行摘要时出错: {e}", exc_info=True)
+            # 出错时不影响主报告
+            return result
+    
+    def _build_run_summary_content(self, run_info: Dict[str, Any]) -> str:
+        """
+        构建运行摘要的 Markdown 内容
+        
+        Args:
+            run_info: 运行信息
+            
+        Returns:
+            Markdown 内容
+        """
+        # 从运行信息中提取关键数据
+        run_id = run_info.get("run_id", "N/A")
+        started_at = run_info.get("started_at")
+        completed_at = run_info.get("completed_at")
+        total_duration_ms = run_info.get("total_duration_ms", 0)
+        status = run_info.get("status", "unknown")
+        stages = run_info.get("stages", [])
+        
+        # 格式化时间
+        def format_datetime(dt_str):
+            if isinstance(dt_str, str):
+                try:
+                    dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return str(dt_str)
+            elif isinstance(dt_str, datetime):
+                return dt_str.strftime("%Y-%m-%d %H:%M:%S")
+            return "N/A"
+        
+        # 格式化耗时
+        def format_duration(ms):
+            if not ms:
+                return "N/A"
+            total_sec = ms // 1000
+            min = total_sec // 60
+            sec = total_sec % 60
+            if min > 0:
+                return f"{min}分钟{sec}秒"
+            return f"{sec}秒"
+        
+        # 构建摘要
+        summary = f"""
+
+---
+
+## 运行摘要
+
+### 基本信息
+- **运行 ID**: {run_id}
+- **状态**: {status}
+- **开始时间**: {format_datetime(started_at)}
+- **结束时间**: {format_datetime(completed_at)}
+- **总耗时**: {format_duration(total_duration_ms)}
+
+### 执行阶段
+| 阶段 | 状态 | 耗时 |
+|------|------|------|
+"""
+        
+        # 添加阶段详情
+        for stage in stages:
+            stage_name = stage.get("stage", "unknown")
+            stage_status = stage.get("status", "unknown")
+            duration = stage.get("duration_ms", 0)
+            summary += f"| {stage_name} | {stage_status} | {format_duration(duration)} |\n"
+        
+        return summary
     
     def _format_input(
         self,
@@ -361,94 +464,6 @@ class ReportGenerationAgent:
             logger.error(f"PDF 生成失败: {e}", exc_info=True)
             # PDF 失败不影响 Markdown 保存
             return False
-    
-    def generate_report(
-        self,
-        project_info: Dict[str, Any],
-        problem_understanding: Dict[str, Any],
-        literature_facts: List[Dict[str, Any]],
-        citation_map: List[Dict[str, Any]],
-        knowledge_gaps: Dict[str, Any],
-        final_hypothesis: Dict[str, Any],
-        experiment_design: Dict[str, Any],
-        small_validation: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        生成研究报告
-        
-        Args:
-            project_info: 项目基本信息
-            problem_understanding: 问题理解结果
-            literature_facts: 文献事实列表
-            citation_map: 引用映射列表
-            knowledge_gaps: 知识缺口结果
-            final_hypothesis: 最终假设
-            experiment_design: 实验设计
-            small_validation: 小样验证结果（可选）
-            
-        Returns:
-            报告生成结果
-        """
-        try:
-            logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
-            
-            # 格式化输入信息
-            formatted_input = self._format_input(
-                project_info,
-                problem_understanding,
-                literature_facts,
-                citation_map,
-                knowledge_gaps,
-                final_hypothesis,
-                experiment_design,
-                small_validation
-            )
-            
-            # 构建提示
-            prompt = REPORT_GENERATION_PROMPT_TEMPLATE.format(**formatted_input)
-            
-            # 定义 schema 示例
-            schema_example = {
-                "title": "科学假设与研究计划",
-                "paper_title": "基于混合模型的医学图像分类研究",
-                "paper_abstract": "本文提出一种...",
-                "markdown_content": "# 科学假设与研究计划...",
-                "chapters": {
-                    "problem_statement": "...",
-                    "rationale": "...",
-                    "technical_details": "...",
-                    "datasets": "...",
-                    "source": "...",
-                    "target": "...",
-                    "methods": "...",
-                    "experiments": "...",
-                    "results": "...",
-                    "references": ["..."]
-                }
-            }
-            
-            # 调用 LLM
-            result_dict = qwen_structured_chat(
-                prompt=prompt,
-                schema_example=schema_example
-            )
-            
-            # 验证和标准化结果
-            result = self._validate_and_normalize_result(result_dict)
-            
-            # 保存报告文件
-            file_info = self._save_report_files(result, project_info)
-            
-            # 合并文件信息到结果
-            result.update(file_info)
-            
-            logger.info("研究报告生成完成")
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"生成研究报告时出错: {e}", exc_info=True)
-            raise
 
 
 # 全局单例

@@ -49,7 +49,7 @@ export const ScoresVisualization = ({
   // 转换数据用于图表
   const radarData = Object.entries(SCORE_LABELS).map(([key, label]) => {
     const item: any = { subject: label };
-    hypotheses.forEach((hyp, idx) => {
+    hypotheses.forEach((hyp) => {
       item[`hyp_${hyp.id}`] = hyp.scores[key as keyof typeof hyp.scores];
     });
     return item;
@@ -126,7 +126,7 @@ export const ScoresVisualization = ({
               ))}
               <Legend 
                 wrapperStyle={{ paddingTop: '20px' }}
-                formatter={(value) => hypotheses.find(h => `hyp_${h.id}` === value)?.title}
+                formatter={(value: string) => hypotheses.find(h => `hyp_${h.id}` === value)?.title}
               />
               <Tooltip 
                 contentStyle={{ 

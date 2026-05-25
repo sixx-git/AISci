@@ -37,7 +37,7 @@ export const ExperimentDesignTable = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
-            {experiments.map((exp, idx) => (
+            {experiments.map((exp) => (
               <tr 
                 key={exp.id}
                 className="hover:bg-gray-800/50 transition-colors"

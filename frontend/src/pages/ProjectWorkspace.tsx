@@ -3,9 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Upload,
-  FileText,
   Play,
-  Download,
   Sparkles,
   File,
   Brain,
@@ -16,14 +14,16 @@ import {
   FlaskConical,
   CheckCircle,
   FileText as FileTextIcon,
+  History,
 } from 'lucide-react';
-import { projectApi, documentApi } from '@/lib/api';
+import { projectApi, documentApi, pipelineApi } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PipelineVisualization, PipelineStage as VisualPipelineStage } from '@/components/PipelineVisualization';
 import { ResearchResults } from '@/components/ResearchResults';
-import type { Project, Document } from '@/types';
+import { PipelineHistory } from '@/components/PipelineHistory';
+import type { Project, Document, PipelineRunDetail } from '@/types';
 
 // 完整的 Pipeline 阶段定义（按用户要求的顺序）
 const VISUAL_PIPELINE_STAGES: VisualPipelineStage[] = [
@@ -50,6 +50,8 @@ export function ProjectWorkspace() {
   const [results, setResults] = useState<any>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<PipelineRunDetail | null>(null);
 
   useEffect(() => {
     if (projectId) {
@@ -109,6 +111,7 @@ export function ProjectWorkspace() {
     setResults(null);
     setReportUrl(null);
     setPipelineCompleted(false);
+    setSelectedRun(null);
 
     // 重置所有阶段为 pending 状态
     setPipelineStages(VISUAL_PIPELINE_STAGES.map(stage => ({
@@ -118,131 +121,25 @@ export function ProjectWorkspace() {
     })));
 
     try {
-      // 逐个运行阶段
-      for (let i = 0; i < VISUAL_PIPELINE_STAGES.length; i++) {
-        const startTime = Date.now();
+      // 调用真实的 API
+      const response = await pipelineApi.run(projectId, researchQuestion);
+      if (response.code === 200) {
+        setResults(response.data);
+        setPipelineCompleted(true);
         
-        // 设置当前阶段为 running
-        setPipelineStages(prev => prev.map((stage, idx) => 
-          idx === i ? { ...stage, status: 'running' as const } : stage
-        ));
-
-        // 模拟阶段执行
-        await new Promise(resolve => setTimeout(resolve, 1200));
-
-        const endTime = Date.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(1) + 's';
-
-        // 模拟每个阶段的输出
-        const stageOutputs = {
-          problem: {
-            analysis: '已深入理解研究问题的背景与重要性，明确了研究目标与边界条件。',
-            keyInsights: [
-              '问题具有重要的理论与实践价值',
-              '现有研究存在明确缺口',
-              '研究方案具有可行性'
-            ]
-          },
-          literature: {
-            papersAnalyzed: 23,
-            keyFindings: [
-              { id: 'f1', content: '深度学习在该领域应用广泛', source: 'Zhang et al., 2025' },
-              { id: 'f2', content: 'Transformer架构展现出强大潜力', source: 'Wang et al., 2024' },
-              { id: 'f3', content: '样本效率是核心挑战', source: 'Liu et al., 2025' }
-            ],
-            summary: '通过全面分析相关文献，确定了本领域的研究脉络与前沿动态。'
-          },
-          gaps: {
-            identifiedGaps: [
-              '混合模型在复杂场景中的探索不足',
-              '跨域迁移学习的理论框架不完善',
-              '小样本学习算法在该领域应用有限',
-              '可解释性研究相对匮乏'
-            ],
-            priority: '高',
-            impact: '解决这些缺口将推动领域显著进步'
-          },
-          hypothesis: {
-            mainHypothesis: '结合注意力机制与图神经网络的混合模型将显著提升任务性能',
-            subHypotheses: [
-              '图神经网络能够有效建模结构化知识',
-              '注意力机制增强了信息选择与组合能力',
-              '迁移学习策略降低了数据依赖'
-            ],
-            rationale: '基于文献分析与方法论创新'
-          },
-          evaluation: {
-            feasibility: 0.85,
-            novelty: 0.78,
-            impact: 0.92,
-            riskAssessment: '低风险',
-            recommendations: [
-              '优先验证核心假设',
-              '准备充足算力资源',
-              '设计多组对比实验'
-            ],
-            overallScore: 8.2
-          },
-          experiment: {
-            design: '严格的对照实验设计',
-            datasets: ['Standard Benchmark A', 'Real-world Dataset B', 'Challenge Dataset C'],
-            baselines: [
-              '传统机器学习方法',
-              '纯深度学习方法',
-              '当前SOTA方法',
-              '消融实验变体'
-            ],
-            metrics: ['准确率', '召回率', 'F1分数', '计算效率'],
-            validationStrategy: '5折交叉验证'
-          },
-          validation: {
-            experimentId: 'EXP-2025-001',
-            results: {
-              accuracy: '+12.5% 相对提升',
-              f1: '+14.2% 相对提升',
-              efficiency: '相当的推理速度'
-            },
-            statisticalSignificance: 'p < 0.01',
-            conclusion: '初步验证表明假设成立'
-          },
-          report: {
-            title: 'AI Research Report: A Hybrid Approach for Scientific Discovery',
-            sections: [
-              'Abstract',
-              'Introduction',
-              'Related Work',
-              'Methodology',
-              'Experiments',
-              'Results',
-              'Discussion',
-              'Conclusion'
-            ],
-            recommendations: [
-              '扩大实验规模',
-              '探索更多应用场景',
-              '优化计算效率',
-              '撰写学术论文投稿'
-            ],
-            generatedAt: new Date().toISOString()
-          }
-        };
-
-        const currentStageId = VISUAL_PIPELINE_STAGES[i].id as keyof typeof stageOutputs;
+        // 更新所有阶段状态为成功
+        setPipelineStages(VISUAL_PIPELINE_STAGES.map((stage) => ({
+          ...stage,
+          status: 'success' as const,
+          duration: '0s',
+        })));
         
-        // 更新阶段状态为 success 并保存输出
-        setPipelineStages(prev => prev.map((stage, idx) => 
-          idx === i ? { 
-            ...stage, 
-            status: 'success' as const, 
-            output: stageOutputs[currentStageId],
-            duration 
-          } : stage
-        ));
+        // 刷新历史记录
+        if (showHistory) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // 历史记录会通过 PipelineHistory 组件自动刷新
+        }
       }
-
-      // 标记完成
-      setPipelineCompleted(true);
-      setReportUrl('http://localhost:3000/api/v1/reports/download/mock-report/pdf');
     } catch (error) {
       console.error('Pipeline 运行失败:', error);
       setPipelineStages(prev => {
@@ -257,6 +154,7 @@ export function ProjectWorkspace() {
         }
         return newStages;
       });
+      alert('Pipeline 运行失败，请重试');
     } finally {
       setIsRunning(false);
     }
@@ -265,18 +163,27 @@ export function ProjectWorkspace() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <Link to="/" className="text-gray-400 hover:text-gray-200">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-1">
-            {project?.name || '项目工作台'}
-          </h1>
-          {project?.description && (
-            <p className="text-gray-400">{project.description}</p>
-          )}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <Link to="/" className="text-gray-400 hover:text-gray-200">
+            <ArrowLeft className="w-6 h-6" />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-1">
+              {project?.name || '项目工作台'}
+            </h1>
+            {project?.description && (
+              <p className="text-gray-400">{project.description}</p>
+            )}
+          </div>
         </div>
+        <Button
+          onClick={() => setShowHistory(!showHistory)}
+          variant="secondary"
+          icon={<History className="w-4 h-4" />}
+        >
+          {showHistory ? '隐藏历史' : '查看历史'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -339,12 +246,20 @@ export function ProjectWorkspace() {
               onClick={runPipeline}
               isLoading={isRunning}
               disabled={!researchQuestion.trim()}
-              leftIcon={<Play className="w-4 h-4" />}
+              icon={<Play className="w-4 h-4" />}
               className="w-full"
             >
               {isRunning ? '研究中...' : '运行研究 Pipeline'}
             </Button>
           </Card>
+          
+          {/* History Panel - Conditional */}
+          {showHistory && projectId && (
+            <PipelineHistory 
+              projectId={projectId} 
+              onSelectRun={setSelectedRun}
+            />
+          )}
         </div>
 
         {/* Right Column - Pipeline & Results */}
@@ -357,7 +272,25 @@ export function ProjectWorkspace() {
           </Card>
 
           {/* Results Display - 集成新的 ResearchResults 组件 */}
-          {pipelineCompleted ? (
+          {selectedRun ? (
+            <Card title={`历史运行结果 - ${selectedRun.research_question.substring(0, 30)}...`} subtitle="历史记录查看">
+              <div className="p-4 bg-gray-900/50 rounded-lg">
+                <p className="text-white">运行时间: {new Date(selectedRun.created_at).toLocaleString('zh-CN')}</p>
+                <p className="text-gray-400 mt-2">状态: {selectedRun.status}</p>
+                <div className="mt-4">
+                  <p className="text-sm text-gray-400 mb-2">阶段详情:</p>
+                  <div className="space-y-2">
+                    {selectedRun.stages.map((stage) => (
+                      <div key={stage.id} className="flex justify-between items-center p-2 bg-gray-800/50 rounded">
+                        <span className="text-sm text-white">{stage.stage}</span>
+                        <StatusBadge status={stage.status as any} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ) : pipelineCompleted ? (
             <ResearchResults />
           ) : (
             <Card title="研究结果" subtitle="AI 生成的研究内容">
