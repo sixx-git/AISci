@@ -30,6 +30,16 @@ from app.agents.hypothesis_generation_agent import (
     HypothesisGenerationResult,
     get_hypothesis_generation_agent
 )
+from app.agents.hypothesis_review_agent import (
+    HypothesisReviewAgent,
+    HypothesisCandidate,
+    HypothesisReviewRequest,
+    HypothesisReviewResult,
+    ScoreDetail,
+    HypothesisScores,
+    HypothesisReview,
+    get_hypothesis_review_agent
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
@@ -53,4 +63,12 @@ __all__ = [
     'HypothesisItem',
     'HypothesisGenerationResult',
     'get_hypothesis_generation_agent',
+    'HypothesisReviewAgent',
+    'HypothesisCandidate',
+    'HypothesisReviewRequest',
+    'HypothesisReviewResult',
+    'ScoreDetail',
+    'HypothesisScores',
+    'HypothesisReview',
+    'get_hypothesis_review_agent',
 ]

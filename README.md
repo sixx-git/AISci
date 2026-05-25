@@ -855,6 +855,213 @@ curl -X POST http://localhost:8000/api/v1/agents/hypothesis-generation \
 
 ---
 
+### HypothesisReviewAgent - 假设评审智能体
+
+假设评审智能体用于对候选假设进行多维度评审和排序。
+
+#### 核心功能
+- 从 5 个维度对假设进行 0-10 分评分：
+  1. scientific_value (科学价值)：对推动领域发展的重要性
+  2. novelty (创新性)：与现有研究的区别和创新点
+  3. testability (可测试性)：通过实验/分析验证的可行性
+  4. data_availability (数据可用性)：验证所需数据的可获得性
+  5. cost_risk (成本风险)：验证的成本、时间和风险程度
+- 每条评分给出具体理由
+- 指出低分原因（如果评分<6分）
+- 给出修改建议
+- 按综合得分从高到低排序输出
+
+#### 评分标准
+- 9-10 分：优秀，非常突出
+- 7-8 分：良好，有较好表现
+- 5-6 分：一般，有明显不足
+- 0-4 分：较差，存在严重问题
+
+#### 基本用法
+
+```python
+from app.agents import (
+    HypothesisReviewAgent,
+    HypothesisCandidate,
+    get_hypothesis_review_agent
+)
+
+# 获取智能体实例
+agent = get_hypothesis_review_agent()
+
+# 准备候选假设
+hypotheses = [
+    HypothesisCandidate(
+        hypothesis="混合 CNN-Transformer 模型在医学影像任务中优于单一模型",
+        rationale="CNN 提取空间特征，Transformer 处理长距离依赖",
+        novelty="首次系统对比三种模型架构",
+        testability="可以通过对比实验验证",
+        required_data="公开医学影像数据集",
+        possible_method="实现三个模型进行对比",
+        risk="混合模型可能计算复杂度高"
+    ),
+    HypothesisCandidate(
+        hypothesis="数据增强技术可以显著提升小数据集上的模型性能",
+        rationale="数据增强在图像任务中有效，医学影像数据通常较少",
+        testability="可以通过对比有/无数据增强的性能验证",
+        required_data="医学影像数据集",
+        possible_method="设计多种数据增强策略"
+    )
+]
+
+# 评审假设
+result = agent.review(hypotheses=hypotheses)
+
+# 查看结果
+print(f"评审完成，共 {len(result.reviews)} 条假设")
+print(f"总体评价: {result.summary}")
+
+for review in result.reviews:
+    print(f"\n假设索引: {review.hypothesis_index}")
+    print(f"综合得分: {review.overall_score}")
+    print(f"科学价值: {review.scores.scientific_value.score} - {review.scores.scientific_value.reason}")
+    print(f"创新性: {review.scores.novelty.score} - {review.scores.novelty.reason}")
+    print(f"可测试性: {review.scores.testability.score} - {review.scores.testability.reason}")
+    print(f"数据可用性: {review.scores.data_availability.score} - {review.scores.data_availability.reason}")
+    print(f"成本风险: {review.scores.cost_risk.score} - {review.scores.cost_risk.reason}")
+    print(f"修改建议: {review.suggestions}")
+    print(f"优势: {review.strengths}")
+    print(f"劣势: {review.weaknesses}")
+```
+
+#### API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/agents/problem-understanding` | 问题理解分析 |
+| POST | `/api/v1/agents/literature-mining` | 文献挖掘分析 |
+| POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
+| POST | `/api/v1/agents/hypothesis-generation` | 假设生成 |
+| GET | `/api/v1/agents/hypotheses/{project_id}` | 获取项目假设列表 |
+| POST | `/api/v1/agents/hypothesis-review` | 假设评审 |
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8000/api/v1/agents/hypothesis-review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hypotheses": [
+      {
+        "hypothesis": "混合 CNN-Transformer 模型在医学影像任务中优于单一模型",
+        "rationale": "CNN 提取空间特征，Transformer 处理长距离依赖，两者结合可以互补",
+        "novelty": "首次系统对比三种模型架构在特定医学影像任务上的性能",
+        "testability": "可以通过构建三个模型，在相同数据集上进行训练和测试，对比准确率、召回率等指标",
+        "required_data": "公开医学影像数据集（如 ChestX-ray14），标注数据",
+        "possible_method": "实现三个模型：纯 CNN、纯 Transformer、混合模型，进行对比实验",
+        "risk": "混合模型可能计算复杂度高，训练时间长，可能存在过拟合风险"
+      },
+      {
+        "hypothesis": "数据增强技术可以显著提升小数据集上的模型性能",
+        "rationale": "现有研究表明数据增强在图像任务中有效，医学影像数据通常较少",
+        "novelty": "专门针对医学影像设计数据增强策略",
+        "testability": "可以通过对比有/无数据增强的模型性能验证",
+        "required_data": "医学影像数据集，包含训练、验证、测试集",
+        "possible_method": "设计多种数据增强策略（旋转、翻转、缩放等），进行 ablation study",
+        "risk": "过度增强可能导致数据失真，引入噪声"
+      }
+    ]
+  }'
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "message": "假设评审完成，评审了 2 条假设",
+  "data": {
+    "reviews": [
+      {
+        "hypothesis_index": 1,
+        "hypothesis": "数据增强技术可以显著提升小数据集上的模型性能",
+        "scores": {
+          "scientific_value": {
+            "score": 6,
+            "reason": "该问题研究较多，但针对医学影像的系统性研究仍有价值",
+            "low_score_reason": null
+          },
+          "novelty": {
+            "score": 5,
+            "reason": "数据增强概念较成熟，需要更具体的创新点",
+            "low_score_reason": "创新性不足，建议提出更有针对性的增强策略"
+          },
+          "testability": {
+            "score": 9,
+            "reason": "实验设计非常简单，易于快速验证",
+            "low_score_reason": null
+          },
+          "data_availability": {
+            "score": 8,
+            "reason": "公开医学影像数据集充足，易于获取",
+            "low_score_reason": null
+          },
+          "cost_risk": {
+            "score": 8,
+            "reason": "实验成本低，周期短，风险可控",
+            "low_score_reason": null
+          }
+        },
+        "overall_score": 7.2,
+        "suggestions": "1. 建议聚焦于医学影像特定的增强策略；2. 增加消融实验分析不同增强方法的效果；3. 可以与第一个假设结合，探索数据增强对混合模型的影响",
+        "strengths": ["可测试性强", "数据易获取", "成本低风险小"],
+        "weaknesses": ["创新性一般"]
+      },
+      {
+        "hypothesis_index": 0,
+        "hypothesis": "混合 CNN-Transformer 模型在医学影像任务中优于单一模型",
+        "scores": {
+          "scientific_value": {
+            "score": 8,
+            "reason": "该假设针对医学影像领域核心问题，若验证成功将显著推动模型架构发展",
+            "low_score_reason": null
+          },
+          "novelty": {
+            "score": 9,
+            "reason": "首次系统对比三种架构在特定任务上的性能，创新点明确",
+            "low_score_reason": null
+          },
+          "testability": {
+            "score": 7,
+            "reason": "实验设计清晰，可以通过对照实验验证，但需要较大计算资源",
+            "low_score_reason": null
+          },
+          "data_availability": {
+            "score": 6,
+            "reason": "公开数据集可用，但特定医学影像数据获取可能受限",
+            "low_score_reason": "可能需要机构合作获取数据"
+          },
+          "cost_risk": {
+            "score": 5,
+            "reason": "实验成本较高，训练时间较长，存在模型不收敛风险",
+            "low_score_reason": "计算资源消耗大，周期可能超预期"
+          }
+        },
+        "overall_score": 7.0,
+        "suggestions": "1. 建议先进行小规模预实验验证可行性；2. 考虑使用预训练模型降低计算成本；3. 设计更高效的混合架构；4. 提前规划数据获取方案",
+        "strengths": ["创新性强", "科学价值高", "实验设计清晰"],
+        "weaknesses": ["成本风险较高", "数据获取可能受限"]
+      }
+    ],
+    "summary": "共评审 2 条假设，建议优先考虑第二条假设进行快速验证，同时投入资源完善第一条假设的实验设计。两条假设可以结合开展研究。"
+  }
+}
+```
+
+#### Prompt 模板
+
+智能体使用的 Prompt 模板主要强调：
+- 评分理由必须具体，结合假设内容分析
+- 指出低分原因（如果评分<6分）
+- 给出可操作的修改建议
+- 识别每条假设的优势和劣势
+- 按综合得分从高到低排序
+
+---
+
 ## 🖥️ 手动启动 (不使用脚本)
 
 ### 后端启动
@@ -907,6 +1114,7 @@ npm run dev
 | POST | `/api/v1/agents/knowledge-gap` | 知识缺口分析 |
 | POST | `/api/v1/agents/hypothesis-generation` | 假设生成 |
 | GET | `/api/v1/agents/hypotheses/{project_id}` | 获取项目假设列表 |
+| POST | `/api/v1/agents/hypothesis-review` | 假设评审 |
 
 ---
 

@@ -25,6 +25,12 @@ from app.agents.knowledge_gap_agent import (
 from app.agents.hypothesis_generation_agent import (
     get_hypothesis_generation_agent
 )
+from app.agents.hypothesis_review_agent import (
+    HypothesisCandidate,
+    HypothesisReviewRequest,
+    HypothesisReviewResult,
+    get_hypothesis_review_agent
+)
 from app.schemas.research import (
     HypothesisGenerationRequest,
     HypothesisGenerationResponse,
@@ -179,6 +185,37 @@ async def get_project_hypotheses(
         return success(
             hypotheses,
             message=f"获取假设列表成功，共 {len(hypotheses)} 条"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/hypothesis-review", response_model=ApiResponse[HypothesisReviewResult])
+async def hypothesis_review(
+    request: HypothesisReviewRequest
+):
+    """
+    假设评审智能体
+    
+    输入候选假设列表，对每条假设从 5 个维度评分：
+    - scientific_value (科学价值 0-10分)
+    - novelty (创新性 0-10分)
+    - testability (可测试性 0-10分)
+    - data_availability (数据可用性 0-10分)
+    - cost_risk (成本风险 0-10分)
+    
+    给出修改建议，输出按综合得分排序后的假设列表
+    """
+    try:
+        agent = get_hypothesis_review_agent()
+        
+        result = agent.review(
+            hypotheses=request.hypotheses
+        )
+        
+        return success(
+            result,
+            message=f"假设评审完成，评审了 {len(result.reviews)} 条假设"
         )
     except Exception as e:
         return error(str(e))
