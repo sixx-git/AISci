@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { FlaskConical, Home, FileText, Settings } from 'lucide-react';
+import { FlaskConical, Home, FileText, Settings, GitBranch, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
@@ -10,6 +10,8 @@ export function Navbar() {
     { path: '/', label: '首页', icon: Home },
     { path: '/projects', label: '项目', icon: FlaskConical },
     { path: '/documents', label: '文档', icon: FileText },
+    { path: '/workflow', label: '工作流', icon: GitBranch },
+    { path: '/reports', label: '报告', icon: ClipboardList },
     { path: '/settings', label: '设置', icon: Settings },
   ];
 
