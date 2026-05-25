@@ -18,6 +18,32 @@ class ResearchProject(Base):
     execution_time = Column(Float, nullable=True)
 
 
+class ExperimentDesign(BaseModel):
+    """
+    实验设计模型
+    """
+    __tablename__ = "experiment_designs"
+    
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    hypothesis_id = Column(String(36), ForeignKey("hypotheses.id"), nullable=False, index=True)
+    hypothesis = Column(Text, nullable=False)
+    
+    # 实验设计内容
+    methods = Column(Text, nullable=False)
+    datasets = Column(Text, nullable=False)
+    source_data = Column(Text, nullable=False)
+    target_data = Column(Text, nullable=False)
+    baselines = Column(Text, nullable=False)
+    metrics = Column(Text, nullable=False)
+    experimental_steps = Column(Text, nullable=False)
+    expected_results = Column(Text, nullable=False)
+    limitations = Column(Text, nullable=False)
+    
+    # 元数据
+    status = Column(String(50), default="draft", nullable=False)  # draft, ready, running, completed
+    priority = Column(Integer, default=3, nullable=False)  # 1-5
+
+
 class Hypothesis(BaseModel):
     """
     科学假设模型

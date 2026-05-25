@@ -40,6 +40,10 @@ from app.agents.hypothesis_review_agent import (
     HypothesisReview,
     get_hypothesis_review_agent
 )
+from app.agents.experiment_design_agent import (
+    ExperimentDesignAgent,
+    get_experiment_design_agent
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
@@ -71,4 +75,6 @@ __all__ = [
     'HypothesisScores',
     'HypothesisReview',
     'get_hypothesis_review_agent',
+    'ExperimentDesignAgent',
+    'get_experiment_design_agent',
 ]

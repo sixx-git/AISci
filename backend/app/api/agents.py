@@ -31,12 +31,20 @@ from app.agents.hypothesis_review_agent import (
     HypothesisReviewResult,
     get_hypothesis_review_agent
 )
+from app.agents.experiment_design_agent import (
+    get_experiment_design_agent
+)
 from app.schemas.research import (
     HypothesisGenerationRequest,
     HypothesisGenerationResponse,
-    HypothesisResponse
+    HypothesisResponse,
+    ExperimentDesignRequest,
+    ExperimentDesignGenerationResponse,
+    ExperimentDesignCreate,
+    ExperimentDesignDBResponse
 )
 from app.services.hypothesis_service import HypothesisService
+from app.services.experiment_service import ExperimentDesignService
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -216,6 +224,105 @@ async def hypothesis_review(
         return success(
             result,
             message=f"假设评审完成，评审了 {len(result.reviews)} 条假设"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/experiment-design", response_model=ApiResponse[ExperimentDesignGenerationResponse])
+async def experiment_design(
+    request: ExperimentDesignRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    实验设计智能体
+    
+    输入最高分假设，自动生成完整的实验设计。
+    输出字段包括：
+    - methods (研究方法)
+    - datasets (数据集)
+    - source_data (源数据)
+    - target_data (目标数据)
+    - baselines (基线方法)
+    - metrics (评估指标)
+    - experimental_steps (实验步骤)
+    - expected_results (预期结果)
+    - limitations (局限性)
+    
+    符合"科学假设与研究计划"的输出规范，结果保存到数据库。
+    """
+    try:
+        agent = get_experiment_design_agent()
+        
+        # 生成实验设计
+        experiment_result = agent.design_experiment(
+            hypothesis=request.hypothesis,
+            rationale=request.rationale,
+            novelty=request.novelty,
+            testability=request.testability,
+            required_data=request.required_data,
+            possible_method=request.possible_method,
+            risk=request.risk
+        )
+        
+        # 保存到数据库
+        experiment_service = ExperimentDesignService(db)
+        experiment_create = ExperimentDesignCreate(
+            project_id=request.project_id,
+            hypothesis_id=request.hypothesis_id,
+            hypothesis=request.hypothesis,
+            methods=experiment_result["methods"],
+            datasets=experiment_result["datasets"],
+            source_data=experiment_result["source_data"],
+            target_data=experiment_result["target_data"],
+            baselines=experiment_result["baselines"],
+            metrics=experiment_result["metrics"],
+            experimental_steps=experiment_result["experimental_steps"],
+            expected_results=experiment_result["expected_results"],
+            limitations=experiment_result["limitations"],
+            status="draft",
+            priority=1
+        )
+        
+        experiment_service.create_experiment_design(experiment_create)
+        
+        # 构建响应
+        response = ExperimentDesignGenerationResponse(
+            experiment_design=experiment_result,
+            summary="实验设计生成成功"
+        )
+        
+        return success(
+            response,
+            message="实验设计生成完成"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/experiment-designs/{project_id}", response_model=ApiResponse[List[ExperimentDesignDBResponse]])
+async def get_project_experiment_designs(
+    project_id: str,
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    获取项目的实验设计列表
+    """
+    try:
+        experiment_service = ExperimentDesignService(db)
+        experiments = experiment_service.get_experiment_designs_by_project(
+            project_id=project_id,
+            status=status,
+            limit=limit,
+            offset=offset
+        )
+        
+        return success(
+            experiments,
+            message=f"获取实验设计列表成功，共 {len(experiments)} 条"
         )
     except Exception as e:
         return error(str(e))
