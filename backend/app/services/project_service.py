@@ -9,8 +9,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 from app.core.config import get_settings
-from app.models.project import Project, ProjectStatus, Document
+from app.models import (
+    Project,
+    Document,
+    Chunk,
+    ProjectStatus,
+    DocumentStatus,
+    ChunkStatus
+)
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectQuery
+
+# Document Parser
+from app.services.document_parser import DocumentParser, ParserBackend
 
 settings = get_settings()
 
@@ -88,6 +98,7 @@ class ProjectService:
         for field, value in update_data.items():
             setattr(project, field, value)
         
+        project.updated_at = datetime.now()
         self.db.commit()
         self.db.refresh(project)
         
@@ -115,13 +126,26 @@ class DocumentService:
         # 确保上传目录存在
         os.makedirs(self.upload_dir, exist_ok=True)
     
-    def save_document(
+    def upload_and_parse_document(
         self,
         filename: str,
         file_content: bytes,
-        project_id: Optional[str] = None
-    ) -> Document:
-        """保存文档"""
+        project_id: Optional[str] = None,
+        auto_parse: bool = True
+    ) -> Tuple[Document, Optional[List[Chunk]]]:
+        """
+        上传并解析文档
+        
+        Args:
+            filename: 文件名
+            file_content: 文件内容
+            project_id: 项目 ID
+            auto_parse: 是否自动解析
+            
+        Returns:
+            Tuple[Document, Optional[List[Chunk]]]
+        """
+        # 保存文件
         doc_id = str(uuid.uuid4())
         file_extension = os.path.splitext(filename)[1].lower()
         save_filename = f"{doc_id}{file_extension}"
@@ -139,14 +163,69 @@ class DocumentService:
             file_path=save_path,
             file_type=file_extension[1:] if file_extension else "unknown",
             file_size=len(file_content),
-            status="pending"
+            status=DocumentStatus.UPLOADED,
+            created_at=datetime.now()
         )
         
         self.db.add(doc)
+        self.db.flush()
+        
+        # 如果需要自动解析
+        chunks = None
+        if auto_parse:
+            try:
+                doc, chunks = self.parse_document(doc.id)
+            except Exception as e:
+                # 解析失败，但文档已保存
+                doc.status = DocumentStatus.FAILED
+                doc.error_message = str(e)
+                self.db.commit()
+        
         self.db.commit()
         self.db.refresh(doc)
         
-        return doc
+        return doc, chunks
+    
+    def parse_document(
+        self,
+        doc_id: str,
+        backend: ParserBackend = ParserBackend.PYMUPDF
+    ) -> Tuple[Document, List[Chunk]]:
+        """
+        解析文档
+        
+        Args:
+            doc_id: 文档 ID
+            backend: 解析后端
+            
+        Returns:
+            Tuple[Document, List[Chunk]]
+        """
+        doc = self.get_document(doc_id)
+        if not doc:
+            raise ValueError(f"Document not found: {doc_id}")
+        
+        # 删除现有的切片
+        self._delete_document_chunks(doc_id)
+        
+        # 更新状态
+        doc.status = DocumentStatus.PROCESSING
+        self.db.flush()
+        
+        # 解析
+        parser = DocumentParser(self.db, backend=backend)
+        doc, chunks = parser.parse_file(
+            file_path=doc.file_path,
+            project_id=doc.project_id,
+            original_filename=doc.filename
+        )
+        
+        return doc, chunks
+    
+    def _delete_document_chunks(self, doc_id: str):
+        """删除文档的所有切片"""
+        self.db.query(Chunk).filter(Chunk.document_id == doc_id).delete()
+        self.db.flush()
     
     def get_document(self, doc_id: str) -> Optional[Document]:
         """获取文档"""
@@ -172,31 +251,21 @@ class DocumentService:
         
         return documents, total
     
-    def update_document_status(
+    def get_document_chunks(
         self,
         doc_id: str,
-        status: str,
-        error_message: Optional[str] = None,
-        content: Optional[str] = None,
-        summary: Optional[str] = None
-    ) -> Optional[Document]:
-        """更新文档状态"""
-        doc = self.get_document(doc_id)
-        if not doc:
-            return None
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Chunk], int]:
+        """获取文档的切片"""
+        q = self.db.query(Chunk).filter(Chunk.document_id == doc_id)
+        q = q.order_by(Chunk.chunk_index)
         
-        doc.status = status
-        if error_message:
-            doc.error_message = error_message
-        if content:
-            doc.content = content
-        if summary:
-            doc.summary = summary
+        total = q.count()
+        offset = (page - 1) * page_size
+        chunks = q.offset(offset).limit(page_size).all()
         
-        self.db.commit()
-        self.db.refresh(doc)
-        
-        return doc
+        return chunks, total
     
     def delete_document(self, doc_id: str) -> bool:
         """删除文档"""
@@ -216,53 +285,46 @@ class DocumentService:
         
         return True
     
-    def extract_text_from_file(self, file_path: str, filename: str) -> str:
-        """从文件中提取文本"""
-        import os
-        file_extension = os.path.splitext(filename)[1].lower()
+    # ==================== 兼容旧方法 ====================
+    
+    def save_document(
+        self,
+        filename: str,
+        file_content: bytes,
+        project_id: Optional[str] = None
+    ) -> Document:
+        """保存文档（旧方法，建议使用 upload_and_parse_document）"""
+        doc, _ = self.upload_and_parse_document(
+            filename=filename,
+            file_content=file_content,
+            project_id=project_id,
+            auto_parse=False
+        )
+        return doc
+    
+    def update_document_status(
+        self,
+        doc_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        content: Optional[str] = None,
+        summary: Optional[str] = None
+    ) -> Optional[Document]:
+        """更新文档状态"""
+        doc = self.get_document(doc_id)
+        if not doc:
+            return None
         
-        if file_extension == '.pdf':
-            return self._extract_pdf_text(file_path)
-        elif file_extension == '.docx':
-            return self._extract_docx_text(file_path)
-        elif file_extension in ['.txt', '.md']:
-            return self._extract_text_file(file_path)
-        else:
-            return f"不支持的文件格式: {file_extension}"
-    
-    def _extract_pdf_text(self, file_path: str) -> str:
-        """提取 PDF 文本"""
-        try:
-            from PyPDF2 import PdfReader
-            reader = PdfReader(file_path)
-            text_parts = []
-            for page in reader.pages:
-                text = page.extract_text() or ""
-                text_parts.append(text)
-            return "\n".join(text_parts)
-        except Exception as e:
-            return f"PDF 解析失败: {str(e)}"
-    
-    def _extract_docx_text(self, file_path: str) -> str:
-        """提取 DOCX 文本"""
-        try:
-            from docx import Document as DocxDocument
-            doc = DocxDocument(file_path)
-            text_parts = []
-            for paragraph in doc.paragraphs:
-                text_parts.append(paragraph.text)
-            return "\n".join(text_parts)
-        except Exception as e:
-            return f"DOCX 解析失败: {str(e)}"
-    
-    def _extract_text_file(self, file_path: str) -> str:
-        """提取文本文件内容"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except UnicodeDecodeError:
-            try:
-                with open(file_path, 'r', encoding='gbk') as f:
-                    return f.read()
-            except Exception as e:
-                return f"文本文件读取失败: {str(e)}"
+        doc.status = status
+        if error_message:
+            doc.error_message = error_message
+        if content:
+            doc.raw_text = content
+        if summary:
+            doc.summary = summary
+        
+        doc.updated_at = datetime.now()
+        self.db.commit()
+        self.db.refresh(doc)
+        
+        return doc
