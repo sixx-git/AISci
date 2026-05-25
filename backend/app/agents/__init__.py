@@ -48,6 +48,10 @@ from app.agents.small_validation_agent import (
     SmallValidationAgent,
     get_small_validation_agent
 )
+from app.agents.report_generation_agent import (
+    ReportGenerationAgent,
+    get_report_generation_agent
+)
 
 __all__ = [
     'ProblemUnderstandingAgent',
@@ -83,4 +87,6 @@ __all__ = [
     'get_experiment_design_agent',
     'SmallValidationAgent',
     'get_small_validation_agent',
+    'ReportGenerationAgent',
+    'get_report_generation_agent',
 ]

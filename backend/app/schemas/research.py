@@ -170,3 +170,79 @@ class SmallValidationGenerationResponse(BaseModel):
     """小样验证生成响应"""
     validation: SmallValidationItem = Field(..., description="生成的验证方案")
     summary: Optional[str] = Field(None, description="生成摘要")
+
+
+class ReportGenerationRequest(BaseModel):
+    """报告生成请求"""
+    project_id: str = Field(..., description="项目 ID")
+    project_info: dict = Field(..., description="项目基本信息")
+    problem_understanding: dict = Field(..., description="问题理解结果")
+    literature_facts: List[dict] = Field(..., description="文献事实列表")
+    citation_map: List[dict] = Field(..., description="引用映射列表")
+    knowledge_gaps: dict = Field(..., description="知识缺口结果")
+    final_hypothesis: dict = Field(..., description="最终假设")
+    experiment_design: dict = Field(..., description="实验设计")
+    small_validation: Optional[dict] = Field(None, description="小样验证结果")
+
+
+class ReportChapterItem(BaseModel):
+    """报告章节内容"""
+    problem_statement: str = Field(..., description="问题陈述")
+    rationale: str = Field(..., description="原理依据")
+    technical_details: str = Field(..., description="技术细节")
+    datasets: str = Field(..., description="数据集说明")
+    source: str = Field(..., description="源数据说明")
+    target: str = Field(..., description="目标说明")
+    methods: str = Field(..., description="研究方法")
+    experiments: str = Field(..., description="实验设计")
+    results: str = Field(..., description="预期结果")
+    references: List[str] = Field(..., description="参考文献列表")
+
+
+class ReportGenerationResult(BaseModel):
+    """报告生成结果"""
+    title: str = Field(..., description="报告标题")
+    paper_title: str = Field(..., description="论文标题")
+    paper_abstract: str = Field(..., description="论文摘要")
+    markdown_content: str = Field(..., description="Markdown 格式完整报告")
+    chapters: ReportChapterItem = Field(..., description="各章节内容")
+
+
+class ReportGenerationResponse(BaseModel):
+    """报告生成响应"""
+    report: ReportGenerationResult = Field(..., description="生成的报告")
+    summary: Optional[str] = Field(None, description="生成摘要")
+
+
+class ReportCreate(BaseModel):
+    """创建研究报告"""
+    project_id: str = Field(..., description="项目 ID")
+    hypothesis_id: Optional[str] = Field(None, description="假设 ID")
+    experiment_design_id: Optional[str] = Field(None, description="实验设计 ID")
+    small_validation_id: Optional[str] = Field(None, description="小样验证 ID")
+    title: str = Field(..., description="报告标题")
+    paper_title: str = Field(..., description="论文标题")
+    paper_abstract: str = Field(..., description="论文摘要")
+    markdown_content: str = Field(..., description="Markdown 内容")
+    problem_statement: str = Field(..., description="问题陈述")
+    rationale: str = Field(..., description="原理依据")
+    technical_details: str = Field(..., description="技术细节")
+    datasets: str = Field(..., description="数据集说明")
+    source: str = Field(..., description="源数据说明")
+    target: str = Field(..., description="目标说明")
+    methods: str = Field(..., description="研究方法")
+    experiments: str = Field(..., description="实验设计")
+    results: str = Field(..., description="预期结果")
+    references: str = Field(..., description="参考文献")
+    status: Optional[str] = Field("draft", description="状态")
+    version: Optional[int] = Field(1, description="版本")
+
+
+class ReportDBResponse(ReportCreate):
+    """报告数据库响应"""
+    id: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True

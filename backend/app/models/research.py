@@ -68,6 +68,40 @@ class SmallValidation(BaseModel):
     execution_time = Column(Float, nullable=True)
 
 
+class ResearchReport(BaseModel):
+    """
+    研究报告模型
+    """
+    __tablename__ = "research_reports"
+    
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    hypothesis_id = Column(String(36), ForeignKey("hypotheses.id"), nullable=True)
+    experiment_design_id = Column(String(36), ForeignKey("experiment_designs.id"), nullable=True)
+    small_validation_id = Column(String(36), ForeignKey("small_validations.id"), nullable=True)
+    
+    # 报告内容
+    title = Column(String(500), nullable=False)
+    paper_title = Column(String(500), nullable=False)
+    paper_abstract = Column(Text, nullable=False)
+    markdown_content = Column(Text, nullable=False)
+    
+    # 章节内容
+    problem_statement = Column(Text, nullable=False)
+    rationale = Column(Text, nullable=False)
+    technical_details = Column(Text, nullable=False)
+    datasets = Column(Text, nullable=False)
+    source = Column(Text, nullable=False)
+    target = Column(Text, nullable=False)
+    methods = Column(Text, nullable=False)
+    experiments = Column(Text, nullable=False)
+    results = Column(Text, nullable=False)
+    references = Column(Text, nullable=False)
+    
+    # 元数据
+    status = Column(String(50), default="draft", nullable=False)  # draft, generated, published
+    version = Column(Integer, default=1, nullable=False)
+
+
 class Hypothesis(BaseModel):
     """
     科学假设模型
