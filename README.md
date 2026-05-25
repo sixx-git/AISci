@@ -176,6 +176,212 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 3. 创建 API Key
 4. 将 API Key 填入 `.env` 文件
 
+### Qwen Client 使用说明
+
+#### 基本用法
+
+```python
+from app.services.qwen_client import QwenClient, qwen_chat, qwen_structured_chat
+
+# 方式1: 直接使用单例便捷函数
+response = qwen_chat(
+    prompt="你好，请介绍一下你自己",
+    system_prompt="你是一个有用的AI助手",
+    temperature=0.3
+)
+print(response)
+
+# 结构化输出
+schema = {"summary": "", "keywords": [], "sentiment": ""}
+result = qwen_structured_chat(
+    prompt="请分析以下文本：...",
+    schema_example=schema
+)
+print(result["summary"])
+
+# 方式2: 创建独立实例
+client = QwenClient(
+    api_key="your-api-key",
+    base_url="https://custom.url",
+    model="qwen-plus",
+    timeout=120,
+    max_retries=3
+)
+
+response = client.chat(
+    prompt="这是一个测试问题",
+    system_prompt="你是一个测试助手",
+    temperature=0.7,
+    max_tokens=500
+)
+
+# 多轮对话
+messages = [
+    {"role": "system", "content": "你是一个研究助手"},
+    {"role": "user", "content": "什么是机器学习？"},
+    {"role": "assistant", "content": "机器学习是..."},
+    {"role": "user", "content": "深度学习和它有什么关系？"}
+]
+response = client.chat_with_messages(messages, temperature=0.5)
+```
+
+#### 配置说明
+
+在 `.env` 文件中配置：
+
+```env
+# 千问 API 配置
+QWEN_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-max  # 可选: qwen-max, qwen-plus, qwen-turbo
+```
+
+#### 错误处理
+
+```python
+from app.services.qwen_client import (
+    QwenClient,
+    QwenError,
+    QwenAPIError,
+    QwenTimeoutError
+)
+
+client = QwenClient()
+
+try:
+    response = client.chat("测试问题")
+except QwenTimeoutError:
+    print("请求超时，请稍后重试")
+except QwenAPIError as e:
+    print(f"API 调用失败: {e}")
+except QwenError as e:
+    print(f"发生错误: {e}")
+```
+
+#### 可用模型
+
+- `qwen-max`: 最强模型，适合复杂任务
+- `qwen-plus`: 平衡模型，通用场景
+- `qwen-turbo`: 最快模型，适合简单任务
+
+---
+
+## 🔍 向量检索 (RAG) 使用说明
+
+### 核心功能
+
+向量存储模块提供以下功能：
+- 按项目分区管理向量索引
+- 使用 FAISS 进行高效向量检索
+- 支持多种 Embedding 模型
+- 自动处理 Chunk 向量化和元数据保存
+
+### 基本用法
+
+```python
+from app.services.vector_store import (
+    get_vector_store,
+    add_chunks_to_vector_store,
+    search_vector_store,
+    SearchResult
+)
+
+# 1. 添加 Chunks 到向量索引
+added_count = add_chunks_to_vector_store(project_id="your-project-id")
+print(f"Added {added_count} chunks")
+
+# 2. 搜索相关 Chunks
+results: list[SearchResult] = search_vector_store(
+    project_id="your-project-id",
+    query="你的搜索查询",
+    top_k=5
+)
+
+# 遍历结果
+for result in results:
+    print(f"文档: {result.document_title} (页 {result.start_page}-{result.end_page})")
+    print(f"相似度: {result.similarity:.2f}")
+    print(f"内容: {result.content[:100]}...\n")
+```
+
+### VectorStore 类使用
+
+```python
+from app.services.vector_store import VectorStore, SentenceTransformerEmbedding
+
+# 使用默认 Embedding 模型
+store = VectorStore()
+
+# 或者使用自定义 Embedding
+embedding = SentenceTransformerEmbedding("paraphrase-multilingual-MiniLM-L12-v2")
+store = VectorStore(embedding=embedding)
+
+# 添加 Chunks
+store.add_chunks(project_id="project-id")
+
+# 搜索
+results = store.search(
+    project_id="project-id",
+    query="搜索文本",
+    top_k=10
+)
+
+# 获取索引统计
+stats = store.get_project_stats("project-id")
+print(f"Chunk 数量: {stats['chunk_count']}")
+
+# 删除索引
+store.delete_project_index("project-id")
+```
+
+### API 接口
+
+向量检索相关的 API 接口（访问 http://localhost:8000/docs 查看完整文档）：
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/vector-search/search/{project_id}` | 向量搜索 |
+| POST | `/api/v1/vector-search/index/{project_id}/add-chunks` | 添加 Chunks 到索引 |
+| GET | `/api/v1/vector-search/index/{project_id}/stats` | 获取索引统计 |
+| DELETE | `/api/v1/vector-search/index/{project_id}` | 删除项目索引 |
+
+### 配置说明
+
+在 `.env` 文件中配置：
+
+```env
+# 向量存储路径
+VECTOR_STORE_PATH=./storage/faiss_index
+
+# Embedding 模型
+# 可选: paraphrase-multilingual-MiniLM-L12-v2, all-MiniLM-L6-v2, all-mpnet-base-v2 等
+EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+```
+
+### 自定义 Embedding
+
+你可以通过继承 `BaseEmbedding` 来实现自定义 Embedding：
+
+```python
+from app.services.vector_store import BaseEmbedding
+import numpy as np
+
+class CustomEmbedding(BaseEmbedding):
+    def __init__(self):
+        self._dimension = 512
+    
+    def embed(self, texts):
+        # 实现你的向量化逻辑
+        return np.random.randn(len(texts), self._dimension)
+    
+    @property
+    def dimension(self):
+        return self._dimension
+
+# 使用自定义 Embedding
+store = VectorStore(embedding=CustomEmbedding())
+```
+
 ---
 
 ## 🖥️ 手动启动 (不使用脚本)
@@ -222,6 +428,9 @@ npm run dev
 | POST | `/api/v1/chat/message` | 发送聊天消息 |
 | POST | `/api/v1/documents/upload` | 上传文档 |
 | GET | `/api/v1/documents/list` | 获取文档列表 |
+| POST | `/api/v1/vector-search/search/{project_id}` | 向量搜索 |
+| POST | `/api/v1/vector-search/index/{project_id}/add-chunks` | 添加 Chunks 到索引 |
+| GET | `/api/v1/vector-search/index/{project_id}/stats` | 获取索引统计 |
 
 ---
 
