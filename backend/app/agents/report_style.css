@@ -1,0 +1,221 @@
+/*
+研究报告 PDF 样式
+支持中文字体
+*/
+
+/* 全局设置 */
+* {
+    box-sizing: border-box;
+}
+
+/* 设置中文字体 */
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei'), local('SimHei'), local('SimSun');
+}
+
+@font-face {
+    font-family: 'PingFang SC';
+    src: local('PingFang SC'), local('Helvetica Neue');
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', 'SimHei', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #333;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 标题样式 */
+h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #1a365d;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #1a365d;
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+
+h2 {
+    font-size: 14pt;
+    font-weight: bold;
+    color: #2c5282;
+    margin-top: 25px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+h3 {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #2b6cb0;
+    margin-top: 20px;
+    margin-bottom: 8px;
+}
+
+h4 {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #2c5282;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+
+/* 段落样式 */
+p {
+    margin-bottom: 10px;
+    text-align: justify;
+}
+
+/* 列表样式 */
+ul, ol {
+    margin-bottom: 10px;
+    padding-left: 25px;
+}
+
+li {
+    margin-bottom: 5px;
+}
+
+/* 表格样式 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+table, th, td {
+    border: 1px solid #cbd5e0;
+}
+
+th, td {
+    padding: 8px 12px;
+    text-align: left;
+}
+
+th {
+    background-color: #ebf8ff;
+    font-weight: bold;
+    color: #2c5282;
+}
+
+tr:nth-child(even) {
+    background-color: #f7fafc;
+}
+
+/* 代码样式 */
+code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 10pt;
+    background-color: #f0f4f8;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #c53030;
+}
+
+pre {
+    background-color: #1a202c;
+    color: #e2e8f0;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+}
+
+/* 引用样式 */
+blockquote {
+    border-left: 4px solid #4299e1;
+    padding-left: 15px;
+    margin-left: 0;
+    color: #4a5568;
+    background-color: #f7fafc;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-right: 10px;
+    border-radius: 0 5px 5px 0;
+}
+
+/* 链接样式 */
+a {
+    color: #3182ce;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* 强调样式 */
+strong {
+    color: #1a365d;
+}
+
+em {
+    font-style: italic;
+}
+
+/* 分隔线 */
+hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* 页头页脚 - WeasyPrint 分页支持 */
+@page {
+    size: A4;
+    margin: 2.5cm;
+    
+    @top-center {
+        content: "科学假设与研究计划";
+        font-size: 10pt;
+        color: #718096;
+    }
+    
+    @bottom-center {
+        content: "第 " counter(page) " 页";
+        font-size: 10pt;
+        color: #718096;
+    }
+}
+
+/* 参考文献样式 */
+.references {
+    margin-top: 30px;
+}
+
+.references li {
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+/* 摘要样式 */
+.abstract {
+    background-color: #f7fafc;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border-left: 4px solid #4299e1;
+}
+
+.abstract-title {
+    font-weight: bold;
+    font-size: 12pt;
+    color: #1a365d;
+    margin-bottom: 10px;
+}

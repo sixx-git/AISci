@@ -79,6 +79,10 @@ class ResearchReport(BaseModel):
     experiment_design_id = Column(String(36), ForeignKey("experiment_designs.id"), nullable=True)
     small_validation_id = Column(String(36), ForeignKey("small_validations.id"), nullable=True)
     
+    # 文件相关
+    report_id = Column(String(36), nullable=True)  # 报告文件 ID
+    pdf_generated = Column(Integer, default=0, nullable=False)  # 0: no, 1: yes
+    
     # 报告内容
     title = Column(String(500), nullable=False)
     paper_title = Column(String(500), nullable=False)

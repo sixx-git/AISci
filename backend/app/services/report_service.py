@@ -27,6 +27,8 @@ class ReportService:
                 hypothesis_id=report_data.hypothesis_id,
                 experiment_design_id=report_data.experiment_design_id,
                 small_validation_id=report_data.small_validation_id,
+                report_id=report_data.report_id,
+                pdf_generated=1 if report_data.pdf_generated else 0,
                 title=report_data.title,
                 paper_title=report_data.paper_title,
                 paper_abstract=report_data.paper_abstract,

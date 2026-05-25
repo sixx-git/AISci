@@ -1,13 +1,17 @@
 """
 报告生成智能体 (ReportGenerationAgent)
-根据所有研究环节生成《科学假设与研究计划》Markdown 报告
+根据所有研究环节生成《科学假设与研究计划》Markdown 报告和 PDF
 """
 import logging
 import json
 import os
+import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from pydantic import BaseModel, Field
+
+import markdown
+from weasyprint import HTML, CSS
 
 from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
@@ -256,10 +260,9 @@ class ReportGenerationAgent:
         
         return result_dict
     
-    def _save_report_files(self, result: Dict[str, Any], project_info: Dict[str, Any]) -> None:
+    def _save_report_files(self, result: Dict[str, Any], project_info: Dict[str, Any]) -> Dict[str, Any]:
         """保存报告文件"""
         try:
-            import uuid
             report_id = str(uuid.uuid4())
             
             # 创建目录
@@ -276,10 +279,176 @@ class ReportGenerationAgent:
             with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
             
+            # 尝试生成 PDF
+            pdf_file = os.path.join(report_path, "report.pdf")
+            pdf_success = self._convert_markdown_to_pdf(
+                markdown_content=result.get("markdown_content", ""),
+                pdf_file=pdf_file
+            )
+            
             logger.info(f"报告文件已保存到: {report_path}")
+            
+            return {
+                "report_id": report_id,
+                "report_path": report_path,
+                "md_file": md_file,
+                "json_file": json_file,
+                "pdf_file": pdf_file if pdf_success else None,
+                "pdf_success": pdf_success
+            }
             
         except Exception as e:
             logger.error(f"保存报告文件时出错: {e}", exc_info=True)
+            raise
+    
+    def _convert_markdown_to_pdf(self, markdown_content: str, pdf_file: str) -> bool:
+        """
+        将 Markdown 转换为 PDF
+        
+        Args:
+            markdown_content: Markdown 内容
+            pdf_file: PDF 文件路径
+            
+        Returns:
+            是否成功
+        """
+        try:
+            # 1. Markdown 转 HTML
+            html_content = markdown.markdown(
+                markdown_content,
+                extensions=[
+                    'extra',
+                    'tables',
+                    'toc',
+                    'codehilite',
+                    'fenced_code'
+                ]
+            )
+            
+            # 2. 获取 CSS 样式
+            css_file = os.path.join(
+                os.path.dirname(__file__),
+                "report_style.css"
+            )
+            
+            # 3. 构建完整 HTML
+            full_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>科学假设与研究计划</title>
+            </head>
+            <body>
+                {html_content}
+            </body>
+            </html>
+            """
+            
+            # 4. 使用 WeasyPrint 生成 PDF
+            if os.path.exists(css_file):
+                HTML(string=full_html).write_pdf(
+                    pdf_file,
+                    stylesheets=[CSS(filename=css_file)]
+                )
+            else:
+                HTML(string=full_html).write_pdf(pdf_file)
+            
+            logger.info(f"PDF 生成成功: {pdf_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"PDF 生成失败: {e}", exc_info=True)
+            # PDF 失败不影响 Markdown 保存
+            return False
+    
+    def generate_report(
+        self,
+        project_info: Dict[str, Any],
+        problem_understanding: Dict[str, Any],
+        literature_facts: List[Dict[str, Any]],
+        citation_map: List[Dict[str, Any]],
+        knowledge_gaps: Dict[str, Any],
+        final_hypothesis: Dict[str, Any],
+        experiment_design: Dict[str, Any],
+        small_validation: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        生成研究报告
+        
+        Args:
+            project_info: 项目基本信息
+            problem_understanding: 问题理解结果
+            literature_facts: 文献事实列表
+            citation_map: 引用映射列表
+            knowledge_gaps: 知识缺口结果
+            final_hypothesis: 最终假设
+            experiment_design: 实验设计
+            small_validation: 小样验证结果（可选）
+            
+        Returns:
+            报告生成结果
+        """
+        try:
+            logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
+            
+            # 格式化输入信息
+            formatted_input = self._format_input(
+                project_info,
+                problem_understanding,
+                literature_facts,
+                citation_map,
+                knowledge_gaps,
+                final_hypothesis,
+                experiment_design,
+                small_validation
+            )
+            
+            # 构建提示
+            prompt = REPORT_GENERATION_PROMPT_TEMPLATE.format(**formatted_input)
+            
+            # 定义 schema 示例
+            schema_example = {
+                "title": "科学假设与研究计划",
+                "paper_title": "基于混合模型的医学图像分类研究",
+                "paper_abstract": "本文提出一种...",
+                "markdown_content": "# 科学假设与研究计划...",
+                "chapters": {
+                    "problem_statement": "...",
+                    "rationale": "...",
+                    "technical_details": "...",
+                    "datasets": "...",
+                    "source": "...",
+                    "target": "...",
+                    "methods": "...",
+                    "experiments": "...",
+                    "results": "...",
+                    "references": ["..."]
+                }
+            }
+            
+            # 调用 LLM
+            result_dict = qwen_structured_chat(
+                prompt=prompt,
+                schema_example=schema_example
+            )
+            
+            # 验证和标准化结果
+            result = self._validate_and_normalize_result(result_dict)
+            
+            # 保存报告文件
+            file_info = self._save_report_files(result, project_info)
+            
+            # 合并文件信息到结果
+            result.update(file_info)
+            
+            logger.info("研究报告生成完成")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"生成研究报告时出错: {e}", exc_info=True)
+            raise
 
 
 # 全局单例

@@ -206,6 +206,10 @@ class ReportGenerationResult(BaseModel):
     paper_abstract: str = Field(..., description="论文摘要")
     markdown_content: str = Field(..., description="Markdown 格式完整报告")
     chapters: ReportChapterItem = Field(..., description="各章节内容")
+    report_id: Optional[str] = Field(None, description="报告 ID")
+    pdf_download_url: Optional[str] = Field(None, description="PDF 下载地址")
+    md_download_url: Optional[str] = Field(None, description="Markdown 下载地址")
+    pdf_success: Optional[bool] = Field(None, description="PDF 是否生成成功")
 
 
 class ReportGenerationResponse(BaseModel):
@@ -234,6 +238,8 @@ class ReportCreate(BaseModel):
     experiments: str = Field(..., description="实验设计")
     results: str = Field(..., description="预期结果")
     references: str = Field(..., description="参考文献")
+    report_id: Optional[str] = Field(None, description="报告文件 ID")
+    pdf_generated: Optional[bool] = Field(False, description="PDF 是否生成成功")
     status: Optional[str] = Field("draft", description="状态")
     version: Optional[int] = Field(1, description="版本")
 

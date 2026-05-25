@@ -1,11 +1,15 @@
 """
 报告 API
 """
+import os
+import json
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
 from app.core.response import ApiResponse, success, error
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.agents.report_generation_agent import (
     get_report_generation_agent
@@ -19,6 +23,22 @@ from app.schemas.research import (
 from app.services.report_service import ReportService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+settings = get_settings()
+
+
+def get_download_url(report_id: str, file_type: str) -> str:
+    """
+    获取下载地址
+    
+    Args:
+        report_id: 报告 ID
+        file_type: 文件类型 (pdf 或 md)
+        
+    Returns:
+        下载地址
+    """
+    base_url = getattr(settings, "API_BASE_URL", "http://localhost:8000")
+    return f"{base_url}/api/reports/download/{report_id}/{file_type}"
 
 
 @router.post("/generate", response_model=ApiResponse[ReportGenerationResponse])
@@ -47,6 +67,18 @@ async def generate_report(
             small_validation=request.small_validation
         )
         
+        # 获取报告 ID
+        report_file_id = report_result.get("report_id")
+        pdf_success = report_result.get("pdf_success", False)
+        
+        # 构建下载地址
+        md_download_url = get_download_url(report_file_id, "md") if report_file_id else None
+        pdf_download_url = get_download_url(report_file_id, "pdf") if report_file_id and pdf_success else None
+        
+        # 更新结果包含下载地址
+        report_result["md_download_url"] = md_download_url
+        report_result["pdf_download_url"] = pdf_download_url
+        
         # 保存到数据库
         report_service = ReportService(db)
         
@@ -71,6 +103,8 @@ async def generate_report(
             experiments=chapters.get("experiments", ""),
             results=chapters.get("results", ""),
             references=json.dumps(chapters.get("references", []), ensure_ascii=False),
+            report_id=report_file_id,
+            pdf_generated=pdf_success,
             status="generated",
             version=1
         )
@@ -89,6 +123,55 @@ async def generate_report(
         )
     except Exception as e:
         return error(str(e))
+
+
+@router.get("/download/{report_id}/{file_type}")
+async def download_report_file(report_id: str, file_type: str):
+    """
+    下载报告文件
+    
+    Args:
+        report_id: 报告文件 ID
+        file_type: 文件类型 (pdf 或 md)
+    """
+    try:
+        # 构建文件路径
+        reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage", "reports")
+        report_dir = os.path.join(reports_dir, report_id)
+        
+        if file_type == "pdf":
+            file_path = os.path.join(report_dir, "report.pdf")
+            filename = "科学假设与研究计划.pdf"
+            media_type = "application/pdf"
+        elif file_type == "md":
+            file_path = os.path.join(report_dir, "report.md")
+            filename = "科学假设与研究计划.md"
+            media_type = "text/markdown"
+        else:
+            raise HTTPException(status_code=400, detail="不支持的文件类型")
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            # 如果 PDF 不存在，尝试返回 MD
+            if file_type == "pdf":
+                md_path = os.path.join(report_dir, "report.md")
+                if os.path.exists(md_path):
+                    return FileResponse(
+                        md_path,
+                        filename="科学假设与研究计划.md",
+                        media_type="text/markdown"
+                    )
+            raise HTTPException(status_code=404, detail="文件不存在")
+        
+        return FileResponse(
+            file_path,
+            filename=filename,
+            media_type=media_type
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{project_id}", response_model=ApiResponse[List[ReportDBResponse]])
@@ -177,7 +260,3 @@ async def delete_report(
         )
     except Exception as e:
         return error(str(e))
-
-
-# 导入 json，因为在上面的代码中使用了
-import json
