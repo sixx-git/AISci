@@ -4,7 +4,8 @@
 from app.agents.problem_understanding_agent import (
     ProblemUnderstandingAgent,
     ProblemUnderstandingRequest,
-    ProblemUnderstandingResponse
+    ProblemUnderstandingResponse,
+    get_problem_understanding_agent
 )
 from app.agents.literature_mining_agent import (
     LiteratureMiningAgent,
@@ -12,7 +13,8 @@ from app.agents.literature_mining_agent import (
     LiteratureMiningResponse,
     ScienceFact,
     EvidenceItem,
-    CitationMapItem
+    CitationMapItem,
+    get_literature_mining_agent
 )
 from app.agents.knowledge_gap_agent import (
     KnowledgeGapAgent,
@@ -22,7 +24,8 @@ from app.agents.knowledge_gap_agent import (
     KnowledgeGapItem,
     ContradictionItem,
     PossibleConnectionItem,
-    ResearchOpportunityItem
+    ResearchOpportunityItem,
+    get_knowledge_gap_agent
 )
 from app.agents.hypothesis_generation_agent import (
     HypothesisGenerationAgent,
@@ -57,12 +60,14 @@ __all__ = [
     'ProblemUnderstandingAgent',
     'ProblemUnderstandingRequest',
     'ProblemUnderstandingResponse',
+    'get_problem_understanding_agent',
     'LiteratureMiningAgent',
     'LiteratureMiningRequest',
     'LiteratureMiningResponse',
     'ScienceFact',
     'EvidenceItem',
     'CitationMapItem',
+    'get_literature_mining_agent',
     'KnowledgeGapAgent',
     'KnowledgeGapRequest',
     'KnowledgeGapResponse',
@@ -71,6 +76,7 @@ __all__ = [
     'ContradictionItem',
     'PossibleConnectionItem',
     'ResearchOpportunityItem',
+    'get_knowledge_gap_agent',
     'HypothesisGenerationAgent',
     'HypothesisItem',
     'HypothesisGenerationResult',
