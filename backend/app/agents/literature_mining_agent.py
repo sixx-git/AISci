@@ -199,7 +199,8 @@ Document ID: {doc_id}
         # 调用 Qwen
         return qwen_structured_chat(
             prompt=prompt,
-            schema_example=schema_example
+            schema_example=schema_example,
+            prompt_version="literature_mining"
         )
     
     def _validate_and_normalize(

@@ -96,7 +96,7 @@ class HypothesisGenerationAgent:
             }
             
             # 调用 LLM
-            result_dict = qwen_structured_chat(prompt=prompt, schema_example=schema_example)
+            result_dict = qwen_structured_chat(prompt=prompt, schema_example=schema_example, prompt_version="hypothesis_generation")
             
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict)

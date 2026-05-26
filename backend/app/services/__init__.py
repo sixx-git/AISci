@@ -15,9 +15,19 @@ from app.services.qwen_client import (
     QwenError,
     QwenAPIError,
     QwenTimeoutError,
+    AgentOutputParseError,
+    CallLog,
     get_qwen_client,
+    get_call_logs,
+    clear_call_logs,
     qwen_chat,
     qwen_structured_chat
+)
+from app.services.mock_qwen_client import (
+    MockQwenClient,
+    use_mock,
+    restore_real_client,
+    run_mock_pipeline_test
 )
 from app.services.document_service import DocumentService
 from app.services.project_service import ProjectService
@@ -38,9 +48,19 @@ __all__ = [
     'QwenError',
     'QwenAPIError',
     'QwenTimeoutError',
+    'AgentOutputParseError',
+    'CallLog',
     'get_qwen_client',
+    'get_call_logs',
+    'clear_call_logs',
     'qwen_chat',
     'qwen_structured_chat',
+    
+    # Mock Qwen 客户端
+    'MockQwenClient',
+    'use_mock',
+    'restore_real_client',
+    'run_mock_pipeline_test',
     
     # 业务服务
     'DocumentService',

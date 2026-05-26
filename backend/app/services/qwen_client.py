@@ -1,22 +1,31 @@
 """
 Qwen/千问 API 调用封装
+
+增强功能：
+- structured_chat 严格 JSON 输出 + 自动修复 + AgentOutputParseError
+- 每次调用自动记录日志（model_name, temperature, prompt_version, input, output, duration）
+- 所有 API Key 从 .env 读取，不硬编码
 """
 import json
+import re
+import time
 import logging
 from typing import Dict, List, Optional, Any, Union
 from functools import wraps
+from dataclasses import dataclass, field
+from datetime import datetime
+
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import openai
 from openai import APIError, APIConnectionError, APIStatusError, APITimeoutError
 
 from app.core.config import get_settings
 
-# 配置日志
 logger = logging.getLogger(__name__)
-
-# 初始化设置
 settings = get_settings()
 
+
+# ==================== 自定义异常 ====================
 
 class QwenError(Exception):
     """Qwen API 基础异常"""
@@ -33,9 +42,191 @@ class QwenAPIError(QwenError):
     pass
 
 
+class AgentOutputParseError(QwenError):
+    """Agent 输出 JSON 解析失败异常（不允许降级为 raw_response）"""
+    def __init__(self, message: str, raw_output: str = "", repair_attempted: bool = False):
+        super().__init__(message)
+        self.raw_output = raw_output
+        self.repair_attempted = repair_attempted
+
+
+# ==================== 调用日志 ====================
+
+@dataclass
+class CallLog:
+    """单次调用日志"""
+    timestamp: str = ""
+    model_name: str = ""
+    temperature: float = 0.2
+    prompt_version: str = ""
+    input: str = ""
+    output: str = ""
+    duration_ms: int = 0
+    success: bool = True
+    error: str = ""
+
+
+# 模块级调用日志存储
+_call_logs: List[CallLog] = []
+
+
+def get_call_logs() -> List[CallLog]:
+    """获取所有调用日志"""
+    return list(_call_logs)
+
+
+def clear_call_logs() -> None:
+    """清空调用日志"""
+    _call_logs.clear()
+
+
+def _truncate(text: str, max_len: int = 500) -> str:
+    """截断文本，用于日志记录"""
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "...[truncated]"
+
+
+# ==================== JSON 修复工具 ====================
+
+def _safe_json_loads(text: str) -> dict:
+    """尝试解析 JSON，但不做修复（先只清理 markdown 标记）"""
+    cleaned = text.strip()
+    # 移除 markdown 代码块标记
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+    return json.loads(cleaned)
+
+
+def _try_extract_json_block(text: str) -> Optional[str]:
+    """尝试从混合文本中提取 JSON 块"""
+    # 尝试匹配 ```json ... ```
+    m = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if m:
+        return m.group(1).strip()
+
+    # 尝试匹配第一个 { 到最后一个 }
+    first_brace = text.find('{')
+    last_brace = text.rfind('}')
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        return text[first_brace:last_brace + 1]
+
+    return None
+
+
+def _fill_missing_braces(json_str: str) -> str:
+    """补齐缺失的大括号，用于修复截断的 JSON"""
+    open_braces = json_str.count('{') - json_str.count('}')
+    open_brackets = json_str.count('[') - json_str.count(']')
+    # 补齐尾部引号（找到最后一个未闭合的字符串值）
+    in_string = False
+    escape_next = False
+    for ch in json_str:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\':
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+    if in_string:
+        json_str += '"'
+    # 补齐括号
+    json_str += ']' * open_brackets
+    json_str += '}' * open_braces
+    return json_str
+
+
+def _repair_json(raw_text: str) -> dict:
+    """
+    多层次 JSON 修复策略
+
+    策略：
+    1. 直接解析（清理 markdown 标记后）
+    2. 从混合文本中提取 JSON 块
+    3. 修复尾部逗号（trailing commas）
+    4. 补齐截断的括号
+    5. 修复常见 LLM 输出问题（单引号 → 双引号、None → null 等）
+    """
+    best_error = None
+
+    # 策略 1：直接解析
+    try:
+        return _safe_json_loads(raw_text)
+    except json.JSONDecodeError as e:
+        best_error = e
+
+    # 策略 2：从混合文本中提取 JSON 块
+    extracted = _try_extract_json_block(raw_text)
+    if extracted:
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError:
+            pass
+        # 对提取的块也做修复
+        candidates = [extracted]
+    else:
+        candidates = [raw_text]
+
+    # 准备多种修复后的候选文本
+    for candidate in list(candidates):
+        # 策略 3：移除尾部逗号
+        fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+        if fixed != candidate:
+            candidates.append(fixed)
+
+        # 策略 4：补齐截断的括号
+        filled = _fill_missing_braces(candidate)
+        if filled != candidate:
+            candidates.append(filled)
+
+        # 策略 5a：Python None → JSON null
+        py_fixed = re.sub(r':\s*None\s*([,}\]])', r': null\1', candidate)
+        if py_fixed != candidate:
+            candidates.append(py_fixed)
+
+        # 策略 5b：True/False → true/false
+        py_fixed = re.sub(r':\s*True\s*([,}\]])', r': true\1', candidate)
+        if py_fixed != candidate:
+            candidates.append(py_fixed)
+        py_fixed = re.sub(r':\s*False\s*([,}\]])', r': false\1', candidate)
+        if py_fixed != candidate:
+            candidates.append(py_fixed)
+
+        # 策略 5c：单引号 → 双引号（只处理键值对中的单引号）
+        try:
+            # 尝试 ast.literal_eval 作为最后一招（处理 Python dict 格式）
+            import ast
+            parsed = ast.literal_eval(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except (ValueError, SyntaxError):
+            pass
+
+    # 对所有候选文本尝试解析
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+    # 所有策略都失败，抛出异常
+    raise best_error if best_error else json.JSONDecodeError(
+        "All repair strategies failed", raw_text, 0
+    )
+
+
+# ==================== QwenClient ====================
+
 class QwenClient:
     """Qwen/千问 API 客户端"""
-    
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -44,34 +235,25 @@ class QwenClient:
         timeout: int = 60,
         max_retries: int = 3
     ):
-        """
-        初始化 Qwen 客户端
-        
-        Args:
-            api_key: Qwen API Key，默认从配置读取
-            base_url: API Base URL，默认从配置读取
-            model: 模型名称，默认从配置读取
-            timeout: 超时时间（秒）
-            max_retries: 最大重试次数
-        """
         self.api_key = api_key or settings.QWEN_API_KEY
         self.base_url = base_url or settings.QWEN_BASE_URL
         self.model = model or settings.QWEN_MODEL
         self.timeout = timeout
         self.max_retries = max_retries
-        
+
         if not self.api_key:
             logger.warning("QWEN_API_KEY not set in environment")
-        
-        # 初始化 OpenAI 兼容客户端
+
         self.client = openai.OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
             timeout=self.timeout
         )
-        
+
         logger.info(f"QwenClient initialized with model: {self.model}")
-    
+
+    # ==================== 内部工具 ====================
+
     def _with_retry(func):
         """重试装饰器"""
         @wraps(func)
@@ -99,7 +281,44 @@ class QwenClient:
                 logger.error(f"Unexpected Qwen API Error: {str(e)}")
                 raise QwenAPIError(f"Unexpected Error: {str(e)}") from e
         return wrapper
-    
+
+    def _log_call(
+        self,
+        model_name: str,
+        temperature: float,
+        prompt_version: str,
+        input_text: str,
+        output_text: str,
+        duration_ms: int,
+        success: bool,
+        error: str = ""
+    ):
+        """记录一次调用"""
+        log_entry = CallLog(
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            model_name=model_name,
+            temperature=temperature,
+            prompt_version=prompt_version,
+            input=_truncate(input_text),
+            output=_truncate(output_text),
+            duration_ms=duration_ms,
+            success=success,
+            error=error
+        )
+        _call_logs.append(log_entry)
+        if success:
+            logger.info(
+                f"[QwenCall] model={model_name} temp={temperature} "
+                f"version={prompt_version} duration={duration_ms}ms OK"
+            )
+        else:
+            logger.warning(
+                f"[QwenCall] model={model_name} temp={temperature} "
+                f"version={prompt_version} duration={duration_ms}ms FAILED: {error}"
+            )
+
+    # ==================== 普通对话 ====================
+
     @_with_retry
     def chat(
         self,
@@ -111,33 +330,18 @@ class QwenClient:
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0
     ) -> str:
-        """
-        普通对话接口
-        
-        Args:
-            prompt: 用户输入
-            system_prompt: 系统提示词（可选）
-            temperature: 温度参数（0-2）
-            max_tokens: 最大生成 token 数
-            top_p: 核采样参数
-            frequency_penalty: 频率惩罚
-            presence_penalty: 存在惩罚
-            
-        Returns:
-            模型回复文本
-        """
+        """普通对话接口"""
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
-        
+
         messages: List[Dict[str, str]] = []
-        
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        
         messages.append({"role": "user", "content": prompt})
-        
+
         logger.debug(f"Calling Qwen chat with prompt: {prompt[:100]}...")
-        
+        t0 = time.time()
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -148,20 +352,23 @@ class QwenClient:
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty
             )
-            
+
             content = response.choices[0].message.content
-            
             if content is None:
                 raise QwenAPIError("Empty response from Qwen API")
-            
+
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(self.model, temperature, "", prompt, content, duration_ms, True)
             logger.debug(f"Received Qwen response: {content[:100]}...")
-            
             return content
-            
+
         except Exception as e:
-            logger.error(f"Qwen chat failed: {str(e)}")
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(self.model, temperature, "", prompt, "", duration_ms, False, str(e))
             raise
-    
+
+    # ==================== 结构化对话（核心增强） ====================
+
     @_with_retry
     def structured_chat(
         self,
@@ -169,47 +376,62 @@ class QwenClient:
         schema_example: Optional[Union[Dict[str, Any], str]] = None,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        prompt_version: str = ""
     ) -> Dict[str, Any]:
         """
-        结构化输出接口，尽量返回 JSON
-        
+        结构化输出接口 —— 强制返回 JSON
+
+        增强点：
+        - JSON 解析失败时自动尝试修复
+        - 修复失败抛出 AgentOutputParseError（绝不返回 raw_response）
+        - 自动记录调用日志
+
         Args:
             prompt: 用户输入
-            schema_example: 期望的 JSON 格式示例（可选）
-            system_prompt: 系统提示词（可选）
-            temperature: 温度参数（0-2）
+            schema_example: 期望的 JSON 格式示例
+            system_prompt: 系统提示词
+            temperature: 温度参数
             max_tokens: 最大生成 token 数
-            
+            prompt_version: Prompt 模板版本标识（用于日志追踪）
+
         Returns:
             解析后的 JSON 字典
+
+        Raises:
+            AgentOutputParseError: JSON 解析失败（含自动修复尝试）
         """
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
-        
-        # 构建增强的系统提示词
-        structured_system_prompt = "你是一个有用的 AI 助手，请尽量以 JSON 格式回答问题。"
-        
-        if system_prompt:
-            structured_system_prompt = f"{system_prompt}\n{structured_system_prompt}"
-        
-        if schema_example:
-            # 如果提供了 schema example
-            schema_str = json.dumps(schema_example, ensure_ascii=False, indent=2)
-            structured_system_prompt += f"\n\n请按照以下 JSON 格式返回答案：\n```json\n{schema_str}\n```"
-        
-        # 增强用户提示词
-        enhanced_prompt = f"""{prompt}
 
-请以有效的 JSON 格式回答，不要添加任何 markdown 标记，只返回 JSON 本身。"""
-        
+        # 构建系统提示词（强调 JSON 输出）
+        structured_system = (
+            "你是一个 JSON 输出助手。你必须只返回合法的 JSON 对象，不要包含任何解释、"
+            "markdown 标记或额外文本。你的整个响应必须是可被 json.loads() 直接解析的。"
+        )
+        if system_prompt:
+            structured_system = f"{system_prompt}\n\n{structured_system}"
+
+        if schema_example:
+            schema_str = json.dumps(schema_example, ensure_ascii=False, indent=2)
+            structured_system += (
+                f"\n\n请严格按照以下 JSON Schema 返回，不要增加或省略字段：\n```json\n{schema_str}\n```"
+            )
+
+        # 用户 prompt 增强
+        enhanced_prompt = f"{prompt}\n\n只返回 JSON，不要任何解释。"
+
         messages: List[Dict[str, str]] = [
-            {"role": "system", "content": structured_system_prompt},
+            {"role": "system", "content": structured_system},
             {"role": "user", "content": enhanced_prompt}
         ]
-        
-        logger.debug(f"Calling Qwen structured_chat with prompt: {prompt[:100]}...")
-        
+
+        logger.debug(f"Calling Qwen structured_chat: prompt={prompt[:100]}... schema_keys={list(schema_example.keys()) if isinstance(schema_example, dict) else 'N/A'}")
+
+        t0 = time.time()
+        raw_content = ""
+
+        # 调用 API
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -217,39 +439,54 @@ class QwenClient:
                 temperature=temperature,
                 max_tokens=max_tokens
             )
-            
-            content = response.choices[0].message.content
-            
-            if content is None:
+
+            raw_content = response.choices[0].message.content
+            if raw_content is None:
                 raise QwenAPIError("Empty response from Qwen API")
-            
-            # 尝试解析 JSON
-            try:
-                # 清理可能的 markdown 标记
-                cleaned_content = content.strip()
-                if cleaned_content.startswith("```json"):
-                    cleaned_content = cleaned_content[7:]
-                elif cleaned_content.startswith("```"):
-                    cleaned_content = cleaned_content[3:]
-                
-                if cleaned_content.endswith("```"):
-                    cleaned_content = cleaned_content[:-3]
-                
-                cleaned_content = cleaned_content.strip()
-                
-                result = json.loads(cleaned_content)
-                logger.debug(f"Successfully parsed Qwen JSON response")
-                return result
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse Qwen response as JSON: {str(e)}, falling back to raw content")
-                # 如果解析失败，返回一个包含原始内容的字典
-                return {"raw_response": content, "error": "JSON parse failed"}
-                
-        except Exception as e:
-            logger.error(f"Qwen structured_chat failed: {str(e)}")
+
+        except (QwenAPIError, QwenTimeoutError) as e:
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(self.model, temperature, prompt_version, prompt, "", duration_ms, False, str(e))
             raise
-    
+
+        duration_ms = int((time.time() - t0) * 1000)
+
+        # ──── 第一次尝试：直接解析 ────
+        json_obj = None
+        first_error = None
+        try:
+            json_obj = _safe_json_loads(raw_content)
+            logger.debug("JSON parsed successfully on first attempt")
+        except json.JSONDecodeError as e:
+            first_error = e
+
+        if json_obj is not None:
+            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True)
+            return json_obj
+
+        # ──── 第二次尝试：自动修复 JSON ────
+        logger.warning(f"First JSON parse failed, attempting auto-repair: {first_error}")
+        try:
+            json_obj = _repair_json(raw_content)
+            logger.info("JSON auto-repair succeeded")
+            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True)
+            return json_obj
+        except json.JSONDecodeError as e:
+            pass  # 修复也失败了
+
+        # ──── 仍然失败：抛出 AgentOutputParseError，绝不允许 raw_response 继续 ────
+        error_msg = f"模型输出 JSON 解析失败（原始+修复均失败）: {first_error}"
+        self._log_call(self.model, temperature, prompt_version, prompt, raw_content, duration_ms, False, error_msg)
+
+        raise AgentOutputParseError(
+            message=f"Agent 输出无法解析为合法 JSON。原始错误: {first_error}。"
+                    f"已尝试自动修复但依然失败。请检查 prompt 和 schema_example 是否清晰明确。",
+            raw_output=raw_content,
+            repair_attempted=True
+        )
+
+    # ==================== 多轮对话 ====================
+
     @_with_retry
     def chat_with_messages(
         self,
@@ -257,22 +494,13 @@ class QwenClient:
         temperature: float = 0.3,
         max_tokens: Optional[int] = None
     ) -> str:
-        """
-        多轮对话接口
-        
-        Args:
-            messages: 消息列表，格式为 [{"role": "system|user|assistant", "content": "..."}]
-            temperature: 温度参数
-            max_tokens: 最大生成 token 数
-            
-        Returns:
-            模型回复文本
-        """
+        """多轮对话接口"""
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
-        
+
         logger.debug(f"Calling Qwen chat_with_messages with {len(messages)} messages")
-        
+        t0 = time.time()
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -280,84 +508,79 @@ class QwenClient:
                 temperature=temperature,
                 max_tokens=max_tokens
             )
-            
             content = response.choices[0].message.content
-            
             if content is None:
                 raise QwenAPIError("Empty response from Qwen API")
-            
+
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(self.model, temperature, "", str(messages), content, duration_ms, True)
             return content
-            
+
         except Exception as e:
-            logger.error(f"Qwen chat_with_messages failed: {str(e)}")
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(self.model, temperature, "", str(messages), "", duration_ms, False, str(e))
             raise
 
 
-# ==================== 便捷函数 ====================
+# ==================== 全局单例 ====================
 
-# 全局单例
 _qwen_client: Optional[QwenClient] = None
 
 
 def get_qwen_client() -> QwenClient:
-    """
-    获取 Qwen 客户端单例
-    
-    Returns:
-        QwenClient 实例
-    """
+    """获取 Qwen 客户端单例"""
     global _qwen_client
     if _qwen_client is None:
         _qwen_client = QwenClient()
     return _qwen_client
 
 
+def _set_qwen_client(client: QwenClient) -> None:
+    """设置自定义 Qwen 客户端（用于 mock 注入）"""
+    global _qwen_client
+    _qwen_client = client
+
+
+# ==================== 便捷函数 ====================
+
 def qwen_chat(
     prompt: str,
     system_prompt: Optional[str] = None,
     temperature: float = 0.3
 ) -> str:
-    """
-    便捷的 Qwen 对话函数
-    
-    Args:
-        prompt: 用户输入
-        system_prompt: 系统提示词
-        temperature: 温度参数
-        
-    Returns:
-        模型回复文本
-    """
+    """便捷的 Qwen 对话函数"""
     client = get_qwen_client()
-    return client.chat(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        temperature=temperature
-    )
+    return client.chat(prompt=prompt, system_prompt=system_prompt, temperature=temperature)
 
 
 def qwen_structured_chat(
     prompt: str,
     schema_example: Optional[Union[Dict[str, Any], str]] = None,
     system_prompt: Optional[str] = None,
-    temperature: float = 0.2
+    temperature: float = 0.2,
+    prompt_version: str = ""
 ) -> Dict[str, Any]:
     """
     便捷的 Qwen 结构化输出函数
-    
+
     Args:
         prompt: 用户输入
         schema_example: JSON 格式示例
         system_prompt: 系统提示词
         temperature: 温度参数
-        
+        prompt_version: Prompt 模板版本标识
+
     Returns:
         解析后的 JSON 字典
+
+    Raises:
+        AgentOutputParseError: JSON 解析失败
     """
     client = get_qwen_client()
     return client.structured_chat(
         prompt=prompt,
         schema_example=schema_example,
         system_prompt=system_prompt,
-        temperature=temperature
+        temperature=temperature,
+        prompt_version=prompt_version
     )

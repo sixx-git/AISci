@@ -77,7 +77,8 @@ class ExperimentDesignAgent:
             # 调用 LLM
             result_dict = qwen_structured_chat(
                 prompt=prompt, 
-                schema_example=schema_example
+                schema_example=schema_example,
+                prompt_version="experiment_design"
             )
             
             # 验证并标准化结果

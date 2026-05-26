@@ -219,7 +219,8 @@ class KnowledgeGapAgent:
         # 调用 Qwen
         return qwen_structured_chat(
             prompt=prompt,
-            schema_example=schema_example
+            schema_example=schema_example,
+            prompt_version="knowledge_gap"
         )
     
     def _validate_and_normalize(

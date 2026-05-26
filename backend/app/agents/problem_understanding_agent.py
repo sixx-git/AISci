@@ -69,7 +69,8 @@ class ProblemUnderstandingAgent:
             # 调用 Qwen 结构化对话
             result = qwen_structured_chat(
                 prompt=prompt,
-                schema_example=schema_example
+                schema_example=schema_example,
+                prompt_version="problem_understanding"
             )
             
             # 验证并返回结果
