@@ -124,15 +124,15 @@ class LiteratureMiningAgent:
         chunks_text = []
         
         for i, result in enumerate(search_results, 1):
-            paper_title = result.document_title or "未知论文"
-            page_info = f" (页 {result.start_page})" if result.start_page else ""
-            doc_id = getattr(result, 'document_id', None) or result.chunk_id
-            
+            paper_title = result.source_title or "未知论文"
+            page_info = f" (页 {result.page_number})" if result.page_number else ""
+            doc_id = result.document_id
+
             chunk_text = f"""--- 片段 {i} ---
 Chunk ID: {result.chunk_id}
 Document ID: {doc_id}
 论文标题: {paper_title}{page_info}
-相似度: {result.similarity:.3f}
+相似度: {result.similarity_score:.3f}
 内容: {result.content}"""
             
             chunks_text.append(chunk_text)

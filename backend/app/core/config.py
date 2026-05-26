@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     
     # 向量存储配置
     VECTOR_STORE_PATH: str = "./storage/faiss_index"
+    VECTOR_INDEXES_PATH: str = "./storage/vector_indexes"
     EMBEDDING_MODEL: str = "paraphrase-multilingual-MiniLM-L12-v2"
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 50

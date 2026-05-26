@@ -11,7 +11,7 @@ import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
-import { documentService } from '@/services';
+import { documentService, vectorService } from '@/services';
 import type { DocumentInfo } from '@/services/documentService';
 
 // ============ MIME / 扩展名 → 文献类型 ============
@@ -116,6 +116,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [buildingIndex, setBuildingIndex] = useState(false);
   const [search, setSearch] = useState('');
   const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +205,30 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       setDeleting(null);
     }
   }, [loadDocuments, showStatus]);
+
+  // ========== 构建向量索引 ==========
+  const handleBuildIndex = useCallback(async () => {
+    setBuildingIndex(true);
+    showStatus({ type: 'loading', text: '正在构建向量索引…' });
+    try {
+      const res = await vectorService.buildIndex(projectId);
+      if (res.code === 0 || res.code === 200) {
+        const added = (res.data as any)?.added_count ?? 0;
+        const total = (res.data as any)?.total_count ?? added;
+        showStatus({
+          type: 'success',
+          text: `向量索引构建成功，新增 ${added} 条，共 ${total} 条切片`,
+        });
+      } else {
+        showStatus({ type: 'error', text: res.message || '构建索引失败' });
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `构建索引失败: ${detail}` });
+    } finally {
+      setBuildingIndex(false);
+    }
+  }, [projectId, showStatus]);
 
   // ========== 搜索 ==========
   const filtered = useMemo(() => {
@@ -325,13 +350,31 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             </div>
           </button>
 
-          <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
-            <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
-              <BrainCircuit className="w-4 h-4 text-gray-400" />
+          <button
+            disabled={buildingIndex}
+            onClick={handleBuildIndex}
+            className={cn(
+              'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
+              buildingIndex
+                ? 'border-primary-500 bg-primary-500/10'
+                : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+            )}
+          >
+            <div className={cn(
+              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+              buildingIndex ? 'bg-primary-500/25' : 'bg-gray-700',
+            )}>
+              {buildingIndex ? (
+                <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
+              ) : (
+                <BrainCircuit className="w-4 h-4 text-gray-300" />
+              )}
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-500">构建向量索引</div>
-              <div className="text-xs text-gray-600 mt-0.5">为文献构建语义检索索引</div>
+              <div className="text-sm font-medium text-gray-200">
+                {buildingIndex ? '构建中…' : '构建向量索引'}
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">为文献构建语义检索索引</div>
             </div>
           </button>
         </div>

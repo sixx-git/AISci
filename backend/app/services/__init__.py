@@ -7,7 +7,7 @@ from app.services.vector_store import (
     BaseEmbedding,
     SentenceTransformerEmbedding,
     get_vector_store,
-    add_chunks_to_vector_store,
+    build_vector_index,
     search_vector_store
 )
 from app.services.qwen_client import (
@@ -30,7 +30,7 @@ __all__ = [
     'BaseEmbedding',
     'SentenceTransformerEmbedding',
     'get_vector_store',
-    'add_chunks_to_vector_store',
+    'build_vector_index',
     'search_vector_store',
     
     # Qwen 客户端
