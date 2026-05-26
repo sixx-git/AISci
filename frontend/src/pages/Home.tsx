@@ -3,40 +3,25 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
 import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
+import env from '@/config/env';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import type { Project } from '@/types';
+import { MOCK_PROJECTS } from '@/data/mockData';
 
-// 后端无数据时的模拟数据
-const MOCK_PROJECTS: Project[] = [
-  {
-    id: '1',
-    name: '深度学习优化研究',
-    description: '研究如何优化深度学习模型的训练效率',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    status: 'completed',
-  },
-  {
-    id: '2',
-    name: '自然语言处理应用',
-    description: '探索 NLP 在实际问题中的应用',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-    status: 'running',
-  },
-  {
-    id: '3',
-    name: '计算机视觉研究',
-    description: '研究 CV 领域的新算法和应用',
-    created_at: new Date(Date.now() - 172800000).toISOString(),
-    updated_at: new Date().toISOString(),
-    status: 'draft',
-  },
-];
+function mockProjectsAsList(): Project[] {
+  return Object.values(MOCK_PROJECTS).map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    status: p.status,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+  }));
+}
 
 export function Home() {
   const navigate = useNavigate();
@@ -48,16 +33,25 @@ export function Home() {
   }, []);
 
   const loadProjects = async () => {
+    setLoading(true);
     try {
       const response = await projectService.getProjects();
       if (response.code === 200) {
         const data = response.data || [];
-        // 后端无数据时显示模拟数据
-        setProjects(data.length > 0 ? data : MOCK_PROJECTS);
+        if (data.length > 0) {
+          setProjects(data);
+        } else if (env.USE_MOCK) {
+          setProjects(mockProjectsAsList());
+        } else {
+          setProjects([]);
+        }
       }
-    } catch (error) {
-      console.error('加载项目失败:', error);
-      setProjects(MOCK_PROJECTS);
+    } catch {
+      if (env.USE_MOCK) {
+        setProjects(mockProjectsAsList());
+      } else {
+        setProjects([]);
+      }
     } finally {
       setLoading(false);
     }

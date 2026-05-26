@@ -62,7 +62,7 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
         <InfoItem label="运行时间" value={log.duration} />
         <InfoItem label="使用模型" value={log.model} />
         <InfoItem label="Prompt 版本" value={log.promptVersion} />
-        <InfoItem label="开始时间" value={formatTS(log.timestampStart)} />
+        <InfoItem label="开始时间" value={log.timestampStart ? formatTS(log.timestampStart) : '-'} />
         {log.timestampEnd && (
           <InfoItem label="结束时间" value={formatTS(log.timestampEnd)} />
         )}

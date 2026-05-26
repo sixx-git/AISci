@@ -148,7 +148,10 @@ async def get_run_detail(
                 input_data=stage.input_data,
                 output_data=stage.output_data,
                 error_message=stage.error_message,
-                token_count=stage.token_count
+                token_count=stage.token_count,
+                model_used=stage.model_used,
+                prompt_used=stage.prompt_used,
+                model_parameters=stage.model_parameters
             )
             for stage in stages
         ]

@@ -12,8 +12,13 @@ settings = get_settings()
 engine = None
 SessionLocal = None
 
-# 导入 Base 模型
+# 导入 Base 以及所有模型（必须在 create_tables 前导入，确保 SQLAlchemy 注册所有表）
 from app.models.core import Base
+# 触发所有模型的类注册，保证 Base.metadata.create_all() 能建全表
+import app.models.project  # noqa: F401 - Project, Document, Chunk, Report, RunLog
+import app.models.research  # noqa: F401 - Hypothesis, ExperimentDesign, Evidence
+import app.models.pipeline  # noqa: F401 - PipelineRun, PipelineStageExecution, PromptVersion
+import app.models.chat  # noqa: F401 - ChatMessage
 
 
 def init_db():

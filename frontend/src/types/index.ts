@@ -165,6 +165,9 @@ export interface PipelineStageExecutionSummary {
   output_data?: unknown;
   error_message?: string;
   token_count?: number;
+  model_used?: string;
+  prompt_used?: string;
+  model_parameters?: Record<string, unknown>;
 }
 
 export interface PipelineRunSummary {
@@ -384,7 +387,7 @@ export interface ReportGenerationRequest {
 // ==================== 运行日志 ====================
 
 export type RunLogStatus = 'success' | 'running' | 'failed' | 'pending';
-export type RunLogStage = '问题理解' | '文献挖掘' | '假设生成' | '实验设计' | '实验执行' | '报告生成';
+export type RunLogStage = '问题理解' | '文献挖掘' | '知识缺口' | '假设生成' | '假设评估' | '实验设计' | '小样验证' | '实验执行' | '报告生成';
 
 export interface RunLog {
   id: string;
@@ -398,9 +401,12 @@ export interface RunLog {
   inputSummary: string;
   outputSnapshot: string;
   errorMessage?: string;
-  modelParams: Record<string, string>;
-  timestampStart: string;
+  modelParams?: Record<string, string>;
+  timestampStart?: string;
   timestampEnd?: string;
+  temperature?: string;
+  tokenCount?: number;
+  runId?: string;
 }
 
 // ==================== 研究结果（聚合） ====================

@@ -15,7 +15,7 @@ const mockPipelineRuns: PipelineRunSummary[] = MOCK_RUN_LOGS.map((log) => ({
   project_id: '1',
   research_question: '基于自适应特征选择的小样本泛化能力提升研究',
   status: log.status === 'success' ? 'completed' : log.status === 'failed' ? 'failed' : 'running',
-  created_at: log.timestampStart,
+  created_at: log.timestampStart || new Date().toISOString(),
 }));
 
 // 阶段名称映射：后端 → 前端节点 ID

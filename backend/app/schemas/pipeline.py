@@ -79,6 +79,9 @@ class PipelineStageExecutionSummary(BaseModel):
     output_data: Optional[Dict[str, Any]]
     error_message: Optional[str]
     token_count: Optional[int]
+    model_used: Optional[str] = None
+    prompt_used: Optional[str] = None
+    model_parameters: Optional[Dict[str, Any]] = None
 
 
 class PipelineRunSummary(BaseModel):
