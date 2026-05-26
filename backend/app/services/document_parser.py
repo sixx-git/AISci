@@ -109,7 +109,8 @@ class DocumentParser:
         self,
         file_path: str,
         project_id: Optional[str] = None,
-        original_filename: Optional[str] = None
+        original_filename: Optional[str] = None,
+        document: Optional[Document] = None
     ) -> Tuple[Document, List[Chunk]]:
         """
         解析文件并保存到数据库
@@ -118,22 +119,29 @@ class DocumentParser:
             file_path: 文件路径
             project_id: 关联的项目 ID
             original_filename: 原始文件名
+            document: 已有文档对象（可选，若提供则更新该文档而非创建新文档）
             
         Returns:
-            Tuple[Document, List[Chunk]]: 创建的文档和切片
+            Tuple[Document, List[Chunk]]: 文档和切片
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
         
         file_ext = Path(file_path).suffix.lower()
         
-        # 创建文档记录
-        document = self._create_document_record(
-            file_path=file_path,
-            project_id=project_id,
-            original_filename=original_filename or Path(file_path).name,
-            file_ext=file_ext
-        )
+        # 使用传入的文档或创建新文档
+        if document:
+            # 更新已有文档状态
+            document.status = DocumentStatus.PROCESSING
+            self.db.flush()
+        else:
+            # 创建文档记录
+            document = self._create_document_record(
+                file_path=file_path,
+                project_id=project_id,
+                original_filename=original_filename or Path(file_path).name,
+                file_ext=file_ext
+            )
         
         try:
             # 解析文件
@@ -152,6 +160,9 @@ class DocumentParser:
                 parsed_data=parsed_data
             )
             
+            # 更新文档切片数量
+            document.chunk_count = len(chunks)
+            
             # 更新文档状态
             document.status = DocumentStatus.PROCESSED
             self.db.commit()
@@ -162,6 +173,7 @@ class DocumentParser:
             # 处理失败
             document.status = DocumentStatus.FAILED
             document.error_message = str(e)
+            document.chunk_count = 0
             self.db.commit()
             raise
     

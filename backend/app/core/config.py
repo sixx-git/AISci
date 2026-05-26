@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50
     
     # 文件上传配置
-    UPLOAD_DIR: str = "./storage/documents"
+    UPLOAD_DIR: str = "./storage/uploads"
     MAX_UPLOAD_SIZE: int = 52428800
     ALLOWED_EXTENSIONS: str = "txt,pdf,docx,md,csv"
     

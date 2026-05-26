@@ -107,6 +107,7 @@ class Document(Base):
     doc_type = Column(SQLEnum(DocumentType), default=DocumentType.RESEARCH_PAPER, nullable=True, comment="文档类型")
     status = Column(SQLEnum(DocumentStatus), default=DocumentStatus.UPLOADED, nullable=False, index=True, comment="处理状态")
     error_message = Column(Text, nullable=True, comment="错误信息")
+    chunk_count = Column(Integer, default=0, nullable=True, comment="切片数量")
     
     # 提取的内容
     raw_text = Column(Text, nullable=True, comment="原始提取文本")

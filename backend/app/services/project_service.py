@@ -224,7 +224,8 @@ class DocumentService:
         doc, chunks = parser.parse_file(
             file_path=doc.file_path,
             project_id=doc.project_id,
-            original_filename=doc.filename
+            original_filename=doc.filename,
+            document=doc
         )
         
         return doc, chunks
