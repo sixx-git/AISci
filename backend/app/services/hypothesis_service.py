@@ -1,12 +1,12 @@
 """
 Hypothesis 服务
-处理假设的数据库操作
+处理假设和证据链的数据库操作
 """
 import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from app.models.research import Hypothesis
+from app.models.research import Hypothesis, Evidence
 from app.schemas.research import HypothesisCreate, HypothesisResponse
 from app.core.database import get_db
 
@@ -130,6 +130,43 @@ class HypothesisService:
             logger.error(f"更新假设失败：{e}", exc_info=True)
             raise
     
+    def create_evidence_batch(
+        self,
+        project_id: str,
+        hypothesis_id: str,
+        facts: List[dict]
+    ) -> List[Evidence]:
+        """为一条假设批量创建证据记录"""
+        created = []
+        try:
+            for fact in facts:
+                evidence = Evidence(
+                    project_id=project_id,
+                    hypothesis_id=hypothesis_id,
+                    document_id=fact.get("source_document_id"),
+                    chunk_id=fact.get("source_chunk_id"),
+                    fact_text=fact.get("content", ""),
+                    quote_text=fact.get("quote_text"),
+                    page_number=fact.get("source_page"),
+                    relevance_score=fact.get("relevance_score", 0.5),
+                    source_title=fact.get("source_paper_title"),
+                )
+                self.db.add(evidence)
+                created.append(evidence)
+            self.db.commit()
+            logger.info(f"批量创建 {len(created)} 条证据记录，假设 ID: {hypothesis_id}")
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"批量创建证据失败: {e}", exc_info=True)
+            raise
+        return created
+
+    def get_evidence_by_hypothesis(self, hypothesis_id: str) -> List[Evidence]:
+        """获取某条假设的证据链"""
+        return self.db.query(Evidence).filter(
+            Evidence.hypothesis_id == hypothesis_id
+        ).order_by(Evidence.relevance_score.desc()).all()
+
     def delete_hypothesis(self, hypothesis_id: str) -> bool:
         """删除假设"""
         db_hypothesis = self.get_hypothesis_by_id(hypothesis_id)

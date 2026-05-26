@@ -82,6 +82,22 @@ export interface LiteratureEvidence {
   relevance: number;
 }
 
+// ==================== 证据链 ====================
+
+export interface EvidenceItem {
+  id: string;
+  project_id: string;
+  hypothesis_id: string;
+  document_id?: string;
+  chunk_id?: string;
+  fact_text: string;
+  quote_text?: string;
+  page_number?: number;
+  relevance_score: number;
+  source_title?: string;
+  created_at?: string;
+}
+
 // ==================== 研究问题 ====================
 
 export interface ResearchQuestion {

@@ -16,6 +16,7 @@ from app.models import (
     Chunk,
     Hypothesis,
     ExperimentDesign,
+    Evidence,
     Report,
     RunLog,
 )
@@ -53,6 +54,7 @@ def init_database():
         'chunks',
         'hypotheses',
         'experiment_designs',
+        'evidences',
         'reports',
         'run_logs',
     ]

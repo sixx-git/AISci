@@ -4,8 +4,9 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { ScoreBar } from '@/components/ScoreBar';
-import { MOCK_DETAILED_HYPOTHESES } from '@/data/mockData';
-import type { DetailedHypothesis } from '@/types';
+import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
+import { MOCK_DETAILED_HYPOTHESES, MOCK_EVIDENCE_CHAINS } from '@/data/mockData';
+import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
@@ -49,14 +50,30 @@ export function HypothesesPage({ projectId: _projectId, compact: _compact = fals
   const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>(MOCK_DETAILED_HYPOTHESES);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
+  // 证据链抽屉状态
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedHypothesis, setSelectedHypothesis] = useState<DetailedHypothesis | null>(null);
+  const [currentEvidence, setCurrentEvidence] = useState<EvidenceItem[]>([]);
+
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
     setTimeout(() => setAlertMsg(null), 2500);
   }, []);
 
-  const handleViewEvidence = useCallback((_id: string) => {
-    showAlert('证据链视图将在后续版本中实现');
-  }, [showAlert]);
+  const handleViewEvidence = useCallback((id: string) => {
+    const hypo = hypotheses.find(h => h.id === id);
+    if (hypo) {
+      setSelectedHypothesis(hypo);
+      setCurrentEvidence(MOCK_EVIDENCE_CHAINS[id] || []);
+      setDrawerOpen(true);
+    }
+  }, [hypotheses]);
+
+  const handleCloseDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setSelectedHypothesis(null);
+    setCurrentEvidence([]);
+  }, []);
 
   const handleSetPrimary = useCallback((id: string) => {
     setHypotheses((prev) =>
@@ -173,6 +190,18 @@ export function HypothesesPage({ projectId: _projectId, compact: _compact = fals
           </div>
         </div>
       </div>
+
+      {/* 证据链抽屉 */}
+      {selectedHypothesis && (
+        <EvidenceChainDrawer
+          open={drawerOpen}
+          onClose={handleCloseDrawer}
+          hypothesisTitle={`${selectedHypothesis.title} (${selectedHypothesis.id})`}
+          hypothesisContent={selectedHypothesis.content}
+          evidenceCount={currentEvidence.length}
+          evidenceList={currentEvidence}
+        />
+      )}
     </div>
   );
 }

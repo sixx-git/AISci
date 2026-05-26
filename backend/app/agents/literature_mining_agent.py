@@ -21,6 +21,7 @@ class ScienceFact(BaseModel):
     fact_id: str = Field(..., description="事实ID")
     content: str = Field(..., description="事实内容")
     source_chunk_id: str = Field(..., description="来源Chunk ID")
+    source_document_id: Optional[str] = Field(None, description="来源文档 ID")
     source_paper_title: Optional[str] = Field(None, description="来源论文标题")
     source_page: Optional[int] = Field(None, description="来源页码")
 
@@ -125,9 +126,11 @@ class LiteratureMiningAgent:
         for i, result in enumerate(search_results, 1):
             paper_title = result.document_title or "未知论文"
             page_info = f" (页 {result.start_page})" if result.start_page else ""
+            doc_id = getattr(result, 'document_id', None) or result.chunk_id
             
             chunk_text = f"""--- 片段 {i} ---
 Chunk ID: {result.chunk_id}
+Document ID: {doc_id}
 论文标题: {paper_title}{page_info}
 相似度: {result.similarity:.3f}
 内容: {result.content}"""
@@ -169,6 +172,7 @@ Chunk ID: {result.chunk_id}
                     "fact_id": "fact_001",
                     "content": "事实内容",
                     "source_chunk_id": "chunk_id",
+                    "source_document_id": "document_id",
                     "source_paper_title": "论文标题",
                     "source_page": 1
                 }
@@ -230,6 +234,7 @@ Chunk ID: {result.chunk_id}
                 "fact_id": fact.get("fact_id", f"fact_{len(validated_facts) + 1:03d}"),
                 "content": fact.get("content", ""),
                 "source_chunk_id": fact.get("source_chunk_id", ""),
+                "source_document_id": fact.get("source_document_id"),
                 "source_paper_title": fact.get("source_paper_title"),
                 "source_page": fact.get("source_page")
             }

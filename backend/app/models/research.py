@@ -4,6 +4,32 @@ from sqlalchemy.sql import func
 from app.models.core import Base, BaseModel
 
 
+class Evidence(BaseModel):
+    """
+    证据链模型
+    记录每条假设背后的文献事实来源，支撑"假设—事实—文献片段—原文来源"的可追踪展示
+    """
+    __tablename__ = "evidences"
+
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True, comment="项目 ID")
+    hypothesis_id = Column(String(36), ForeignKey("hypotheses.id"), nullable=False, index=True, comment="关联假设 ID")
+    document_id = Column(String(36), nullable=True, index=True, comment="来源文档 ID")
+    chunk_id = Column(String(36), nullable=True, index=True, comment="来源 Chunk ID")
+
+    # 证据内容
+    fact_text = Column(Text, nullable=False, comment="事实陈述")
+    quote_text = Column(Text, nullable=True, comment="原文引用片段")
+    page_number = Column(Integer, nullable=True, comment="页码")
+    relevance_score = Column(Float, default=0.0, nullable=False, comment="相关度分数 0-1")
+    source_title = Column(String(500), nullable=True, comment="来源论文/文档标题")
+
+    # 元数据
+    extra_metadata = Column(Text, nullable=True, comment="额外元数据（JSON）")
+
+    # 关系
+    hypothesis = relationship("Hypothesis", backref="evidences")
+
+
 class ResearchProject(Base):
     __tablename__ = "research_projects"
     

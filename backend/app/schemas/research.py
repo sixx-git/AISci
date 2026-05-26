@@ -24,6 +24,24 @@ class ResearchResponse(BaseModel):
     execution_time: Optional[float] = Field(None, description="执行时间（秒）")
 
 
+class EvidenceResponse(BaseModel):
+    """证据链响应"""
+    id: str
+    project_id: str
+    hypothesis_id: str
+    document_id: Optional[str] = None
+    chunk_id: Optional[str] = None
+    fact_text: str
+    quote_text: Optional[str] = None
+    page_number: Optional[int] = None
+    relevance_score: float
+    source_title: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class HypothesisCreate(BaseModel):
     """创建假设"""
     project_id: str = Field(..., description="项目ID")

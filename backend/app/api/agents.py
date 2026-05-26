@@ -1,9 +1,12 @@
 """
 智能体 API
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.core.response import ApiResponse, success, error
 from app.core.database import get_db
@@ -41,6 +44,7 @@ from app.schemas.research import (
     HypothesisGenerationRequest,
     HypothesisGenerationResponse,
     HypothesisResponse,
+    EvidenceResponse,
     ExperimentDesignRequest,
     ExperimentDesignGenerationResponse,
     ExperimentDesignCreate,
@@ -147,7 +151,7 @@ async def hypothesis_generation(
     输入研究问题、facts、knowledge_gaps、constraints，生成 3-5 条科学假设。
     每条假设包含：hypothesis、rationale、novelty、testability、required_data、possible_method、risk。
     使用归纳推理和演绎推理，避免空泛套话。
-    生成的假设将保存到 Hypothesis 表中。
+    生成的假设将保存到 Hypothesis 表中，并将关联 facts 写入 Evidence 证据链表。
     """
     try:
         # 生成假设
@@ -164,11 +168,22 @@ async def hypothesis_generation(
         hypothesis_service = HypothesisService(db)
         hypotheses_list = [hypo.model_dump() for hypo in result.hypotheses]
         
-        hypothesis_service.create_hypotheses_batch(
+        created_hypotheses = hypothesis_service.create_hypotheses_batch(
             project_id=request.project_id,
             research_question=request.research_question,
             hypotheses_list=hypotheses_list
         )
+        
+        # 为每条假设创建证据链记录
+        for db_hypothesis in created_hypotheses:
+            try:
+                hypothesis_service.create_evidence_batch(
+                    project_id=request.project_id,
+                    hypothesis_id=db_hypothesis.id,
+                    facts=request.facts
+                )
+            except Exception as ev_err:
+                logger.warning(f"为假设 {db_hypothesis.id} 创建证据链失败: {ev_err}")
         
         return success(
             result,
@@ -201,6 +216,34 @@ async def get_project_hypotheses(
         return success(
             hypotheses,
             message=f"获取假设列表成功，共 {len(hypotheses)} 条"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/hypotheses/{hypothesis_id}/evidence", response_model=ApiResponse[List[EvidenceResponse]])
+async def get_hypothesis_evidence(
+    hypothesis_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    获取假设的证据链
+    
+    返回某条假设背后的所有文献事实来源，包含：
+    - fact_text: 事实陈述
+    - quote_text: 原文引用片段
+    - source_title: 来源论文/文档标题
+    - page_number: 页码
+    - relevance_score: 相关度分数
+    - document_id / chunk_id: 溯源信息
+    """
+    try:
+        hypothesis_service = HypothesisService(db)
+        evidences = hypothesis_service.get_evidence_by_hypothesis(hypothesis_id)
+        
+        return success(
+            evidences,
+            message=f"获取证据链成功，共 {len(evidences)} 条"
         )
     except Exception as e:
         return error(str(e))

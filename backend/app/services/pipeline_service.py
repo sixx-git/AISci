@@ -24,6 +24,7 @@ from app.models.pipeline import (
     PipelineStage as DB_PipelineStage
 )
 from app.models.project import Report
+from app.services.hypothesis_service import HypothesisService
 
 from app.schemas.pipeline import (
     PipelineStatus,
@@ -194,6 +195,25 @@ class PipelineService:
                 stages[stage_idx].output_data = hypothesis_generation.model_dump()
                 results['hypothesis_generation'] = hypothesis_generation.model_dump()
                 self._update_stage_execution(db_stage, "completed", output=hypothesis_generation.model_dump())
+                
+                # 保存假设和证据链到数据库
+                try:
+                    hypo_service = HypothesisService(self.db)
+                    hypotheses_list = [hypo.model_dump() for hypo in hypothesis_generation.hypotheses]
+                    created_hypos = hypo_service.create_hypotheses_batch(
+                        project_id=request.project_id,
+                        research_question=request.research_question,
+                        hypotheses_list=hypotheses_list
+                    )
+                    # 为每条假设创建证据链
+                    for db_hypo in created_hypos:
+                        hypo_service.create_evidence_batch(
+                            project_id=request.project_id,
+                            hypothesis_id=db_hypo.id,
+                            facts=[f.model_dump() for f in literature_mining.facts]
+                        )
+                except Exception as save_err:
+                    logger.warning(f"保存假设/证据链失败: {save_err}")
             except Exception as e:
                 stages[stage_idx].status = PipelineStageStatus.FAILED
                 stages[stage_idx].error_message = str(e)
