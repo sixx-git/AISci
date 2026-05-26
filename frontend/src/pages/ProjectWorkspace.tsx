@@ -10,15 +10,16 @@ import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatCard } from '@/components/StatCard';
 import { PipelineProgress } from '@/components/PipelineProgress';
-import { ExperimentDesignTable } from '@/components/ExperimentDesignTable';
 import { ResearchQuestionPage } from '@/components/ResearchQuestionPage';
 import { LiteratureLibrary } from '@/components/LiteratureLibrary';
 import { WorkflowPage } from '@/components/WorkflowPage';
 import { HypothesesPage } from '@/components/HypothesesPage';
+import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
+import { ReportPage } from '@/components/ReportPage';
+import { RunLogsPage } from '@/components/RunLogsPage';
 import {
   MOCK_PROJECT_OVERVIEW, MOCK_STATS, DEFAULT_STATS,
   MOCK_PIPELINE_NODES, DEFAULT_PIPELINE_NODES,
-  MOCK_EXPERIMENTS,
 } from '@/data/mockData';
 import type { ProjectOverviewData, StatItem, PipelineNodeData } from '@/data/mockData';
 import { cn } from '@/lib/utils';
@@ -126,83 +127,18 @@ function HypothesesTab({ projectId }: { projectId: string }) {
 }
 
 // ============ 实验设计 ============
-function ExperimentsTab() {
-  return <ExperimentDesignTable experiments={MOCK_EXPERIMENTS} />;
+function ExperimentsTab({ projectId }: { projectId: string }) {
+  return <ExperimentDesignPage projectId={projectId} compact />;
 }
 
 // ============ 研究报告 ============
-function ReportsTab() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-white">研究报告</h3>
-          <p className="text-sm text-gray-400 mt-1">AI Scientist 生成的研究报告</p>
-        </div>
-        <Button variant="primary" icon={<FileText className="w-4 h-4" />}>
-          生成报告
-        </Button>
-      </div>
-
-      {[
-        { title: '深度迁移学习优化研究报告', date: '2026-05-20', status: 'completed', pages: 12 },
-        { title: '注意力机制轻量化分析', date: '2026-05-15', status: 'draft', pages: 8 },
-      ].map((report, idx) => (
-        <Card key={idx}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileText className="w-8 h-8 text-primary-400" />
-              <div>
-                <h4 className="text-white font-medium">{report.title}</h4>
-                <p className="text-sm text-gray-500">
-                  {report.date} · {report.pages} 页
-                </p>
-              </div>
-            </div>
-            <StatusBadge status={report.status as any} />
-          </div>
-        </Card>
-      ))}
-
-      <Card className="text-center py-12">
-        <FileText className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-400">运行完整 Pipeline 后自动生成研究报告</p>
-      </Card>
-    </div>
-  );
+function ReportsTab({ projectId }: { projectId: string }) {
+  return <ReportPage projectId={projectId} compact />;
 }
 
 // ============ 运行日志 ============
-function LogsTab() {
-  return (
-    <div className="space-y-4">
-      <Card title="运行日志" subtitle="Pipeline 执行历史">
-        {[
-          { time: '2026-05-20 14:30', event: 'Pipeline 启动', status: 'success' },
-          { time: '2026-05-20 14:31', event: '问题理解完成', status: 'success' },
-          { time: '2026-05-20 14:33', event: '文献挖掘完成 - 检索到 12 篇相关文献', status: 'success' },
-          { time: '2026-05-20 14:35', event: '假设生成中...', status: 'running' },
-        ].map((log, idx) => (
-          <div
-            key={idx}
-            className="flex items-center gap-4 p-3 border-l-2 border-gray-700 bg-gray-900/30"
-          >
-            <span className="text-xs text-gray-500 font-mono w-36 shrink-0">{log.time}</span>
-            <div className={cn(
-              'w-2 h-2 rounded-full shrink-0',
-              log.status === 'success' ? 'bg-green-400' : 'bg-yellow-400',
-            )} />
-            <span className="text-sm text-gray-300">{log.event}</span>
-          </div>
-        ))}
-      </Card>
-
-      <Card className="text-center py-12">
-        <ScrollText className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-400">更多运行日志将在 Pipeline 执行后显示</p>
-      </Card>
-    </div>
-  );
+function LogsTab({ projectId }: { projectId: string }) {
+  return <RunLogsPage projectId={projectId} compact />;
 }
 
 // ============ 主组件 ============
@@ -259,11 +195,11 @@ export function ProjectWorkspace() {
       case 'hypotheses':
         return <HypothesesTab projectId={projectId ?? '1'} />;
       case 'experiments':
-        return <ExperimentsTab />;
+        return <ExperimentsTab projectId={projectId ?? '1'} />;
       case 'reports':
-        return <ReportsTab />;
+        return <ReportsTab projectId={projectId ?? '1'} />;
       case 'logs':
-        return <LogsTab />;
+        return <LogsTab projectId={projectId ?? '1'} />;
       default:
         return <ProjectOverview project={project} stats={stats} pipelineNodes={pipelineNodes} />;
     }
