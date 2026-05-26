@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import {
   MOCK_DETAILED_EXPERIMENT,
 } from '@/data/mockData';
-import type { DetailedExperimentDesign } from '@/data/mockData';
+import type { DetailedExperimentDesign } from '@/types';
 
 interface ExperimentDesignPageProps {
   projectId?: string;
@@ -115,7 +115,7 @@ export function ExperimentDesignPage({ projectId: _projectId, compact: _compact 
               onClick={() => showAlert('小样验证已启动（模拟 5s）')}>
               运行小样验证
             </Button>
-            <Button variant="outline" size="sm" icon={<FileText className="w-4 h-4" />}
+            <Button variant="secondary" size="sm" icon={<FileText className="w-4 h-4" />}
               onClick={() => showAlert('跳转至研究报告页面（待对接）')}>
               进入研究报告
             </Button>

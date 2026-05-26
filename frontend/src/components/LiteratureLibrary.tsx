@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import { MOCK_LITERATURE, computeLiteratureStats } from '@/data/mockData';
-import type { LiteratureItem, LiteratureStats } from '@/data/mockData';
+import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 
 // ============ 类型标签映射 ============

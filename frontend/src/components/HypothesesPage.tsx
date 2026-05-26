@@ -5,7 +5,7 @@ import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { ScoreBar } from '@/components/ScoreBar';
 import { MOCK_DETAILED_HYPOTHESES } from '@/data/mockData';
-import type { DetailedHypothesis } from '@/data/mockData';
+import type { DetailedHypothesis } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;

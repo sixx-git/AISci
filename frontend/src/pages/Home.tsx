@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
 import { projectApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 import type { Project } from '@/types';
 
 // 后端无数据时的模拟数据
@@ -37,6 +39,7 @@ const MOCK_PROJECTS: Project[] = [
 ];
 
 export function Home() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,17 +66,15 @@ export function Home() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">项目工作台</h1>
-          <p className="text-gray-400">管理您的 AI 科研项目</p>
-        </div>
-        <Link to="/projects/new">
-          <Button icon={<Plus className="w-4 h-4" />}>
-            创建新项目
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="项目工作台"
+        subtitle="管理您的 AI 科研项目"
+        actions={
+          <Link to="/projects/new">
+            <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
+          </Link>
+        }
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -114,16 +115,15 @@ export function Home() {
             ))}
           </div>
         ) : projects.length === 0 ? (
-          <Card className="text-center py-12">
-            <FlaskConical className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-300 mb-2">还没有项目</h3>
-            <p className="text-gray-500 mb-6">创建您的第一个 AI 科研项目</p>
-            <Link to="/projects/new">
-              <Button icon={<Plus className="w-4 h-4" />}>
-                创建项目
-              </Button>
-            </Link>
-          </Card>
+          <EmptyState
+            icon={<FlaskConical className="w-8 h-8" />}
+            title="还没有项目"
+            description="创建您的第一个 AI 科研项目"
+            action={{
+              label: '创建项目',
+              onClick: () => navigate('/projects/new'),
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((project) => (

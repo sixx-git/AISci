@@ -232,7 +232,7 @@ export function ResearchQuestionPage({ projectId }: ResearchQuestionPageProps) {
             </Button>
             <Button
               icon={<ArrowRight className="w-4 h-4" />}
-              variant="outline"
+              variant="secondary"
               onClick={() => navigate(`/projects/${projectId}?tab=literature`)}
             >
               下一步：文献库

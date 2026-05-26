@@ -1,7 +1,7 @@
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
-import type { ReportSection } from '@/data/mockData';
+import type { ReportSection } from '@/types';
 
 interface ReportChecklistProps {
   sections: ReportSection[];

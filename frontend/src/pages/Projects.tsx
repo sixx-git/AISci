@@ -4,6 +4,8 @@ import { Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX } from 'lucid
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 import { MOCK_PROJECT_OVERVIEW } from '@/data/mockData';
 import { formatDate } from '@/lib/utils';
 
@@ -47,15 +49,15 @@ export function Projects() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">项目管理</h1>
-          <p className="text-gray-400">浏览、搜索和管理您的 AI 科研项目</p>
-        </div>
-        <Link to="/projects/new">
-          <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="项目管理"
+        subtitle="浏览、搜索和管理您的 AI 科研项目"
+        actions={
+          <Link to="/projects/new">
+            <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
+          </Link>
+        }
+      />
 
       {/* 搜索 & 筛选栏 */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -125,22 +127,16 @@ export function Projects() {
 
       {/* 项目列表 */}
       {filtered.length === 0 ? (
-        <Card className="text-center py-16">
-          <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-300 mb-2">未找到匹配的项目</h3>
-          <p className="text-gray-500 mb-4">
-            {hasFilters ? '尝试调整搜索条件或清除筛选器' : '还没有项目，点击上方按钮创建一个'}
-          </p>
-          {hasFilters ? (
-            <Button variant="secondary" onClick={clearFilters} icon={<FilterX className="w-4 h-4" />}>
-              清除筛选
-            </Button>
-          ) : (
-            <Link to="/projects/new">
-              <Button icon={<Plus className="w-4 h-4" />}>创建项目</Button>
-            </Link>
-          )}
-        </Card>
+        <EmptyState
+          icon={<Search className="w-8 h-8" />}
+          title="未找到匹配的项目"
+          description={hasFilters ? '尝试调整搜索条件或清除筛选器' : '还没有项目，点击上方按钮创建一个'}
+          action={
+            hasFilters
+              ? { label: '清除筛选', onClick: clearFilters }
+              : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((project) => (

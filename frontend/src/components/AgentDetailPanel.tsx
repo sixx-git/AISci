@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
-import type { AgentNodeData } from '@/data/mockData';
+import type { AgentNodeData } from '@/types';
 
 interface AgentDetailPanelProps {
   node: AgentNodeData | null;
@@ -36,7 +36,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             </div>
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             icon={<RotateCcw className="w-3.5 h-3.5" />}
             onClick={() => onRerun?.(node.id)}

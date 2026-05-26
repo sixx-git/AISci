@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Eye, ChevronDown, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { RunLog, RunLogStatus, RunLogStage } from '@/data/mockData';
+import type { RunLog, RunLogStatus, RunLogStage } from '@/types';
 
 interface RunLogTableProps {
   logs: RunLog[];

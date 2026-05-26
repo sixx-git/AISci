@@ -5,7 +5,7 @@ import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { MOCK_AGENT_NODES } from '@/data/mockData';
-import type { AgentNodeData } from '@/data/mockData';
+import type { AgentNodeData } from '@/types';
 
 interface WorkflowPageProps {
   projectId?: string;

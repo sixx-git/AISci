@@ -6,8 +6,7 @@ import {
   Star, Eye, FlaskConical, RefreshCw, AlertTriangle,
   Award, CheckCircle2, Sparkles, Target,
 } from 'lucide-react';
-import type { Hypothesis } from '@/types';
-import type { DetailedHypothesis } from '@/data/mockData';
+import type { Hypothesis, DetailedHypothesis } from '@/types';
 
 // ---- 旧接口（ResearchResults 使用） ----
 interface HypothesisCardPropsOld {
@@ -205,21 +204,21 @@ function HypothesisCardDetailed({
 
       {/* 操作按钮 */}
       <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-800">
-        <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5" />}
+        <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5" />}
           onClick={() => onViewEvidence?.(hypothesis.id)}>
           查看证据链
         </Button>
         {!hypothesis.isPrimary && (
-          <Button variant="ghost" size="sm" icon={<Star className="w-3.5 h-3.5" />}
+          <Button variant="secondary" size="sm" icon={<Star className="w-3.5 h-3.5" />}
             onClick={() => onSetPrimary?.(hypothesis.id)}>
             设为主假设
           </Button>
         )}
-        <Button variant="ghost" size="sm" icon={<FlaskConical className="w-3.5 h-3.5" />}
+        <Button variant="secondary" size="sm" icon={<FlaskConical className="w-3.5 h-3.5" />}
           onClick={() => onEnterExperiment?.(hypothesis.id)}>
           进入实验设计
         </Button>
-        <Button variant="ghost" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />}
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={() => onRegenerate?.(hypothesis.id)}>
           重新生成
         </Button>

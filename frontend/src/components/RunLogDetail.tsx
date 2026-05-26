@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, AlertCircle, BarChart3, Terminal, FileCode } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { RunLog, RunLogStatus } from '@/data/mockData';
+import type { RunLog, RunLogStatus } from '@/types';
 
 interface RunLogDetailProps {
   log: RunLog | null;

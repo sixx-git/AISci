@@ -21,7 +21,7 @@ import {
   MOCK_PROJECT_OVERVIEW, MOCK_STATS, DEFAULT_STATS,
   MOCK_PIPELINE_NODES, DEFAULT_PIPELINE_NODES,
 } from '@/data/mockData';
-import type { ProjectOverviewData, StatItem, PipelineNodeData } from '@/data/mockData';
+import type { ProjectOverview, StatItem, PipelineNodeData } from '@/types';
 import { cn } from '@/lib/utils';
 
 // ============ 标签页定义 ============
@@ -44,7 +44,7 @@ const TABS: TabItem[] = [
 
 // ============ 项目概览 ============
 function ProjectOverview({ project, stats, pipelineNodes }: {
-  project: ProjectOverviewData;
+  project: ProjectOverview;
   stats: StatItem[];
   pipelineNodes: PipelineNodeData[];
 }) {
@@ -93,10 +93,10 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
             return (
               <button
                 key={action.label}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-700 bg-gray-800/50 hover:border-primary-500/50 hover:bg-gray-800 transition-all"
+                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-dark-700 bg-dark-800/50 hover:border-primary-500/50 hover:bg-dark-800 transition-all"
               >
                 <Icon className="w-6 h-6 text-primary-400" />
-                <span className="text-sm text-gray-300">{action.label}</span>
+                <span className="text-sm text-[#F8FAFC]">{action.label}</span>
               </button>
             );
           })}
@@ -147,7 +147,7 @@ export function ProjectWorkspace() {
   const [activeTab, setActiveTab] = useState<string>('overview');
 
   // 项目信息
-  const project: ProjectOverviewData = useMemo(() => {
+  const project: ProjectOverview = useMemo(() => {
     const id = projectId ?? '1';
     return MOCK_PROJECT_OVERVIEW[id] ?? {
       id,
@@ -209,7 +209,7 @@ export function ProjectWorkspace() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* ========== 项目头部 ========== */}
       <div className="mb-8">
-        <Link to="/" className="inline-flex items-center text-gray-400 hover:text-gray-200 mb-4 transition-colors">
+        <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           <span className="text-sm">返回项目列表</span>
         </Link>
@@ -236,9 +236,9 @@ export function ProjectWorkspace() {
             </div>
 
             {project.description && (
-              <p className="text-gray-400 max-w-2xl">{project.description}</p>
+              <p className="text-[#94A3B8] max-w-2xl">{project.description}</p>
             )}
-            <div className="flex items-center gap-2 mt-3 text-sm text-gray-500">
+            <div className="flex items-center gap-2 mt-3 text-sm text-[#94A3B8]">
               <Calendar className="w-4 h-4" />
               <span>创建于 {formatDate(project.created_at)}</span>
             </div>
@@ -268,7 +268,7 @@ export function ProjectWorkspace() {
                   'flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-200',
                   isActive
                     ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600',
+                    : 'border-transparent text-[#94A3B8] hover:text-[#F8FAFC] hover:border-dark-700',
                 )}
               >
                 <Icon className="w-4 h-4" />

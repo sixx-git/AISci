@@ -3,7 +3,7 @@ import {
   CheckCircle, Loader2, Clock, XCircle,
   AlertTriangle, ChevronRight,
 } from 'lucide-react';
-import type { AgentNodeData, AgentStatus } from '@/data/mockData';
+import type { AgentNodeData, AgentStatus } from '@/types';
 
 // ============ 状态配置 ============
 const statusConfig: Record<AgentStatus, { label: string; ringClass: string; dotClass: string }> = {

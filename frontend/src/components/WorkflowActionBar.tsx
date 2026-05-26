@@ -1,7 +1,7 @@
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import type { AgentNodeData } from '@/data/mockData';
+import type { AgentNodeData } from '@/types';
 
 interface WorkflowActionBarProps {
   nodes: AgentNodeData[];
@@ -37,7 +37,7 @@ export function WorkflowActionBar({ nodes, isRunning, onRunAll, onPause, onReset
           暂停
         </Button>
         <Button
-          variant="ghost"
+          variant="secondary"
           icon={<RotateCcw className="w-4 h-4" />}
           onClick={onReset}
           disabled={isRunning}

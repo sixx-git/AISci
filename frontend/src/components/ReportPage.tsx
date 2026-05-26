@@ -5,7 +5,7 @@ import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
-import type { ReportData } from '@/data/mockData';
+import type { ReportData } from '@/types';
 import { MOCK_REPORT } from '@/data/mockData';
 
 interface ReportPageProps {

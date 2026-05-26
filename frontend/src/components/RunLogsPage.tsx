@@ -4,7 +4,7 @@ import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
 import { RunLogDetail } from './RunLogDetail';
 import { MOCK_RUN_LOGS } from '@/data/mockData';
-import type { RunLog } from '@/data/mockData';
+import type { RunLog } from '@/types';
 
 interface RunLogsPageProps {
   projectId?: string;

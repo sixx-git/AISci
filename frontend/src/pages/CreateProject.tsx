@@ -4,6 +4,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { projectApi } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { PageHeader } from '@/components/PageHeader';
 
 export function CreateProject() {
   const navigate = useNavigate();
@@ -34,15 +35,15 @@ export function CreateProject() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Back Button */}
-      <Link to="/" className="inline-flex items-center text-gray-400 hover:text-gray-200 mb-6">
+      <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-6 transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回项目列表
       </Link>
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">创建新项目</h1>
-        <p className="text-gray-400">输入项目基本信息开始您的 AI 科研之旅</p>
-      </div>
+      <PageHeader
+        title="创建新项目"
+        subtitle="输入项目基本信息开始您的 AI 科研之旅"
+      />
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">

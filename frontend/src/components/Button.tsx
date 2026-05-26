@@ -1,12 +1,34 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'icon';
+
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  /** 按钮变体：主按钮 / 次按钮 / 危险按钮 / 图标按钮 */
+  variant?: ButtonVariant;
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: React.ReactNode;
 }
+
+const variantMap: Record<ButtonVariant, string> = {
+  primary:   'btn-primary',
+  secondary: 'btn-secondary',
+  danger:    'btn-danger',
+  icon:      'btn-icon',
+};
+
+const sizeMap = {
+  sm: 'py-1.5 px-3 text-sm',
+  md: 'py-2 px-4 text-sm',
+  lg: 'py-3 px-6 text-base',
+};
+
+const iconSizeMap = {
+  sm: 'p-1.5',
+  md: 'p-2',
+  lg: 'p-3',
+};
 
 export function Button({
   children,
@@ -18,36 +40,24 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const variants = {
-    primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-900/20',
-    secondary: 'bg-dark-700 hover:bg-dark-600 text-gray-100 border border-dark-600',
-    outline: 'border border-primary-600 text-primary-500 hover:bg-primary-600 hover:text-white',
-    ghost: 'text-gray-400 hover:text-gray-200 hover:bg-dark-700',
-    danger: 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20',
-  };
-
-  const sizes = {
-    sm: 'py-1.5 px-3 text-sm',
-    md: 'py-2 px-4 text-base',
-    lg: 'py-3 px-6 text-lg',
-  };
+  const isIconOnly = variant === 'icon';
 
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
-        variants[variant],
-        sizes[size],
-        className
+        variantMap[variant],
+        isIconOnly ? iconSizeMap[size] : sizeMap[size],
+        className,
       )}
       disabled={disabled || isLoading}
       {...props}
     >
-      {isLoading && (
+      {isLoading ? (
         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-      )}
-      {!isLoading && icon}
-      {children}
+      ) : icon ? (
+        <span className="w-4 h-4 flex items-center justify-center">{icon}</span>
+      ) : null}
+      {!isIconOnly && children}
     </button>
   );
 }
