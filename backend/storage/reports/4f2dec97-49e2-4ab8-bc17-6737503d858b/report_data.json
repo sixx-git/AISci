@@ -1,0 +1,163 @@
+{
+  "known_facts": [
+    {
+      "fact_id": "f1",
+      "content": "已知事实1",
+      "source_paper_title": "论文A"
+    },
+    {
+      "fact_id": "f2",
+      "content": "已知事实2",
+      "source_paper_title": "论文B"
+    }
+  ],
+  "knowledge_gaps": [
+    {
+      "gap_id": "g1",
+      "description": "研究缺口1：现有方法未充分验证",
+      "basis": [
+        "f1"
+      ],
+      "potential_value": "高"
+    },
+    {
+      "gap_id": "g2",
+      "description": "研究缺口2：缺乏对比实验",
+      "basis": [
+        "f2"
+      ],
+      "potential_value": "中"
+    }
+  ],
+  "contradictions": [
+    {
+      "contradiction_id": "c1",
+      "fact_ids": [
+        "f1",
+        "f2"
+      ],
+      "description": "结果矛盾"
+    }
+  ],
+  "possible_connections": [
+    {
+      "connection_id": "p1",
+      "fact_ids": [
+        "f1",
+        "f2"
+      ],
+      "description": "特征选择与泛化能力相关",
+      "confidence": 0.75
+    }
+  ],
+  "research_opportunities": [
+    {
+      "opportunity_id": "r1",
+      "title": "新机会",
+      "description": "探索自适应特征选择",
+      "related_gap_ids": [
+        "g1"
+      ],
+      "expected_impact": "显著",
+      "feasibility": 0.8
+    }
+  ],
+  "title": "科学假设与研究计划",
+  "paper_title": "研究报告",
+  "paper_abstract": "",
+  "markdown_content": "\n\n\n---\n\n## 运行摘要\n\n### 基本信息\n- **运行 ID**: ed6ebf42-c192-4790-bba9-234ebd017968\n- **状态**: completed\n- **开始时间**: 2026-05-26 13:20:42\n- **结束时间**: 2026-05-26 13:20:42\n- **总耗时**: N/A\n\n### 执行阶段\n| 阶段 | 状态 | 耗时 |\n|------|------|------|\n| problem_understanding | completed | 0秒 |\n| literature_mining | completed | 0秒 |\n| knowledge_gap | completed | 0秒 |\n| hypothesis_generation | completed | 0秒 |\n| hypothesis_review | completed | 0秒 |\n| experiment_design | completed | 0秒 |\n| small_validation | completed | 0秒 |\n| report_generation | running | N/A |\n",
+  "chapters": {
+    "problem_statement": "",
+    "rationale": "",
+    "technical_details": "",
+    "datasets": "",
+    "source": "",
+    "target": "",
+    "methods": "",
+    "experiments": "",
+    "results": "",
+    "references": []
+  },
+  "compliance_check": {
+    "total": 12,
+    "completed": 0,
+    "missing": 11,
+    "human_review": 1,
+    "references_verified": 0,
+    "references_suspicious": 0,
+    "items": [
+      {
+        "key": "problem_statement",
+        "label": "Problem Statement",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "rationale",
+        "label": "Rationale",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "technical_details",
+        "label": "Technical Details",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "datasets",
+        "label": "Datasets",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "source",
+        "label": "Source",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "target",
+        "label": "Target",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "paper_title",
+        "label": "Paper Title",
+        "status": "human_review",
+        "note": "内容较短，建议补充完善"
+      },
+      {
+        "key": "paper_abstract",
+        "label": "Paper Abstract",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "methods",
+        "label": "Methods",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "experiments",
+        "label": "Experiments",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "results",
+        "label": "Results",
+        "status": "missing",
+        "note": "该字段缺失，需补充内容"
+      },
+      {
+        "key": "references",
+        "label": "References",
+        "status": "missing",
+        "note": "暂无真实文献引用，需补充文献库"
+      }
+    ]
+  }
+}

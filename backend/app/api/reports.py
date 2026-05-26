@@ -106,7 +106,8 @@ async def generate_report(
             report_id=report_file_id,
             pdf_generated=pdf_success,
             status="generated",
-            version=1
+            version=1,
+            extra_metadata=report_result.get("compliance_check", None)
         )
         
         db_report = report_service.create_report(report_create)

@@ -111,7 +111,11 @@ class ReportGenerationAgent:
             )
             
             # 验证和标准化结果
-            result = self._validate_and_normalize_result(result_dict)
+            result = self._validate_and_normalize_result(
+                result_dict,
+                literature_facts,
+                citation_map
+            )
             
             # 添加运行摘要到报告
             if pipeline_run_info:
@@ -249,7 +253,12 @@ class ReportGenerationAgent:
             "small_validation": json.dumps(small_validation, ensure_ascii=False, indent=2) if small_validation else "无小样验证结果"
         }
     
-    def _validate_and_normalize_result(self, result_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_and_normalize_result(
+        self,
+        result_dict: Dict[str, Any],
+        literature_facts: List[Dict[str, Any]] = None,
+        citation_map: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """验证和标准化结果"""
         # 确保顶层字段存在
         required_fields = ["title", "paper_title", "paper_abstract", "markdown_content", "chapters"]
@@ -262,7 +271,7 @@ class ReportGenerationAgent:
                 else:
                     result_dict[field] = ""
         
-        # 确保 chapters 字段存在且包含所有必需章节
+        # 确保 chapters 字段存在且包含所有必需章节（12 项挑战杯规范字段）
         if "chapters" not in result_dict or not isinstance(result_dict["chapters"], dict):
             result_dict["chapters"] = {}
         
@@ -282,7 +291,178 @@ class ReportGenerationAgent:
         if not isinstance(result_dict["chapters"]["references"], list):
             result_dict["chapters"]["references"] = []
         
+        # 参考文献真实性校验
+        ref_check = self._validate_references(
+            result_dict["chapters"]["references"],
+            literature_facts or [],
+            citation_map or []
+        )
+        
+        # 如果参考文献全部无法验证且不为空标记，强制替换
+        if ref_check["suspicious_count"] > 0 and ref_check["verified_count"] == 0:
+            logger.warning(f"参考文献校验失败：{ref_check['suspicious_count']} 条疑似虚构引用")
+            result_dict["chapters"]["references"] = ["暂无真实文献引用，需补充文献库"]
+            ref_check["references_replaced"] = True
+        
+        # 构建比赛规范合规性检查结果
+        compliance_check = self._build_compliance_check(result_dict, ref_check)
+        result_dict["compliance_check"] = compliance_check
+        
         return result_dict
+    
+    def _validate_references(
+        self,
+        references: List[str],
+        literature_facts: List[Dict[str, Any]],
+        citation_map: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        校验参考文献是否来自已上传的文献库或证据链
+        
+        Returns:
+            {
+                "verified_count": 可验证的引用数,
+                "suspicious_count": 疑似虚构的引用数,
+                "verified_refs": 验证通过的引用列表,
+                "suspicious_refs": 疑似虚构的引用列表,
+                "references_replaced": 是否已替换
+            }
+        """
+        if not references or references == ["暂无真实文献引用，需补充文献库"]:
+            return {
+                "verified_count": 0,
+                "suspicious_count": 0,
+                "verified_refs": [],
+                "suspicious_refs": [],
+                "references_replaced": False,
+                "note": "暂无文献引用"
+            }
+        
+        # 构建可验证的关键词库（从 literature_facts 和 citation_map 提取）
+        verified_keywords = set()
+        for fact in (literature_facts or []):
+            for key in ["title", "authors", "source", "content"]:
+                val = fact.get(key, "")
+                if isinstance(val, str) and len(val) > 3:
+                    # 使用短序列用于模糊匹配
+                    verified_keywords.add(val[:50].lower())
+        for cit in (citation_map or []):
+            for key in ["title", "authors", "source", "reference_text", "citation"]:
+                val = cit.get(key, "")
+                if isinstance(val, str) and len(val) > 3:
+                    verified_keywords.add(val[:50].lower())
+        
+        verified_refs = []
+        suspicious_refs = []
+        
+        for ref in references:
+            if not ref or not isinstance(ref, str):
+                suspicious_refs.append(str(ref) if ref else "(空引用)")
+                continue
+            
+            ref_lower = ref[:100].lower()
+            is_verified = False
+            
+            for kw in verified_keywords:
+                # 检查引用文本是否包含已知文献的关键信息
+                if len(kw) > 10 and kw in ref_lower:
+                    is_verified = True
+                    break
+                # 也尝试用较短片段匹配（作者名等）
+                if len(kw) >= 5 and kw[:20] in ref_lower:
+                    is_verified = True
+                    break
+            
+            if is_verified:
+                verified_refs.append(ref)
+            else:
+                suspicious_refs.append(ref)
+        
+        return {
+            "verified_count": len(verified_refs),
+            "suspicious_count": len(suspicious_refs),
+            "verified_refs": verified_refs,
+            "suspicious_refs": suspicious_refs,
+            "references_replaced": False
+        }
+    
+    def _build_compliance_check(
+        self,
+        result_dict: Dict[str, Any],
+        ref_check: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """构建 12 项挑战杯规范合规性检查结果"""
+        chapters = result_dict.get("chapters", {})
+        
+        # 定义 12 项检查字段
+        CHECK_FIELDS = [
+            ("problem_statement", "Problem Statement"),
+            ("rationale", "Rationale"),
+            ("technical_details", "Technical Details"),
+            ("datasets", "Datasets"),
+            ("source", "Source"),
+            ("target", "Target"),
+            ("paper_title", "Paper Title"),
+            ("paper_abstract", "Paper Abstract"),
+            ("methods", "Methods"),
+            ("experiments", "Experiments"),
+            ("results", "Results"),
+            ("references", "References"),
+        ]
+        
+        items = []
+        for key, label in CHECK_FIELDS:
+            if key == "paper_title":
+                value = result_dict.get("paper_title", "")
+            elif key == "paper_abstract":
+                value = result_dict.get("paper_abstract", "")
+            else:
+                value = chapters.get(key, "")
+            
+            if key == "references":
+                refs = chapters.get("references", [])
+                if not refs or refs == ["暂无真实文献引用，需补充文献库"]:
+                    status = "missing"
+                    note = "暂无真实文献引用，需补充文献库"
+                elif ref_check.get("references_replaced"):
+                    status = "human_review"
+                    note = f"检测到 {ref_check.get('suspicious_count', 0)} 条疑似虚构引用，已被替换为安全提示"
+                elif ref_check.get("suspicious_count", 0) > 0:
+                    status = "human_review"
+                    note = f"检测到 {ref_check.get('suspicious_count', 0)} 条引用无法在文献库中验证，需人工确认"
+                else:
+                    status = "completed"
+                    note = f"{ref_check.get('verified_count', 0)} 条引用已通过文献库验证"
+            elif isinstance(value, str) and len(value.strip()) > 10:
+                status = "completed"
+                note = None
+            elif isinstance(value, str) and len(value.strip()) > 0:
+                status = "human_review"
+                note = "内容较短，建议补充完善"
+            else:
+                status = "missing"
+                note = "该字段缺失，需补充内容"
+            
+            items.append({
+                "key": key,
+                "label": label,
+                "status": status,
+                "note": note
+            })
+        
+        completed = sum(1 for i in items if i["status"] == "completed")
+        missing = sum(1 for i in items if i["status"] == "missing")
+        needs_review = sum(1 for i in items if i["status"] == "human_review")
+        
+        return {
+            "total": 12,
+            "completed": completed,
+            "missing": missing,
+            "human_review": needs_review,
+            "references_verified": ref_check.get("verified_count", 0),
+            "references_suspicious": ref_check.get("suspicious_count", 0),
+            "items": items
+        }
     
     def _save_report_files(self, result: Dict[str, Any], project_info: Dict[str, Any]) -> Dict[str, Any]:
         """保存报告文件"""

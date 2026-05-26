@@ -43,7 +43,8 @@ class ReportService:
                 results=report_data.results,
                 references=report_data.references,
                 status=report_data.status or "draft",
-                version=report_data.version or 1
+                version=report_data.version or 1,
+                extra_metadata=report_data.extra_metadata
             )
             
             self.db.add(db_report)

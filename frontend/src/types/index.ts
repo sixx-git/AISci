@@ -329,12 +329,28 @@ export interface ReportSection {
   note?: string;
 }
 
+/** 合规性检查结果（12 项挑战杯字段） */
+export interface ComplianceCheck {
+  total: number;
+  completed: number;
+  missing: number;
+  human_review: number;
+  references_verified: number;
+  references_suspicious: number;
+  items: ReportSection[];
+}
+
 export interface ReportData {
   id: string;
   title: string;
   generatedAt: string;
   markdownContent: string;
   sections: ReportSection[];
+  /** 合规性检查结果 */
+  complianceCheck?: ComplianceCheck;
+  /** 下载链接 */
+  mdDownloadUrl?: string;
+  pdfDownloadUrl?: string;
 }
 
 export interface ReportGenerationResult {
@@ -349,6 +365,8 @@ export interface ReportGenerationResult {
   pdf_success?: boolean;
   summary?: string;
   chapters: unknown;
+  /** 合规性检查结果 */
+  compliance_check?: ComplianceCheck;
 }
 
 export interface ReportGenerationRequest {

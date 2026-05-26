@@ -2,7 +2,7 @@
 研究相关 Schemas
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -278,6 +278,7 @@ class ReportCreate(BaseModel):
     pdf_generated: Optional[bool] = Field(False, description="PDF 是否生成成功")
     status: Optional[str] = Field("draft", description="状态")
     version: Optional[int] = Field(1, description="版本")
+    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="额外元数据（如合规性检查结果）")
 
 
 class ReportDBResponse(ReportCreate):

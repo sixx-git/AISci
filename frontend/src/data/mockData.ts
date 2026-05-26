@@ -22,6 +22,7 @@ import type {
   AgentNodeData,
   LiteratureStats,
   ReportData,
+  ReportSection,
   RunLog,
   ResearchResult,
 } from '@/types';
@@ -744,7 +745,32 @@ export const MOCK_REPORT: ReportData = {
     { key: 'results', label: 'Results', status: 'missing', note: '需在实验执行后填充实际数据' },
     { key: 'references', label: 'References', status: 'completed' },
   ],
+  complianceCheck: {
+    total: 12,
+    completed: 10,
+    missing: 1,
+    human_review: 1,
+    references_verified: 4,
+    references_suspicious: 0,
+    items: [
+      { key: 'problem_statement', label: 'Problem Statement', status: 'completed' },
+      { key: 'rationale', label: 'Rationale', status: 'completed' },
+      { key: 'technical_details', label: 'Technical Details', status: 'completed' },
+      { key: 'datasets', label: 'Datasets', status: 'completed' },
+      { key: 'source', label: 'Source', status: 'completed' },
+      { key: 'target', label: 'Target', status: 'completed' },
+      { key: 'paper_title', label: 'Paper Title', status: 'completed' },
+      { key: 'paper_abstract', label: 'Paper Abstract', status: 'human_review', note: '建议补充更详细的贡献陈述' },
+      { key: 'methods', label: 'Methods', status: 'completed' },
+      { key: 'experiments', label: 'Experiments', status: 'completed' },
+      { key: 'results', label: 'Results', status: 'missing', note: '需在实验执行后填充实际数据' },
+      { key: 'references', label: 'References', status: 'completed' },
+    ],
+  },
 };
+
+/** MOCK_REPORT 的 sections 独立导出（兜底用） */
+export const MOCK_REPORT_SECTIONS: ReportSection[] = MOCK_REPORT.sections;
 
 // ============================================================
 // 11. 运行日志（6 条）
