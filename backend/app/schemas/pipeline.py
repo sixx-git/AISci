@@ -39,6 +39,7 @@ class PipelineRunRequest(BaseModel):
     """Pipeline 运行请求"""
     project_id: str = Field(..., description="项目 ID", example="123e4567-e89b-12d3-a456-426614174000")
     research_question: str = Field(..., description="研究问题", example="如何利用机器学习提高医学影像诊断的准确率？")
+    options: Optional[Dict[str, Any]] = Field(default=None, description="可选配置参数")
 
 
 class PipelineStageLog(BaseModel):
@@ -104,20 +105,23 @@ class PipelineRunDetail(PipelineRunSummary):
 
 class PipelineRunResult(BaseModel):
     """Pipeline 完整运行结果"""
-    pipeline_id: str
+    pipeline_id: str = Field(..., description="Pipeline ID")
+    run_id: str = Field(..., description="运行 ID")
     project_id: str
     research_question: str
     status: PipelineStatus
-    stages: List[PipelineStageLog]
-    total_duration: Optional[float]
-    problem_understanding: Optional[Dict[str, Any]]
-    literature_mining: Optional[Dict[str, Any]]
-    knowledge_gap: Optional[Dict[str, Any]]
-    hypothesis_generation: Optional[Dict[str, Any]]
-    hypothesis_review: Optional[Dict[str, Any]]
-    experiment_design: Optional[Dict[str, Any]]
-    small_validation: Optional[Dict[str, Any]]
-    report_generation: Optional[Dict[str, Any]]
-    final_report: Optional[Dict[str, Any]]
+    stages: List[PipelineStageLog] = Field(default_factory=list)
+    total_duration: Optional[float] = None
+    problem_understanding: Optional[Dict[str, Any]] = None
+    literature_mining: Optional[Dict[str, Any]] = None
+    knowledge_gap: Optional[Dict[str, Any]] = None
+    hypothesis_generation: Optional[Dict[str, Any]] = None
+    hypothesis_review: Optional[Dict[str, Any]] = None
+    experiment_design: Optional[Dict[str, Any]] = None
+    small_validation: Optional[Dict[str, Any]] = None
+    report_generation: Optional[Dict[str, Any]] = None
+    final_report: Optional[Dict[str, Any]] = None
+    final_report_id: Optional[str] = Field(None, description="生成的报告 ID")
+    failed_stage: Optional[str] = Field(None, description="失败的阶段名称")
     created_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: Optional[datetime] = None

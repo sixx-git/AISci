@@ -117,8 +117,8 @@ function LiteratureTab({ projectId }: { projectId: string }) {
 }
 
 // ============ 智能体工作流 ============
-function WorkflowTab({ projectId }: { projectId: string }) {
-  return <WorkflowPage projectId={projectId} compact />;
+function WorkflowTab({ projectId, researchQuestion }: { projectId: string; researchQuestion: string }) {
+  return <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact />;
 }
 
 // ============ 候选假设 ============
@@ -191,7 +191,7 @@ export function ProjectWorkspace() {
       case 'literature':
         return <LiteratureTab projectId={projectId ?? '1'} />;
       case 'workflow':
-        return <WorkflowTab projectId={projectId ?? '1'} />;
+        return <WorkflowTab projectId={projectId ?? '1'} researchQuestion={project.research_question ?? ''} />;
       case 'hypotheses':
         return <HypothesesTab projectId={projectId ?? '1'} />;
       case 'experiments':

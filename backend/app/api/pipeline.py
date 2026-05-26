@@ -1,7 +1,7 @@
 """
 Pipeline API 路由
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -31,6 +31,7 @@ async def run_pipeline(
     
     - **project_id**: 项目 ID
     - **research_question**: 研究问题
+    - **options**: 可选配置参数
     
     按顺序执行 8 个阶段：
     1. ProblemUnderstandingAgent
@@ -42,25 +43,19 @@ async def run_pipeline(
     7. SmallValidationAgent
     8. ReportGenerationAgent
     
-    返回完整的执行日志和结果。
+    返回完整的执行日志和结果。失败时不抛 500，而是返回 status=failed 的正常结果。
     """
     try:
         pipeline_service = get_pipeline_service(db)
-        result = pipeline_service.run_pipeline(request)
+        result: PipelineRunResult = pipeline_service.run_pipeline(request)
         
         if result.status == PipelineStatus.FAILED:
-            # 找到失败的阶段
-            failed_stage = None
-            for stage in result.stages:
-                if stage.status == "failed":
-                    failed_stage = stage
-                    break
-            
-            error_msg = f"Pipeline 执行失败在阶段: {failed_stage.stage if failed_stage else 'unknown'}"
-            if failed_stage and failed_stage.error_message:
-                error_msg += f" - 错误信息: {failed_stage.error_message}"
-            
-            raise HTTPException(status_code=500, detail=error_msg)
+            # 返回正常 200，但 data.status=failed，前端据此判断
+            return ResponseModel(
+                code=200,
+                message=f"Pipeline 执行失败在阶段: {result.failed_stage or 'unknown'}",
+                data=result
+            )
         
         return ResponseModel(
             code=200,
@@ -68,10 +63,8 @@ async def run_pipeline(
             data=result
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Pipeline 执行失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pipeline 服务异常: {str(e)}")
 
 
 @router.get("/runs/{project_id}", response_model=ResponseModel[List[PipelineRunSummary]])
@@ -187,3 +180,52 @@ async def get_run_detail(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取 Pipeline 运行详情失败: {str(e)}")
+
+
+@router.get("/status/{run_id}", response_model=ResponseModel[PipelineRunResult])
+async def get_run_status(
+    run_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    轮询 Pipeline 运行状态（供前端实时更新）
+    
+    - **run_id**: Pipeline 运行 ID
+    """
+    try:
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+        if not run:
+            raise HTTPException(status_code=404, detail="Pipeline 运行记录未找到")
+        
+        # 获取阶段信息
+        stages = db.query(PipelineStageExecution).filter(
+            PipelineStageExecution.pipeline_run_id == run.id
+        ).order_by(PipelineStageExecution.stage_order).all()
+        
+        return ResponseModel(
+            code=200,
+            message="获取成功",
+            data={
+                "run_id": run.run_id,
+                "project_id": run.project_id,
+                "status": run.status.value if hasattr(run.status, "value") else str(run.status),
+                "failed_stage": run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
+                "final_report_id": run.final_report_id,
+                "stages": [
+                    {
+                        "stage": s.stage.value if hasattr(s.stage, "value") else str(s.stage),
+                        "status": s.status.value if hasattr(s.status, "value") else str(s.status),
+                        "started_at": s.started_at.isoformat() if s.started_at else None,
+                        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+                        "duration_ms": s.duration_ms,
+                        "error_message": s.error_message,
+                        "output_data": s.output_data
+                    }
+                    for s in stages
+                ]
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

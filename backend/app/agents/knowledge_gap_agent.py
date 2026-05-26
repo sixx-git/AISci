@@ -125,8 +125,17 @@ class KnowledgeGapAgent:
         facts_text = []
         
         for fact in facts:
-            source_info = f" (来源: {fact.source_paper_title})" if fact.source_paper_title else ""
-            fact_text = f"""[{fact.fact_id}] {fact.content}{source_info}"""
+            # 兼容 dict 和 object
+            if isinstance(fact, dict):
+                source_title = fact.get("source_paper_title", fact.get("source", ""))
+                fact_id = fact.get("fact_id", fact.get("id", ""))
+                content = fact.get("content", fact.get("fact", str(fact)))
+            else:
+                source_title = getattr(fact, "source_paper_title", "")
+                fact_id = getattr(fact, "fact_id", "")
+                content = getattr(fact, "content", str(fact))
+            source_info = f" (来源: {source_title})" if source_title else ""
+            fact_text = f"[{fact_id}] {content}{source_info}"
             facts_text.append(fact_text)
         
         return "\n\n".join(facts_text)

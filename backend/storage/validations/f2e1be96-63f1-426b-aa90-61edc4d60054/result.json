@@ -1,0 +1,9 @@
+{
+  "has_real_data": 5,
+  "analysis_script": "mock_# 完整的 Python 分析脚本...",
+  "simulated_data": "mock_[{\"col1\": 1, \"col2\":",
+  "simulation_assumptions": "mock_模拟假设说明...",
+  "charts": "mock_[{\"type\": \"bar\", \"ti",
+  "statistics": "mock_{\"mean\": 0.5}",
+  "run_log": "mock_[{\"timestamp\": \"2024"
+}

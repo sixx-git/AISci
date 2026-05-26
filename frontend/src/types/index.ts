@@ -35,6 +35,7 @@ export interface ProjectOverview {
   research_field: string;
   description: string;
   current_stage: string;
+  research_question?: string;
   created_at: string;
   updated_at: string;
   status: string;
@@ -176,6 +177,40 @@ export interface PipelineRunDetail extends PipelineRunSummary {
   input_data?: unknown;
   output_data?: unknown;
   stages: PipelineStageExecutionSummary[];
+}
+
+export interface PipelineStageLog {
+  stage: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  start_time?: string;
+  end_time?: string;
+  duration?: number;
+  input_data?: Record<string, unknown>;
+  output_data?: Record<string, unknown>;
+  error_message?: string;
+}
+
+export interface PipelineRunResult {
+  pipeline_id: string;
+  run_id: string;
+  project_id: string;
+  research_question: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  stages: PipelineStageLog[];
+  total_duration?: number;
+  problem_understanding?: Record<string, unknown>;
+  literature_mining?: Record<string, unknown>;
+  knowledge_gap?: Record<string, unknown>;
+  hypothesis_generation?: Record<string, unknown>;
+  hypothesis_review?: Record<string, unknown>;
+  experiment_design?: Record<string, unknown>;
+  small_validation?: Record<string, unknown>;
+  report_generation?: Record<string, unknown>;
+  final_report?: Record<string, unknown>;
+  final_report_id?: string;
+  failed_stage?: string;
+  created_at: string;
+  completed_at?: string;
 }
 
 // ==================== 统计卡片 ====================
