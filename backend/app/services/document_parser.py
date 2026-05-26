@@ -383,6 +383,7 @@ class DocumentParser:
                 content_preview=chunk.content[:200] if len(chunk.content) > 200 else chunk.content,
                 start_page=chunk.start_page,
                 end_page=chunk.end_page,
+                page_number=chunk.start_page,
                 start_offset=chunk.start_offset,
                 end_offset=chunk.end_offset,
                 chunk_type=chunk.chunk_type,

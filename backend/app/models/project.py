@@ -156,6 +156,7 @@ class Chunk(Base):
     end_offset = Column(Integer, nullable=True, comment="在原文档中的结束位置")
     start_page = Column(Integer, nullable=True, comment="起始页码")
     end_page = Column(Integer, nullable=True, comment="结束页码")
+    page_number = Column(Integer, nullable=True, comment="主要页码（取起始页）")
     
     # 向量化信息
     embedding_model = Column(String(100), nullable=True, comment="向量化模型名称")

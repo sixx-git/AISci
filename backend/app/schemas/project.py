@@ -103,6 +103,7 @@ class DocumentInfo(BaseModel):
     summary: Optional[str] = None
     status: DocumentStatus
     error_message: Optional[str] = None
+    chunk_count: Optional[int] = Field(None, description="切片数量")
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -146,6 +147,7 @@ class ChunkInfo(BaseModel):
     content_preview: Optional[str] = None
     start_page: Optional[int] = None
     end_page: Optional[int] = None
+    page_number: Optional[int] = None
     start_offset: Optional[int] = None
     end_offset: Optional[int] = None
     chunk_type: Optional[str] = None

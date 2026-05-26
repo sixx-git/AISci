@@ -145,11 +145,18 @@ class DocumentService:
         Returns:
             Tuple[Document, Optional[List[Chunk]]]
         """
-        # 保存文件
+        # 保存文件到 storage/uploads/{project_id}/
         doc_id = str(uuid.uuid4())
         file_extension = os.path.splitext(filename)[1].lower()
         save_filename = f"{doc_id}{file_extension}"
-        save_path = os.path.join(self.upload_dir, save_filename)
+        
+        if project_id:
+            upload_subdir = os.path.join(self.upload_dir, project_id)
+        else:
+            upload_subdir = self.upload_dir
+        os.makedirs(upload_subdir, exist_ok=True)
+        
+        save_path = os.path.join(upload_subdir, save_filename)
         
         # 保存文件
         with open(save_path, 'wb') as f:

@@ -1,16 +1,65 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   BookOpen, Upload, FileText,
   Database, Eye, Sparkles, Trash2,
   FileSearch, Loader2, CheckCircle, Clock, AlertCircle, Plus,
-  Layers, FileDown, BrainCircuit,
+  Layers, BrainCircuit,
+  XCircle, ArrowUp,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
-import { MOCK_LITERATURE, computeLiteratureStats } from '@/data/mockData';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
+import { documentService } from '@/services';
+import type { DocumentInfo } from '@/services/documentService';
+
+// ============ MIME / 扩展名 → 文献类型 ============
+function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
+  const ext = info.file_type?.toLowerCase();
+  if (ext === 'pdf') return '论文';
+  if (ext === 'txt' || ext === 'md') return '预印本';
+  return '论文';
+}
+
+// ============ 后端 parse_status → LiteratureItem.parseStatus ============
+function mapStatus(status: DocumentInfo['status']): LiteratureItem['parseStatus'] {
+  switch (status) {
+    case 'uploaded':
+      return 'pending';
+    case 'processing':
+      return 'parsing';
+    case 'processed':
+      return 'completed';
+    case 'failed':
+      return 'error';
+    default:
+      return 'pending';
+  }
+}
+
+// ============ DocumentInfo → LiteratureItem ============
+function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
+  const year = doc.created_at ? new Date(doc.created_at).getFullYear() : new Date().getFullYear();
+  return {
+    id: doc.id,
+    title: doc.title || doc.filename.replace(/\.\w+$/, ''),
+    authors: doc.authors || '—',
+    year,
+    type: inferDocType(doc),
+    parseStatus: mapStatus(doc.status),
+    snippetCount: doc.chunk_count ?? 0,
+    factCount: 0,
+    fileSize: formatFileSize(doc.file_size),
+    uploadDate: doc.created_at ? doc.created_at.slice(0, 10) : '—',
+  };
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ============ 类型标签映射 ============
 const typeConfig: Record<LiteratureItem['type'], { label: string; className: string }> = {
@@ -28,20 +77,11 @@ const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; 
   error:     { label: '失败',   className: 'bg-red-500/15 text-red-400 border-red-500/25' },
 };
 
-// ============ 上传动作 ============
-interface UploadAction {
-  key: string;
-  label: string;
-  desc: string;
-  icon: React.FC<{ className?: string }>;
-  variant: 'primary' | 'secondary' | 'outline';
+// ============ 状态消息 ============
+interface StatusMsg {
+  type: 'loading' | 'success' | 'error';
+  text: string;
 }
-
-const UPLOAD_ACTIONS: UploadAction[] = [
-  { key: 'pdf', label: '上传 PDF', desc: '上传论文 PDF，自动解析文本', icon: Upload, variant: 'primary' },
-  { key: 'csv', label: '导入 CSV 数据', desc: '导入结构化科研数据', icon: FileDown, variant: 'secondary' },
-  { key: 'index', label: '构建向量索引', desc: '为文献构建语义检索索引', icon: BrainCircuit, variant: 'outline' },
-];
 
 // ============ 表格列定义 ============
 const TABLE_COLUMNS = [
@@ -55,19 +95,117 @@ const TABLE_COLUMNS = [
   { key: 'actions', label: '操作', className: 'text-right' },
 ] as const;
 
+// ============ 统计计算 ============
+function computeStats(items: LiteratureItem[]): LiteratureStats {
+  return {
+    uploaded: items.length,
+    parsed: items.filter((i) => i.parseStatus === 'completed').length,
+    snippets: items.reduce((s, i) => s + i.snippetCount, 0),
+    facts: items.reduce((s, i) => s + i.factCount, 0),
+  };
+}
+
 // ============ Props ============
 interface LiteratureLibraryProps {
   projectId?: string;
   compact?: boolean;
 }
 
-export function LiteratureLibrary({ projectId: _projectId, compact: _compact = false }: LiteratureLibraryProps) {
-  const [literature, setLiterature] = useState<LiteratureItem[]>(MOCK_LITERATURE);
-  const [uploading, setUploading] = useState<string | null>(null);
+export function LiteratureLibrary({ projectId = 'default', compact: _compact = false }: LiteratureLibraryProps) {
+  const [literature, setLiterature] = useState<LiteratureItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const stats: LiteratureStats = useMemo(() => computeLiteratureStats(literature), [literature]);
+  const stats: LiteratureStats = useMemo(() => computeStats(literature), [literature]);
 
+  // ========== 数据加载 ==========
+  const loadDocuments = useCallback(async () => {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      const res = await documentService.getDocuments(projectId);
+      if (res.code === 200) {
+        const items = (res.data?.items ?? []).map(docInfoToLiterature);
+        setLiterature(items);
+      }
+    } catch (err: any) {
+      console.error('获取文献列表失败:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  // ========== 显示状态消息 ==========
+  const showStatus = useCallback((msg: StatusMsg) => {
+    setStatusMsg(msg);
+    setTimeout(() => setStatusMsg(null), 4000);
+  }, []);
+
+  // ========== 上传 PDF ==========
+  const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 重置 input 以便重复选择同一文件
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    // 校验文件类型
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showStatus({ type: 'error', text: '仅支持 PDF 文件' });
+      return;
+    }
+
+    setUploading(true);
+    showStatus({ type: 'loading', text: `正在上传并解析 ${file.name}…` });
+
+    try {
+      const res = await documentService.uploadDocument(projectId, file);
+      if (res.code === 200) {
+        const uploadedDoc = res.data?.document;
+        const chunks = res.data?.chunks_count ?? 0;
+        showStatus({
+          type: 'success',
+          text: `"${uploadedDoc?.filename ?? file.name}" 上传成功，已生成 ${chunks} 个切片`,
+        });
+        await loadDocuments();
+      } else {
+        showStatus({ type: 'error', text: res.message || '上传失败' });
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `上传失败: ${detail}` });
+    } finally {
+      setUploading(false);
+    }
+  }, [projectId, loadDocuments, showStatus]);
+
+  // ========== 删除 ==========
+  const handleDelete = useCallback(async (id: string) => {
+    setDeleting(id);
+    try {
+      const res = await documentService.deleteDocument(id);
+      if (res.code === 200) {
+        showStatus({ type: 'success', text: '文献已删除' });
+        await loadDocuments();
+      } else {
+        showStatus({ type: 'error', text: res.message || '删除失败' });
+      }
+    } catch (err: any) {
+      showStatus({ type: 'error', text: `删除失败: ${err.message}` });
+    } finally {
+      setDeleting(null);
+    }
+  }, [loadDocuments, showStatus]);
+
+  // ========== 搜索 ==========
   const filtered = useMemo(() => {
     if (!search.trim()) return literature;
     const kw = search.trim().toLowerCase();
@@ -78,37 +216,13 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
     );
   }, [literature, search]);
 
-  // ===== 模拟操作 =====
-  const handleUploadAction = (key: string) => {
-    setUploading(key);
-    setTimeout(() => setUploading(null), 1800);
-  };
-
-  const handleExtractFacts = (id: string) => {
-    setLiterature((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, parseStatus: 'parsing' as const } : l,
-      ),
-    );
-    setTimeout(() => {
-      setLiterature((prev) =>
-        prev.map((l) =>
-          l.id === id
-            ? { ...l, parseStatus: 'completed' as const, snippetCount: l.snippetCount + 5, factCount: l.factCount + 4 }
-            : l,
-        ),
-      );
-    }, 1500);
-  };
-
-  const handleDelete = (id: string) => {
-    setLiterature((prev) => prev.filter((l) => l.id !== id));
-  };
-
-  // ===== 空状态 =====
-  if (literature.length === 0) {
+  // ========== 空状态 ==========
+  if (!loading && literature.length === 0) {
     return (
       <div className="max-w-7xl mx-auto">
+        {/* 状态提示 */}
+        <StatusBar msg={statusMsg} />
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
           <p className="text-gray-400">
@@ -124,11 +238,20 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
           <p className="text-gray-500 max-w-md mx-auto mb-6 text-sm">
             上传论文 PDF 后，系统将自动完成文本解析、文献切片、向量索引构建和科学事实提取。
           </p>
+          {/* 隐藏文件选择器 + 按钮触发 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handlePdfUpload}
+            className="hidden"
+          />
           <Button
-            icon={<Plus className="w-4 h-4" />}
-            onClick={() => setLiterature(MOCK_LITERATURE)}
+            icon={uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
           >
-            上传第一篇论文
+            {uploading ? '解析中…' : '上传第一篇论文'}
           </Button>
         </Card>
       </div>
@@ -137,6 +260,9 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* 状态提示 */}
+      <StatusBar msg={statusMsg} />
+
       {/* ========== 头部 ========== */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
@@ -152,40 +278,62 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
           <h3 className="text-sm font-semibold text-gray-200">数据导入与处理</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {UPLOAD_ACTIONS.map((action) => {
-            const Icon = action.icon;
-            const isActive = uploading === action.key;
-            return (
-              <button
-                key={action.key}
-                disabled={uploading !== null}
-                onClick={() => handleUploadAction(action.key)}
-                className={cn(
-                  'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                  isActive
-                    ? 'border-primary-500 bg-primary-500/10'
-                    : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
-                  uploading !== null && 'opacity-60 cursor-not-allowed',
-                )}
-              >
-                <div className={cn(
-                  'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-                  isActive ? 'bg-primary-500/25' : 'bg-gray-700',
-                )}>
-                  {isActive
-                    ? <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
-                    : <Icon className="w-4 h-4 text-gray-300" />
-                  }
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-gray-200">
-                    {isActive ? '处理中…' : action.label}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{action.desc}</div>
-                </div>
-              </button>
-            );
-          })}
+          {/* PDF 上传 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handlePdfUpload}
+            className="hidden"
+          />
+          <button
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
+              uploading
+                ? 'border-primary-500 bg-primary-500/10'
+                : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+            )}
+          >
+            <div className={cn(
+              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+              uploading ? 'bg-primary-500/25' : 'bg-gray-700',
+            )}>
+              {uploading ? (
+                <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4 text-gray-300" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-200">
+                {uploading ? '解析中…' : '上传 PDF'}
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">上传论文 PDF，自动解析文本</div>
+            </div>
+          </button>
+
+          {/* 占位 */}
+          <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
+            <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
+              <ArrowUp className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-500">导入 CSV 数据</div>
+              <div className="text-xs text-gray-600 mt-0.5">导入结构化科研数据</div>
+            </div>
+          </button>
+
+          <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
+            <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
+              <BrainCircuit className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-500">构建向量索引</div>
+              <div className="text-xs text-gray-600 mt-0.5">为文献构建语义检索索引</div>
+            </div>
+          </button>
         </div>
       </Card>
 
@@ -210,7 +358,7 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
           />
         </div>
         <span className="text-sm text-gray-500">
-          共 {filtered.length} 篇文献
+          {loading ? '加载中…' : `共 ${filtered.length} 篇文献`}
         </span>
       </div>
 
@@ -237,10 +385,14 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
               {filtered.map((item) => {
                 const tConf = typeConfig[item.type];
                 const psConf = parseStatusConfig[item.parseStatus];
+                const isDeleting = deleting === item.id;
                 return (
                   <tr
                     key={item.id}
-                    className="border-b border-dark-800 hover:bg-dark-800/30 transition-colors"
+                    className={cn(
+                      'border-b border-dark-800 hover:bg-dark-800/30 transition-colors',
+                      isDeleting && 'opacity-50',
+                    )}
                   >
                     {/* 标题 */}
                     <td className="px-4 py-3">
@@ -312,27 +464,27 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
                         </button>
                         <button
                           title="提取事实"
-                          onClick={() => handleExtractFacts(item.id)}
-                          disabled={item.parseStatus === 'parsing'}
-                          className={cn(
-                            'p-1.5 rounded-md transition-colors',
-                            item.parseStatus === 'parsing'
-                              ? 'text-gray-600 cursor-not-allowed'
-                              : 'text-gray-500 hover:text-amber-400 hover:bg-amber-500/10',
-                          )}
+                          disabled
+                          className="p-1.5 rounded-md text-gray-600 cursor-not-allowed transition-colors"
                         >
-                          {item.parseStatus === 'parsing' ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Sparkles className="w-3.5 h-3.5" />
-                          )}
+                          <Sparkles className="w-3.5 h-3.5" />
                         </button>
                         <button
                           title="删除"
+                          disabled={isDeleting}
                           onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          className={cn(
+                            'p-1.5 rounded-md transition-colors',
+                            isDeleting
+                              ? 'text-gray-600 cursor-not-allowed'
+                              : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10',
+                          )}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          {isDeleting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -342,7 +494,37 @@ export function LiteratureLibrary({ projectId: _projectId, compact: _compact = f
             </tbody>
           </table>
         </div>
+
+        {filtered.length === 0 && !loading && (
+          <div className="py-12 text-center text-gray-500 text-sm">
+            没有匹配的文献
+          </div>
+        )}
       </Card>
+    </div>
+  );
+}
+
+// ========== 状态提示条 ==========
+function StatusBar({ msg }: { msg: StatusMsg | null }) {
+  if (!msg) return null;
+
+  const config = {
+    loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-white' },
+    success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-white' },
+    error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-white' },
+  }[msg.type];
+
+  const Icon = config.icon;
+  const isSpinning = msg.type === 'loading';
+
+  return (
+    <div className={cn(
+      'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-lg flex items-center gap-2.5 animate-slide-in',
+      config.bg,
+    )}>
+      <Icon className={cn('w-4 h-4', config.text, isSpinning && 'animate-spin')} />
+      <span className={cn('text-sm font-medium', config.text)}>{msg.text}</span>
     </div>
   );
 }
