@@ -54,7 +54,7 @@ from app.services.hypothesis_service import HypothesisService
 from app.services.experiment_service import ExperimentDesignService
 from app.services.small_validation_service import SmallValidationService
 
-router = APIRouter(prefix="/agents", tags=["agents"])
+router = APIRouter(tags=["agents"])
 
 
 @router.post("/problem-understanding", response_model=ApiResponse[ProblemUnderstandingResponse])

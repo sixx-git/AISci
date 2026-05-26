@@ -15,7 +15,7 @@ from app.services.vector_store import (
     SearchResult
 )
 
-router = APIRouter(prefix="/vector-search", tags=["vector-search"])
+router = APIRouter(tags=["vector-search"])
 
 
 class SearchRequest(BaseModel):
@@ -58,10 +58,10 @@ class AddChunksResponse(BaseModel):
     added_count: int
 
 
-@router.post("/search/{project_id}", response_model=ApiResponse[SearchResponse])
+@router.post("/search", response_model=ApiResponse[SearchResponse])
 async def vector_search(
-    project_id: str,
     request: SearchRequest,
+    project_id: str = Query(..., description="项目 ID"),
     db: Session = Depends(get_db)
 ):
     """
@@ -103,9 +103,9 @@ async def vector_search(
         return error(str(e))
 
 
-@router.post("/index/{project_id}/add-chunks", response_model=ApiResponse[AddChunksResponse])
-async def index_chunks(
-    project_id: str,
+@router.post("/build", response_model=ApiResponse[AddChunksResponse])
+async def build_index(
+    project_id: str = Query(..., description="项目 ID"),
     db: Session = Depends(get_db)
 ):
     """

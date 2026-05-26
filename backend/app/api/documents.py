@@ -19,7 +19,7 @@ from app.schemas.project import (
 )
 from app.services.document_parser import ParserBackend
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(tags=["documents"])
 
 
 @router.post("/upload", response_model=ApiResponse[UploadResponse])

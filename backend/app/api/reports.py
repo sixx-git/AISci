@@ -22,7 +22,7 @@ from app.schemas.research import (
 )
 from app.services.report_service import ReportService
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(tags=["reports"])
 settings = get_settings()
 
 
@@ -38,7 +38,7 @@ def get_download_url(report_id: str, file_type: str) -> str:
         下载地址
     """
     base_url = getattr(settings, "API_BASE_URL", "http://localhost:8000")
-    return f"{base_url}/api/reports/download/{report_id}/{file_type}"
+    return f"{base_url}/api/v1/reports/download/{report_id}/{file_type}"
 
 
 @router.post("/generate", response_model=ApiResponse[ReportGenerationResponse])
