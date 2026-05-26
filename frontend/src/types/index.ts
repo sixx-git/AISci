@@ -110,9 +110,9 @@ export interface ResearchQuestion {
   keywords: string;
 }
 
-// ==================== 智能体 / 工作流节点 ====================
+// ==================== 智能体工作流 ====================
 
-export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'human_review';
+export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'human_review_required' | 'human_review';
 
 export interface AgentNodeData {
   id: string;
@@ -126,6 +126,14 @@ export interface AgentNodeData {
   model: string;
   promptVersion: string;
   icon: LucideIcon;
+  /** 从真实 API 获取的完整数据 */
+  input_data?: Record<string, unknown> | null;
+  output_data?: Record<string, unknown> | null;
+  error_message?: string | null;
+  prompt_used?: string | null;
+  model_used?: string | null;
+  model_parameters?: Record<string, unknown> | null;
+  token_count?: number | null;
 }
 
 // ==================== Pipeline 统计 ====================
@@ -181,13 +189,21 @@ export interface PipelineRunDetail extends PipelineRunSummary {
 
 export interface PipelineStageLog {
   stage: string;
+  stage_order?: number;
   status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at?: string | null;
+  completed_at?: string | null;
   start_time?: string;
   end_time?: string;
   duration?: number;
-  input_data?: Record<string, unknown>;
-  output_data?: Record<string, unknown>;
-  error_message?: string;
+  duration_ms?: number | null;
+  input_data?: Record<string, unknown> | null;
+  output_data?: Record<string, unknown> | null;
+  error_message?: string | null;
+  prompt_used?: string | null;
+  model_used?: string | null;
+  model_parameters?: Record<string, unknown> | null;
+  token_count?: number | null;
 }
 
 export interface PipelineRunResult {

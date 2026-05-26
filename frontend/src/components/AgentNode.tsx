@@ -7,20 +7,22 @@ import type { AgentNodeData, AgentStatus } from '@/types';
 
 // ============ 状态配置 ============
 const statusConfig: Record<AgentStatus, { label: string; ringClass: string; dotClass: string }> = {
-  completed:    { label: '已完成',   ringClass: 'border-green-500 bg-green-500/10', dotClass: 'bg-green-400' },
-  running:      { label: '运行中',   ringClass: 'border-blue-500 bg-blue-500/10',   dotClass: 'bg-blue-400' },
-  pending:      { label: '未开始',   ringClass: 'border-gray-600 bg-gray-800/50',   dotClass: 'bg-gray-600' },
-  failed:       { label: '失败',     ringClass: 'border-red-500 bg-red-500/10',     dotClass: 'bg-red-400' },
-  human_review: { label: '需人工确认', ringClass: 'border-amber-500 bg-amber-500/10', dotClass: 'bg-amber-400' },
+  completed:             { label: '已完成',     ringClass: 'border-green-500 bg-green-500/10', dotClass: 'bg-green-400' },
+  running:               { label: '运行中',     ringClass: 'border-blue-500 bg-blue-500/10',  dotClass: 'bg-blue-400' },
+  pending:               { label: '未开始',     ringClass: 'border-gray-600 bg-gray-800/50',  dotClass: 'bg-gray-600' },
+  failed:                { label: '失败',       ringClass: 'border-red-500 bg-red-500/10',    dotClass: 'bg-red-400' },
+  human_review:          { label: '需人工确认', ringClass: 'border-amber-500 bg-amber-500/10', dotClass: 'bg-amber-400' },
+  human_review_required: { label: '需人工确认', ringClass: 'border-amber-500 bg-amber-500/10', dotClass: 'bg-amber-400' },
 };
 
 function StatusIcon({ status }: { status: AgentStatus }) {
   switch (status) {
-    case 'completed':    return <CheckCircle className="w-4 h-4 text-green-400" />;
-    case 'running':      return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
-    case 'pending':      return <Clock className="w-4 h-4 text-gray-500" />;
-    case 'failed':       return <XCircle className="w-4 h-4 text-red-400" />;
-    case 'human_review': return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+    case 'completed':             return <CheckCircle className="w-4 h-4 text-green-400" />;
+    case 'running':               return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
+    case 'pending':               return <Clock className="w-4 h-4 text-gray-500" />;
+    case 'failed':                return <XCircle className="w-4 h-4 text-red-400" />;
+    case 'human_review':
+    case 'human_review_required': return <AlertTriangle className="w-4 h-4 text-amber-400" />;
   }
 }
 
@@ -58,7 +60,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             node.status === 'completed' ? 'text-green-400'
             : node.status === 'running' ? 'text-blue-400'
             : node.status === 'failed' ? 'text-red-400'
-            : node.status === 'human_review' ? 'text-amber-400'
+            : node.status === 'human_review' || node.status === 'human_review_required' ? 'text-amber-400'
             : 'text-gray-500'
           )} />
         </div>

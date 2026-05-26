@@ -7,7 +7,7 @@ import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { MOCK_AGENT_NODES } from '@/data/mockData';
 import { pipelineService } from '@/services/pipelineService';
 import env from '@/config/env';
-import type { AgentNodeData, AgentStatus, PipelineRunResult } from '@/types';
+import type { AgentNodeData, AgentStatus, PipelineRunResult, PipelineStageLog } from '@/types';
 
 interface WorkflowPageProps {
   projectId?: string;
@@ -33,14 +33,54 @@ function mapStatus(status: string): AgentStatus {
     case 'running': return 'running';
     case 'completed': return 'completed';
     case 'failed': return 'failed';
+    case 'human_review_required': return 'human_review_required';
     default: return 'pending';
   }
+}
+
+/**
+ * 将一个 API 阶段的完整数据合并到前端节点上。
+ */
+function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNodeData {
+  const newStatus = mapStatus(stage.status);
+  const durationMs = stage.duration_ms ?? (stage.duration ? Math.round(stage.duration * 1000) : null);
+
+  const logEntry = stage.error_message
+    ? `[${new Date().toLocaleTimeString()}] ${newStatus}: ${stage.error_message}`
+    : newStatus !== node.status
+      ? `[${new Date().toLocaleTimeString()}] 状态: ${newStatus}`
+      : null;
+
+  return {
+    ...node,
+    status: newStatus,
+    duration: durationMs,
+    logs: logEntry ? [...node.logs, logEntry] : node.logs,
+    // 从 API 返回的完整字段
+    input_data: stage.input_data ?? node.input_data,
+    output_data: stage.output_data ?? node.output_data,
+    error_message: stage.error_message ?? node.error_message,
+    prompt_used: stage.prompt_used ?? node.prompt_used,
+    model_used: stage.model_used ?? node.model_used,
+    model_parameters: stage.model_parameters ?? node.model_parameters,
+    token_count: stage.token_count ?? node.token_count,
+    // 用真实 API 数据覆盖 mock 静态字段
+    model: stage.model_used || node.model,
+    inputSummary: stage.input_data
+      ? JSON.stringify(stage.input_data).slice(0, 200)
+      : node.inputSummary,
+    outputSummary: stage.output_data
+      ? JSON.stringify(stage.output_data).slice(0, 200)
+      : node.outputSummary,
+  };
 }
 
 export function WorkflowPage({ projectId, researchQuestion, compact: _compact = false }: WorkflowPageProps) {
   const [nodes, setNodes] = useState<AgentNodeData[]>(MOCK_AGENT_NODES);
   const [selectedId, setSelectedId] = useState<string>(MOCK_AGENT_NODES[0].id);
   const [isRunning, setIsRunning] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -57,49 +97,27 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
     setSelectedId(id);
   }, []);
 
-  // ────── 真实 API 模式：运行 Pipeline ──────
-  const handleRunAll = useCallback(async () => {
-    if (!projectId || !researchQuestion) {
-      // 无 projectId 时走本地 mock 模拟（纯前端演示）
-      runMockPipeline();
-      return;
-    }
+  // 将 API stages 数组应用到所有节点上
+  const applyStageResults = useCallback((result: PipelineRunResult) => {
+    setNodes((prev) => {
+      const updated = prev.map((node) => {
+        const matchedStage = result.stages?.find(
+          (s) => STAGE_TO_NODE_ID[s.stage] === node.id
+        );
+        return matchedStage ? mergeStageData(node, matchedStage) : node;
+      });
 
-    setIsRunning(true);
-    // 重置所有节点为 pending
-    setNodes((prev) => prev.map((n) => ({ ...n, status: 'pending' as const, duration: null, logs: [] })));
-
-    try {
-      const response = await pipelineService.run(projectId, researchQuestion);
-      const result: PipelineRunResult = response.data;
-
-      if (!result) {
-        throw new Error('Empty response from pipeline');
+      // 如果有失败阶段，自动选中
+      if (result.failed_stage) {
+        const failedNodeId = STAGE_TO_NODE_ID[result.failed_stage];
+        if (failedNodeId) {
+          setSelectedId(failedNodeId);
+        }
       }
 
-      setCurrentRunId(result.run_id);
-
-      // 如果是同步返回（已完成或已失败），直接更新节点
-      if (result.status === 'completed' || result.status === 'failed') {
-        applyStageResults(result);
-        setIsRunning(false);
-      } else {
-        // 异步轮询状态
-        startPolling(result.run_id);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Pipeline 执行失败:', message);
-      setNodes((prev) =>
-        prev.map((n, i) => ({
-          ...n,
-          status: i === 0 ? 'failed' as const : n.status,
-          logs: [...n.logs, `[Error] ${message}`],
-        }))
-      );
-      setIsRunning(false);
-    }
-  }, [projectId, researchQuestion]);
+      return updated;
+    });
+  }, []);
 
   // 轮询 Pipeline 状态
   const startPolling = useCallback((runId: string) => {
@@ -119,44 +137,76 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
           pollingRef.current = null;
           setIsRunning(false);
           setCurrentRunId(null);
+          setErrorMessage(result.status === 'failed' && result.failed_stage
+            ? `执行失败在阶段: ${result.failed_stage}`
+            : null);
         }
       } catch (err) {
         console.error('轮询状态失败:', err);
       }
-    }, 1500); // 每 1.5 秒轮询一次
-  }, []);
+    }, 1500);
+  }, [applyStageResults]);
 
-  // 将 API 阶段结果映射到前端节点
-  const applyStageResults = useCallback((result: PipelineRunResult) => {
-    setNodes((prev) =>
-      prev.map((node) => {
-        // 按 node.id 映射到 stage key
-        const matchedStage = result.stages?.find(
-          (s) => STAGE_TO_NODE_ID[s.stage] === node.id
-        );
-        if (!matchedStage) return node;
+  // ────── 真实 API 模式：运行 Pipeline ──────
+  const handleRunAll = useCallback(async () => {
+    if (!projectId || !researchQuestion) {
+      runMockPipeline();
+      return;
+    }
 
-        const newStatus = mapStatus(matchedStage.status);
-        return {
-          ...node,
-          status: newStatus,
-          duration: matchedStage.duration ? Math.round(matchedStage.duration * 1000) : node.duration,
-          logs: matchedStage.error_message
-            ? [...node.logs, `[${new Date().toLocaleTimeString()}] ${newStatus}: ${matchedStage.error_message}`]
-            : newStatus !== node.status
-              ? [...node.logs, `[${new Date().toLocaleTimeString()}] 状态: ${newStatus}`]
-              : node.logs,
-          outputSummary: matchedStage.output_data
-            ? JSON.stringify(matchedStage.output_data).slice(0, 120) + '...'
-            : node.outputSummary,
-        };
-      })
-    );
-  }, []);
+    setIsRunning(true);
+    setIsLoading(true);
+    setErrorMessage(null);
+    // 重置所有节点为 pending
+    setNodes((prev) => prev.map((n) => ({
+      ...n,
+      status: 'pending' as const,
+      duration: null,
+      logs: [],
+      input_data: null,
+      output_data: null,
+      error_message: null,
+      prompt_used: null,
+      model_parameters: null,
+      token_count: null,
+    })));
+
+    try {
+      const response = await pipelineService.run(projectId, researchQuestion);
+      const result: PipelineRunResult = response.data;
+
+      if (!result) {
+        throw new Error('后端返回空数据');
+      }
+
+      setCurrentRunId(result.run_id);
+      setIsLoading(false);
+
+      // 同步返回（已完成或已失败），直接更新节点
+      if (result.status === 'completed' || result.status === 'failed') {
+        applyStageResults(result);
+        setIsRunning(false);
+        if (result.status === 'failed' && result.failed_stage) {
+          setErrorMessage(`执行失败在阶段: ${result.failed_stage}`);
+        }
+      } else {
+        // 异步执行，开始轮询
+        startPolling(result.run_id);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '请求 Pipeline 失败';
+      console.error('Pipeline 执行失败:', message);
+      setErrorMessage(message);
+      setIsLoading(false);
+      setIsRunning(false);
+    }
+  }, [projectId, researchQuestion, applyStageResults, startPolling]);
 
   // ────── Mock 模式（纯前端模拟） ──────
   const runMockPipeline = useCallback(() => {
     setIsRunning(true);
+    setIsLoading(false);
+    setErrorMessage(null);
     let idx = 0;
     const runNext = () => {
       setNodes((prev) => {
@@ -166,7 +216,6 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
         }
         return next;
       });
-      // 确保 nodes 在当前闭包中是最新的
       setNodes((prev) => {
         if (idx < prev.length) {
           setSelectedId(prev[idx].id);
@@ -189,7 +238,7 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
           return next;
         });
         idx++;
-        if (idx < nodes.length) {
+        if (idx < MOCK_AGENT_NODES.length) {
           runNext();
         } else {
           setIsRunning(false);
@@ -197,7 +246,7 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
       }, 1500 + Math.random() * 2000);
     };
     runNext();
-  }, [nodes]);
+  }, []);
 
   const handlePause = useCallback(() => {
     if (pollingRef.current) {
@@ -213,6 +262,8 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
       pollingRef.current = null;
     }
     setIsRunning(false);
+    setIsLoading(false);
+    setErrorMessage(null);
     setCurrentRunId(null);
     setNodes(MOCK_AGENT_NODES);
     setSelectedId(MOCK_AGENT_NODES[0].id);
@@ -273,11 +324,38 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
         )}
       </div>
 
+      {/* ========== 错误提示 ========== */}
+      {errorMessage && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+          <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center shrink-0 mt-0.5">
+            <span className="text-red-400 text-xs font-bold">!</span>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">执行错误</p>
+            <p className="text-sm text-red-400/80 mt-0.5">{errorMessage}</p>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-gray-500 hover:text-gray-300 shrink-0"
+          >
+            <span className="text-xs">✕</span>
+          </button>
+        </div>
+      )}
+
+      {/* ========== Loading 提示 ========== */}
+      {isLoading && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-blue-300">正在向后台提交 Pipeline 请求…</p>
+        </div>
+      )}
+
       {/* ========== 操作栏 ========== */}
       <div className="mb-6">
         <WorkflowActionBar
           nodes={nodes}
-          isRunning={isRunning}
+          isRunning={isRunning || isLoading}
           onRunAll={handleRunAll}
           onPause={handlePause}
           onReset={handleReset}
@@ -311,7 +389,7 @@ export function WorkflowPage({ projectId, researchQuestion, compact: _compact = 
             onRerun={handleRerun}
           />
 
-          {selectedNode && selectedNode.status !== 'pending' && (
+          {selectedNode && (selectedNode.status === 'human_review' || selectedNode.status === 'human_review_required') && (
             <HumanInLoopCard />
           )}
         </div>

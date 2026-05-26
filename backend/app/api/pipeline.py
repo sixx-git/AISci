@@ -208,18 +208,27 @@ async def get_run_status(
             data={
                 "run_id": run.run_id,
                 "project_id": run.project_id,
+                "research_question": run.research_question,
                 "status": run.status.value if hasattr(run.status, "value") else str(run.status),
                 "failed_stage": run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
                 "final_report_id": run.final_report_id,
+                "total_duration_ms": run.total_duration_ms,
+                "created_at": run.created_at.isoformat() if run.created_at else None,
                 "stages": [
                     {
                         "stage": s.stage.value if hasattr(s.stage, "value") else str(s.stage),
+                        "stage_order": s.stage_order,
                         "status": s.status.value if hasattr(s.status, "value") else str(s.status),
                         "started_at": s.started_at.isoformat() if s.started_at else None,
                         "completed_at": s.completed_at.isoformat() if s.completed_at else None,
                         "duration_ms": s.duration_ms,
+                        "input_data": s.input_data,
+                        "output_data": s.output_data,
                         "error_message": s.error_message,
-                        "output_data": s.output_data
+                        "prompt_used": s.prompt_used,
+                        "model_used": s.model_used,
+                        "model_parameters": s.model_parameters,
+                        "token_count": s.token_count,
                     }
                     for s in stages
                 ]
