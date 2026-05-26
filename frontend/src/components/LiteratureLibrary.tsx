@@ -212,7 +212,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     showStatus({ type: 'loading', text: '正在构建向量索引…' });
     try {
       const res = await vectorService.buildIndex(projectId);
-      if (res.code === 0 || res.code === 200) {
+      if (res.code === 200) {
         const added = (res.data as any)?.added_count ?? 0;
         const total = (res.data as any)?.total_count ?? added;
         showStatus({

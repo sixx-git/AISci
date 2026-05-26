@@ -5,7 +5,6 @@ from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.documents import DocumentResponse
 from app.models import Document
-from app.services.vector_service import VectorService
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -14,7 +13,6 @@ settings = get_settings()
 class DocumentService:
     def __init__(self, db: Session):
         self.db = db
-        self.vector_service = VectorService()
         self.storage_path = settings.UPLOAD_DIR
         os.makedirs(self.storage_path, exist_ok=True)
     
@@ -52,7 +50,7 @@ class DocumentService:
         self.db.add(document)
         self.db.commit()
         
-        await self.vector_service.add_document(document_id, content_text)
+        # 向量索引由 /api/v1/vector-search/build 统一构建，不在此处触发
         
         return DocumentResponse(
             success=True,

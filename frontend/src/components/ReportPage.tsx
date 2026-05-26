@@ -149,7 +149,7 @@ export function ReportPage({ projectId, compact: _compact = false }: ReportPageP
     );
   }
 
-  const sections = report.sections || MOCK_REPORT_SECTIONS;
+  const sections = report.sections || (env.USE_MOCK ? MOCK_REPORT_SECTIONS : []);
   const complianceCheck = report.complianceCheck;
 
   return (

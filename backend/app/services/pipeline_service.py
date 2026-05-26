@@ -133,8 +133,12 @@ class PipelineService:
                 lambda: self._exec_experiment_design(results.get("hypothesis_review")))
             
             # ── 阶段 7: SmallValidationAgent ──
+            # experiment_design 不含 hypothesis 字段，需要从 hypothesis_review 补充
             self._run_stage(stages, 6, results, request,
-                lambda: self._exec_small_validation(results.get("experiment_design")))
+                lambda: self._exec_small_validation(
+                    results.get("experiment_design"),
+                    results.get("hypothesis_review")
+                ))
             
             # ── 阶段 8: ReportGenerationAgent ──
             def _exec_report():
@@ -379,15 +383,28 @@ class PipelineService:
         reviews = hr.get("reviews", [])
         if reviews:
             best_review = reviews[0]
-            result = agent.design_experiment(hypothesis=best_review.get("hypothesis", ""))
+            result = agent.design_experiment(
+                hypothesis=best_review.get("hypothesis", ""),
+                rationale=best_review.get("rationale"),
+                novelty=str(best_review.get("novelty", "")),
+                testability=str(best_review.get("testability", "")),
+                required_data=best_review.get("required_data"),
+                possible_method=best_review.get("possible_method"),
+                risk=str(best_review.get("risk", ""))
+            )
             return result if isinstance(result, dict) else self._safe_model_dump(result)
         return {}
     
-    def _exec_small_validation(self, experiment_design: Optional[Dict]):
+    def _exec_small_validation(self, experiment_design: Optional[Dict], hypothesis_review: Optional[Dict] = None):
         agent = get_small_validation_agent()
         ed = experiment_design or {}
+        hr = hypothesis_review or {}
+        reviews = hr.get("reviews", [])
+        hypothesis = ed.get("hypothesis") or (
+            reviews[0].get("hypothesis", "") if reviews else ""
+        )
         result = agent.generate_validation(
-            hypothesis=ed.get("hypothesis", ""),
+            hypothesis=hypothesis,
             methods=ed.get("methods", ""),
             datasets=ed.get("datasets", ""),
             metrics=ed.get("metrics", "")

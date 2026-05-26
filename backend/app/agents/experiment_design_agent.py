@@ -11,6 +11,19 @@ from app.services.prompt_loader import get_prompt_loader
 logger = logging.getLogger(__name__)
 
 
+class ExperimentDesignResult(BaseModel):
+    """实验设计结果（标准化输出）"""
+    methods: str = Field("", description="研究方法")
+    datasets: str = Field("", description="所需数据集")
+    source_data: str = Field("", description="源数据说明")
+    target_data: str = Field("", description="目标数据说明")
+    baselines: str = Field("", description="基线方法")
+    metrics: str = Field("", description="评估指标")
+    experimental_steps: str = Field("", description="实验步骤")
+    expected_results: str = Field("", description="预期结果")
+    limitations: str = Field("", description="局限性")
+
+
 class ExperimentDesignAgent:
     """
     实验设计智能体
@@ -86,7 +99,7 @@ class ExperimentDesignAgent:
             
             logger.info("实验设计完成")
             
-            return result
+            return ExperimentDesignResult(**result)
             
         except Exception as e:
             logger.error(f"设计实验时出错：{e}", exc_info=True)

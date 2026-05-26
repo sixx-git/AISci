@@ -6,6 +6,7 @@ import { HypothesisCard } from '@/components/HypothesisCard';
 import { ScoreBar } from '@/components/ScoreBar';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import { MOCK_DETAILED_HYPOTHESES, MOCK_EVIDENCE_CHAINS } from '@/data/mockData';
+import env from '@/config/env';
 import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
 interface HypothesesPageProps {
@@ -98,6 +99,11 @@ export function HypothesesPage({ projectId: _projectId, compact: _compact = fals
           <h1 className="text-3xl font-bold text-white mb-2">候选假设</h1>
           <p className="text-gray-400">
             基于文献事实、知识缺口和逻辑推理生成可验证科学假设
+            {env.USE_MOCK && (
+              <span className="ml-2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-amber-400 text-xs align-baseline">
+                演示数据
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">

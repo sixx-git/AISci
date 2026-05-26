@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import {
   MOCK_DETAILED_EXPERIMENT,
 } from '@/data/mockData';
+import env from '@/config/env';
 import type { DetailedExperimentDesign } from '@/types';
 
 interface ExperimentDesignPageProps {
@@ -86,7 +87,13 @@ export function ExperimentDesignPage({ projectId: _projectId, compact: _compact 
       {/* ========== 头部 ========== */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">实验设计</h1>
-        <p className="text-gray-400">为选定科学假设生成可执行、可复现的验证方案</p>
+        <p className="text-gray-400">为选定科学假设生成可执行、可复现的验证方案
+            {env.USE_MOCK && (
+              <span className="ml-2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-amber-400 text-xs align-baseline">
+                演示数据
+              </span>
+            )}
+          </p>
       </div>
 
       {/* 短暂提示 */}

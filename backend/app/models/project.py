@@ -182,33 +182,6 @@ class Chunk(Base):
 
 
 # Hypothesis 和 ExperimentDesign 模型已移至 app.models.research 模块
-# 保留枚举以保持向后兼容
-class HypothesisStatus(str, Enum):
-    """假设状态枚举"""
-    DRAFT = "draft"
-    PENDING_REVIEW = "pending_review"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    MODIFIED = "modified"
-
-
-class ExperimentDesignStatus(str, Enum):
-    """实验设计状态枚举"""
-    DRAFT = "draft"
-    READY_FOR_REVIEW = "ready_for_review"
-    APPROVED = "approved"
-    MODIFIED = "modified"
-    DEPRECATED = "deprecated"
-
-
-class ReportStatus(str, Enum):
-    """报告状态枚举（仅供参考，实际使用 String 存储以兼容多种状态值）"""
-    DRAFT = "draft"
-    GENERATING = "generating"
-    GENERATED = "generated"
-    READY = "ready"
-    PUBLISHED = "published"
-    ARCHIVED = "archived"
 
 
 class Report(Base):
