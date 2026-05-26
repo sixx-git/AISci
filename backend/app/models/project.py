@@ -200,9 +200,10 @@ class ExperimentDesignStatus(str, Enum):
 
 
 class ReportStatus(str, Enum):
-    """报告状态枚举"""
+    """报告状态枚举（仅供参考，实际使用 String 存储以兼容多种状态值）"""
     DRAFT = "draft"
     GENERATING = "generating"
+    GENERATED = "generated"
     READY = "ready"
     PUBLISHED = "published"
     ARCHIVED = "archived"
@@ -210,46 +211,54 @@ class ReportStatus(str, Enum):
 
 class Report(Base):
     """
-    最终报告表
-    存储AI生成的最终研究报告
+    统一研究报告表
+    存储 AI 生成的《科学假设与研究计划》报告，包含比赛要求的所有字段
     """
     __tablename__ = "reports"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     
+    # 关联实体
+    hypothesis_id = Column(String(36), nullable=True, comment="关联假设 ID")
+    experiment_design_id = Column(String(36), nullable=True, comment="关联实验设计 ID")
+    small_validation_id = Column(String(36), nullable=True, comment="关联小样验证 ID")
+    
     # 报告基本信息
     title = Column(String(500), nullable=False, comment="报告标题")
-    summary = Column(Text, nullable=True, comment="报告摘要")
-    authors = Column(Text, nullable=True, comment="作者列表")
+    paper_title = Column(String(500), nullable=False, comment="论文标题")
+    paper_abstract = Column(Text, nullable=False, comment="论文摘要")
     
-    # 报告内容
-    introduction = Column(Text, nullable=True, comment="引言")
-    literature_review = Column(Text, nullable=True, comment="文献综述")
-    methodology = Column(Text, nullable=True, comment="研究方法")
-    results = Column(Text, nullable=True, comment="研究结果")
-    discussion = Column(Text, nullable=True, comment="讨论")
-    conclusion = Column(Text, nullable=True, comment="结论")
-    future_work = Column(Text, nullable=True, comment="未来工作")
-    
-    # 参考文献
-    references = Column(Text, nullable=True, comment="参考文献")
+    # 报告章节内容（比赛要求字段）
+    problem_statement = Column(Text, nullable=False, comment="问题陈述")
+    rationale = Column(Text, nullable=False, comment="原理依据")
+    technical_details = Column(Text, nullable=False, comment="技术细节")
+    datasets = Column(Text, nullable=False, comment="数据集说明")
+    source = Column(Text, nullable=False, comment="源数据说明")
+    target = Column(Text, nullable=False, comment="目标说明")
+    methods = Column(Text, nullable=False, comment="研究方法")
+    experiments = Column(Text, nullable=False, comment="实验设计")
+    results = Column(Text, nullable=False, comment="预期结果")
+    references = Column(Text, nullable=False, comment="参考文献")
     
     # 完整内容
-    full_content = Column(Text, nullable=True, comment="完整报告内容（Markdown/HTML）")
+    markdown_content = Column(Text, nullable=False, comment="Markdown 格式完整报告")
     
     # 附件
     attachments = Column(JSON, nullable=True, comment="附件列表（JSON）")
+    pdf_path = Column(String(500), nullable=True, comment="PDF 文件路径")
     
     # 版本和状态
     version = Column(Integer, default=1, comment="版本号")
-    status = Column(SQLEnum(ReportStatus), default=ReportStatus.DRAFT, nullable=False, index=True, comment="状态")
+    status = Column(String(50), default="draft", nullable=False, index=True, comment="状态: draft/generating/generated/ready/published/archived")
     language = Column(String(20), default="zh-CN", comment="语言")
     
     # 元数据
     generated_by = Column(String(100), nullable=True, comment="生成者")
     model_used = Column(String(100), nullable=True, comment="使用的模型")
-    extra_metadata = Column(JSON, nullable=True, comment="额外元数据")
+    authors = Column(Text, nullable=True, comment="作者列表")
+    summary = Column(Text, nullable=True, comment="报告摘要（简短版本）")
+    extra_metadata = Column(JSON, nullable=True, comment="额外元数据（JSON）")
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
@@ -258,7 +267,7 @@ class Report(Base):
     # 关系
     project = relationship("Project", back_populates="reports")
     
-    __table_args__ = {'comment': '研究报告表'}
+    __table_args__ = {'comment': '统一研究报告表'}
 
 
 class LogLevel(str, Enum):

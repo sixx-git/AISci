@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+pymysql://user:password@localhost:3306/aiscientist"
+    DATABASE_URL: str = "sqlite:///./data/aiscientist.db"
     
     # 千问 API 配置
     QWEN_API_KEY: str = ""

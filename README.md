@@ -144,10 +144,10 @@ VERSION=0.1.0
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
 
-# 数据库
-DATABASE_URL=mysql+pymysql://root:password@localhost:3306/aiscientist
-# 或使用 SQLite (无需安装数据库)
-# DATABASE_URL=sqlite:///./data/aiscientist.db
+# 数据库 (默认使用 SQLite)
+DATABASE_URL=sqlite:///./data/aiscientist.db
+# 或使用 MySQL
+# DATABASE_URL=mysql+pymysql://root:password@localhost:3306/aiscientist
 
 # 千问 API (必需)
 QWEN_API_KEY=your_api_key_here

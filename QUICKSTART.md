@@ -6,7 +6,7 @@
 
 - **Python 3.9+**
 - **Node.js 18+**
-- **MySQL 8.0+** (可选，可用 SQLite)
+- **MySQL 8.0+** (可选，默认使用 SQLite)
 
 ---
 
@@ -71,11 +71,11 @@ cp .env.example .env
 QWEN_API_KEY=your_actual_api_key_here
 
 # 数据库配置
-# 方式 A: MySQL (推荐)
-DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/aiscientist
+# 方式 A: SQLite (默认，无需安装数据库)
+DATABASE_URL=sqlite:///./data/aiscientist.db
 
-# 方式 B: SQLite (无需安装数据库)
-# DATABASE_URL=sqlite:///./data/aiscientist.db
+# 方式 B: MySQL (可选，需要安装 MySQL)
+# DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/aiscientist
 ```
 
 ### 2. 获取千问 API Key
@@ -86,6 +86,8 @@ DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/aiscientist
 4. 将 API Key 填入 `.env` 文件
 
 ### 3. 创建 MySQL 数据库 (如果使用 MySQL)
+
+如果选择使用 MySQL 而不是默认的 SQLite，需要先创建数据库：
 
 ```sql
 CREATE DATABASE aiscientist CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -2,6 +2,7 @@
 Pipeline 服务 - 负责按顺序执行各个 Agent
 """
 import uuid
+import json
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -474,11 +475,25 @@ class PipelineService:
         """创建报告记录"""
         report_id = str(uuid.uuid4())
         title = report_data.get("paper_title", "研究报告")
+        chapters = report_data.get("chapters", {})
         report = Report(
             id=report_id,
             project_id=project_id,
             title=title,
-            full_content=report_data.get("markdown_content", ""),
+            paper_title=title,
+            paper_abstract=report_data.get("paper_abstract", ""),
+            markdown_content=report_data.get("markdown_content", ""),
+            problem_statement=chapters.get("problem_statement", ""),
+            rationale=chapters.get("rationale", ""),
+            technical_details=chapters.get("technical_details", ""),
+            datasets=chapters.get("datasets", ""),
+            source=chapters.get("source", ""),
+            target=chapters.get("target", ""),
+            methods=chapters.get("methods", ""),
+            experiments=chapters.get("experiments", ""),
+            results=chapters.get("results", ""),
+            references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else chapters.get("references", ""),
+            pdf_path=report_data.get("report_id"),
             status="ready"
         )
         self.db.add(report)

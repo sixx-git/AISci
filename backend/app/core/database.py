@@ -1,6 +1,7 @@
 """
 数据库配置
 """
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from .config import get_settings
@@ -24,7 +25,12 @@ def init_db():
         # SQLite 特殊配置
         if settings.DATABASE_URL.startswith("sqlite"):
             connect_args["check_same_thread"] = False
-        
+            # 自动创建数据目录
+            db_path = settings.DATABASE_URL.replace("sqlite:///", "")
+            db_dir = os.path.dirname(db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+                
         engine = create_engine(
             settings.DATABASE_URL,
             connect_args=connect_args,

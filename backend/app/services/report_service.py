@@ -1,12 +1,12 @@
 """
-ResearchReport 服务
+Report 服务
 处理研究报告的数据库操作
 """
 import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from app.models.research import ResearchReport
+from app.models.project import Report
 from app.schemas.research import ReportCreate, ReportDBResponse
 from app.core.database import get_db
 
@@ -19,16 +19,15 @@ class ReportService:
     def __init__(self, db: Session):
         self.db = db
     
-    def create_report(self, report_data: ReportCreate) -> ResearchReport:
+    def create_report(self, report_data: ReportCreate) -> Report:
         """创建新的研究报告"""
         try:
-            db_report = ResearchReport(
+            db_report = Report(
                 project_id=report_data.project_id,
                 hypothesis_id=report_data.hypothesis_id,
                 experiment_design_id=report_data.experiment_design_id,
                 small_validation_id=report_data.small_validation_id,
-                report_id=report_data.report_id,
-                pdf_generated=1 if report_data.pdf_generated else 0,
+                pdf_path=report_data.report_id,  # 旧 report_id 映射为 pdf_path
                 title=report_data.title,
                 paper_title=report_data.paper_title,
                 paper_abstract=report_data.paper_abstract,
@@ -59,10 +58,10 @@ class ReportService:
             logger.error(f"创建研究报告失败: {e}", exc_info=True)
             raise
     
-    def get_report_by_id(self, report_id: str) -> Optional[ResearchReport]:
+    def get_report_by_id(self, report_id: str) -> Optional[Report]:
         """根据 ID 获取研究报告"""
-        return self.db.query(ResearchReport).filter(
-            ResearchReport.id == report_id
+        return self.db.query(Report).filter(
+            Report.id == report_id
         ).first()
     
     def get_reports_by_project(
@@ -71,35 +70,35 @@ class ReportService:
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
-    ) -> List[ResearchReport]:
+    ) -> List[Report]:
         """获取项目的研究报告列表"""
-        query = self.db.query(ResearchReport).filter(
-            ResearchReport.project_id == project_id
+        query = self.db.query(Report).filter(
+            Report.project_id == project_id
         )
         
         if status:
-            query = query.filter(ResearchReport.status == status)
+            query = query.filter(Report.status == status)
         
         return query.order_by(
-            ResearchReport.created_at.desc()
+            Report.created_at.desc()
         ).limit(limit).offset(offset).all()
     
     def get_latest_report_by_project(
         self,
         project_id: str
-    ) -> Optional[ResearchReport]:
+    ) -> Optional[Report]:
         """获取项目最新的研究报告"""
-        return self.db.query(ResearchReport).filter(
-            ResearchReport.project_id == project_id
+        return self.db.query(Report).filter(
+            Report.project_id == project_id
         ).order_by(
-            ResearchReport.created_at.desc()
+            Report.created_at.desc()
         ).first()
     
     def update_report(
         self,
         report_id: str,
         update_data: dict
-    ) -> Optional[ResearchReport]:
+    ) -> Optional[Report]:
         """更新研究报告"""
         db_report = self.get_report_by_id(report_id)
         if not db_report:
