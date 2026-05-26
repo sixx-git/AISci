@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
-import { projectApi } from '@/lib/api';
+import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -49,7 +49,7 @@ export function Home() {
 
   const loadProjects = async () => {
     try {
-      const response = await projectApi.list();
+      const response = await projectService.getProjects();
       if (response.code === 200) {
         const data = response.data || [];
         // 后端无数据时显示模拟数据

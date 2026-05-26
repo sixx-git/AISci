@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, CheckCircle, AlertCircle } from 'lucide-react';
 import type { PipelineRunSummary, PipelineRunDetail } from '@/types';
-import { pipelineApi } from '@/lib/api';
+import { pipelineService } from '@/services';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Card } from '@/components/Card';
 
@@ -36,7 +36,7 @@ export function PipelineHistory({ projectId, onSelectRun }: PipelineHistoryProps
   const loadRuns = async () => {
     setLoading(true);
     try {
-      const response = await pipelineApi.getRuns(projectId);
+      const response = await pipelineService.getRuns(projectId);
       if (response.code === 200) {
         setRuns(response.data || []);
       }
@@ -56,7 +56,7 @@ export function PipelineHistory({ projectId, onSelectRun }: PipelineHistoryProps
 
     setLoadingDetail(true);
     try {
-      const response = await pipelineApi.getRunDetail(runId);
+      const response = await pipelineService.getRunDetail(runId);
       if (response.code === 200) {
         setSelectedRunDetail(response.data);
         setExpandedRunId(runId);

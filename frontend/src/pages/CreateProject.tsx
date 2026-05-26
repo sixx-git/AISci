@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { projectApi } from '@/lib/api';
+import { projectService } from '@/services';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
@@ -20,7 +20,7 @@ export function CreateProject() {
 
     setLoading(true);
     try {
-      const response = await projectApi.create(formData);
+      const response = await projectService.createProject(formData);
       if (response.code === 200) {
         navigate(`/projects/${response.data.id}`);
       }
