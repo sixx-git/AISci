@@ -1,13 +1,12 @@
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
-downloads/
 eggs/
 .eggs/
 lib64/
@@ -18,33 +17,94 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
+# =========================
 # Virtual Environment
+# =========================
 venv/
 env/
 ENV/
+.venv/
 
+# =========================
 # IDE
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# =========================
 # Environment variables
+# =========================
 .env
+.env.local
+.env.*.local
 
+# =========================
+# Frontend dependencies
+# =========================
+node_modules/
+frontend/node_modules/
+
+# =========================
+# Frontend build/cache outputs
+# =========================
+dist/
+build/
+frontend/dist/
+frontend/build/
+.vite/
+frontend/.vite/
+
+# =========================
+# Backend build/cache outputs
+# =========================
+backend/dist/
+backend/build/
+
+# =========================
+# Database
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
 # Storage
+# 保留 storage 目录说明文件，但不提交上传文件、报告、向量索引
+# =========================
 storage/*
 !storage/README.md
 
-# Node modules
-node_modules/
+backend/storage/*
+!backend/storage/README.md
 
-# Build outputs
-dist/
-build/
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+backend/logs/
 
-# Database
-*.db
-*.sqlite
+# =========================
+# Archives
+# 防止把旧压缩包套进新压缩包
+# =========================
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
