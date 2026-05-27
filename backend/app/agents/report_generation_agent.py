@@ -1,6 +1,6 @@
 """
 报告生成智能体 (ReportGenerationAgent)
-根据所有研究环节生成《科学假设与研究计划》Markdown 报告和 PDF
+——面向挑战杯 XH-202619 赛题，生成《科学假设与研究计划》Markdown + PDF。
 """
 import logging
 import json
@@ -15,18 +15,55 @@ from app.services.pdf_export_service import export_markdown_to_pdf
 
 logger = logging.getLogger(__name__)
 
+# ── 15 章节结构 ──
+REPORT_CHAPTERS = [
+    "paper_title",           # 0
+    "paper_abstract",        # 1
+    "problem_statement",     # 2
+    "literature_facts",      # 3  ← Evidence-grounded
+    "knowledge_gaps",        # 4
+    "scientific_hypothesis", # 5
+    "rationale",             # 6
+    "technical_details",     # 7
+    "datasets",              # 8
+    "source",                # 9
+    "target",                # 10
+    "methods",               # 11
+    "experiments",           # 12
+    "results_feasibility",   # 13
+    "human_review",          # 14
+    "references",            # 15 (handled separately)
+]
+
+CHALLENGE_CUP_FIELDS = [
+    ("paper_title", "0. Paper Title"),
+    ("paper_abstract", "1. Paper Abstract"),
+    ("problem_statement", "2. Problem Statement"),
+    ("literature_facts", "3. Evidence-grounded Literature Facts"),
+    ("knowledge_gaps", "4. Knowledge Gaps"),
+    ("scientific_hypothesis", "5. Generated Scientific Hypothesis"),
+    ("rationale", "6. Rationale"),
+    ("technical_details", "7. Technical Details"),
+    ("datasets", "8. Datasets"),
+    ("source", "9. Source"),
+    ("target", "10. Target"),
+    ("methods", "11. Methods"),
+    ("experiments", "12. Experiments"),
+    ("results_feasibility", "13. Results / Feasibility Verification"),
+    ("human_review", "14. Human-in-the-loop Review"),
+    ("references", "15. References"),
+]
+
 
 class ReportGenerationAgent:
-    """
-    报告生成智能体
-    根据所有研究环节生成《科学假设与研究计划》报告
-    """
-    
+    """面向挑战杯赛题的科技报告生成智能体"""
+
     def __init__(self):
-        # 确保存储目录存在
-        self.reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "storage", "reports")
+        self.reports_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "..", "storage", "reports"
+        )
         os.makedirs(self.reports_dir, exist_ok=True)
-    
+
     def generate_report(
         self,
         project_info: Dict[str, Any],
@@ -34,58 +71,58 @@ class ReportGenerationAgent:
         literature_facts: List[Dict[str, Any]],
         citation_map: List[Dict[str, Any]],
         knowledge_gaps: Dict[str, Any],
+        all_hypotheses: List[Dict[str, Any]],
         final_hypothesis: Dict[str, Any],
         experiment_design: Dict[str, Any],
         small_validation: Optional[Dict[str, Any]] = None,
-        pipeline_run_info: Optional[Dict[str, Any]] = None
+        pipeline_run_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        生成研究报告
-        
-        Args:
+         Args:
             project_info: 项目基本信息
             problem_understanding: 问题理解结果
-            literature_facts: 文献事实列表
+            literature_facts: 文献事实列表（来自 LiteratureMiningAgent）
             citation_map: 引用映射列表
             knowledge_gaps: 知识缺口结果
-            final_hypothesis: 最终假设
+            all_hypotheses: 所有生成的假设列表（包含 supporting_fact_ids）
+            final_hypothesis: 评审后的最终假设
             experiment_design: 实验设计
-            small_validation: 小样验证结果（可选）
-            pipeline_run_info: Pipeline 运行信息（可选）
-            
-        Returns:
-            报告生成结果
+            small_validation: 小样验证结果
+            pipeline_run_info: Pipeline 运行信息
         """
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
-            
-            # 格式化输入信息
+
+            # ── 格式化输入 ──
             formatted_input = self._format_input(
                 project_info,
                 problem_understanding,
                 literature_facts,
                 citation_map,
                 knowledge_gaps,
+                all_hypotheses,
                 final_hypothesis,
                 experiment_design,
-                small_validation
+                small_validation,
             )
-            
-            # 构建提示
+
+            # ── 构建 Prompt ──
             prompt_loader = get_prompt_loader()
             prompt = prompt_loader.render_template(
-                "report_generation",
-                formatted_input
+                "report_generation", formatted_input
             )
-            
-            # 定义 schema 示例
+
+            # ── Schema example ──
             schema_example = {
                 "title": "科学假设与研究计划",
-                "paper_title": "基于混合模型的医学图像分类研究",
-                "paper_abstract": "本文提出一种...",
-                "markdown_content": "# 科学假设与研究计划...",
+                "paper_title": "基于文献挖掘的科学假设与验证计划",
+                "paper_abstract": "本文围绕... 通过文献挖掘提取 X 条关键事实...",
+                "markdown_content": "# 科学假设与研究计划\n\n...",
                 "chapters": {
                     "problem_statement": "...",
+                    "literature_facts": "...",
+                    "knowledge_gaps": "...",
+                    "scientific_hypothesis": "...",
                     "rationale": "...",
                     "technical_details": "...",
                     "datasets": "...",
@@ -93,138 +130,41 @@ class ReportGenerationAgent:
                     "target": "...",
                     "methods": "...",
                     "experiments": "...",
-                    "results": "...",
-                    "references": ["..."]
-                }
+                    "results_feasibility": "...",
+                    "human_review": "...",
+                    "references": [],
+                },
             }
-            
-            # 调用 LLM
+
+            # ── LLM ──
             result_dict = qwen_structured_chat(
                 prompt=prompt,
                 schema_example=schema_example,
-                prompt_version="report_generation"
+                prompt_version="report_generation",
             )
-            
-            # 验证和标准化结果
+
+            # ── 后校验 + 合规检查 ──
             result = self._validate_and_normalize_result(
-                result_dict,
-                literature_facts,
-                citation_map
+                result_dict, literature_facts, citation_map, all_hypotheses
             )
-            
-            # 添加运行摘要到报告
+
+            # ── 附加运行摘要 ──
             if pipeline_run_info:
                 result = self._append_run_summary_to_report(result, pipeline_run_info)
-            
-            # 保存报告文件
+
+            # ── 保存文件 ──
             file_info = self._save_report_files(result, project_info)
-            
-            # 合并文件信息到结果
             result.update(file_info)
-            
+
             logger.info("研究报告生成完成")
-            
             return result
-            
+
         except Exception as e:
-            logger.error(f"生成研究报告时出错: {e}", exc_info=True)
+            logger.error(f"生成报告时出错: {e}", exc_info=True)
             raise
-    
-    def _append_run_summary_to_report(self, result: Dict[str, Any], run_info: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        将运行摘要附加到报告
-        
-        Args:
-            result: 原始报告结果
-            run_info: 运行信息
-            
-        Returns:
-            更新后的结果
-        """
-        try:
-            # 构建运行摘要部分
-            summary_content = self._build_run_summary_content(run_info)
-            
-            # 附加到 markdown 内容
-            original_markdown = result.get("markdown_content", "")
-            result["markdown_content"] = original_markdown + "\n" + summary_content
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"添加运行摘要时出错: {e}", exc_info=True)
-            # 出错时不影响主报告
-            return result
-    
-    def _build_run_summary_content(self, run_info: Dict[str, Any]) -> str:
-        """
-        构建运行摘要的 Markdown 内容
-        
-        Args:
-            run_info: 运行信息
-            
-        Returns:
-            Markdown 内容
-        """
-        # 从运行信息中提取关键数据
-        run_id = run_info.get("run_id", "N/A")
-        started_at = run_info.get("started_at")
-        completed_at = run_info.get("completed_at")
-        total_duration_ms = run_info.get("total_duration_ms", 0)
-        status = run_info.get("status", "unknown")
-        stages = run_info.get("stages", [])
-        
-        # 格式化时间
-        def format_datetime(dt_str):
-            if isinstance(dt_str, str):
-                try:
-                    dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                    return dt.strftime("%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    return str(dt_str)
-            elif isinstance(dt_str, datetime):
-                return dt_str.strftime("%Y-%m-%d %H:%M:%S")
-            return "N/A"
-        
-        # 格式化耗时
-        def format_duration(ms):
-            if not ms:
-                return "N/A"
-            total_sec = ms // 1000
-            min = total_sec // 60
-            sec = total_sec % 60
-            if min > 0:
-                return f"{min}分钟{sec}秒"
-            return f"{sec}秒"
-        
-        # 构建摘要
-        summary = f"""
 
----
+    # ──────── 格式化 ────────
 
-## 运行摘要
-
-### 基本信息
-- **运行 ID**: {run_id}
-- **状态**: {status}
-- **开始时间**: {format_datetime(started_at)}
-- **结束时间**: {format_datetime(completed_at)}
-- **总耗时**: {format_duration(total_duration_ms)}
-
-### 执行阶段
-| 阶段 | 状态 | 耗时 |
-|------|------|------|
-"""
-        
-        # 添加阶段详情
-        for stage in stages:
-            stage_name = stage.get("stage", "unknown")
-            stage_status = stage.get("status", "unknown")
-            duration = stage.get("duration_ms", 0)
-            summary += f"| {stage_name} | {stage_status} | {format_duration(duration)} |\n"
-        
-        return summary
-    
     def _format_input(
         self,
         project_info: Dict[str, Any],
@@ -232,252 +172,294 @@ class ReportGenerationAgent:
         literature_facts: List[Dict[str, Any]],
         citation_map: List[Dict[str, Any]],
         knowledge_gaps: Dict[str, Any],
+        all_hypotheses: List[Dict[str, Any]],
         final_hypothesis: Dict[str, Any],
         experiment_design: Dict[str, Any],
-        small_validation: Optional[Dict[str, Any]] = None
+        small_validation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
-        """格式化输入信息为字符串"""
         return {
             "project_info": json.dumps(project_info, ensure_ascii=False, indent=2),
             "problem_understanding": json.dumps(problem_understanding, ensure_ascii=False, indent=2),
             "literature_facts": json.dumps(literature_facts, ensure_ascii=False, indent=2),
             "citation_map": json.dumps(citation_map, ensure_ascii=False, indent=2),
             "knowledge_gaps": json.dumps(knowledge_gaps, ensure_ascii=False, indent=2),
+            "all_hypotheses": json.dumps(all_hypotheses, ensure_ascii=False, indent=2),
             "final_hypothesis": json.dumps(final_hypothesis, ensure_ascii=False, indent=2),
             "experiment_design": json.dumps(experiment_design, ensure_ascii=False, indent=2),
-            "small_validation": json.dumps(small_validation, ensure_ascii=False, indent=2) if small_validation else "无小样验证结果"
+            "small_validation": json.dumps(small_validation, ensure_ascii=False, indent=2)
+            if small_validation
+            else "null",
         }
-    
+
+    # ──────── 校验 ────────
+
     def _validate_and_normalize_result(
         self,
         result_dict: Dict[str, Any],
-        literature_facts: List[Dict[str, Any]] = None,
-        citation_map: List[Dict[str, Any]] = None
+        literature_facts: List[Dict[str, Any]],
+        citation_map: List[Dict[str, Any]],
+        all_hypotheses: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """验证和标准化结果"""
-        # 确保顶层字段存在
-        required_fields = ["title", "paper_title", "paper_abstract", "markdown_content", "chapters"]
-        for field in required_fields:
+        """验证章节完整性、References 真实性、合规标记"""
+        # 顶层字段
+        for field in ["title", "paper_title", "paper_abstract", "markdown_content"]:
             if field not in result_dict:
-                if field == "title":
-                    result_dict[field] = "科学假设与研究计划"
-                elif field == "paper_title":
-                    result_dict[field] = "研究报告"
-                else:
-                    result_dict[field] = ""
-        
-        # 确保 chapters 字段存在且包含所有必需章节（12 项挑战杯规范字段）
+                result_dict[field] = ""
+
+        # chapters 字典
         if "chapters" not in result_dict or not isinstance(result_dict["chapters"], dict):
             result_dict["chapters"] = {}
-        
-        required_chapters = [
-            "problem_statement", "rationale", "technical_details",
-            "datasets", "source", "target", "methods", "experiments", "results", "references"
-        ]
-        
-        for chapter in required_chapters:
-            if chapter not in result_dict["chapters"]:
-                if chapter == "references":
-                    result_dict["chapters"][chapter] = []
-                else:
-                    result_dict["chapters"][chapter] = ""
-        
-        # 确保 references 是列表
-        if not isinstance(result_dict["chapters"]["references"], list):
-            result_dict["chapters"]["references"] = []
-        
-        # 参考文献真实性校验
-        ref_check = self._validate_references(
-            result_dict["chapters"]["references"],
-            literature_facts or [],
-            citation_map or []
-        )
-        
-        # 如果参考文献全部无法验证且不为空标记，强制替换
+
+        chapters = result_dict["chapters"]
+        for ch in REPORT_CHAPTERS:
+            if ch not in chapters:
+                chapters[ch] = [] if ch == "references" else ""
+
+        # ── References 真实性校验 ──
+        refs = chapters.get("references", [])
+        if not isinstance(refs, list):
+            refs = [refs] if refs else []
+            chapters["references"] = refs
+
+        ref_check = self._validate_references(refs, literature_facts, citation_map)
+
         if ref_check["suspicious_count"] > 0 and ref_check["verified_count"] == 0:
-            logger.warning(f"参考文献校验失败：{ref_check['suspicious_count']} 条疑似虚构引用")
-            result_dict["chapters"]["references"] = ["暂无真实文献引用，需补充文献库"]
+            logger.warning(f"参考文献全不可验证: {ref_check['suspicious_count']} 条可疑")
+            chapters["references"] = []
             ref_check["references_replaced"] = True
-        
-        # 构建比赛规范合规性检查结果
-        compliance_check = self._build_compliance_check(result_dict, ref_check)
-        result_dict["compliance_check"] = compliance_check
-        
+
+        # ── 合规检查 ──
+        compliance = self._build_compliance_check(result_dict, ref_check, literature_facts, all_hypotheses)
+        result_dict["compliance_check"] = compliance
+
         return result_dict
-    
+
+    # ──────── References 校验 ────────
+
     def _validate_references(
         self,
         references: List[str],
         literature_facts: List[Dict[str, Any]],
-        citation_map: List[Dict[str, Any]]
+        citation_map: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        校验参考文献是否来自已上传的文献库或证据链
-        
-        Returns:
-            {
-                "verified_count": 可验证的引用数,
-                "suspicious_count": 疑似虚构的引用数,
-                "verified_refs": 验证通过的引用列表,
-                "suspicious_refs": 疑似虚构的引用列表,
-                "references_replaced": 是否已替换
-            }
-        """
-        if not references or references == ["暂无真实文献引用，需补充文献库"]:
+        """验证每条引用是否可追溯到 citation_map 或 literature_facts"""
+        if not references:
             return {
                 "verified_count": 0,
                 "suspicious_count": 0,
                 "verified_refs": [],
                 "suspicious_refs": [],
                 "references_replaced": False,
-                "note": "暂无文献引用"
+                "note": "暂无文献引用",
             }
-        
-        # 构建可验证的关键词库（从 literature_facts 和 citation_map 提取）
+
+        # ── 从 citation_map 构建强验证关键词（标题、作者、DOI、external_id）──
         verified_keywords = set()
-        for fact in (literature_facts or []):
-            for key in ["title", "authors", "source", "content"]:
-                val = fact.get(key, "")
-                if isinstance(val, str) and len(val) > 3:
-                    # 使用短序列用于模糊匹配
-                    verified_keywords.add(val[:50].lower())
         for cit in (citation_map or []):
-            for key in ["title", "authors", "source", "reference_text", "citation"]:
+            for key in ("paper_title", "title", "authors", "doi", "external_id", "source_url"):
                 val = cit.get(key, "")
-                if isinstance(val, str) and len(val) > 3:
-                    verified_keywords.add(val[:50].lower())
-        
+                if isinstance(val, str) and len(val.strip()) >= 5:
+                    verified_keywords.add(val.strip().lower())
+            # 也加入作者姓
+            authors = cit.get("authors", "")
+            if isinstance(authors, str) and "," in authors:
+                for a in authors.split(","):
+                    a = a.strip()
+                    if len(a) >= 3:
+                        verified_keywords.add(a.lower())
+
+        # ── 从 facts 补充 ──
+        for fact in (literature_facts or []):
+            title = fact.get("source_paper_title", "")
+            if isinstance(title, str) and len(title) >= 5:
+                verified_keywords.add(title.lower())
+            quote = fact.get("quote_text", "")
+            if isinstance(quote, str) and len(quote) >= 20:
+                verified_keywords.add(quote[:60].lower())
+
         verified_refs = []
         suspicious_refs = []
-        
+
         for ref in references:
             if not ref or not isinstance(ref, str):
                 suspicious_refs.append(str(ref) if ref else "(空引用)")
                 continue
-            
-            ref_lower = ref[:100].lower()
-            is_verified = False
-            
+
+            ref_lower = ref.lower()
+            matched = False
             for kw in verified_keywords:
-                # 检查引用文本是否包含已知文献的关键信息
-                if len(kw) > 10 and kw in ref_lower:
-                    is_verified = True
+                if len(kw) >= 6 and kw in ref_lower:
+                    matched = True
                     break
-                # 也尝试用较短片段匹配（作者名等）
-                if len(kw) >= 5 and kw[:20] in ref_lower:
-                    is_verified = True
-                    break
-            
-            if is_verified:
+
+            if matched:
                 verified_refs.append(ref)
             else:
                 suspicious_refs.append(ref)
-        
+
         return {
             "verified_count": len(verified_refs),
             "suspicious_count": len(suspicious_refs),
             "verified_refs": verified_refs,
             "suspicious_refs": suspicious_refs,
-            "references_replaced": False
+            "references_replaced": False,
         }
-    
+
+    # ──────── 合规检查 ────────
+
     def _build_compliance_check(
         self,
         result_dict: Dict[str, Any],
-        ref_check: Dict[str, Any]
+        ref_check: Dict[str, Any],
+        literature_facts: List[Dict[str, Any]],
+        all_hypotheses: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """构建 12 项挑战杯规范合规性检查结果"""
+        """16 项合规检查（含 References / Evidence / Hypothesis / Result）"""
         chapters = result_dict.get("chapters", {})
-        
-        # 定义 12 项检查字段
-        CHECK_FIELDS = [
-            ("problem_statement", "Problem Statement"),
-            ("rationale", "Rationale"),
-            ("technical_details", "Technical Details"),
-            ("datasets", "Datasets"),
-            ("source", "Source"),
-            ("target", "Target"),
-            ("paper_title", "Paper Title"),
-            ("paper_abstract", "Paper Abstract"),
-            ("methods", "Methods"),
-            ("experiments", "Experiments"),
-            ("results", "Results"),
-            ("references", "References"),
-        ]
-        
+
         items = []
-        for key, label in CHECK_FIELDS:
-            if key == "paper_title":
+        for key, label in CHALLENGE_CUP_FIELDS:
+            if key in ("paper_title",):
                 value = result_dict.get("paper_title", "")
-            elif key == "paper_abstract":
+            elif key in ("paper_abstract",):
                 value = result_dict.get("paper_abstract", "")
+            elif key == "references":
+                value = chapters.get("references", [])
             else:
                 value = chapters.get(key, "")
-            
+
+            # ── References 专项 ──
             if key == "references":
                 refs = chapters.get("references", [])
-                if not refs or refs == ["暂无真实文献引用，需补充文献库"]:
+                has_real = any(
+                    r and r != "暂无真实文献引用，需补充文献库" and not r.startswith("[待")
+                    for r in refs
+                )
+                if not refs or not has_real:
                     status = "missing"
-                    note = "暂无真实文献引用，需补充文献库"
+                    note = "缺少真实引用，需先导入文献库"
                 elif ref_check.get("references_replaced"):
                     status = "human_review"
-                    note = f"检测到 {ref_check.get('suspicious_count', 0)} 条疑似虚构引用，已被替换为安全提示"
+                    note = f"检测到 {ref_check.get('suspicious_count', 0)} 条虚构引用，已清除"
                 elif ref_check.get("suspicious_count", 0) > 0:
                     status = "human_review"
-                    note = f"检测到 {ref_check.get('suspicious_count', 0)} 条引用无法在文献库中验证，需人工确认"
+                    note = f"{ref_check.get('suspicious_count', 0)} 条引用无法验证，需人工确认"
                 else:
                     status = "completed"
                     note = f"{ref_check.get('verified_count', 0)} 条引用已通过文献库验证"
-            elif isinstance(value, str) and len(value.strip()) > 10:
-                status = "completed"
-                note = None
-            elif isinstance(value, str) and len(value.strip()) > 0:
-                status = "human_review"
-                note = "内容较短，建议补充完善"
             else:
-                status = "missing"
-                note = "该字段缺失，需补充内容"
-            
-            items.append({
-                "key": key,
-                "label": label,
-                "status": status,
-                "note": note
-            })
-        
+                if isinstance(value, str) and len(value.strip()) >= 20:
+                    status = "completed"
+                    note = None
+                elif isinstance(value, str) and len(value.strip()) > 0:
+                    status = "human_review"
+                    note = "内容较短，建议补充"
+                else:
+                    status = "missing"
+                    note = "该字段缺失"
+
+            items.append({"key": key, "label": label, "status": status, "note": note})
+
         completed = sum(1 for i in items if i["status"] == "completed")
         missing = sum(1 for i in items if i["status"] == "missing")
         needs_review = sum(1 for i in items if i["status"] == "human_review")
-        
+
+        # ── 额外赛题指标 ──
+        evidence_fact_count = len(literature_facts) if literature_facts else 0
+        hypothesis_with_evidence = sum(
+            1 for h in (all_hypotheses or [])
+            if h.get("supporting_fact_ids") and len(h.get("supporting_fact_ids", [])) > 0
+        )
+        has_result = False
+        result_type = "none"
+        rf = chapters.get("results_feasibility", "")
+        if isinstance(rf, str):
+            rf_lower = rf.lower()
+            if "actual" in rf_lower or "实际" in rf_lower:
+                has_result = True
+                result_type = "actual_result"
+            elif "simulat" in rf_lower or "模拟" in rf_lower or "预期" in rf_lower:
+                has_result = True
+                result_type = "simulated_or_expected"
+
         return {
-            "total": 12,
+            "total_items": len(CHALLENGE_CUP_FIELDS),
             "completed": completed,
             "missing": missing,
             "human_review": needs_review,
             "references_verified": ref_check.get("verified_count", 0),
             "references_suspicious": ref_check.get("suspicious_count", 0),
-            "items": items
+            "references_replaced": ref_check.get("references_replaced", False),
+            # ── 赛题专属指标 ──
+            "evidence_fact_count": evidence_fact_count,
+            "hypothesis_with_evidence_count": hypothesis_with_evidence,
+            "has_actual_or_simulated_result": has_result,
+            "result_type": result_type,
+            "items": items,
         }
-    
-    def _save_report_files(self, result: Dict[str, Any], project_info: Dict[str, Any]) -> Dict[str, Any]:
-        """保存报告文件"""
-        report_id = str(uuid.uuid4())
 
-        # 创建目录
+    # ──────── 运行摘要 ────────
+
+    def _append_run_summary_to_report(
+        self, result: Dict[str, Any], run_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        try:
+            summary_content = self._build_run_summary_content(run_info)
+            original = result.get("markdown_content", "")
+            result["markdown_content"] = original + "\n" + summary_content
+            return result
+        except Exception as e:
+            logger.error(f"添加运行摘要时出错: {e}", exc_info=True)
+            return result
+
+    def _build_run_summary_content(self, run_info: Dict[str, Any]) -> str:
+        def fmt_time(ts):
+            if isinstance(ts, str):
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return str(ts)
+            elif isinstance(ts, datetime):
+                return ts.strftime("%Y-%m-%d %H:%M:%S")
+            return "N/A"
+
+        def fmt_dur(ms):
+            if not ms:
+                return "N/A"
+            s = ms // 1000
+            m, s = divmod(s, 60)
+            return f"{m}分{s}秒" if m else f"{s}秒"
+
+        run_id = run_info.get("run_id", "N/A")
+        summary = (
+            "\n\n---\n\n## 运行摘要\n\n"
+            f"| 项目 | 值 |\n|------|----|\n"
+            f"| 运行 ID | {run_id} |\n"
+            f"| 状态 | {run_info.get('status', '?')} |\n"
+            f"| 开始 | {fmt_time(run_info.get('started_at'))} |\n"
+            f"| 结束 | {fmt_time(run_info.get('completed_at'))} |\n"
+            f"| 总耗时 | {fmt_dur(run_info.get('total_duration_ms', 0))} |\n"
+        )
+        return summary
+
+    # ──────── 文件存储 ────────
+
+    def _save_report_files(
+        self, result: Dict[str, Any], project_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        report_id = str(uuid.uuid4())
         report_path = os.path.join(self.reports_dir, report_id)
         os.makedirs(report_path, exist_ok=True)
 
-        # 保存 Markdown 文件
         md_file = os.path.join(report_path, "report.md")
         with open(md_file, "w", encoding="utf-8") as f:
             f.write(result.get("markdown_content", ""))
 
-        # 保存 JSON 数据
         json_file = os.path.join(report_path, "report_data.json")
         with open(json_file, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
+            json.dump(result, f, ensure_ascii=False, indent=2, default=str)
 
-        # 生成 PDF（新服务：Playwright → WeasyPrint → 降级警告）
         pdf_file = os.path.join(report_path, "report.pdf")
         pdf_result = export_markdown_to_pdf(
             markdown_content=result.get("markdown_content", ""),
@@ -486,7 +468,6 @@ class ReportGenerationAgent:
         )
 
         logger.info(f"报告文件已保存到: {report_path}")
-
         return {
             "report_id": report_id,
             "report_path": report_path,
@@ -498,12 +479,10 @@ class ReportGenerationAgent:
         }
 
 
-# 全局单例
 _agent_instance: Optional[ReportGenerationAgent] = None
 
 
 def get_report_generation_agent() -> ReportGenerationAgent:
-    """获取 ReportGenerationAgent 单例"""
     global _agent_instance
     if _agent_instance is None:
         _agent_instance = ReportGenerationAgent()

@@ -416,6 +416,7 @@ class PipelineService:
         pu = results.get("problem_understanding", {})
         lm = results.get("literature_mining", {})
         kg = results.get("knowledge_gap", {})
+        hg = results.get("hypothesis_generation", {})
         hr = results.get("hypothesis_review", {})
         ed = results.get("experiment_design", {})
         sv = results.get("small_validation", {})
@@ -427,6 +428,7 @@ class PipelineService:
             literature_facts=lm.get("facts", []),
             citation_map=lm.get("citation_map", []),
             knowledge_gaps=kg,
+            all_hypotheses=hg.get("hypotheses", []),
             final_hypothesis=hr,
             experiment_design=ed,
             small_validation=sv,
