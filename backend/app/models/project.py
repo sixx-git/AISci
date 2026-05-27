@@ -73,6 +73,32 @@ class DocumentStatus(str, Enum):
     FAILED = "failed"
 
 
+class SourceType(str, Enum):
+    """文献来源类型枚举"""
+    UPLOAD = "upload"
+    ARXIV = "arxiv"
+    GOOGLE_SCHOLAR_IMPORT = "google_scholar_import"
+    BIBTEX = "bibtex"
+    MANUAL = "manual"
+
+
+class ImportStatus(str, Enum):
+    """文献导入状态枚举"""
+    DISCOVERED = "discovered"
+    IMPORTED = "imported"
+    PDF_DOWNLOADED = "pdf_downloaded"
+    PARSED = "parsed"
+    INDEXED = "indexed"
+    FAILED = "failed"
+
+
+class LibraryScope(str, Enum):
+    """文献库范围枚举"""
+    BASE = "base"
+    PROJECT = "project"
+    PERSONAL = "personal"
+
+
 class Document(Base):
     """
     文档表
@@ -101,7 +127,15 @@ class Document(Base):
     issue = Column(String(50), nullable=True, comment="期")
     pages = Column(String(50), nullable=True, comment="页码")
     doi = Column(String(200), nullable=True, index=True, comment="DOI编号")
-    source_url = Column(String(500), nullable=True, comment="来源URL")
+    source_url = Column(String(500), nullable=True, comment="来源详情页URL")
+    pdf_url = Column(String(500), nullable=True, comment="PDF下载URL（如arXiv PDF）")
+    external_id = Column(String(200), nullable=True, index=True, comment="外部文献ID（arXiv ID / DOI）")
+    
+    # 文献来源与范围
+    source_type = Column(SQLEnum(SourceType), default=SourceType.UPLOAD, nullable=False, index=True, comment="文献来源类型")
+    library_scope = Column(SQLEnum(LibraryScope), default=LibraryScope.PERSONAL, nullable=False, comment="文献库范围")
+    import_status = Column(SQLEnum(ImportStatus), default=ImportStatus.IMPORTED, nullable=False, index=True, comment="导入状态")
+    is_personal = Column(Boolean, default=True, nullable=False, comment="是否为个人文献")
     
     # 处理信息
     doc_type = Column(SQLEnum(DocumentType), default=DocumentType.RESEARCH_PAPER, nullable=True, comment="文档类型")
@@ -116,6 +150,7 @@ class Document(Base):
     # 元数据
     extra_metadata = Column(JSON, nullable=True, comment="额外元数据（JSON）")
     custom_fields = Column(JSON, nullable=True, comment="自定义字段（JSON）")
+    metadata_json = Column(JSON, nullable=True, comment="原始来源元数据JSON（arXiv API / BibTeX解析结果）")
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

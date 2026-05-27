@@ -90,6 +90,51 @@ class DocumentType(str, Enum):
     OTHER = "other"
 
 
+class DocumentSourceType(str, Enum):
+    """文献来源类型枚举"""
+    UPLOAD = "upload"
+    ARXIV = "arxiv"
+    GOOGLE_SCHOLAR_IMPORT = "google_scholar_import"
+    BIBTEX = "bibtex"
+    MANUAL = "manual"
+
+
+class DocumentImportStatus(str, Enum):
+    """文献导入状态枚举"""
+    DISCOVERED = "discovered"
+    IMPORTED = "imported"
+    PDF_DOWNLOADED = "pdf_downloaded"
+    PARSED = "parsed"
+    INDEXED = "indexed"
+    FAILED = "failed"
+
+
+class LibraryScope(str, Enum):
+    """文献库范围枚举"""
+    BASE = "base"
+    PROJECT = "project"
+    PERSONAL = "personal"
+
+
+class DocumentCreate(BaseModel):
+    """创建/导入文档请求"""
+    project_id: str = Field(..., description="所属项目ID")
+    filename: str = Field(..., max_length=255)
+    title: Optional[str] = Field(None, max_length=500)
+    authors: Optional[str] = Field(None)
+    abstract: Optional[str] = Field(None)
+    doi: Optional[str] = Field(None, max_length=200)
+    source_url: Optional[str] = Field(None, max_length=500)
+    pdf_url: Optional[str] = Field(None, max_length=500)
+    external_id: Optional[str] = Field(None, max_length=200, description="外部ID（arXiv ID / DOI）")
+    source_type: DocumentSourceType = Field(default=DocumentSourceType.UPLOAD)
+    library_scope: LibraryScope = Field(default=LibraryScope.PERSONAL)
+    import_status: DocumentImportStatus = Field(default=DocumentImportStatus.IMPORTED)
+    is_personal: bool = Field(default=True)
+    doc_type: Optional[DocumentType] = Field(None)
+    metadata_json: Optional[dict] = Field(None, description="原始元数据JSON")
+
+
 class DocumentInfo(BaseModel):
     """文档信息"""
     id: str
@@ -100,10 +145,23 @@ class DocumentInfo(BaseModel):
     title: Optional[str] = None
     authors: Optional[str] = None
     abstract: Optional[str] = None
+    doi: Optional[str] = None
+    keywords: Optional[str] = None
+    journal: Optional[str] = None
+    publication_date: Optional[datetime] = None
     summary: Optional[str] = None
     status: DocumentStatus
     error_message: Optional[str] = None
     chunk_count: Optional[int] = Field(None, description="切片数量")
+    # 多来源文献库字段
+    source_type: Optional[DocumentSourceType] = None
+    source_url: Optional[str] = None
+    pdf_url: Optional[str] = None
+    external_id: Optional[str] = None
+    library_scope: Optional[LibraryScope] = None
+    import_status: Optional[DocumentImportStatus] = None
+    is_personal: Optional[bool] = None
+    metadata_json: Optional[dict] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     

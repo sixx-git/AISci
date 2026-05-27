@@ -92,7 +92,11 @@ backend/storage/*
 *.log
 logs/
 backend/logs/
+
+
 review-files/
+
+
 # =========================
 # Archives
 # 防止把旧压缩包套进新压缩包
