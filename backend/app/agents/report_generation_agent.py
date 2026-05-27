@@ -9,16 +9,11 @@ import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-import markdown
-# weasyprint is imported lazily in _generate_pdf method
-
-from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
+from app.services.pdf_export_service import export_markdown_to_pdf
 
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 
 class ReportGenerationAgent:
@@ -466,107 +461,41 @@ class ReportGenerationAgent:
     
     def _save_report_files(self, result: Dict[str, Any], project_info: Dict[str, Any]) -> Dict[str, Any]:
         """保存报告文件"""
-        try:
-            report_id = str(uuid.uuid4())
-            
-            # 创建目录
-            report_path = os.path.join(self.reports_dir, report_id)
-            os.makedirs(report_path, exist_ok=True)
-            
-            # 保存 Markdown 文件
-            md_file = os.path.join(report_path, "report.md")
-            with open(md_file, "w", encoding="utf-8") as f:
-                f.write(result.get("markdown_content", ""))
-            
-            # 保存 JSON 数据
-            json_file = os.path.join(report_path, "report_data.json")
-            with open(json_file, "w", encoding="utf-8") as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-            
-            # 尝试生成 PDF
-            pdf_file = os.path.join(report_path, "report.pdf")
-            pdf_success = self._convert_markdown_to_pdf(
-                markdown_content=result.get("markdown_content", ""),
-                pdf_file=pdf_file
-            )
-            
-            logger.info(f"报告文件已保存到: {report_path}")
-            
-            return {
-                "report_id": report_id,
-                "report_path": report_path,
-                "md_file": md_file,
-                "json_file": json_file,
-                "pdf_file": pdf_file if pdf_success else None,
-                "pdf_success": pdf_success
-            }
-            
-        except Exception as e:
-            logger.error(f"保存报告文件时出错: {e}", exc_info=True)
-            raise
-    
-    def _convert_markdown_to_pdf(self, markdown_content: str, pdf_file: str) -> bool:
-        """
-        将 Markdown 转换为 PDF
-        
-        Args:
-            markdown_content: Markdown 内容
-            pdf_file: PDF 文件路径
-            
-        Returns:
-            是否成功
-        """
-        try:
-            from weasyprint import HTML, CSS
-            
-            # 1. Markdown 转 HTML
-            html_content = markdown.markdown(
-                markdown_content,
-                extensions=[
-                    'extra',
-                    'tables',
-                    'toc',
-                    'codehilite',
-                    'fenced_code'
-                ]
-            )
-            
-            # 2. 获取 CSS 样式
-            css_file = os.path.join(
-                os.path.dirname(__file__),
-                "report_style.css"
-            )
-            
-            # 3. 构建完整 HTML
-            full_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>科学假设与研究计划</title>
-            </head>
-            <body>
-                {html_content}
-            </body>
-            </html>
-            """
-            
-            # 4. 使用 WeasyPrint 生成 PDF
-            if os.path.exists(css_file):
-                HTML(string=full_html).write_pdf(
-                    pdf_file,
-                    stylesheets=[CSS(filename=css_file)]
-                )
-            else:
-                HTML(string=full_html).write_pdf(pdf_file)
-            
-            logger.info(f"PDF 生成成功: {pdf_file}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"PDF 生成失败: {e}", exc_info=True)
-            # PDF 失败不影响 Markdown 保存
-            return False
+        report_id = str(uuid.uuid4())
+
+        # 创建目录
+        report_path = os.path.join(self.reports_dir, report_id)
+        os.makedirs(report_path, exist_ok=True)
+
+        # 保存 Markdown 文件
+        md_file = os.path.join(report_path, "report.md")
+        with open(md_file, "w", encoding="utf-8") as f:
+            f.write(result.get("markdown_content", ""))
+
+        # 保存 JSON 数据
+        json_file = os.path.join(report_path, "report_data.json")
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+
+        # 生成 PDF（新服务：Playwright → WeasyPrint → 降级警告）
+        pdf_file = os.path.join(report_path, "report.pdf")
+        pdf_result = export_markdown_to_pdf(
+            markdown_content=result.get("markdown_content", ""),
+            output_path=pdf_file,
+            css_path=os.path.join(os.path.dirname(__file__), "report_style.css"),
+        )
+
+        logger.info(f"报告文件已保存到: {report_path}")
+
+        return {
+            "report_id": report_id,
+            "report_path": report_path,
+            "md_file": md_file,
+            "json_file": json_file,
+            "pdf_file": pdf_result.get("pdf_path"),
+            "pdf_success": pdf_result.get("success", False),
+            "warning": pdf_result.get("warning"),
+        }
 
 
 # 全局单例

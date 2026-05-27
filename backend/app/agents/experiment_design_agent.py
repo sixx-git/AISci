@@ -3,7 +3,7 @@
 """
 import logging
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
@@ -22,6 +22,21 @@ class ExperimentDesignResult(BaseModel):
     experimental_steps: str = Field("", description="实验步骤")
     expected_results: str = Field("", description="预期结果")
     limitations: str = Field("", description="局限性")
+
+    @field_validator(
+        "datasets", "baselines", "metrics",
+        "experimental_steps", "limitations",
+        mode="before"
+    )
+    @classmethod
+    def _list_to_str(cls, v):
+        """LLM 可能返回列表，自动转为换行分隔的字符串"""
+        if isinstance(v, list):
+            return "\n".join(
+                item if isinstance(item, str) else item.get("name", str(item))
+                for item in v
+            )
+        return v
 
 
 class ExperimentDesignAgent:
