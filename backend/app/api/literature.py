@@ -16,6 +16,10 @@ from app.core.database import get_db
 from app.core.response import ApiResponse, success, error
 from app.services.literature_ingestion_service import LiteratureIngestionService
 from app.services.literature_sources.bibtex_importer import BibTexParseError
+from app.agents.problem_understanding_agent import get_problem_understanding_agent
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["literature"])
 
@@ -52,6 +56,13 @@ class DocumentActionRequest(BaseModel):
     project_id: str = Field(..., description="项目ID")
     document_id: str = Field(..., description="文献Document ID")
     auto_index: bool = Field(default=True, description="解析后是否自动构建向量索引")
+
+
+class ArxivRecommendRequest(BaseModel):
+    """从研究问题推荐 arXiv 文献"""
+    project_id: str = Field(..., description="目标项目ID")
+    research_question: str = Field(..., min_length=1, description="研究问题文本")
+    max_results: int = Field(default=10, ge=1, le=100, description="最大推荐数")
 
 
 # ==================== API Endpoints ====================
@@ -93,6 +104,76 @@ async def list_sources():
     })
 
 
+@router.post("/recommend/arxiv")
+async def recommend_arxiv_from_question(
+    req: ArxivRecommendRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    从研究问题自动检索 arXiv 文献
+
+    流程：
+      1. 调用 ProblemUnderstandingAgent 从研究问题中提取关键词
+      2. 用关键词组合查询字符串搜索 arXiv
+      3. （降级）如果关键词提取失败，直接用研究问题文本搜索
+      4. 返回 arXiv 搜索结果（仅元数据，不下载 PDF）
+
+    请求：
+      { "project_id": "...", "research_question": "...", "max_results": 10 }
+
+    响应：
+      {
+        "query_mode": "keyword" | "raw_question",
+        "keywords": ["关键词1", "关键词2"],
+        "total": N,
+        "results": [ ArxivPaper, ... ]
+      }
+    """
+    try:
+        keywords: List[str] = []
+        query_mode = "raw_question"
+        search_query = req.research_question.strip()
+
+        # 1. 尝试用 ProblemUnderstandingAgent 提取关键词
+        try:
+            agent = get_problem_understanding_agent()
+            analysis = agent.analyze(research_question=req.research_question)
+            if analysis.keywords and len(analysis.keywords) > 0:
+                keywords = analysis.keywords
+                # 使用 AND 组合关键词构建 arXiv query
+                # arXiv 搜索语法: 用 AND 连接关键词可以提高精确度
+                query_terms = [f"all:{kw}" for kw in keywords[:5]]  # 最多 5 个关键词
+                search_query = " AND ".join(query_terms)
+                query_mode = "keyword"
+                logger.info(
+                    f"从研究问题提取关键词: {keywords} → arXiv query: {search_query}"
+                )
+        except Exception as ex:
+            logger.warning(f"关键词提取失败，将直接使用研究问题搜索: {ex}")
+
+        # 2. 搜索 arXiv
+        service = LiteratureIngestionService(db)
+        results = service.search_arxiv(
+            query=search_query,
+            max_results=req.max_results,
+            start=0,
+            sort_by="relevance",
+        )
+
+        return success(data={
+            "query_mode": query_mode,
+            "keywords": keywords,
+            "original_question": req.research_question,
+            "search_query": search_query,
+            "total": len(results),
+            "results": results,
+        })
+    except ValueError as e:
+        return error(str(e), code=400)
+    except RuntimeError as e:
+        return error(str(e), code=502)
+    except Exception as e:
+        return error(f"arXiv 推荐失败: {str(e)}", code=500)
 @router.post("/search/arxiv")
 async def search_arxiv(
     req: ArxivSearchRequest,

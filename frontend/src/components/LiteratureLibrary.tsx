@@ -149,6 +149,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [arxivImported, setArxivImported] = useState<Record<string, boolean>>({});
   const [arxivSearched, setArxivSearched] = useState(false);
 
+  // ========== 研究问题推荐状态 ==========
+  const [researchQuestion, setResearchQuestion] = useState('');
+  const [recommendSearching, setRecommendSearching] = useState(false);
+  const [recommendInfo, setRecommendInfo] = useState<{ query_mode: string; keywords: string[]; search_query: string } | null>(null);
+
   // ========== 已入库文献状态 ==========
   const [importedDocs, setImportedDocs] = useState<ImportedDocument[]>([]);
   const [importedLoading, setImportedLoading] = useState(false);
@@ -313,6 +318,47 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     }
   }, [arxivQuery, arxivMaxResults, showStatus]);
 
+  // ========== 从研究问题推荐 arXiv ==========
+  const handleRecommendArxiv = useCallback(async () => {
+    const q = researchQuestion.trim();
+    if (!q) return;
+
+    setRecommendSearching(true);
+    setArxivSearched(true);
+    setArxivResults([]);
+    setRecommendInfo(null);
+
+    try {
+      const res = await literatureService.recommendArxiv(projectId, q, arxivMaxResults);
+      if (res.code === 200 && res.data) {
+        const d = res.data;
+        setArxivResults(d.results ?? []);
+        setRecommendInfo({
+          query_mode: d.query_mode,
+          keywords: d.keywords,
+          search_query: d.search_query,
+        });
+        if (!d.results?.length) {
+          showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文，请尝试其他研究问题' });
+        } else {
+          showStatus({
+            type: 'success',
+            text: d.query_mode === 'keyword'
+              ? `已提取关键词 [${d.keywords.join(', ')}]，返回 ${d.total} 条结果`
+              : `已搜索研究问题，返回 ${d.total} 条结果`,
+          });
+        }
+      } else {
+        showStatus({ type: 'error', text: res.message || '推荐失败' });
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}` });
+    } finally {
+      setRecommendSearching(false);
+    }
+  }, [researchQuestion, arxivMaxResults, projectId, showStatus]);
+
   // ========== arXiv 导入 ==========
   const handleImportArxiv = useCallback(async (paper: ArxivPaper) => {
     setArxivImporting((prev) => ({ ...prev, [paper.external_id]: true }));
@@ -471,6 +517,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
               imported={arxivImported}
               onImport={handleImportArxiv}
               truncate={truncate}
+              researchQuestion={researchQuestion}
+              onResearchQuestionChange={setResearchQuestion}
+              recommendSearching={recommendSearching}
+              recommendInfo={recommendInfo}
+              onRecommend={handleRecommendArxiv}
             />
           )}
           {activeTab === 'library' && <LibraryTabEmpty />}
@@ -604,6 +655,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             imported={arxivImported}
             onImport={handleImportArxiv}
             truncate={truncate}
+            researchQuestion={researchQuestion}
+            onResearchQuestionChange={setResearchQuestion}
+            recommendSearching={recommendSearching}
+            recommendInfo={recommendInfo}
+            onRecommend={handleRecommendArxiv}
           />
         )}
 
@@ -703,6 +759,7 @@ function UploadTabEmpty({ fileInputRef, uploading, onUpload }: {
 function ArxivTabContent({
   query, onQueryChange, maxResults, onMaxResultsChange, onSearch, searching,
   results, searched, importing, imported, onImport, truncate,
+  researchQuestion, onResearchQuestionChange, recommendSearching, recommendInfo, onRecommend,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
@@ -716,11 +773,79 @@ function ArxivTabContent({
   imported: Record<string, boolean>;
   onImport: (paper: ArxivPaper) => void;
   truncate: (text: string, maxLen: number) => string;
+  // 研究问题推荐
+  researchQuestion: string;
+  onResearchQuestionChange: (v: string) => void;
+  recommendSearching: boolean;
+  recommendInfo: { query_mode: string; keywords: string[]; search_query: string } | null;
+  onRecommend: () => void;
 }) {
   return (
     <div>
-      {/* 搜索栏 */}
+      {/* 研究问题推荐区 */}
+      <Card className="mb-4 border-primary-500/15 bg-primary-500/[0.02]">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="w-4 h-4 text-primary-400" />
+          <h3 className="text-sm font-semibold text-white">从研究问题检索 arXiv 文献</h3>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          输入完整的研究问题，AI 将自动提取关键词后搜索 arXiv，推荐最相关的文献
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <textarea
+              placeholder="输入你的研究问题，如：如何利用机器学习提高医学影像诊断的准确率？Transformer 模型的长序列处理效率如何优化？"
+              value={researchQuestion}
+              onChange={(e) => onResearchQuestionChange(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors resize-none"
+            />
+          </div>
+          <div className="flex flex-col justify-end gap-2">
+            <Button
+              icon={recommendSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              disabled={recommendSearching || !researchQuestion.trim()}
+              onClick={onRecommend}
+              variant="primary"
+            >
+              {recommendSearching ? '检索中…' : '从问题检索 arXiv'}
+            </Button>
+          </div>
+        </div>
+        {/* 推荐关键词展示 */}
+        {recommendInfo && (
+          <div className="mt-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700/50">
+            <div className="flex items-center gap-2 mb-1.5">
+              <BrainCircuit className="w-3.5 h-3.5 text-primary-400" />
+              <span className="text-xs font-medium text-gray-400">
+                {recommendInfo.query_mode === 'keyword' ? '已提取关键词' : '直接搜索'}
+              </span>
+            </div>
+            {recommendInfo.query_mode === 'keyword' && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {recommendInfo.keywords.map((kw, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-0.5 rounded text-[11px] bg-primary-500/15 text-primary-400 border border-primary-500/25"
+                  >
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-gray-600 font-mono truncate">
+              arXiv Query: {recommendInfo.search_query}
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* 手动搜索栏 */}
       <Card className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Search className="w-4 h-4 text-gray-400" />
+          <h3 className="text-sm font-semibold text-white">手动搜索 arXiv</h3>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-400 mb-1.5">搜索关键词</label>

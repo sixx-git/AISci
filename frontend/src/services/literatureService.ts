@@ -109,6 +109,16 @@ export interface ParseIndexResult {
   index_added?: number;
 }
 
+/** 从研究问题推荐 arXiv 文献的响应 */
+export interface ArxivRecommendData {
+  query_mode: 'keyword' | 'raw_question';
+  keywords: string[];
+  original_question: string;
+  search_query: string;
+  total: number;
+  results: ArxivPaper[];
+}
+
 // ==================== Mock 数据 ====================
 
 const MOCK_ARXIV_RESULTS: ArxivPaper[] = [
@@ -262,6 +272,40 @@ export const literatureService = {
     const { data } = await api.post<ApiResponse<ImportArxivResult>>('/literature/import/arxiv', {
       project_id: projectId,
       papers,
+    });
+    return data;
+  },
+
+  /**
+   * POST /api/v1/literature/recommend/arxiv
+   * 从研究问题自动提取关键词并搜索 arXiv
+   */
+  async recommendArxiv(
+    projectId: string,
+    researchQuestion: string,
+    maxResults: number = 10,
+  ): Promise<ApiResponse<ArxivRecommendData>> {
+    if (env.USE_MOCK) {
+      console.log('[Mock] literatureService.recommendArxiv', { projectId, researchQuestion, maxResults });
+      await new Promise((r) => setTimeout(r, 800));
+      return {
+        code: 200,
+        message: 'Mock data',
+        data: {
+          query_mode: 'keyword',
+          keywords: ['chain-of-thought', 'reasoning', 'large language models'],
+          original_question: researchQuestion,
+          search_query: 'all:chain-of-thought AND all:reasoning AND all:large language models',
+          total: MOCK_ARXIV_RESULTS.length,
+          results: MOCK_ARXIV_RESULTS,
+        },
+      };
+    }
+
+    const { data } = await api.post<ApiResponse<ArxivRecommendData>>('/literature/recommend/arxiv', {
+      project_id: projectId,
+      research_question: researchQuestion,
+      max_results: maxResults,
     });
     return data;
   },
