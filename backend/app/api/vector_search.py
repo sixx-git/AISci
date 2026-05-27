@@ -79,12 +79,12 @@ async def build_index(
     """
     try:
         # 检查是否有 Chunk
-        from app.models.project import Chunk, Document
+        from app.models.project import Chunk, Document, DocumentStatus
         chunk_count = (
             db.query(Chunk)
             .join(Document, Chunk.document_id == Document.id)
             .filter(Chunk.project_id == project_id)
-            .filter(Document.status == "processed")
+            .filter(Document.status == DocumentStatus.PROCESSED)
             .count()
         )
 

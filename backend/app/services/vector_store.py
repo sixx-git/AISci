@@ -14,7 +14,7 @@ import faiss
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.project import Chunk, Document, ChunkStatus
+from app.models.project import Chunk, Document, ChunkStatus, DocumentStatus
 from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ class VectorStore:
                 session.query(Chunk, Document)
                 .join(Document, Chunk.document_id == Document.id)
                 .filter(Chunk.project_id == project_id)
-                .filter(Document.status == "processed")  # 只取已解析的文档
+                .filter(Document.status == DocumentStatus.PROCESSED)  # 只取已解析的文档
                 .all()
             )
 

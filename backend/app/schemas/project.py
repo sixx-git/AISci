@@ -134,8 +134,9 @@ class ParseDocumentRequest(BaseModel):
 class ChunkStatus(str, Enum):
     """切片状态枚举"""
     PENDING = "pending"
-    INDEXED = "indexed"
-    PROCESSED = "processed"
+    EMBEDDING = "embedding"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class ChunkInfo(BaseModel):

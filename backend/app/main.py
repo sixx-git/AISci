@@ -69,12 +69,29 @@ async def startup_event():
     print()
     
     # 初始化数据库
-    print("[1/2] 初始化数据库...")
+    print("[1/3] 初始化数据库...")
     create_tables()
     print("    数据库表创建成功")
     print()
     
-    print(f"[2/2] 启动完成！")
+    # LLM 客户端初始化
+    print("[2/3] 初始化 LLM 客户端...")
+    if settings.USE_MOCK_LLM:
+        from app.services.mock_qwen_client import use_mock
+        use_mock()
+        print("    ⚠ Mock LLM 模式已启用（model: mock-model）")
+        print("    ⚠ 不会发起真实 API 调用，所有 LLM 输出为模拟数据")
+        print("    ⚠ 此模式仅用于开发调试，不可用于生产环境")
+    elif not settings.QWEN_API_KEY:
+        print("    ⚠ QWEN_API_KEY 未设置")
+        print("    ⚠ Pipeline 运行时会因缺少 API Key 而失败")
+        print("    ⚠ 如需在无 API Key 时跑通 Pipeline，请在 .env 中设置 USE_MOCK_LLM=true")
+    else:
+        print(f"    ✓ 千问模型: {settings.QWEN_MODEL}")
+        print(f"    ✓ API 地址: {settings.QWEN_BASE_URL}")
+    print()
+    
+    print(f"[3/3] 启动完成！")
     print()
     print(f"📚 API 文档: http://localhost:{settings.BACKEND_PORT}/docs")
     print(f"🔧 服务地址: http://localhost:{settings.BACKEND_PORT}")
