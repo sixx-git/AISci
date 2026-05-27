@@ -227,29 +227,94 @@ async def download_arxiv_pdf(
         return error(f"PDF 下载异常: {str(e)}", code=500)
 
 
-# ==================== 解析 + 索引 ====================
+# ==================== 统一 PDF 解析 ====================
 
-@router.post("/parse-and-index")
-async def parse_and_index_document(
+@router.post("/parse-document")
+async def parse_document(
     req: DocumentActionRequest,
     db: Session = Depends(get_db),
 ):
     """
-    解析文献 PDF 并构建向量索引
+    统一 PDF 解析（任意来源：上传/arXiv/BibTeX 等）
 
     流程:
-      1. 解析 PDF → 生成 Chunk
-      2. (可选) 调用 VectorStore 构建项目级 FAISS 索引
-      3. 更新 import_status: parsed → indexed
+      1. 验证 PDF 文件存在
+      2. 删除旧 Chunk（幂等重解析）
+      3. DocumentParser 解析 PDF → 生成 Chunk
+      4. 更新 import_status = parsed
 
-    注意：
-      - 需先调用 /download-pdf 下载 PDF 文件
-      - 索引操作为增量，不会覆盖已有索引
-      - 解析失败不影响文献元数据
+    Project-level semantics:
+      - 用户上传 PDF: source_type=upload, library_scope=personal, is_personal=true
+      - arXiv PDF:     source_type=arxiv, library_scope=base,    is_personal=false
     """
     try:
         service = LiteratureIngestionService(db)
-        result = service.parse_and_index_document(
+        result = service.parse_document(
+            project_id=req.project_id,
+            document_id=req.document_id,
+        )
+        source_tag = f" (来源: {result.get('source_type', '?')})" if result.get('source_type') else ""
+        return success(
+            data=result,
+            message=f"解析完成: {result['chunk_count']} 个切片{source_tag}",
+        )
+    except ValueError as e:
+        return error(str(e), code=400)
+    except RuntimeError as e:
+        return error(str(e), code=502)
+    except Exception as e:
+        return error(f"解析异常: {str(e)}", code=500)
+
+
+# ==================== 统一向量索引 ====================
+
+@router.post("/index-document")
+async def index_document(
+    req: DocumentActionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    统一向量索引（任意来源）
+
+    对项目级 FAISS 索引进行增量构建。
+    LiteratureMiningAgent 不关心文献来源，仅按 project_id 检索。
+
+    前置条件: 文档已解析（import_status = parsed）
+    """
+    try:
+        service = LiteratureIngestionService(db)
+        result = service.index_document(
+            project_id=req.project_id,
+            document_id=req.document_id,
+        )
+        return success(
+            data=result,
+            message=f"向量索引完成: 新增 {result['index_added']} 条",
+        )
+    except ValueError as e:
+        return error(str(e), code=400)
+    except RuntimeError as e:
+        return error(str(e), code=502)
+    except Exception as e:
+        return error(f"索引异常: {str(e)}", code=500)
+
+
+# ==================== 组合: 解析 + 索引 ====================
+
+@router.post("/parse-and-index")
+async def parse_and_index(
+    req: DocumentActionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    解析 PDF 并构建向量索引（组合调用）
+
+    等价于 POST /parse-document → POST /index-document。
+    auto_index=false 时仅执行解析，不索引。
+    """
+    try:
+        service = LiteratureIngestionService(db)
+        result = service.parse_and_index(
             project_id=req.project_id,
             document_id=req.document_id,
             auto_index=req.auto_index,

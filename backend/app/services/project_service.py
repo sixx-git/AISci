@@ -15,7 +15,10 @@ from app.models import (
     Chunk,
     ProjectStatus,
     DocumentStatus,
-    ChunkStatus
+    ChunkStatus,
+    SourceType,
+    ImportStatus,
+    LibraryScope,
 )
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectQuery
 
@@ -134,35 +137,42 @@ class DocumentService:
         auto_parse: bool = True
     ) -> Tuple[Document, Optional[List[Chunk]]]:
         """
-        上传并解析文档
-        
+        上传并解析文档（用户手动上传 PDF）
+
+        统一字段：
+          - source_type = upload
+          - library_scope = personal
+          - is_personal = true
+          - import_status = imported → parsed（解析后）
+
+        解析委托给 LiteratureIngestionService.parse_document()，
+        确保与 arXiv 等外部文献走同一解析管道。
+
         Args:
             filename: 文件名
             file_content: 文件内容
             project_id: 项目 ID
             auto_parse: 是否自动解析
-            
+
         Returns:
             Tuple[Document, Optional[List[Chunk]]]
         """
-        # 保存文件到 storage/uploads/{project_id}/
         doc_id = str(uuid.uuid4())
         file_extension = os.path.splitext(filename)[1].lower()
         save_filename = f"{doc_id}{file_extension}"
-        
+
         if project_id:
             upload_subdir = os.path.join(self.upload_dir, project_id)
         else:
             upload_subdir = self.upload_dir
         os.makedirs(upload_subdir, exist_ok=True)
-        
+
         save_path = os.path.join(upload_subdir, save_filename)
-        
-        # 保存文件
+
         with open(save_path, 'wb') as f:
             f.write(file_content)
-        
-        # 创建文档记录
+
+        # 创建文档记录 — 显式设置上传来源字段
         doc = Document(
             id=doc_id,
             project_id=project_id,
@@ -170,27 +180,46 @@ class DocumentService:
             file_path=save_path,
             file_type=file_extension[1:] if file_extension else "unknown",
             file_size=len(file_content),
+            # ── 统一字段 ──
+            source_type=SourceType.UPLOAD,
+            library_scope=LibraryScope.PERSONAL,
+            is_personal=True,
+            import_status=ImportStatus.IMPORTED,
+            # ── 处理状态 ──
             status=DocumentStatus.UPLOADED,
             created_at=datetime.now()
         )
-        
+
         self.db.add(doc)
         self.db.flush()
-        
-        # 如果需要自动解析
+
+        # 自动解析（委托给统一管道）
         chunks = None
-        if auto_parse:
+        if auto_parse and doc.file_path.lower().endswith(".pdf"):
             try:
-                doc, chunks = self.parse_document(doc.id)
+                from app.services.literature_ingestion_service import (
+                    LiteratureIngestionService,
+                )
+                ing_svc = LiteratureIngestionService(self.db)
+                result = ing_svc.parse_document(
+                    project_id=project_id or "",
+                    document_id=doc_id,
+                )
+                doc = ing_svc.db.query(Document).filter(Document.id == doc_id).first()
+                chunks = (
+                    ing_svc.db.query(Chunk)
+                    .filter(Chunk.document_id == doc_id)
+                    .all()
+                )
             except Exception as e:
-                # 解析失败，但文档已保存
+                doc.import_status = ImportStatus.FAILED
                 doc.status = DocumentStatus.FAILED
                 doc.error_message = str(e)
                 self.db.commit()
-        
+
         self.db.commit()
         self.db.refresh(doc)
-        
+
         return doc, chunks
     
     def parse_document(
@@ -199,35 +228,33 @@ class DocumentService:
         backend: ParserBackend = ParserBackend.PYMUPDF
     ) -> Tuple[Document, List[Chunk]]:
         """
-        解析文档
-        
-        Args:
-            doc_id: 文档 ID
-            backend: 解析后端
-            
-        Returns:
-            Tuple[Document, List[Chunk]]
+        解析文档（委托给统一管道）
+
+        为保持向后兼容保留此方法，
+        实际委托给 LiteratureIngestionService.parse_document()。
         """
+        from app.services.literature_ingestion_service import (
+            LiteratureIngestionService,
+        )
+
         doc = self.get_document(doc_id)
         if not doc:
             raise ValueError(f"Document not found: {doc_id}")
-        
-        # 删除现有的切片
-        self._delete_document_chunks(doc_id)
-        
-        # 更新状态
-        doc.status = DocumentStatus.PROCESSING
-        self.db.flush()
-        
-        # 解析
-        parser = DocumentParser(self.db, backend=backend)
-        doc, chunks = parser.parse_file(
-            file_path=doc.file_path,
-            project_id=doc.project_id,
-            original_filename=doc.filename,
-            document=doc
+
+        ing_svc = LiteratureIngestionService(self.db)
+        ing_svc.parse_document(
+            project_id=doc.project_id or "",
+            document_id=doc_id,
         )
-        
+
+        # 重新加载，获取最新状态和 Chunks
+        doc = self.get_document(doc_id)
+        chunks = (
+            self.db.query(Chunk)
+            .filter(Chunk.document_id == doc_id)
+            .order_by(Chunk.chunk_index)
+            .all()
+        )
         return doc, chunks
     
     def _delete_document_chunks(self, doc_id: str):

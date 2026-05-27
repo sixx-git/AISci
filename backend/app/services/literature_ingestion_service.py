@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from app.models import Document, SourceType, ImportStatus, LibraryScope, DocumentStatus
 from app.services.literature_sources.arxiv_source import ArxivSource, ArxivPaper
 from app.services.literature_sources.bibtex_importer import BibTexImporter, BibTexParseError, parse_bibtex
+from app.services.document_parser import DocumentParser
+from app.services.vector_store import build_vector_index
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -476,6 +478,178 @@ class LiteratureIngestionService:
 
         return None
 
+    # ==================== 统一 PDF 解析 ====================
+
+    def parse_document(
+        self,
+        project_id: str,
+        document_id: str,
+    ) -> Dict[str, Any]:
+        """
+        统一 PDF 解析方法 —— 适用于任意来源的 Document（上传/arXiv/BibTeX 等）。
+
+        流程：
+          1. 查找 Document，验证 PDF 文件存在
+          2. 调用 DocumentParser 解析 PDF，生成 Chunk
+          3. 删除该文档的旧 Chunk（幂等重解析）
+          4. 更新 import_status = parsed，status = processed
+
+        Args:
+            project_id: 项目 ID
+            document_id: 文献 Document ID
+
+        Returns:
+            {"document_id": str, "title": str, "chunk_count": int, "status": "parsed"}
+
+        Raises:
+            ValueError: 文档不存在 / PDF 文件缺失
+            RuntimeError: 解析失败
+        """
+        # 1. 查找文档
+        doc = (
+            self.db.query(Document)
+            .filter(Document.id == document_id, Document.project_id == project_id)
+            .first()
+        )
+        if not doc:
+            raise ValueError(f"文献不存在: {document_id}")
+
+        # 2. 验证 PDF 文件
+        if not doc.file_path or not os.path.exists(doc.file_path):
+            raise ValueError(
+                f"PDF 文件未下载或不存在: {doc.file_path or '(空)'}。"
+                f"如果是 arXiv 文献，请先调用 download-pdf 下载。"
+            )
+        if not doc.file_path.lower().endswith(".pdf"):
+            raise ValueError(f"文件不是 PDF 格式: {doc.file_path}")
+
+        # 3. 删除旧切片（幂等重解析）
+        self._delete_document_chunks(document_id)
+
+        # 4. 解析
+        logger.info(f"开始解析 PDF (source={doc.source_type}): {doc.file_path}")
+        doc.status = DocumentStatus.PROCESSING
+        self.db.flush()
+
+        try:
+            parser = DocumentParser(self.db)
+            doc, chunks = parser.parse_file(
+                file_path=doc.file_path,
+                project_id=project_id,
+                original_filename=doc.filename or f"{document_id}.pdf",
+                document=doc,
+            )
+
+            doc.import_status = ImportStatus.PARSED
+            doc.status = DocumentStatus.PROCESSED
+            doc.chunk_count = len(chunks)
+            self.db.commit()
+            self.db.refresh(doc)
+
+            logger.info(f"PDF 解析完成: {document_id} -> {len(chunks)} chunks, status={doc.import_status.value}")
+
+        except Exception as e:
+            doc.import_status = ImportStatus.FAILED
+            doc.status = DocumentStatus.FAILED
+            doc.error_message = f"解析失败: {str(e)}"
+            self.db.commit()
+            raise RuntimeError(f"PDF 解析失败: {e}") from e
+
+        return {
+            "document_id": document_id,
+            "title": doc.title or doc.filename,
+            "chunk_count": len(chunks),
+            "status": doc.import_status.value,
+            "source_type": doc.source_type.value if doc.source_type else None,
+        }
+
+    # ==================== 统一向量索引 ====================
+
+    def index_document(
+        self,
+        project_id: str,
+        document_id: str,
+    ) -> Dict[str, Any]:
+        """
+        统一向量索引方法 —— 构建项目级 FAISS 索引。
+
+        索引范围：project_id 下所有状态为 processed 的 Chunk。
+        单篇文献调用此方法会触发整个项目的增量索引，
+        确保 LiteratureMiningAgent 能检索到所有来源的文献。
+
+        Args:
+            project_id: 项目 ID
+            document_id: 文献 Document ID（用于定位并更新 import_status）
+
+        Returns:
+            {"document_id": str, "index_added": int, "status": "indexed"}
+
+        Raises:
+            ValueError: 文档不存在
+            RuntimeError: 索引失败（不影响已有解析结果）
+        """
+        doc = (
+            self.db.query(Document)
+            .filter(Document.id == document_id, Document.project_id == project_id)
+            .first()
+        )
+        if not doc:
+            raise ValueError(f"文献不存在: {document_id}")
+
+        logger.info(f"开始构建向量索引: project={project_id}, doc={document_id}")
+        try:
+            index_added = build_vector_index(project_id, db=self.db)
+
+            doc.import_status = ImportStatus.INDEXED
+            self.db.commit()
+
+            logger.info(f"向量索引完成: project={project_id}, added={index_added}")
+
+        except Exception as e:
+            logger.error(f"向量索引失败: {e}")
+            doc.error_message = (doc.error_message or "") + f"; 索引失败: {str(e)}"
+            self.db.commit()
+            raise RuntimeError(f"向量索引失败: {e}") from e
+
+        return {
+            "document_id": document_id,
+            "index_added": index_added,
+            "status": doc.import_status.value,
+        }
+
+    # ==================== 组合方法：解析 + 索引 ====================
+
+    def parse_and_index(
+        self,
+        project_id: str,
+        document_id: str,
+        auto_index: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        解析 PDF 并（可选）构建向量索引。
+
+        等价于 parse_document() + (if auto_index) index_document()。
+
+        Args:
+            project_id: 项目 ID
+            document_id: 文献 Document ID
+            auto_index: 解析后是否自动构建向量索引
+        """
+        parse_result = self.parse_document(project_id=project_id, document_id=document_id)
+
+        index_result = None
+        if auto_index:
+            index_result = self.index_document(project_id=project_id, document_id=document_id)
+
+        return {
+            "document_id": document_id,
+            "title": parse_result["title"],
+            "chunk_count": parse_result["chunk_count"],
+            "status": index_result["status"] if index_result else parse_result["status"],
+            "index_added": index_result["index_added"] if index_result else None,
+            "source_type": parse_result.get("source_type"),
+        }
+
     # ==================== arXiv PDF 下载 ====================
 
     def download_arxiv_pdf(
@@ -503,10 +677,9 @@ class LiteratureIngestionService:
             }
 
         Raises:
-            ValueError: 文档不存在 / 不是 arXiv 来源 / 无 PDF URL
+            ValueError: 文档不存在 / 无 PDF URL
             RuntimeError: 下载失败
         """
-        # 1. 查找文档
         doc = (
             self.db.query(Document)
             .filter(Document.id == document_id, Document.project_id == project_id)
@@ -515,14 +688,12 @@ class LiteratureIngestionService:
         if not doc:
             raise ValueError(f"文献不存在: {document_id}")
 
-        # 2. 检查 PDF URL
         pdf_url = doc.pdf_url or ""
         if not pdf_url:
             raise ValueError(f"该文献无 PDF 下载链接（pdf_url 为空）")
         if not pdf_url.startswith(("http://", "https://")):
             raise ValueError(f"无效的 PDF URL: {pdf_url}")
 
-        # 3. 准备本地存储路径
         settings = get_settings()
         upload_dir = settings.UPLOAD_DIR
         storage_dir = os.path.join(upload_dir, project_id, "external", "arxiv")
@@ -530,7 +701,6 @@ class LiteratureIngestionService:
 
         pdf_path = os.path.join(storage_dir, f"{document_id}.pdf")
 
-        # 4. 下载 PDF
         logger.info(f"开始下载 arXiv PDF: {pdf_url} -> {pdf_path}")
         try:
             headers = {
@@ -539,7 +709,6 @@ class LiteratureIngestionService:
             resp = requests.get(pdf_url, headers=headers, timeout=60, stream=True)
             resp.raise_for_status()
 
-            # 检查 Content-Type（arXiv 可能返回 HTML 错误页而非 PDF）
             content_type = resp.headers.get("Content-Type", "")
             if "text/html" in content_type and b"<html" in resp.content[:200].lower():
                 raise RuntimeError("arXiv 返回了 HTML 页面而非 PDF，可能是频率限制，请稍后重试")
@@ -556,7 +725,6 @@ class LiteratureIngestionService:
         except requests.RequestException as e:
             raise RuntimeError(f"下载 PDF 失败: {e}")
 
-        # 5. 更新 Document
         doc.file_path = pdf_path
         doc.file_size = file_size
         doc.file_type = "pdf"
@@ -577,119 +745,11 @@ class LiteratureIngestionService:
             "status": doc.import_status.value,
         }
 
-    # ==================== PDF 解析 + 向量索引 ====================
+    # ==================== 内部辅助 ====================
 
-    def parse_and_index_document(
-        self,
-        project_id: str,
-        document_id: str,
-        auto_index: bool = True,
-    ) -> Dict[str, Any]:
-        """
-        解析文献 PDF 并构建向量索引
+    def _delete_document_chunks(self, document_id: str) -> None:
+        """删除文档的所有切片（用于幂等重解析）"""
+        from app.models import Chunk
 
-        流程：
-          1. 查找 Document，验证 PDF 已下载
-          2. 调用 DocumentParser 解析 PDF，生成 Chunk
-          3. 更新 import_status = parsed
-          4. 若 auto_index=True，调用 VectorStore.build_index() 增量添加索引
-          5. 更新 import_status = indexed
-
-        Args:
-            project_id: 项目 ID
-            document_id: 文献 Document ID
-            auto_index: 是否自动构建向量索引
-
-        Returns:
-            {
-                "document_id": str,
-                "title": str,
-                "chunk_count": int,
-                "status": "indexed" | "parsed",
-                "index_added": int | None,
-            }
-
-        Raises:
-            ValueError: 文档不存在 / PDF 未下载
-            RuntimeError: 解析或索引失败
-        """
-        # 1. 查找文档
-        doc = (
-            self.db.query(Document)
-            .filter(Document.id == document_id, Document.project_id == project_id)
-            .first()
-        )
-        if not doc:
-            raise ValueError(f"文献不存在: {document_id}")
-
-        # 2. 验证 PDF 是否已下载
-        if not doc.file_path or not os.path.exists(doc.file_path):
-            raise ValueError(f"PDF 文件未下载或不存在，请先调用 download-pdf 下载")
-        if not doc.file_path.lower().endswith(".pdf"):
-            raise ValueError(f"文件不是 PDF 格式: {doc.file_path}")
-
-        # 3. 解析 PDF，生成 Chunk
-        logger.info(f"开始解析 PDF: {doc.file_path}")
-        doc.import_status = ImportStatus.PARSED  # 默认先标 parsed（解析完成后可能改成 indexed）
-        doc.status = DocumentStatus.PROCESSING
+        self.db.query(Chunk).filter(Chunk.document_id == document_id).delete()
         self.db.flush()
-
-        try:
-            from app.services.document_parser import DocumentParser
-
-            parser = DocumentParser(self.db)
-            doc, chunks = parser.parse_file(
-                file_path=doc.file_path,
-                project_id=project_id,
-                original_filename=doc.filename or f"{document_id}.pdf",
-                document=doc,  # 复用已有 Document，不创建新的
-            )
-
-            # 更新 import_status
-            doc.import_status = ImportStatus.PARSED
-            doc.status = DocumentStatus.PROCESSED
-            doc.chunk_count = len(chunks)
-            self.db.commit()
-            self.db.refresh(doc)
-
-            logger.info(f"PDF 解析完成: {document_id} -> {len(chunks)} chunks")
-
-        except Exception as e:
-            doc.import_status = ImportStatus.FAILED
-            doc.status = DocumentStatus.FAILED
-            doc.error_message = f"解析失败: {str(e)}"
-            self.db.commit()
-            raise RuntimeError(f"PDF 解析失败: {e}") from e
-
-        # 4. 构建向量索引
-        index_added = None
-        if auto_index and chunks:
-            logger.info(f"开始构建向量索引: project={project_id}")
-            try:
-                from app.services.vector_store import build_vector_index
-
-                # build_vector_index 索引项目下所有已 processed 的 chunk
-                # （包括刚解析的 + 之前已有的）
-                index_added = build_vector_index(project_id, db=self.db)
-
-                # 更新 import_status
-                doc.import_status = ImportStatus.INDEXED
-                self.db.commit()
-
-                logger.info(f"向量索引完成: project={project_id}, added={index_added}")
-
-            except Exception as e:
-                logger.error(f"向量索引失败（文献已解析）: {e}")
-                # 索引失败不影响解析结果，保留 parsed 状态
-                doc.error_message = (doc.error_message or "") + f"; 索引失败: {str(e)}"
-                self.db.commit()
-                raise RuntimeError(f"PDF 解析成功但索引失败: {e}") from e
-
-        result = {
-            "document_id": document_id,
-            "title": doc.title or doc.filename,
-            "chunk_count": doc.chunk_count or 0,
-            "status": doc.import_status.value,
-            "index_added": index_added,
-        }
-        return result
