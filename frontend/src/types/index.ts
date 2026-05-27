@@ -332,14 +332,20 @@ export interface ReportSection {
   note?: string;
 }
 
-/** 合规性检查结果（12 项挑战杯字段） */
+/** 合规性检查结果（挑战杯 XH-202619 16 项字段） */
 export interface ComplianceCheck {
-  total: number;
+  total_items?: number;
   completed: number;
   missing: number;
   human_review: number;
   references_verified: number;
   references_suspicious: number;
+  references_replaced?: boolean;
+  /** ── 赛题专属指标 ── */
+  evidence_fact_count: number;
+  hypothesis_with_evidence_count: number;
+  has_actual_or_simulated_result: boolean;
+  result_type?: string;
   items: ReportSection[];
 }
 
@@ -354,6 +360,8 @@ export interface ReportData {
   /** 下载链接 */
   mdDownloadUrl?: string;
   pdfDownloadUrl?: string;
+  /** PDF 导出是否成功（后端返回） */
+  pdfSuccess?: boolean;
 }
 
 export interface ReportGenerationResult {
