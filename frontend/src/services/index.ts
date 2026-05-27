@@ -3,3 +3,4 @@ export { documentService } from './documentService';
 export { pipelineService } from './pipelineService';
 export { reportService } from './reportService';
 export { vectorService } from './vectorService';
+export { literatureService } from './literatureService';

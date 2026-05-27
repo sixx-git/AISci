@@ -4,15 +4,17 @@ import {
   Database, Eye, Sparkles, Trash2,
   FileSearch, Loader2, CheckCircle, Clock, AlertCircle, Plus,
   Layers, BrainCircuit,
-  XCircle, ArrowUp,
+  XCircle, ArrowUp, Search, Download, ExternalLink,
+  ClipboardList, Info, FileCode,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
-import { documentService, vectorService } from '@/services';
+import { documentService, vectorService, literatureService } from '@/services';
 import type { DocumentInfo } from '@/services/documentService';
+import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult } from '@/services/literatureService';
 
 // ============ MIME / 扩展名 → 文献类型 ============
 function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
@@ -25,16 +27,11 @@ function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
 // ============ 后端 parse_status → LiteratureItem.parseStatus ============
 function mapStatus(status: DocumentInfo['status']): LiteratureItem['parseStatus'] {
   switch (status) {
-    case 'uploaded':
-      return 'pending';
-    case 'processing':
-      return 'parsing';
-    case 'processed':
-      return 'completed';
-    case 'failed':
-      return 'error';
-    default:
-      return 'pending';
+    case 'uploaded': return 'pending';
+    case 'processing': return 'parsing';
+    case 'processed': return 'completed';
+    case 'failed': return 'error';
+    default: return 'pending';
   }
 }
 
@@ -77,6 +74,24 @@ const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; 
   error:     { label: '失败',   className: 'bg-red-500/15 text-red-400 border-red-500/25' },
 };
 
+// ============ source_type 标签映射 ============
+const sourceTypeConfig: Record<string, { label: string; className: string }> = {
+  upload:  { label: 'PDF上传', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
+  arxiv:   { label: 'arXiv',   className: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25' },
+  bibtex:  { label: 'BibTeX',  className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
+  manual:  { label: '手动',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
+};
+
+// ============ import_status 标签映射 ============
+const importStatusConfig: Record<string, { label: string; className: string }> = {
+  discovered:      { label: '已发现', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' },
+  imported:        { label: '已导入', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
+  pdf_downloaded:  { label: 'PDF已下载', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
+  parsed:          { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
+  indexed:         { label: '已索引', className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
+  failed:          { label: '失败', className: 'bg-red-500/15 text-red-400 border-red-500/25' },
+};
+
 // ============ 状态消息 ============
 interface StatusMsg {
   type: 'loading' | 'success' | 'error';
@@ -112,14 +127,38 @@ interface LiteratureLibraryProps {
 }
 
 export function LiteratureLibrary({ projectId = 'default', compact: _compact = false }: LiteratureLibraryProps) {
+  // ========== Tab 状态 ==========
+  const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'bibtex' | 'library'>('upload');
+
+  // ========== 上传 PDF 状态 ==========
   const [literature, setLiterature] = useState<LiteratureItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [buildingIndex, setBuildingIndex] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ========== arXiv 检索状态 ==========
+  const [arxivQuery, setArxivQuery] = useState('');
+  const [arxivMaxResults, setArxivMaxResults] = useState(10);
+  const [arxivResults, setArxivResults] = useState<ArxivPaper[]>([]);
+  const [arxivSearching, setArxivSearching] = useState(false);
+  const [arxivImporting, setArxivImporting] = useState<Record<string, boolean>>({});
+  const [arxivImported, setArxivImported] = useState<Record<string, boolean>>({});
+  const [arxivSearched, setArxivSearched] = useState(false);
+
+  // ========== 已入库文献状态 ==========
+  const [importedDocs, setImportedDocs] = useState<ImportedDocument[]>([]);
+  const [importedLoading, setImportedLoading] = useState(false);
+
+  // ========== BibTeX 导入状态 ==========
+  const [bibtexText, setBibtexText] = useState('');
+  const [bibtexImporting, setBibtexImporting] = useState(false);
+  const [bibtexResult, setBibtexResult] = useState<ImportBibtexResult | null>(null);
+
+  // ========== 全局状态消息 ==========
+  const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
 
   const stats: LiteratureStats = useMemo(() => computeStats(literature), [literature]);
 
@@ -140,9 +179,25 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     }
   }, [projectId]);
 
+  const loadImportedDocs = useCallback(async () => {
+    if (!projectId) return;
+    setImportedLoading(true);
+    try {
+      const res = await literatureService.getProjectLiterature(projectId);
+      if (res.code === 200) {
+        setImportedDocs(res.data?.items ?? []);
+      }
+    } catch (err: any) {
+      console.error('获取已入库文献失败:', err);
+    } finally {
+      setImportedLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     loadDocuments();
-  }, [loadDocuments]);
+    loadImportedDocs();
+  }, [loadDocuments, loadImportedDocs]);
 
   // ========== 显示状态消息 ==========
   const showStatus = useCallback((msg: StatusMsg) => {
@@ -154,11 +209,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // 重置 input 以便重复选择同一文件
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    // 校验文件类型
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       showStatus({ type: 'error', text: '仅支持 PDF 文件' });
       return;
@@ -172,11 +224,9 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       if (res.code === 200) {
         const uploadedDoc = res.data?.document;
         const chunks = res.data?.chunks_count ?? 0;
-        showStatus({
-          type: 'success',
-          text: `"${uploadedDoc?.filename ?? file.name}" 上传成功，已生成 ${chunks} 个切片`,
-        });
+        showStatus({ type: 'success', text: `"${uploadedDoc?.filename ?? file.name}" 上传成功，已生成 ${chunks} 个切片` });
         await loadDocuments();
+        await loadImportedDocs();
       } else {
         showStatus({ type: 'error', text: res.message || '上传失败' });
       }
@@ -186,7 +236,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     } finally {
       setUploading(false);
     }
-  }, [projectId, loadDocuments, showStatus]);
+  }, [projectId, loadDocuments, loadImportedDocs, showStatus]);
 
   // ========== 删除 ==========
   const handleDelete = useCallback(async (id: string) => {
@@ -196,6 +246,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       if (res.code === 200) {
         showStatus({ type: 'success', text: '文献已删除' });
         await loadDocuments();
+        await loadImportedDocs();
       } else {
         showStatus({ type: 'error', text: res.message || '删除失败' });
       }
@@ -204,7 +255,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     } finally {
       setDeleting(null);
     }
-  }, [loadDocuments, showStatus]);
+  }, [loadDocuments, loadImportedDocs, showStatus]);
 
   // ========== 构建向量索引 ==========
   const handleBuildIndex = useCallback(async () => {
@@ -215,10 +266,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       if (res.code === 200) {
         const added = (res.data as any)?.added_count ?? 0;
         const total = (res.data as any)?.total_count ?? added;
-        showStatus({
-          type: 'success',
-          text: `向量索引构建成功，新增 ${added} 条，共 ${total} 条切片`,
-        });
+        showStatus({ type: 'success', text: `向量索引构建成功，新增 ${added} 条，共 ${total} 条切片` });
       } else {
         showStatus({ type: 'error', text: res.message || '构建索引失败' });
       }
@@ -230,320 +278,827 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     }
   }, [projectId, showStatus]);
 
-  // ========== 搜索 ==========
+  // ========== arXiv 搜索 ==========
+  const handleArxivSearch = useCallback(async () => {
+    const q = arxivQuery.trim();
+    if (!q) return;
+
+    setArxivSearching(true);
+    setArxivSearched(true);
+    setArxivResults([]);
+
+    try {
+      const res = await literatureService.searchArxiv(q, arxivMaxResults);
+      if (res.code === 200) {
+        setArxivResults(res.data?.results ?? []);
+        if (!res.data?.results?.length) {
+          showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文' });
+        }
+      } else {
+        showStatus({ type: 'error', text: res.message || '搜索失败' });
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.detail || err.message;
+      showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}` });
+    } finally {
+      setArxivSearching(false);
+    }
+  }, [arxivQuery, arxivMaxResults, showStatus]);
+
+  // ========== arXiv 导入 ==========
+  const handleImportArxiv = useCallback(async (paper: ArxivPaper) => {
+    setArxivImporting((prev) => ({ ...prev, [paper.external_id]: true }));
+
+    try {
+      const res = await literatureService.importArxiv(projectId, [paper]);
+      if (res.code === 200) {
+        const result = res.data as ImportArxivResult;
+        if (result.imported > 0) {
+          setArxivImported((prev) => ({ ...prev, [paper.external_id]: true }));
+          showStatus({ type: 'success', text: `"${paper.title.slice(0, 60)}..." 已导入文献库` });
+          await loadImportedDocs();
+        } else if (result.duplicates > 0) {
+          setArxivImported((prev) => ({ ...prev, [paper.external_id]: true }));
+          showStatus({ type: 'success', text: '该文献已存在，跳过导入' });
+        } else {
+          showStatus({ type: 'error', text: '导入失败' });
+        }
+      } else {
+        showStatus({ type: 'error', text: res.message || '导入失败' });
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `导入失败: ${detail}` });
+    } finally {
+      setArxivImporting((prev) => ({ ...prev, [paper.external_id]: false }));
+    }
+  }, [projectId, loadImportedDocs, showStatus]);
+
+  // ========== BibTeX 导入 ==========
+  const handleImportBibtex = useCallback(async () => {
+    const text = bibtexText.trim();
+    if (!text) return;
+
+    setBibtexImporting(true);
+    setBibtexResult(null);
+
+    try {
+      const res = await literatureService.importBibtex(projectId, text, 'google_scholar_import');
+      const result = res.data as ImportBibtexResult;
+      setBibtexResult(result);
+
+      if (result.failed > 0) {
+        showStatus({ type: 'error', text: `导入完成，但有 ${result.failed} 条失败` });
+      } else {
+        showStatus({
+          type: 'success',
+          text: `BibTeX 导入完成: 新增 ${result.imported}，重复 ${result.duplicates}`,
+        });
+      }
+      await loadImportedDocs();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `BibTeX 导入失败: ${detail}` });
+    } finally {
+      setBibtexImporting(false);
+    }
+  }, [bibtexText, projectId, loadImportedDocs, showStatus]);
+
+  // ========== 搜索（已有上传文献） ==========
   const filtered = useMemo(() => {
     if (!search.trim()) return literature;
     const kw = search.trim().toLowerCase();
     return literature.filter(
-      (l) =>
-        l.title.toLowerCase().includes(kw) ||
-        l.authors.toLowerCase().includes(kw),
+      (l) => l.title.toLowerCase().includes(kw) || l.authors.toLowerCase().includes(kw),
     );
   }, [literature, search]);
 
-  // ========== 空状态 ==========
+  // ========== 截断文本 ==========
+  const truncate = (text: string, maxLen: number) =>
+    text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
+
+  // ========== Tab 配置 ==========
+  const tabs = [
+    { key: 'upload' as const, label: '上传 PDF', icon: Upload },
+    { key: 'arxiv' as const, label: 'arXiv 检索', icon: Search },
+    { key: 'bibtex' as const, label: 'BibTeX 导入', icon: ClipboardList },
+    { key: 'library' as const, label: '已入库文献', icon: Database },
+  ];
+
+  // ============ 空状态（首次加载且无数据） ============
   if (!loading && literature.length === 0) {
     return (
       <div className="max-w-7xl mx-auto">
-        {/* 状态提示 */}
         <StatusBar msg={statusMsg} />
 
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
-          <p className="text-gray-400">
-            上传论文 PDF 后，系统将进行文本解析、文献切片、向量索引构建与科学事实提取。
-          </p>
+          <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
         </div>
 
-        <Card className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-5">
-            <BookOpen className="w-8 h-8 text-gray-500" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-300 mb-2">还没有上传科研文献</h3>
-          <p className="text-gray-500 max-w-md mx-auto mb-6 text-sm">
-            上传论文 PDF 后，系统将自动完成文本解析、文献切片、向量索引构建和科学事实提取。
-          </p>
-          {/* 隐藏文件选择器 + 按钮触发 */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            onChange={handlePdfUpload}
-            className="hidden"
-          />
-          <Button
-            icon={uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {uploading ? '解析中…' : '上传第一篇论文'}
-          </Button>
-        </Card>
+        {/* Tabs */}
+        <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as typeof activeTab)} />
+
+        <div className="mt-6">
+          {activeTab === 'upload' && <UploadTabEmpty fileInputRef={fileInputRef} uploading={uploading} onUpload={handlePdfUpload} />}
+          {activeTab === 'arxiv' && (
+            <ArxivTabContent
+              query={arxivQuery}
+              onQueryChange={setArxivQuery}
+              maxResults={arxivMaxResults}
+              onMaxResultsChange={setArxivMaxResults}
+              onSearch={handleArxivSearch}
+              searching={arxivSearching}
+              results={arxivResults}
+              searched={arxivSearched}
+              importing={arxivImporting}
+              imported={arxivImported}
+              onImport={handleImportArxiv}
+              truncate={truncate}
+            />
+          )}
+          {activeTab === 'library' && <LibraryTabEmpty />}
+          {activeTab === 'bibtex' && (
+            <BibTexTabContent
+              text={bibtexText}
+              onTextChange={setBibtexText}
+              onImport={handleImportBibtex}
+              importing={bibtexImporting}
+              result={bibtexResult}
+            />
+          )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 状态提示 */}
       <StatusBar msg={statusMsg} />
 
       {/* ========== 头部 ========== */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
-        <p className="text-gray-400">
-          上传论文 PDF 后，系统将进行文本解析、文献切片、向量索引构建与科学事实提取。
-        </p>
+        <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
       </div>
 
-      {/* ========== 上传区域 ========== */}
-      <Card className="mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <FileSearch className="w-4 h-4 text-primary-400" />
-          <h3 className="text-sm font-semibold text-gray-200">数据导入与处理</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* PDF 上传 */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            onChange={handlePdfUpload}
-            className="hidden"
-          />
-          <button
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-              uploading
-                ? 'border-primary-500 bg-primary-500/10'
-                : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
-            )}
-          >
-            <div className={cn(
-              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-              uploading ? 'bg-primary-500/25' : 'bg-gray-700',
-            )}>
-              {uploading ? (
-                <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4 text-gray-300" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-200">
-                {uploading ? '解析中…' : '上传 PDF'}
+      {/* ========== Tabs ========== */}
+      <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as typeof activeTab)} />
+
+      {/* ========== Tab 内容 ========== */}
+      <div className="mt-6">
+        {/* TAB 1: 上传 PDF */}
+        {activeTab === 'upload' && (
+          <div>
+            {/* 上传区域 */}
+            <Card className="mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileSearch className="w-4 h-4 text-primary-400" />
+                <h3 className="text-sm font-semibold text-gray-200">数据导入与处理</h3>
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">上传论文 PDF，自动解析文本</div>
-            </div>
-          </button>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input ref={fileInputRef} type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" />
+                <button
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
+                    uploading ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+                  )}
+                >
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-primary-500/25' : 'bg-gray-700')}>
+                    {uploading ? <Loader2 className="w-4 h-4 text-primary-400 animate-spin" /> : <Upload className="w-4 h-4 text-gray-300" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-200">{uploading ? '解析中…' : '上传 PDF'}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">上传论文 PDF，自动解析文本</div>
+                  </div>
+                </button>
 
-          {/* 占位 */}
-          <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
-            <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
-              <ArrowUp className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-500">导入 CSV 数据</div>
-              <div className="text-xs text-gray-600 mt-0.5">导入结构化科研数据</div>
-            </div>
-          </button>
+                <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
+                  <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0"><ArrowUp className="w-4 h-4 text-gray-400" /></div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-500">导入 CSV 数据</div>
+                    <div className="text-xs text-gray-600 mt-0.5">导入结构化科研数据</div>
+                  </div>
+                </button>
 
-          <button
-            disabled={buildingIndex}
-            onClick={handleBuildIndex}
-            className={cn(
-              'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-              buildingIndex
-                ? 'border-primary-500 bg-primary-500/10'
-                : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
-            )}
-          >
-            <div className={cn(
-              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-              buildingIndex ? 'bg-primary-500/25' : 'bg-gray-700',
-            )}>
-              {buildingIndex ? (
-                <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
-              ) : (
-                <BrainCircuit className="w-4 h-4 text-gray-300" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-200">
-                {buildingIndex ? '构建中…' : '构建向量索引'}
+                <button
+                  disabled={buildingIndex}
+                  onClick={handleBuildIndex}
+                  className={cn(
+                    'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
+                    buildingIndex ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+                  )}
+                >
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-primary-500/25' : 'bg-gray-700')}>
+                    {buildingIndex ? <Loader2 className="w-4 h-4 text-primary-400 animate-spin" /> : <BrainCircuit className="w-4 h-4 text-gray-300" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-200">{buildingIndex ? '构建中…' : '构建向量索引'}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">为文献构建语义检索索引</div>
+                  </div>
+                </button>
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">为文献构建语义检索索引</div>
+            </Card>
+
+            {/* 统计卡片 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatCard label="已上传文献" value={stats.uploaded} icon={<Database className="w-5 h-5" />} colorClass="text-blue-400" />
+              <StatCard label="已解析文献" value={stats.parsed} icon={<FileText className="w-5 h-5" />} colorClass="text-green-400" />
+              <StatCard label="知识片段" value={stats.snippets} icon={<Layers className="w-5 h-5" />} colorClass="text-purple-400" />
+              <StatCard label="已提取事实" value={stats.facts} icon={<Sparkles className="w-5 h-5" />} colorClass="text-amber-400" />
             </div>
-          </button>
-        </div>
-      </Card>
 
-      {/* ========== 统计卡片 ========== */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="已上传文献" value={stats.uploaded} icon={<Database className="w-5 h-5" />} colorClass="text-blue-400" />
-        <StatCard label="已解析文献" value={stats.parsed} icon={<FileText className="w-5 h-5" />} colorClass="text-green-400" />
-        <StatCard label="知识片段" value={stats.snippets} icon={<Layers className="w-5 h-5" />} colorClass="text-purple-400" />
-        <StatCard label="已提取事实" value={stats.facts} icon={<Sparkles className="w-5 h-5" />} colorClass="text-amber-400" />
-      </div>
+            {/* 搜索 + 结果 */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <FileSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text" placeholder="搜索论文标题或作者…" value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+                />
+              </div>
+              <span className="text-sm text-gray-500">{loading ? '加载中…' : `共 ${filtered.length} 篇文献`}</span>
+            </div>
 
-      {/* ========== 搜索 + 结果数 ========== */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
-          <FileSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="搜索论文标题或作者…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
-          />
-        </div>
-        <span className="text-sm text-gray-500">
-          {loading ? '加载中…' : `共 ${filtered.length} 篇文献`}
-        </span>
-      </div>
-
-      {/* ========== 文献列表表格 ========== */}
-      <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-dark-700 bg-dark-800/50">
-                {TABLE_COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    className={cn(
-                      'px-4 py-3 font-medium text-gray-400 text-xs whitespace-nowrap',
-                      col.className,
-                    )}
-                  >
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => {
-                const tConf = typeConfig[item.type];
-                const psConf = parseStatusConfig[item.parseStatus];
-                const isDeleting = deleting === item.id;
-                return (
-                  <tr
-                    key={item.id}
-                    className={cn(
-                      'border-b border-dark-800 hover:bg-dark-800/30 transition-colors',
-                      isDeleting && 'opacity-50',
-                    )}
-                  >
-                    {/* 标题 */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded bg-primary-500/15 flex items-center justify-center shrink-0">
-                          <FileText className="w-3.5 h-3.5 text-primary-400" />
-                        </div>
-                        <span className="text-white text-sm font-medium line-clamp-1">
-                          {item.title}
-                        </span>
-                      </div>
-                    </td>
-                    {/* 作者 */}
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                      {item.authors}
-                    </td>
-                    {/* 年份 */}
-                    <td className="px-4 py-3 text-center text-gray-300 whitespace-nowrap">
-                      {item.year}
-                    </td>
-                    {/* 类型 */}
-                    <td className="px-4 py-3 text-center">
-                      <span className={cn(
-                        'inline-block px-2 py-0.5 rounded text-[11px] font-medium border',
-                        tConf.className,
-                      )}>
-                        {tConf.label}
-                      </span>
-                    </td>
-                    {/* 解析状态 */}
-                    <td className="px-4 py-3 text-center">
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border',
-                        psConf.className,
-                      )}>
-                        {item.parseStatus === 'parsing' && (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        )}
-                        {item.parseStatus === 'completed' && (
-                          <CheckCircle className="w-3 h-3" />
-                        )}
-                        {item.parseStatus === 'pending' && (
-                          <Clock className="w-3 h-3" />
-                        )}
-                        {item.parseStatus === 'error' && (
-                          <AlertCircle className="w-3 h-3" />
-                        )}
-                        {psConf.label}
-                      </span>
-                    </td>
-                    {/* 切片数量 */}
-                    <td className="px-4 py-3 text-center text-gray-300">
-                      {item.snippetCount}
-                    </td>
-                    {/* 事实数量 */}
-                    <td className="px-4 py-3 text-center">
-                      <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-gray-600'}>
-                        {item.factCount}
-                      </span>
-                    </td>
-                    {/* 操作 */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          title="查看详情"
-                          className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          title="提取事实"
-                          disabled
-                          className="p-1.5 rounded-md text-gray-600 cursor-not-allowed transition-colors"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          title="删除"
-                          disabled={isDeleting}
-                          onClick={() => handleDelete(item.id)}
-                          className={cn(
-                            'p-1.5 rounded-md transition-colors',
-                            isDeleting
-                              ? 'text-gray-600 cursor-not-allowed'
-                              : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10',
-                          )}
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {filtered.length === 0 && !loading && (
-          <div className="py-12 text-center text-gray-500 text-sm">
-            没有匹配的文献
+            {/* 文献表格 */}
+            <LiteratureTable
+              items={filtered}
+              loading={loading}
+              deleting={deleting}
+              onDelete={handleDelete}
+            />
           </div>
         )}
+
+        {/* TAB 2: arXiv 检索 */}
+        {activeTab === 'arxiv' && (
+          <ArxivTabContent
+            query={arxivQuery}
+            onQueryChange={setArxivQuery}
+            maxResults={arxivMaxResults}
+            onMaxResultsChange={setArxivMaxResults}
+            onSearch={handleArxivSearch}
+            searching={arxivSearching}
+            results={arxivResults}
+            searched={arxivSearched}
+            importing={arxivImporting}
+            imported={arxivImported}
+            onImport={handleImportArxiv}
+            truncate={truncate}
+          />
+        )}
+
+        {/* TAB 3: 已入库文献 */}
+        {activeTab === 'library' && (
+          <LibraryTabContent
+            docs={importedDocs}
+            loading={importedLoading}
+          />
+        )}
+
+        {/* TAB 4: BibTeX 导入 */}
+        {activeTab === 'bibtex' && (
+          <BibTexTabContent
+            text={bibtexText}
+            onTextChange={setBibtexText}
+            onImport={handleImportBibtex}
+            importing={bibtexImporting}
+            result={bibtexResult}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== 子组件 ====================
+
+// ---------- TabBar ----------
+function TabBar({ tabs, active, onChange }: {
+  tabs: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }>;
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <div className="flex gap-1 border-b border-gray-700">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const isActive = active === tab.key;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+              isActive
+                ? 'border-primary-500 text-primary-400'
+                : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600',
+            )}
+          >
+            <Icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- 空状态：上传 PDF ----------
+function UploadTabEmpty({ fileInputRef, uploading, onUpload }: {
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  uploading: boolean;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <Card className="text-center py-16">
+      <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-5">
+        <BookOpen className="w-8 h-8 text-gray-500" />
+      </div>
+      <h3 className="text-lg font-medium text-gray-300 mb-2">还没有上传科研文献</h3>
+      <p className="text-gray-500 max-w-md mx-auto mb-6 text-sm">
+        上传论文 PDF 后，系统将自动完成文本解析、文献切片、向量索引构建和科学事实提取。
+      </p>
+      <input ref={fileInputRef} type="file" accept=".pdf" onChange={onUpload} className="hidden" />
+      <Button
+        icon={uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {uploading ? '解析中…' : '上传第一篇论文'}
+      </Button>
+    </Card>
+  );
+}
+
+// ---------- arXiv 检索 Tab 内容 ----------
+function ArxivTabContent({
+  query, onQueryChange, maxResults, onMaxResultsChange, onSearch, searching,
+  results, searched, importing, imported, onImport, truncate,
+}: {
+  query: string;
+  onQueryChange: (v: string) => void;
+  maxResults: number;
+  onMaxResultsChange: (v: number) => void;
+  onSearch: () => void;
+  searching: boolean;
+  results: ArxivPaper[];
+  searched: boolean;
+  importing: Record<string, boolean>;
+  imported: Record<string, boolean>;
+  onImport: (paper: ArxivPaper) => void;
+  truncate: (text: string, maxLen: number) => string;
+}) {
+  return (
+    <div>
+      {/* 搜索栏 */}
+      <Card className="mb-6">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">搜索关键词</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="输入研究主题或关键词，如: chain of thought reasoning…"
+                value={query}
+                onChange={(e) => onQueryChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+              />
+            </div>
+          </div>
+          <div className="w-28">
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">结果数</label>
+            <select
+              value={maxResults}
+              onChange={(e) => onMaxResultsChange(Number(e.target.value))}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <Button
+              icon={searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              disabled={searching || !query.trim()}
+              onClick={onSearch}
+            >
+              {searching ? '搜索中…' : '搜索 arXiv'}
+            </Button>
+          </div>
+        </div>
       </Card>
+
+      {/* 搜索结果 */}
+      {searching && (
+        <div className="py-16 text-center text-gray-500">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+          <p className="text-sm">正在搜索 arXiv…</p>
+        </div>
+      )}
+
+      {!searching && searched && results.length === 0 && (
+        <Card className="text-center py-12">
+          <Search className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">未找到匹配的 arXiv 论文，请尝试其他关键词</p>
+        </Card>
+      )}
+
+      {!searching && results.length > 0 && (
+        <div className="space-y-4">
+          <div className="text-sm text-gray-500 mb-2">共 {results.length} 条结果</div>
+          {results.map((paper) => {
+            const isImporting = importing[paper.external_id];
+            const isImported = imported[paper.external_id];
+
+            return (
+              <Card key={paper.external_id} className={cn(isImported && 'border-green-500/20')}>
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    {/* 标题 + arXiv ID */}
+                    <div className="flex items-start gap-2 mb-1">
+                      <h4 className="text-base font-semibold text-white leading-snug">{paper.title}</h4>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 font-mono">
+                        {paper.external_id}
+                      </span>
+                      {paper.categories && paper.categories.split(',').map((cat) => (
+                        <span key={cat} className="text-xs px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400 border border-gray-600">
+                          {cat.trim()}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* 作者 */}
+                    <p className="text-sm text-gray-400 mb-2">{truncate(paper.authors, 120)}</p>
+
+                    {/* 摘要 */}
+                    <p className="text-sm text-gray-500 leading-relaxed mb-3 line-clamp-3">
+                      {paper.abstract}
+                    </p>
+
+                    {/* 链接 */}
+                    <div className="flex items-center gap-3 text-xs">
+                      <a href={paper.source_url} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors">
+                        <ExternalLink className="w-3 h-3" /> arXiv 详情
+                      </a>
+                      {paper.pdf_url && (
+                        <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer"
+                           className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+                          <Download className="w-3 h-3" /> PDF
+                        </a>
+                      )}
+                      {paper.published_at && (
+                        <span className="text-gray-600">
+                          {paper.published_at.slice(0, 10)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 导入按钮 */}
+                  <div className="shrink-0">
+                    {isImported ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-sm font-medium border border-green-500/25">
+                        <CheckCircle className="w-3.5 h-3.5" /> 已导入
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        disabled={isImporting}
+                        onClick={() => onImport(paper)}
+                      >
+                        {isImporting ? '导入中…' : '导入文献库'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {!searching && !searched && (
+        <Card className="text-center py-12">
+          <Search className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">输入关键词后点击搜索，从 arXiv 检索论文元数据</p>
+          <p className="text-gray-600 text-xs mt-1">当前阶段仅导入元数据，不下载 PDF</p>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------- 空状态：已入库文献 ----------
+function LibraryTabEmpty() {
+  return (
+    <Card className="text-center py-16">
+      <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-5">
+        <Database className="w-8 h-8 text-gray-500" />
+      </div>
+      <h3 className="text-lg font-medium text-gray-300 mb-2">暂无已入库文献</h3>
+      <p className="text-gray-500 max-w-md mx-auto text-sm">
+        上传 PDF 或通过 arXiv 检索导入文献后，这里将显示所有已入库的文献。
+      </p>
+    </Card>
+  );
+}
+
+// ---------- 已入库文献 Tab 内容 ----------
+function LibraryTabContent({
+  docs, loading,
+}: {
+  docs: ImportedDocument[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="py-16 text-center text-gray-500">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+        <p className="text-sm">加载已入库文献…</p>
+      </div>
+    );
+  }
+
+  if (docs.length === 0) {
+    return <LibraryTabEmpty />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-gray-500 mb-2">共 {docs.length} 篇文献</div>
+      {docs.map((doc) => {
+        const sConf = sourceTypeConfig[doc.source_type ?? ''] ?? { label: doc.source_type ?? '—', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' };
+        const iConf = importStatusConfig[doc.import_status ?? ''] ?? { label: doc.import_status ?? '—', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' };
+
+        return (
+          <Card key={doc.id}>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="text-base font-semibold text-white leading-snug mb-1">
+                  {doc.title || '未命名文献'}
+                </h4>
+                <p className="text-sm text-gray-400 mb-2">{doc.authors}</p>
+
+                {doc.abstract && (
+                  <p className="text-sm text-gray-500 leading-relaxed mb-3 line-clamp-2">
+                    {doc.abstract}
+                  </p>
+                )}
+
+                {/* 标签行 */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className={cn('text-xs px-2 py-0.5 rounded border', sConf.className)}>{sConf.label}</span>
+                  <span className={cn('text-xs px-2 py-0.5 rounded border', iConf.className)}>{iConf.label}</span>
+                  {doc.external_id && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-700/50 text-gray-400 border border-gray-600 font-mono">
+                      {doc.external_id}
+                    </span>
+                  )}
+                  {doc.is_personal ? (
+                    <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/25">个人</span>
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/25">基础库</span>
+                  )}
+                </div>
+
+                {/* 链接 + 时间 */}
+                <div className="flex items-center gap-3 text-xs">
+                  {doc.source_url && (
+                    <a href={doc.source_url} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors">
+                      <ExternalLink className="w-3 h-3" /> 来源
+                    </a>
+                  )}
+                  {doc.pdf_url && (
+                    <a href={doc.pdf_url} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+                      <Download className="w-3 h-3" /> PDF
+                    </a>
+                  )}
+                  {doc.created_at && (
+                    <span className="text-gray-600">{doc.created_at.slice(0, 10)}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 操作 */}
+              <div className="shrink-0 flex items-center gap-1">
+                <button title="查看详情"
+                        className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- 已有文献表格 ----------
+function LiteratureTable({
+  items, loading, deleting, onDelete,
+}: {
+  items: LiteratureItem[];
+  loading: boolean;
+  deleting: string | null;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-dark-700 bg-dark-800/50">
+              {TABLE_COLUMNS.map((col) => (
+                <th key={col.key} className={cn('px-4 py-3 font-medium text-gray-400 text-xs whitespace-nowrap', col.className)}>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const tConf = typeConfig[item.type];
+              const psConf = parseStatusConfig[item.parseStatus];
+              const isDeleting = deleting === item.id;
+              return (
+                <tr key={item.id} className={cn('border-b border-dark-800 hover:bg-dark-800/30 transition-colors', isDeleting && 'opacity-50')}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded bg-primary-500/15 flex items-center justify-center shrink-0">
+                        <FileText className="w-3.5 h-3.5 text-primary-400" />
+                      </div>
+                      <span className="text-white text-sm font-medium line-clamp-1">{item.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{item.authors}</td>
+                  <td className="px-4 py-3 text-center text-gray-300 whitespace-nowrap">{item.year}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border', tConf.className)}>{tConf.label}</span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border', psConf.className)}>
+                      {item.parseStatus === 'parsing' && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {item.parseStatus === 'completed' && <CheckCircle className="w-3 h-3" />}
+                      {item.parseStatus === 'pending' && <Clock className="w-3 h-3" />}
+                      {item.parseStatus === 'error' && <AlertCircle className="w-3 h-3" />}
+                      {psConf.label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center text-gray-300">{item.snippetCount}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-gray-600'}>{item.factCount}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button title="查看详情"
+                              className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button title="提取事实" disabled
+                              className="p-1.5 rounded-md text-gray-600 cursor-not-allowed transition-colors">
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </button>
+                      <button title="删除" disabled={isDeleting} onClick={() => onDelete(item.id)}
+                              className={cn('p-1.5 rounded-md transition-colors',
+                                isDeleting ? 'text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10',
+                              )}>
+                        {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {items.length === 0 && !loading && (
+        <div className="py-12 text-center text-gray-500 text-sm">没有匹配的文献</div>
+      )}
+    </Card>
+  );
+}
+
+// ========== BibTeX 导入 Tab 内容 ==========
+function BibTexTabContent({
+  text, onTextChange, onImport, importing, result,
+}: {
+  text: string;
+  onTextChange: (v: string) => void;
+  onImport: () => void;
+  importing: boolean;
+  result: ImportBibtexResult | null;
+}) {
+  return (
+    <div>
+      {/* 说明 */}
+      <Card className="mb-6 border-amber-500/20 bg-amber-500/5">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-semibold text-amber-300 mb-1">Google Scholar / BibTeX 手动导入</h3>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Google Scholar 暂无官方开放 API。本系统<strong className="text-gray-200">不直接爬取 Scholar</strong>，
+              仅支持用户从 Google Scholar 或其他学术网站导出的 <strong className="text-gray-200">BibTeX 引用格式</strong> 导入。
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              操作步骤：在 Google Scholar 搜索结果中点「引用」→「BibTeX」→ 复制全部文本 → 粘贴到下方文本框 → 点击导入。
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* 文本框 */}
+      <Card className="mb-4">
+        <label className="block text-xs font-medium text-gray-400 mb-2">粘贴 BibTeX 内容</label>
+        <textarea
+          placeholder={`@article{vaswani2017attention,\n  title={Attention Is All You Need},\n  author={Vaswani, Ashish and Shazeer, Noam and ...},\n  year={2017},\n  journal={Advances in Neural Information Processing Systems},\n  ...\n}`}
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          rows={12}
+          className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500 transition-colors resize-y"
+        />
+
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-xs text-gray-600">
+            支持 @article / @inproceedings / @misc 等类型，可粘贴多条 BibTeX 同时导入
+          </span>
+          <Button
+            icon={importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCode className="w-4 h-4" />}
+            disabled={importing || !text.trim()}
+            onClick={onImport}
+          >
+            {importing ? '导入中…' : '导入文献'}
+          </Button>
+        </div>
+      </Card>
+
+      {/* 导入结果 */}
+      {result && (
+        <Card className={result.failed > 0 ? 'border-red-500/20' : 'border-green-500/20'}>
+          <h4 className="text-sm font-semibold text-gray-200 mb-3">导入结果</h4>
+
+          {/* 统计 */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="text-2xl font-bold text-green-400">{result.imported}</div>
+              <div className="text-xs text-green-500">新增</div>
+            </div>
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <div className="text-2xl font-bold text-amber-400">{result.duplicates}</div>
+              <div className="text-xs text-amber-500">重复</div>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="text-2xl font-bold text-red-400">{result.failed}</div>
+              <div className="text-xs text-red-500">失败</div>
+            </div>
+          </div>
+
+          {/* 条目列表 */}
+          {result.results.length > 0 && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {result.results.map((r, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded text-xs',
+                    r.duplicate ? 'bg-amber-500/5 text-amber-400' : r.error ? 'bg-red-500/5 text-red-400' : 'bg-green-500/5 text-green-400',
+                  )}
+                >
+                  {r.duplicate ? (
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                  ) : r.error ? (
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">
+                    {r.title || r.cite_key || `条目 ${i + 1}`}
+                    {r.duplicate && '（已存在，跳过）'}
+                    {r.error && `（${r.error}）`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

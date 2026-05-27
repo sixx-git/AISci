@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline
+from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature
 
 router = APIRouter()
 
@@ -11,3 +11,4 @@ router.include_router(vector_search.router, prefix="/vector-search", tags=["vect
 router.include_router(agents.router, prefix="/agents", tags=["agents"])
 router.include_router(reports.router, prefix="/reports", tags=["reports"])
 router.include_router(pipeline.router, prefix="/pipeline", tags=["pipeline"])
+router.include_router(literature.router, prefix="/literature", tags=["literature"])
