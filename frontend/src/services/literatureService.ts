@@ -91,6 +91,24 @@ export interface ImportBibtexResult {
   }>;
 }
 
+/** PDF 下载响应 */
+export interface DownloadPdfResult {
+  document_id: string;
+  pdf_url: string;
+  file_path: string;
+  file_size: number;
+  status: string;
+}
+
+/** PDF 解析 + 索引响应 */
+export interface ParseIndexResult {
+  document_id: string;
+  title: string;
+  chunk_count: number;
+  status: string;
+  index_added?: number;
+}
+
 // ==================== Mock 数据 ====================
 
 const MOCK_ARXIV_RESULTS: ArxivPaper[] = [
@@ -327,5 +345,99 @@ export const literatureService = {
       source_type: sourceType,
     });
     return data;
+  },
+
+  /**
+   * POST /api/v1/literature/download-pdf
+   */
+  async downloadPdf(projectId: string, documentId: string): Promise<ApiResponse<DownloadPdfResult>> {
+    if (env.USE_MOCK) {
+      console.log('[Mock] literatureService.downloadPdf', { projectId, documentId });
+      await new Promise((r) => setTimeout(r, 800));
+      return {
+        code: 200,
+        message: 'Mock: PDF 下载完成',
+        data: {
+          document_id: documentId,
+          pdf_url: 'https://arxiv.org/pdf/mock.pdf',
+          file_path: `storage/uploads/${projectId}/external/arxiv/${documentId}.pdf`,
+          file_size: 2048000,
+          status: 'pdf_downloaded',
+        },
+      };
+    }
+
+    const { data } = await api.post<ApiResponse<DownloadPdfResult>>('/literature/download-pdf', {
+      project_id: projectId,
+      document_id: documentId,
+    });
+    return data;
+  },
+
+  /**
+   * POST /api/v1/literature/parse-and-index
+   */
+  async parseAndIndex(
+    projectId: string,
+    documentId: string,
+    autoIndex: boolean = true,
+  ): Promise<ApiResponse<ParseIndexResult>> {
+    if (env.USE_MOCK) {
+      console.log('[Mock] literatureService.parseAndIndex', { projectId, documentId, autoIndex });
+      await new Promise((r) => setTimeout(r, 1500));
+      return {
+        code: 200,
+        message: 'Mock: 解析完成',
+        data: {
+          document_id: documentId,
+          title: 'Mock Paper Title',
+          chunk_count: 12,
+          status: autoIndex ? 'indexed' : 'parsed',
+          index_added: autoIndex ? 12 : undefined,
+        },
+      };
+    }
+
+    const { data } = await api.post<ApiResponse<ParseIndexResult>>('/literature/parse-and-index', {
+      project_id: projectId,
+      document_id: documentId,
+      auto_index: autoIndex,
+    });
+    return data;
+  },
+
+  /**
+   * GET /api/v1/documents/{doc_id}/chunks
+   */
+  async getDocumentChunks(
+    docId: string,
+    page: number = 1,
+    pageSize: number = 20,
+  ): Promise<ApiResponse<{ items: any[]; total: number; page: number; page_size: number }>> {
+    if (env.USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 200));
+      return {
+        code: 200,
+        message: 'Mock chunks',
+        data: {
+          items: Array.from({ length: 3 }, (_, i) => ({
+            id: `chunk-${i}`,
+            chunk_index: i,
+            content: `[Mock chunk ${i}] Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
+            content_preview: `[Mock chunk ${i}] Lorem ipsum dolor sit amet...`,
+            page_number: i + 1,
+            status: 'ready',
+          })),
+          total: 3,
+          page,
+          page_size: pageSize,
+        },
+      };
+    }
+
+    const { data } = await api.get(`/documents/${docId}/chunks`, {
+      params: { page, page_size: pageSize },
+    });
+    return data as any;
   },
 };

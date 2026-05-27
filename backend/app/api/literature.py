@@ -48,6 +48,12 @@ class BibTexImportRequest(BaseModel):
     source_type: str = Field(default="google_scholar_import", description="来源类型: google_scholar_import / bibtex")
 
 
+class DocumentActionRequest(BaseModel):
+    project_id: str = Field(..., description="项目ID")
+    document_id: str = Field(..., description="文献Document ID")
+    auto_index: bool = Field(default=True, description="解析后是否自动构建向量索引")
+
+
 # ==================== API Endpoints ====================
 
 @router.get("/sources")
@@ -188,3 +194,74 @@ async def import_bibtex(
         return error(f"BibTeX 解析失败: {str(e)}", code=400)
     except Exception as e:
         return error(f"BibTeX 导入失败: {str(e)}", code=500)
+
+
+# ==================== arXiv PDF 下载 ====================
+
+@router.post("/download-pdf")
+async def download_arxiv_pdf(
+    req: DocumentActionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    下载 arXiv 论文 PDF
+
+    从 Document.pdf_url 下载 PDF 文件到本地存储。
+    存储路径: storage/uploads/{project_id}/external/arxiv/{document_id}.pdf
+    """
+    try:
+        service = LiteratureIngestionService(db)
+        result = service.download_arxiv_pdf(
+            project_id=req.project_id,
+            document_id=req.document_id,
+        )
+        return success(
+            data=result,
+            message=f"PDF 下载完成 ({result['file_size']} bytes)",
+        )
+    except ValueError as e:
+        return error(str(e), code=400)
+    except RuntimeError as e:
+        return error(str(e), code=502)
+    except Exception as e:
+        return error(f"PDF 下载异常: {str(e)}", code=500)
+
+
+# ==================== 解析 + 索引 ====================
+
+@router.post("/parse-and-index")
+async def parse_and_index_document(
+    req: DocumentActionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    解析文献 PDF 并构建向量索引
+
+    流程:
+      1. 解析 PDF → 生成 Chunk
+      2. (可选) 调用 VectorStore 构建项目级 FAISS 索引
+      3. 更新 import_status: parsed → indexed
+
+    注意：
+      - 需先调用 /download-pdf 下载 PDF 文件
+      - 索引操作为增量，不会覆盖已有索引
+      - 解析失败不影响文献元数据
+    """
+    try:
+        service = LiteratureIngestionService(db)
+        result = service.parse_and_index_document(
+            project_id=req.project_id,
+            document_id=req.document_id,
+            auto_index=req.auto_index,
+        )
+        idx_msg = f"，索引新增 {result['index_added']} 条" if result.get('index_added') is not None else ""
+        return success(
+            data=result,
+            message=f"解析完成: {result['chunk_count']} 个切片，状态={result['status']}{idx_msg}",
+        )
+    except ValueError as e:
+        return error(str(e), code=400)
+    except RuntimeError as e:
+        return error(str(e), code=502)
+    except Exception as e:
+        return error(f"解析异常: {str(e)}", code=500)

@@ -14,7 +14,7 @@ import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
 import type { DocumentInfo } from '@/services/documentService';
-import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult } from '@/services/literatureService';
+import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult, ParseIndexResult } from '@/services/literatureService';
 
 // ============ MIME / 扩展名 → 文献类型 ============
 function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
@@ -76,10 +76,11 @@ const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; 
 
 // ============ source_type 标签映射 ============
 const sourceTypeConfig: Record<string, { label: string; className: string }> = {
-  upload:  { label: 'PDF上传', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-  arxiv:   { label: 'arXiv',   className: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25' },
-  bibtex:  { label: 'BibTeX',  className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
-  manual:  { label: '手动',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
+  upload:                { label: 'PDF上传', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
+  arxiv:                 { label: 'arXiv',   className: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25' },
+  bibtex:                { label: 'BibTeX',  className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
+  google_scholar_import: { label: 'Scholar', className: 'bg-orange-500/15 text-orange-400 border-orange-500/25' },
+  manual:                { label: '手动',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
 };
 
 // ============ import_status 标签映射 ============
@@ -151,6 +152,13 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   // ========== 已入库文献状态 ==========
   const [importedDocs, setImportedDocs] = useState<ImportedDocument[]>([]);
   const [importedLoading, setImportedLoading] = useState(false);
+
+  // ========== 操作状态：下载 / 解析 / Chunk ==========
+  const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+  const [parsingDoc, setParsingDoc] = useState<string | null>(null);
+  const [chunkViewer, setChunkViewer] = useState<{ docId: string; title: string } | null>(null);
+  const [chunkLoading, setChunkLoading] = useState(false);
+  const [chunkList, setChunkList] = useState<any[]>([]);
 
   // ========== BibTeX 导入状态 ==========
   const [bibtexText, setBibtexText] = useState('');
@@ -364,6 +372,54 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     }
   }, [bibtexText, projectId, loadImportedDocs, showStatus]);
 
+  // ========== 下载 PDF ==========
+  const handleDownloadPdf = useCallback(async (docId: string, docTitle: string) => {
+    setDownloadingDoc(docId);
+    try {
+      await literatureService.downloadPdf(projectId, docId);
+      showStatus({ type: 'success', text: `PDF 下载完成: ${docTitle.slice(0, 40)}` });
+      await loadImportedDocs();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `PDF 下载失败: ${detail}` });
+    } finally {
+      setDownloadingDoc(null);
+    }
+  }, [projectId, loadImportedDocs, showStatus]);
+
+  // ========== 解析 + 索引 ==========
+  const handleParseAndIndex = useCallback(async (docId: string, _docTitle: string) => {
+    setParsingDoc(docId);
+    try {
+      const res = await literatureService.parseAndIndex(projectId, docId, true);
+      const r = res.data as ParseIndexResult;
+      const idxInfo = r.index_added != null ? `，索引 +${r.index_added}` : '';
+      showStatus({ type: 'success', text: `解析完成: ${r.chunk_count} chunks${idxInfo}` });
+      await loadImportedDocs();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      showStatus({ type: 'error', text: `解析失败: ${detail}` });
+    } finally {
+      setParsingDoc(null);
+    }
+  }, [projectId, loadImportedDocs, showStatus]);
+
+  // ========== 查看 Chunk ==========
+  const handleViewChunks = useCallback(async (docId: string, docTitle: string) => {
+    setChunkViewer({ docId, title: docTitle });
+    setChunkLoading(true);
+    try {
+      const res = await literatureService.getDocumentChunks(docId, 1, 50);
+      setChunkList(res.data.items || []);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err.message;
+      showStatus({ type: 'error', text: `获取切片失败: ${detail}` });
+      setChunkList([]);
+    } finally {
+      setChunkLoading(false);
+    }
+  }, [showStatus]);
+
   // ========== 搜索（已有上传文献） ==========
   const filtered = useMemo(() => {
     if (!search.trim()) return literature;
@@ -556,6 +612,15 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
           <LibraryTabContent
             docs={importedDocs}
             loading={importedLoading}
+            downloadingDoc={downloadingDoc}
+            parsingDoc={parsingDoc}
+            onDownloadPdf={handleDownloadPdf}
+            onParseAndIndex={handleParseAndIndex}
+            onViewChunks={handleViewChunks}
+            chunkViewer={chunkViewer}
+            chunkLoading={chunkLoading}
+            chunkList={chunkList}
+            onCloseChunks={() => setChunkViewer(null)}
           />
         )}
 
@@ -819,9 +884,21 @@ function LibraryTabEmpty() {
 // ---------- 已入库文献 Tab 内容 ----------
 function LibraryTabContent({
   docs, loading,
+  downloadingDoc, parsingDoc,
+  onDownloadPdf, onParseAndIndex, onViewChunks,
+  chunkViewer, chunkLoading, chunkList, onCloseChunks,
 }: {
   docs: ImportedDocument[];
   loading: boolean;
+  downloadingDoc: string | null;
+  parsingDoc: string | null;
+  onDownloadPdf: (docId: string, title: string) => void;
+  onParseAndIndex: (docId: string, title: string) => void;
+  onViewChunks: (docId: string, title: string) => void;
+  chunkViewer: { docId: string; title: string } | null;
+  chunkLoading: boolean;
+  chunkList: any[];
+  onCloseChunks: () => void;
 }) {
   if (loading) {
     return (
@@ -837,6 +914,7 @@ function LibraryTabContent({
   }
 
   return (
+    <>
     <div className="space-y-4">
       <div className="text-sm text-gray-500 mb-2">共 {docs.length} 篇文献</div>
       {docs.map((doc) => {
@@ -895,7 +973,45 @@ function LibraryTabContent({
               </div>
 
               {/* 操作 */}
-              <div className="shrink-0 flex items-center gap-1">
+              <div className="shrink-0 flex items-center gap-1.5">
+                {/* 下载 PDF */}
+                {doc.pdf_url && doc.import_status === 'imported' && (
+                  <button title="下载 PDF"
+                          disabled={downloadingDoc === doc.id}
+                          onClick={() => onDownloadPdf(doc.id, doc.title || '文献')}
+                          className="p-1.5 rounded-md text-blue-400 hover:text-white hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+                    {downloadingDoc === doc.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+
+                {/* 解析 + 索引 */}
+                {((doc.import_status === 'pdf_downloaded' || doc.import_status === 'imported') && doc.pdf_url) && (
+                  <button title="解析并索引"
+                          disabled={parsingDoc === doc.id}
+                          onClick={() => onParseAndIndex(doc.id, doc.title || '文献')}
+                          className="p-1.5 rounded-md text-green-400 hover:text-white hover:bg-green-500/30 transition-colors disabled:opacity-50">
+                    {parsingDoc === doc.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <BrainCircuit className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+
+                {/* 查看 Chunk */}
+                {(doc.import_status === 'parsed' || doc.import_status === 'indexed') && (
+                  <button title="查看切片"
+                          onClick={() => onViewChunks(doc.id, doc.title || '文献')}
+                          className="p-1.5 rounded-md text-purple-400 hover:text-white hover:bg-purple-500/30 transition-colors">
+                    <FileSearch className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* 查看详情 */}
                 <button title="查看详情"
                         className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
                   <Eye className="w-3.5 h-3.5" />
@@ -906,6 +1022,69 @@ function LibraryTabContent({
         );
       })}
     </div>
+
+    {/* ========== Chunk 查看器 Modal ========== */}
+      {chunkViewer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCloseChunks}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <FileSearch className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-semibold text-white truncate max-w-md">
+                  切片预览: {chunkViewer.title}
+                </h3>
+              </div>
+              <button title="关闭"
+                      onClick={onCloseChunks}
+                      className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-700 transition-colors">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto max-h-[65vh] p-4">
+              {chunkLoading ? (
+                <div className="py-12 text-center text-gray-500">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+                  <p className="text-sm">加载切片…</p>
+                </div>
+              ) : chunkList.length === 0 ? (
+                <div className="py-12 text-center text-gray-500">
+                  <p className="text-sm">暂无切片数据</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {chunkList.map((chunk: any, i: number) => (
+                    <div key={chunk.id || i} className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono">
+                          #{chunk.chunk_index ?? i + 1}
+                        </span>
+                        {chunk.page_number && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                            p.{chunk.page_number}
+                          </span>
+                        )}
+                        <span className={cn(
+                          'text-xs px-1.5 py-0.5 rounded',
+                          chunk.status === 'ready' ? 'bg-green-500/15 text-green-400' : 'bg-gray-700 text-gray-500',
+                        )}>
+                          {chunk.status || 'pending'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                        {chunk.content_preview || chunk.content || '(空)'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
