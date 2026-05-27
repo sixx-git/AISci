@@ -175,34 +175,6 @@ async def download_report_file(report_id: str, file_type: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{project_id}", response_model=ApiResponse[List[ReportDBResponse]])
-async def get_project_reports(
-    project_id: str,
-    status: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-    db: Session = Depends(get_db)
-):
-    """
-    获取项目的研究报告列表
-    """
-    try:
-        report_service = ReportService(db)
-        reports = report_service.get_reports_by_project(
-            project_id=project_id,
-            status=status,
-            limit=limit,
-            offset=offset
-        )
-        
-        return success(
-            reports,
-            message=f"获取研究报告列表成功，共 {len(reports)} 条"
-        )
-    except Exception as e:
-        return error(str(e))
-
-
 @router.get("/latest/{project_id}", response_model=ApiResponse[Optional[ReportDBResponse]])
 async def get_latest_report(
     project_id: str,
@@ -238,6 +210,34 @@ async def get_report_detail(
         return success(
             report,
             message="获取研究报告详情成功" if report else "报告不存在"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/{project_id}", response_model=ApiResponse[List[ReportDBResponse]])
+async def get_project_reports(
+    project_id: str,
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    获取项目的研究报告列表
+    """
+    try:
+        report_service = ReportService(db)
+        reports = report_service.get_reports_by_project(
+            project_id=project_id,
+            status=status,
+            limit=limit,
+            offset=offset
+        )
+        
+        return success(
+            reports,
+            message=f"获取研究报告列表成功，共 {len(reports)} 条"
         )
     except Exception as e:
         return error(str(e))

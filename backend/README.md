@@ -42,7 +42,8 @@ backend/
 
 ### 1. 环境要求
 
-- Python 3.9+
+- Python 3.10 / 3.11 / 3.12 (推荐)
+- **暂不建议 Python 3.13**：部分依赖（SQLAlchemy、FAISS、sentence-transformers）可能存在兼容问题
 - MySQL 8.0+ (可选，默认使用 SQLite)
 
 ### 2. 安装依赖
@@ -80,7 +81,7 @@ DATABASE_URL=sqlite:///../data/aiscientist.db
 # DATABASE_URL=mysql+pymysql://root:password@localhost:3306/aiscientist
 
 # 千问 API (可选，用于研究功能)
-QWEN_API_KEY=your_api_key
+QWEN_API_KEY=your_qwen_api_key_here
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-max
 

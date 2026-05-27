@@ -4,7 +4,8 @@
 
 ### 前置要求
 
-- **Python 3.9+**
+- **Python 3.10 / 3.11 / 3.12** (推荐)
+- **暂不建议 Python 3.13**：部分依赖（SQLAlchemy、FAISS、sentence-transformers）可能存在兼容问题
 - **Node.js 18+**
 - **MySQL 8.0+** (可选，默认使用 SQLite)
 
@@ -168,7 +169,7 @@ AISci/
 ## 常见问题
 
 ### Q: 提示 "未找到 Python"
-A: 请先安装 Python 3.9 或更高版本，并确保添加到 PATH
+A: 请安装 Python 3.10 / 3.11 / 3.12（暂不建议 3.13），并确保添加到 PATH
 
 ### Q: 提示 "未找到 Node.js"
 A: 请从 https://nodejs.org/ 下载并安装 Node.js 18+

@@ -1,15 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX } from 'lucide-react';
+import { Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { MOCK_PROJECT_OVERVIEW } from '@/data/mockData';
+import { projectService } from '@/services/projectService';
 import { formatDate } from '@/lib/utils';
+import env from '@/config/env';
+import type { Project } from '@/types';
 
-const PROJECTS = Object.values(MOCK_PROJECT_OVERVIEW);
+const MOCK_FALLBACK = Object.values(MOCK_PROJECT_OVERVIEW);
 
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
@@ -21,15 +24,51 @@ const STATUS_OPTIONS = [
 export function Projects() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjects() {
+      setLoading(true);
+      setError(null);
+
+      if (env.USE_MOCK) {
+        setProjects(MOCK_FALLBACK);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await projectService.getProjects();
+        if (cancelled) return;
+        if (res.code === 200 && res.data) {
+          setProjects(res.data);
+        } else {
+          setError(res.message || '获取项目列表失败');
+        }
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : '获取项目列表失败，请检查后端服务是否启动');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadProjects();
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
-    let list = PROJECTS;
+    let list = projects;
     if (search.trim()) {
       const kw = search.trim().toLowerCase();
       list = list.filter(
         (p) =>
           p.name.toLowerCase().includes(kw) ||
-          p.research_field.toLowerCase().includes(kw) ||
+          ((p as any).research_field && (p as any).research_field.toLowerCase().includes(kw)) ||
           (p.description && p.description.toLowerCase().includes(kw)),
       );
     }
@@ -37,7 +76,7 @@ export function Projects() {
       list = list.filter((p) => p.status === statusFilter);
     }
     return list;
-  }, [search, statusFilter]);
+  }, [search, statusFilter, projects]);
 
   const clearFilters = () => {
     setSearch('');
@@ -45,6 +84,11 @@ export function Projects() {
   };
 
   const hasFilters = search.trim() !== '' || statusFilter !== '';
+
+  const projectCount = projects.length;
+  const completedCount = projects.filter((p) => p.status === 'completed').length;
+  const runningCount = projects.filter((p) => p.status === 'running').length;
+  const draftCount = projects.filter((p) => p.status === 'draft').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -102,92 +146,110 @@ export function Projects() {
       {/* 统计卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card className="text-center">
-          <div className="text-2xl font-bold text-primary-400">{PROJECTS.length}</div>
+          <div className="text-2xl font-bold text-primary-400">{projectCount}</div>
           <div className="text-gray-400 text-sm mt-1">总项目数</div>
         </Card>
         <Card className="text-center">
-          <div className="text-2xl font-bold text-green-400">
-            {PROJECTS.filter((p) => p.status === 'completed').length}
-          </div>
+          <div className="text-2xl font-bold text-green-400">{completedCount}</div>
           <div className="text-gray-400 text-sm mt-1">已完成</div>
         </Card>
         <Card className="text-center">
-          <div className="text-2xl font-bold text-blue-400">
-            {PROJECTS.filter((p) => p.status === 'running').length}
-          </div>
+          <div className="text-2xl font-bold text-blue-400">{runningCount}</div>
           <div className="text-gray-400 text-sm mt-1">运行中</div>
         </Card>
         <Card className="text-center">
-          <div className="text-2xl font-bold text-gray-400">
-            {PROJECTS.filter((p) => p.status === 'draft').length}
-          </div>
+          <div className="text-2xl font-bold text-gray-400">{draftCount}</div>
           <div className="text-gray-400 text-sm mt-1">草稿</div>
         </Card>
       </div>
 
-      {/* 项目列表 */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={<Search className="w-8 h-8" />}
-          title="未找到匹配的项目"
-          description={hasFilters ? '尝试调整搜索条件或清除筛选器' : '还没有项目，点击上方按钮创建一个'}
-          action={
-            hasFilters
-              ? { label: '清除筛选', onClick: clearFilters }
-              : undefined
-          }
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((project) => (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}`}
-              className="block group"
-            >
-              <Card className="h-full hover:border-primary-600/50 transition-all duration-200 group-hover:shadow-xl group-hover:shadow-primary-900/10">
-                {/* 项目图标 + 状态 */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                    <FlaskConical className="w-5 h-5 text-white" />
-                  </div>
-                  <StatusBadge status={(project.status as any) || 'draft'} />
-                </div>
-
-                {/* 项目名 */}
-                <h3 className="font-semibold text-white mb-2 group-hover:text-primary-400 transition-colors">
-                  {project.name}
-                </h3>
-
-                {/* 描述 */}
-                {project.description && (
-                  <p className="text-sm text-gray-400 line-clamp-2 mb-3">
-                    {project.description}
-                  </p>
-                )}
-
-                {/* 研究领域标签 */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-primary-500/10 text-primary-400 border border-primary-500/20">
-                    {project.research_field}
-                  </span>
-                </div>
-
-                {/* 日期 */}
-                <div className="flex items-center text-gray-500 text-sm">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {formatDate(project.created_at)}
-                </div>
-
-                {/* 底部操作 */}
-                <div className="mt-4 pt-4 border-t border-dark-700 flex items-center justify-between">
-                  <span className="text-sm text-primary-400">查看详情</span>
-                  <ArrowRight className="w-4 h-4 text-primary-400 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Card>
-            </Link>
-          ))}
+      {/* 加载状态 */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-8 h-8 animate-spin mb-3" />
+          <span>正在加载项目列表...</span>
         </div>
+      )}
+
+      {/* 错误状态 */}
+      {!loading && error && (
+        <Card className="border-red-500/30 bg-red-500/5">
+          <div className="flex flex-col items-center py-8 text-center">
+            <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
+            <h3 className="text-lg font-semibold text-red-300 mb-2">加载失败</h3>
+            <p className="text-gray-400 mb-4 max-w-md">{error}</p>
+            <Button onClick={() => window.location.reload()} variant="secondary">
+              重新加载
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* 项目列表 */}
+      {!loading && !error && (
+        filtered.length === 0 ? (
+          <EmptyState
+            icon={<Search className="w-8 h-8" />}
+            title="未找到匹配的项目"
+            description={hasFilters ? '尝试调整搜索条件或清除筛选器' : '还没有项目，点击上方按钮创建一个'}
+            action={
+              hasFilters
+                ? { label: '清除筛选', onClick: clearFilters }
+                : undefined
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((project) => (
+              <Link
+                key={project.id}
+                to={`/projects/${project.id}`}
+                className="block group"
+              >
+                <Card className="h-full hover:border-primary-600/50 transition-all duration-200 group-hover:shadow-xl group-hover:shadow-primary-900/10">
+                  {/* 项目图标 + 状态 */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
+                      <FlaskConical className="w-5 h-5 text-white" />
+                    </div>
+                    <StatusBadge status={(project.status as any) || 'draft'} />
+                  </div>
+
+                  {/* 项目名 */}
+                  <h3 className="font-semibold text-white mb-2 group-hover:text-primary-400 transition-colors">
+                    {project.name}
+                  </h3>
+
+                  {/* 描述 */}
+                  {project.description && (
+                    <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+                      {project.description}
+                    </p>
+                  )}
+
+                  {/* 研究领域标签 */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-primary-500/10 text-primary-400 border border-primary-500/20">
+                      {(project as any).research_field || '未知领域'}
+                    </span>
+                  </div>
+
+                  {/* 日期 */}
+                  <div className="flex items-center text-gray-500 text-sm">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    {formatDate(project.created_at)}
+                  </div>
+
+                  {/* 底部操作 */}
+                  <div className="mt-4 pt-4 border-t border-dark-700 flex items-center justify-between">
+                    <span className="text-sm text-primary-400">查看详情</span>
+                    <ArrowRight className="w-4 h-4 text-primary-400 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )
       )}
     </div>
   );

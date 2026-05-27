@@ -150,7 +150,7 @@ DATABASE_URL=sqlite:///./data/aiscientist.db
 # DATABASE_URL=mysql+pymysql://root:password@localhost:3306/aiscientist
 
 # 千问 API (必需)
-QWEN_API_KEY=your_api_key_here
+QWEN_API_KEY=your_qwen_api_key_here
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-max
 
@@ -231,7 +231,7 @@ response = client.chat_with_messages(messages, temperature=0.5)
 
 ```env
 # 千问 API 配置
-QWEN_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+QWEN_API_KEY=your_qwen_api_key_here
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-max  # 可选: qwen-max, qwen-plus, qwen-turbo
 ```
@@ -1189,7 +1189,7 @@ npm run dev
 ## ❓ 常见问题
 
 ### Q: 提示 "未找到 Python"
-A: 请先安装 Python 3.9 或更高版本，并确保添加到 PATH
+A: 请安装 Python 3.10 / 3.11 / 3.12（暂不建议 3.13），并确保添加到 PATH
 
 ### Q: 提示 "未找到 Node.js"
 A: 请从 https://nodejs.org/ 下载并安装 Node.js 18+
