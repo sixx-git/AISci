@@ -8,6 +8,8 @@ arXiv 文献搜索（通过官方 API，零额外依赖）
 """
 import urllib.request
 import urllib.parse
+import urllib.error
+import ssl
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # arXiv API 配置
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
-ARXIV_TIMEOUT = 15  # 秒
+ARXIV_TIMEOUT = 30  # 秒（国内网络访问 arXiv 较慢，需更长超时）
 ARXIV_NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
     'arxiv': 'http://arxiv.org/schemas/atom',
@@ -61,8 +63,9 @@ class ArxivPaper:
 class ArxivSource:
     """arXiv 文献数据源（只检索元数据，不下载 PDF）"""
 
-    def __init__(self, timeout: int = ARXIV_TIMEOUT):
+    def __init__(self, timeout: int = ARXIV_TIMEOUT, max_retries: int = 2):
         self.timeout = timeout
+        self.max_retries = max_retries
 
     def search(
         self,
@@ -99,27 +102,49 @@ class ArxivSource:
 
         logger.info(f"arXiv search: query='{query}', max_results={max_results}")
 
-        try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                raw_xml = response.read().decode("utf-8")
+        import time
 
-            papers = self._parse_atom_response(raw_xml)
-            logger.info(f"arXiv search returned {len(papers)} results")
-            return papers
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                # 创建 SSL context
+                ctx = ssl.create_default_context()
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=self.timeout, context=ctx) as response:
+                    raw_xml = response.read().decode("utf-8")
 
-        except urllib.error.URLError as e:
-            logger.error(f"arXiv API 网络错误: {e.reason}")
-            raise RuntimeError(f"arXiv API 连接失败: {e.reason}") from e
-        except TimeoutError as e:
-            logger.error(f"arXiv API 超时 ({self.timeout}s)")
-            raise RuntimeError(f"arXiv API 请求超时 ({self.timeout}秒)") from e
-        except ET.ParseError as e:
-            logger.error(f"arXiv API XML 解析失败: {e}")
-            raise RuntimeError("arXiv 返回数据解析失败") from e
-        except Exception as e:
-            logger.error(f"arXiv search 未知错误: {e}")
-            raise RuntimeError(f"arXiv 搜索异常: {str(e)}") from e
+                papers = self._parse_atom_response(raw_xml)
+                logger.info(f"arXiv search returned {len(papers)} results")
+                return papers
+
+            except urllib.error.URLError as e:
+                reason = str(e.reason) if e.reason else "Unknown Error"
+                last_error = RuntimeError(f"arXiv API 连接失败: {reason}")
+                logger.warning(f"arXiv 网络错误 (attempt {attempt+1}/{self.max_retries+1}): {reason}")
+            except ssl.SSLError as e:
+                last_error = RuntimeError(f"arXiv SSL 验证失败（可能需要配置代理或 VPN）: {e}")
+                logger.warning(f"arXiv SSL 错误 (attempt {attempt+1}/{self.max_retries+1}): {e}")
+            except TimeoutError as e:
+                last_error = RuntimeError(f"arXiv API 请求超时 ({self.timeout}秒，国内访问可能较慢)")
+                logger.warning(f"arXiv 超时 (attempt {attempt+1}/{self.max_retries+1})")
+            except ConnectionError as e:
+                last_error = RuntimeError(f"arXiv API 连接被拒绝（请检查网络或代理设置）: {e}")
+                logger.warning(f"arXiv 连接拒绝 (attempt {attempt+1}/{self.max_retries+1}): {e}")
+            except ET.ParseError as e:
+                # XML 解析错误不重试
+                logger.error(f"arXiv API XML 解析失败: {e}")
+                raise RuntimeError("arXiv 返回数据解析失败") from e
+            except Exception as e:
+                last_error = RuntimeError(f"arXiv 搜索异常 ({type(e).__name__}): {e}")
+                logger.warning(f"arXiv 未知错误 (attempt {attempt+1}/{self.max_retries+1}): {type(e).__name__}: {e}")
+
+            # 重试前等待
+            if attempt < self.max_retries:
+                wait = 2 * (attempt + 1)
+                time.sleep(wait)
+
+        # 所有重试均失败
+        raise last_error or RuntimeError("arXiv API 连接失败（已重试）")
 
     def search_by_id(self, arxiv_id: str) -> Optional[ArxivPaper]:
         """

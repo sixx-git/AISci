@@ -270,7 +270,7 @@ import_label_arxiv = "arXiv 检索"
 arxiv_imported = 0
 try:
     from app.services.literature_sources.arxiv_source import ArxivSource
-    arxiv_source = ArxivSource(timeout=15)
+    arxiv_source = ArxivSource(timeout=30)  # 国内网络需更长超时
     papers = arxiv_source.search("multimodal medical diagnosis transformer", max_results=2)
     if papers:
         ingestion = LiteratureIngestionService(db)
