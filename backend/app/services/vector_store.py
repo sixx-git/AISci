@@ -23,13 +23,20 @@ settings = get_settings()
 
 @dataclass
 class SearchResult:
-    """搜索结果"""
+    """搜索结果（含完整文献元数据，供引用）"""
     chunk_id: str
     document_id: str
     content: str
     page_number: Optional[int]
     source_title: Optional[str]
     similarity_score: float
+    # ── 文献引用元数据 ──
+    authors: Optional[str] = None
+    year: Optional[int] = None
+    source_type: Optional[str] = None
+    doi: Optional[str] = None
+    external_id: Optional[str] = None
+    source_url: Optional[str] = None
 
 
 class BaseEmbedding:
@@ -214,6 +221,13 @@ class VectorStore:
                     "content": chunk.content,
                     "page_number": chunk.page_number or chunk.start_page,
                     "source_title": doc.title or doc.filename,
+                    # ── 文献引用元数据 ──
+                    "authors": doc.authors,
+                    "year": doc.year,
+                    "source_type": doc.source_type.value if doc.source_type else None,
+                    "doi": doc.doi,
+                    "external_id": doc.external_id,
+                    "source_url": doc.source_url,
                     "faiss_index": start_idx + i,
                 }
                 self._mappings[project_id].append(item)
@@ -283,6 +297,13 @@ class VectorStore:
                 page_number=item.get("page_number"),
                 source_title=item.get("source_title"),
                 similarity_score=round(float(score), 4),
+                # ── 文献引用元数据 ──
+                authors=item.get("authors"),
+                year=item.get("year"),
+                source_type=item.get("source_type"),
+                doi=item.get("doi"),
+                external_id=item.get("external_id"),
+                source_url=item.get("source_url"),
             ))
 
         logger.info(f"Search {project_id}: {len(results)} results for '{query[:50]}...'")
