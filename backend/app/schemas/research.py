@@ -53,6 +53,8 @@ class HypothesisCreate(BaseModel):
     required_data: str = Field(..., description="所需数据")
     possible_method: str = Field(..., description="可能的方法")
     risk: str = Field(..., description="风险")
+    supporting_fact_ids: Optional[List[str]] = Field(None, description="支持的文献事实 ID 列表")
+    evidence_level: Optional[str] = Field("medium", description="证据级别: high / medium / low")
     status: Optional[str] = Field("draft", description="状态")
     priority: Optional[int] = Field(3, ge=1, le=5, description="优先级 1-5")
     confidence: Optional[float] = Field(0.5, ge=0, le=1, description="置信度 0-1")
@@ -77,6 +79,8 @@ class HypothesisItem(BaseModel):
     required_data: str = Field(..., description="所需数据")
     possible_method: str = Field(..., description="可能的方法")
     risk: str = Field(..., description="风险")
+    supporting_fact_ids: List[str] = Field(default_factory=list, description="支持的文献事实 ID 列表")
+    evidence_level: str = Field(default="medium", description="证据级别: high / medium / low")
 
 
 class HypothesisGenerationRequest(BaseModel):

@@ -3,6 +3,7 @@ Hypothesis 服务
 处理假设和证据链的数据库操作
 """
 import logging
+import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,8 @@ class HypothesisService:
                 required_data=hypothesis_data.required_data,
                 possible_method=hypothesis_data.possible_method,
                 risk=hypothesis_data.risk,
+                supporting_fact_ids=json.dumps(hypothesis_data.supporting_fact_ids, ensure_ascii=False) if hypothesis_data.supporting_fact_ids else None,
+                evidence_level=hypothesis_data.evidence_level or "medium",
                 status=hypothesis_data.status or "draft",
                 priority=hypothesis_data.priority or 3,
                 confidence=hypothesis_data.confidence or 0.5
@@ -58,9 +61,16 @@ class HypothesisService:
     ) -> List[Hypothesis]:
         """批量创建假设"""
         created_hypotheses = []
-        
+
         try:
             for idx, hypo_data in enumerate(hypotheses_list):
+                # supporting_fact_ids: JSON 序列化为文本存库
+                fact_ids = hypo_data.get("supporting_fact_ids", [])
+                if isinstance(fact_ids, list):
+                    fact_ids_json = json.dumps(fact_ids, ensure_ascii=False)
+                else:
+                    fact_ids_json = str(fact_ids) if fact_ids else None
+
                 hypothesis_create = HypothesisCreate(
                     project_id=project_id,
                     research_question=research_question,
@@ -71,16 +81,18 @@ class HypothesisService:
                     required_data=hypo_data.get("required_data", ""),
                     possible_method=hypo_data.get("possible_method", ""),
                     risk=hypo_data.get("risk", ""),
+                    supporting_fact_ids=hypo_data.get("supporting_fact_ids") if isinstance(hypo_data.get("supporting_fact_ids"), list) else None,
+                    evidence_level=hypo_data.get("evidence_level", "medium"),
                     status=status,
                     priority=idx + 1 if idx + 1 <= 5 else 3  # 前 5 个优先级更高
                 )
-                
+
                 db_hypothesis = self.create_hypothesis(hypothesis_create)
                 created_hypotheses.append(db_hypothesis)
-            
+
             logger.info(f"批量创建 {len(created_hypotheses)} 个假设成功")
             return created_hypotheses
-            
+
         except Exception as e:
             logger.error(f"批量创建假设失败：{e}", exc_info=True)
             raise
@@ -143,11 +155,11 @@ class HypothesisService:
                 evidence = Evidence(
                     project_id=project_id,
                     hypothesis_id=hypothesis_id,
-                    document_id=fact.get("source_document_id"),
+                    document_id=fact.get("document_id") or fact.get("source_document_id"),
                     chunk_id=fact.get("source_chunk_id"),
-                    fact_text=fact.get("content", ""),
+                    fact_text=fact.get("fact_text") or fact.get("content", ""),
                     quote_text=fact.get("quote_text"),
-                    page_number=fact.get("source_page"),
+                    page_number=fact.get("page_number") or fact.get("source_page"),
                     relevance_score=fact.get("relevance_score", 0.5),
                     source_title=fact.get("source_paper_title"),
                 )

@@ -446,12 +446,31 @@ class PipelineService:
             research_question=research_question,
             hypotheses_list=hg["hypotheses"]
         )
+        # ── 为每条假设创建证据链：只关联其 supporting_fact_ids 对应的事实 ──
+        all_facts = lm.get("facts", [])
         for db_hypo in created_hypos:
-            hypo_service.create_evidence_batch(
-                project_id=project_id,
-                hypothesis_id=db_hypo.id,
-                facts=lm.get("facts", [])
-            )
+            # 从存储的 JSON 反序列化 supporting_fact_ids
+            raw_ids = db_hypo.supporting_fact_ids
+            try:
+                target_ids = json.loads(raw_ids) if raw_ids else []
+            except (json.JSONDecodeError, TypeError):
+                target_ids = []
+            if not isinstance(target_ids, list):
+                target_ids = []
+
+            if target_ids:
+                # 只保留与 supporting_fact_ids 匹配的事实
+                matched_facts = [f for f in all_facts if f.get("fact_id") in target_ids]
+            else:
+                # 没有 supporting_fact_ids: 不创建证据链
+                matched_facts = []
+
+            if matched_facts:
+                hypo_service.create_evidence_batch(
+                    project_id=project_id,
+                    hypothesis_id=db_hypo.id,
+                    facts=matched_facts,
+                )
     
     @staticmethod
     def _safe_model_dump(obj) -> dict:

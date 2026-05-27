@@ -115,6 +115,10 @@ class Hypothesis(BaseModel):
     possible_method = Column(Text, nullable=False)
     risk = Column(Text, nullable=False)
     
+    # 事实绑定
+    supporting_fact_ids = Column(Text, nullable=True, comment="关联的文献事实 ID 列表（JSON 数组）")
+    evidence_level = Column(String(20), default="medium", nullable=False, comment="证据级别: high / medium / low")
+    
     # 元数据
     status = Column(String(50), default="draft", nullable=False)  # draft, testing, accepted, rejected
     priority = Column(Integer, default=3, nullable=False)  # 1-5
