@@ -232,9 +232,15 @@ _mock_search_results = [
     SearchResult(chunk_id="chk-3", document_id="doc-2", content="少样本学习结合预训练Transformer可在50例数据上实现可用模型。",
                  page_number=1, source_title="Few-shot Medical Transformer", similarity_score=0.82),
 ]
-_vector_store_patcher = patch("app.agents.literature_mining_agent.search_vector_store", return_value=_mock_search_results)
-_vector_store_patcher.start()
-print("[Mock] 向量存储 Mock 注入完成")
+_vector_store_patchers = [
+    patch("app.agents.literature_mining_agent.search_vector_store", return_value=_mock_search_results),
+    # 关键修复：同时 Mock has_index，否则 LiteratureMiningAgent 会直接返回空结果
+    patch("app.agents.literature_mining_agent.get_vector_store"),
+]
+_mock_vs = _vector_store_patchers[1].start()
+_mock_vs.return_value.has_index.return_value = True
+_vector_store_patchers[0].start()
+print("[Mock] 向量存储 Mock 注入完成 (search + has_index)")
 
 # ================================================================
 #  3. 创建测试项目
@@ -484,7 +490,8 @@ print(f"\n  >>> 最终结果: {'PASS ✓' if overall else 'FAIL ✗'} <<<")
 print("=" * 60)
 
 # ─── 清理 ───
-_vector_store_patcher.stop()
+for p in _vector_store_patchers:
+    p.stop()
 db.close()
 
 sys.exit(0 if overall else 1)

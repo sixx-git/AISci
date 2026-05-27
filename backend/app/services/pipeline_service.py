@@ -93,6 +93,7 @@ class PipelineService:
         results: Dict[str, Any] = {}
         final_report_id: Optional[str] = None
         pipeline_start = datetime.now(timezone.utc)
+        self._pipeline_start = pipeline_start  # 供 _build_pipeline_run_info 实时计算耗时
         
         try:
             # 更新 Pipeline 状态为运行中
@@ -305,11 +306,18 @@ class PipelineService:
     
     def _build_pipeline_run_info(self) -> Dict[str, Any]:
         """构建 Pipeline 运行摘要信息"""
+        now = datetime.now(timezone.utc)
+        # 实时计算耗时：从 pipeline 启动到当前时刻
+        duration_ms = self.db_pipeline_run.total_duration_ms or (
+            int((now - self._pipeline_start).total_seconds() * 1000)
+            if hasattr(self, '_pipeline_start') and self._pipeline_start
+            else 0
+        )
         return {
             "run_id": self.run_id,
             "started_at": self.db_pipeline_run.started_at.isoformat() if self.db_pipeline_run and self.db_pipeline_run.started_at else None,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "total_duration_ms": self.db_pipeline_run.total_duration_ms if self.db_pipeline_run else 0,
+            "completed_at": now.isoformat(),
+            "total_duration_ms": duration_ms,
             "status": "completed",
             "stages": [
                 {

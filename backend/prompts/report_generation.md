@@ -47,6 +47,7 @@
 
 ## 0. Paper Title
 - 生成一个精确学术标题，体现核心假设和创新点
+- **标题必须基于文献挖掘出的 facts 和生成的 hypothesis 来构造，不可使用"零文献输入"等无实质内容的占位标题**
 
 ## 1. Paper Abstract
 - 200-300 字摘要
@@ -89,6 +90,7 @@
 ## 7. Technical Details
 - 列出：
   - 模型/算法名称及原理简述
+  - **生成引擎**：本报告由 Qwen/千问大模型生成。禁止提及 GPT-4、Llama-3 等其他模型
   - 统计检验方法
   - 工具栈（Python/PyTorch/Scikit-learn 等）
   - 关键公式（如有）
@@ -125,8 +127,9 @@
   - **actual_result**: 如果有小样验证的实际执行结果，列在此处
   - **simulated_result**: 如果有模拟/推算的结果，列在此处
   - **expected_result**: 预期达到的结果
+- **优先使用 small_validation 中的真实运行数据**（actual_result）而非模拟数据
 - **如果只有模拟或预期，必须明确标注，不得伪装成真实结果**
-- 如果 small_validation 中有数据，优先使用
+- small_validation 中如有"验证通过"/"不通过"结论、具体数值指标、代码执行输出等，均视为 actual_result
 
 ## 14. Human-in-the-loop Review
 - 列出需要人工确认的问题：
@@ -177,3 +180,4 @@
 - results_feasibility 中若没有 actual_result 数据，必须显式写出"以下为预期/模拟结果"
 - 如果没有文献库，全报告应明确提示而非假装有证据
 - markdown_content 必须是一段连贯完整的 Markdown 文档，而非碎片
+- **禁止在任何章节中提及 GPT-4、GPT-3.5、Llama-3、Claude 等非 Qwen/千问 模型名称**。系统唯一使用的大模型为 Qwen（千问），technical_details 中的"生成引擎"必须标注为 Qwen/千问
