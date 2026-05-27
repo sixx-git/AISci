@@ -1161,6 +1161,75 @@ npm run dev
 
 ---
 
+## 🧪 如何验证文献库到报告引用链路
+
+使用端到端验收脚本 `scripts/test_literature_to_report.py` 验证完整的 **arXiv / BibTeX / PDF 文献库 → Pipeline → 报告 References** 链路。
+
+### 运行方式
+
+```bash
+# 1. 进入 backend 目录
+cd backend
+
+# 2. 使用 Mock LLM 模式运行（无需 QWEN_API_KEY，不调用真实 API）
+$env:PYTHONPATH = "."
+python ../scripts/test_literature_to_report.py
+
+# 3. 如需使用真实 arXiv 搜索（需网络）
+$env:REAL_ARXIV = "1"
+python ../scripts/test_literature_to_report.py
+```
+
+### 验收流程
+
+| 步骤 | 说明 |
+|------|------|
+| 创建项目 | 在内存 SQLite 中创建测试项目 |
+| arXiv 检索 | 搜索 "multimodal medical diagnosis transformer"，导入前 2 篇元数据 |
+| BibTeX 导入 | 导入一条测试 BibTeX 条目（Swin Transformer） |
+| 运行 Pipeline | 使用 Mock LLM 完成全部 8 个阶段 |
+| 生成报告 | 生成包含 References 的研究报告 |
+
+### 验证项
+
+| 检查项 | 预期结果 |
+|--------|----------|
+| References 不为空 | 至少 1 条引用 |
+| `compliance_check.references_verified > 0` | 引用通过文献库验证 |
+| `markdown_content` 包含 "References" | 报告正文含参考文献章节 |
+| Evidence-grounded Literature Facts 不为空 | 基于文献的事实摘要 |
+| `compliance_check` 结构完整 | 16 项合规检查全量 |
+
+### 输出示例
+
+```
+[OK] 测试项目创建: abc123...
+[OK] arXiv 检索: 2 篇导入成功
+[OK] BibTeX 导入: 1 篇导入成功
+[INFO] 项目文献总数: 3 篇
+
+--- 开始运行 Pipeline ---
+Pipeline 状态: completed
+报告 ID: def456...
+
+[PASS] References 不为空 (3 条引用)
+[PASS] compliance_check.references_verified = 3 (>0)
+[PASS] markdown_content 包含 References
+[PASS] Evidence-grounded Literature Facts 不为空
+[PASS] compliance_check 结构完整
+
+  >>> 最终结果: PASS ✓ <<<
+```
+
+### 注意事项
+
+- **默认使用 Mock LLM**：脚本不依赖 `QWEN_API_KEY`，使用预设响应模拟各 Agent 输出
+- **不强制下载 PDF**：仅导入文献元数据，不触发 PDF 下载
+- **不依赖 Google Scholar**：所有文献均通过 arXiv API 或本地 BibTeX 导入
+- **arXiv 搜索降级**：如果网络不可用，arXiv 搜索步骤将跳过并提示，后续验证仍可进行
+
+---
+
 ## 🔧 开发指南
 
 ### 后端开发

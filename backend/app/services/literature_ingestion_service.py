@@ -391,9 +391,8 @@ class LiteratureIngestionService:
             publication_date=published_at,
             journal=journal,
             volume=entry.get("volume"),
-            number=entry.get("number"),
+            issue=entry.get("number"),  # BibTeX 'number' → 'issue'
             pages=entry.get("pages"),
-            publisher=entry.get("publisher"),
             source_url=entry.get("url", ""),
             pdf_url="",
             external_id=entry.get("cite_key", ""),
