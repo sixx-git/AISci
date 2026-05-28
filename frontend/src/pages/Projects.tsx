@@ -35,7 +35,8 @@ export function Projects() {
         const res = await projectService.getProjects();
         if (cancelled) return;
         if (res.code === 200 && res.data) {
-          setProjects(res.data);
+          const list = (res.data as any)?.list ?? res.data;
+          setProjects(Array.isArray(list) ? list : []);
         } else {
           setError(res.message || '获取项目列表失败');
         }
