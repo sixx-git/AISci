@@ -4,8 +4,6 @@ import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
 import { RunLogDetail } from './RunLogDetail';
 import { pipelineService } from '@/services';
-import env from '@/config/env';
-import { MOCK_RUN_LOGS } from '@/data/mockData';
 import type { RunLog, PipelineRunSummary, PipelineStageExecutionSummary } from '@/types';
 
 interface RunLogsPageProps {
@@ -96,7 +94,7 @@ export function RunLogsPage({
 
   // 加载运行日志
   useEffect(() => {
-    if (!projectId && !env.USE_MOCK) {
+    if (!projectId) {
       setIsLoading(false);
       return;
     }
@@ -105,15 +103,10 @@ export function RunLogsPage({
       setIsLoading(true);
       setErrorMsg(null);
       try {
-        const res = await pipelineService.getRuns(projectId || '');
+        const res = await pipelineService.getRuns(projectId);
 
         if (res.code !== 200 || !res.data || res.data.length === 0) {
-          if (env.USE_MOCK) {
-            setLogs(MOCK_RUN_LOGS);
-            setSelectedLog(MOCK_RUN_LOGS[0]);
-          } else {
-            setLogs([]);
-          }
+          setLogs([]);
           return;
         }
 
@@ -142,10 +135,6 @@ export function RunLogsPage({
       } catch (err) {
         console.error('加载运行日志失败:', err);
         setErrorMsg(err instanceof Error ? err.message : '加载失败');
-        if (env.USE_MOCK) {
-          setLogs(MOCK_RUN_LOGS);
-          setSelectedLog(MOCK_RUN_LOGS[0]);
-        }
       } finally {
         setIsLoading(false);
       }

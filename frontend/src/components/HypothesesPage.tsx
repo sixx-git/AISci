@@ -5,8 +5,6 @@ import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { ScoreBar } from '@/components/ScoreBar';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
-import { MOCK_DETAILED_HYPOTHESES, MOCK_EVIDENCE_CHAINS } from '@/data/mockData';
-import env from '@/config/env';
 import hypothesisService, { type BackendHypothesis, type BackendEvidence } from '@/services/hypothesisService';
 import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
@@ -100,10 +98,8 @@ export function HypothesesPage({
   revalidateKey: _revalidateKey,
   latestRunId: _latestRunId,
 }: HypothesesPageProps) {
-  const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>(
-    env.USE_MOCK ? MOCK_DETAILED_HYPOTHESES : [],
-  );
-  const [loading, setLoading] = useState(!env.USE_MOCK);
+  const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
@@ -118,7 +114,6 @@ export function HypothesesPage({
   }, []);
 
   useEffect(() => {
-    if (env.USE_MOCK) return;
     if (!_projectId) {
       setLoading(false);
       setError('未提供项目 ID');
@@ -147,12 +142,6 @@ export function HypothesesPage({
     const hypo = hypotheses.find(h => h.id === id);
     if (!hypo) return;
     setSelectedHypothesis(hypo);
-
-    if (env.USE_MOCK) {
-      setCurrentEvidence(MOCK_EVIDENCE_CHAINS[id] || []);
-      setDrawerOpen(true);
-      return;
-    }
 
     setEvidenceLoading(true);
     setDrawerOpen(true);
@@ -188,18 +177,10 @@ export function HypothesesPage({
   }, [showAlert]);
 
   const handleRegenerate = useCallback((_id: string) => {
-    if (env.USE_MOCK) {
-      showAlert('重新生成请求已提交（模拟）');
-      return;
-    }
     showAlert('请在工作流页面运行 Pipeline 以重新生成假设');
   }, [showAlert]);
 
   const handleGenerateNew = useCallback(() => {
-    if (env.USE_MOCK) {
-      showAlert('生成新假设中…（模拟 3s）');
-      return;
-    }
     showAlert('请先在工作流页面运行 Pipeline，完成后返回此页面查看生成的假设');
   }, [showAlert]);
 
@@ -210,11 +191,6 @@ export function HypothesesPage({
           <h1 className="text-3xl font-bold text-white mb-2">候选假设</h1>
           <p className="text-gray-400">
             基于文献事实、知识缺口和逻辑推理生成可验证科学假设
-            {env.USE_MOCK && (
-              <span className="ml-2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-amber-400 text-xs align-baseline">
-                演示数据
-              </span>
-            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -250,7 +226,7 @@ export function HypothesesPage({
         </div>
       )}
 
-      {!loading && !error && !env.USE_MOCK && hypotheses.length === 0 && (
+      {!loading && !error && hypotheses.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
           <p className="text-sm text-gray-400 mb-2">暂无假设数据</p>

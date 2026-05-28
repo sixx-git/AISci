@@ -8,10 +8,6 @@ import {
   Sparkles, Loader2, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  MOCK_DETAILED_EXPERIMENT,
-} from '@/data/mockData';
-import env from '@/config/env';
 import experimentService, { type BackendExperimentDesign } from '@/services/experimentService';
 import type { DetailedExperimentDesign, ExperimentBaseline, ExperimentMetric, ExperimentStep } from '@/types';
 
@@ -152,10 +148,8 @@ export function ExperimentDesignPage({
   revalidateKey: _revalidateKey,
   latestRunId: _latestRunId,
 }: ExperimentDesignPageProps) {
-  const [experiment, setExperiment] = useState<DetailedExperimentDesign | null>(
-    env.USE_MOCK ? MOCK_DETAILED_EXPERIMENT : null,
-  );
-  const [loading, setLoading] = useState(!env.USE_MOCK);
+  const [experiment, setExperiment] = useState<DetailedExperimentDesign | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
@@ -165,7 +159,6 @@ export function ExperimentDesignPage({
   }, []);
 
   useEffect(() => {
-    if (env.USE_MOCK) return;
     if (!_projectId) {
       setLoading(false);
       setError('未提供项目 ID');
@@ -192,18 +185,10 @@ export function ExperimentDesignPage({
   }, [_projectId, _revalidateKey, _latestRunId]);
 
   const handleGenerate = useCallback(() => {
-    if (env.USE_MOCK) {
-      showAlert('实验设计生成中…（模拟）');
-      return;
-    }
     showAlert('请先在工作流页面运行 Pipeline，完成 experiment_design 阶段后返回查看');
   }, [showAlert]);
 
   const handleSmallValidation = useCallback(() => {
-    if (env.USE_MOCK) {
-      showAlert('小样验证已启动（模拟 5s）');
-      return;
-    }
     showAlert('请先运行 Pipeline 的 small_validation 阶段');
   }, [showAlert]);
 
@@ -212,11 +197,6 @@ export function ExperimentDesignPage({
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">实验设计</h1>
         <p className="text-gray-400">为选定科学假设生成可执行、可复现的验证方案
-          {env.USE_MOCK && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-amber-400 text-xs align-baseline">
-              演示数据
-            </span>
-          )}
         </p>
       </div>
 

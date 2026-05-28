@@ -6,15 +6,13 @@ import { ExperimentDesignTable } from '@/components/ExperimentDesignTable';
 import { Button } from '@/components/Button';
 import { Sparkles, FileText, Download } from 'lucide-react';
 import type { ResearchResult } from '@/types';
-import { MOCK_RESEARCH_RESULTS } from '@/data/mockData';
-import env from '@/config/env';
 
 interface ResearchResultsProps {
   results?: ResearchResult;
 }
 
 export const ResearchResults = ({ 
-  results = env.USE_MOCK ? MOCK_RESEARCH_RESULTS : ({} as ResearchResult)
+  results = {} as ResearchResult
 }: ResearchResultsProps) => {
   const [selectedHypothesisId, setSelectedHypothesisId] = useState<string>(
     results.hypotheses[0]?.id

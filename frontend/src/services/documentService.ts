@@ -1,5 +1,4 @@
 import api from '@/lib/api';
-import env from '@/config/env';
 import type { ApiResponse } from '@/types';
 
 /** 后端返回的文档信息 */
@@ -63,15 +62,6 @@ export const documentService = {
     page = 1,
     pageSize = 100,
   ): Promise<ApiResponse<DocumentListResult>> {
-    if (env.USE_MOCK) {
-      console.log('[Mock] documentService.getDocuments', projectId);
-      return {
-        code: 200,
-        message: 'Mock data',
-        data: { items: [], total: 0, page: 1, page_size: 20 },
-      };
-    }
-
     const { data } = await api.get<ApiResponse<DocumentListResult>>(
       '/documents',
       { params: { project_id: projectId, page, page_size: pageSize } },

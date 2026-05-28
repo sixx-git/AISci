@@ -8,9 +8,7 @@ import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
 import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
 import type { ReportData } from '@/types';
-import { MOCK_REPORT, MOCK_REPORT_SECTIONS } from '@/data/mockData';
 import { reportService } from '@/services/reportService';
-import env from '@/config/env';
 
 interface ReportPageProps {
   projectId: string;
@@ -29,7 +27,7 @@ export function ReportPage({
   latestRunId: _latestRunId,
 }: ReportPageProps) {
   const navigate = useNavigate();
-  const [report, setReport] = useState<ReportData | null>(env.USE_MOCK ? MOCK_REPORT : null);
+  const [report, setReport] = useState<ReportData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
@@ -41,7 +39,7 @@ export function ReportPage({
 
   // 非 Mock 模式下加载最新报告
   useEffect(() => {
-    if (env.USE_MOCK || !projectId) return;
+    if (!projectId) return;
 
     (async () => {
       setIsLoading(true);
@@ -162,7 +160,7 @@ export function ReportPage({
     );
   }
 
-  const sections = report.sections || (env.USE_MOCK ? MOCK_REPORT_SECTIONS : []);
+  const sections = report.sections || [];
   const complianceCheck = report.complianceCheck;
   const hasNoRefs = complianceCheck && complianceCheck.references_verified === 0;
   const pdfFailed = report.pdfSuccess === false;

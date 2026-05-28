@@ -6,9 +6,7 @@ import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { Button } from '@/components/Button';
-import { MOCK_AGENT_NODES } from '@/data/mockData';
 import { pipelineService } from '@/services/pipelineService';
-import env from '@/config/env';
 import type {
   AgentNodeData,
   AgentStatus,
@@ -122,10 +120,8 @@ export function WorkflowPage({
   onPipelineCompleted,
 }: WorkflowPageProps) {
   // ────── 节点与选中状态 ──────
-  const [nodes, setNodes] = useState<AgentNodeData[]>(
-    () => MOCK_AGENT_NODES.map((n) => ({ ...n })),
-  );
-  const [selectedId, setSelectedId] = useState<string>(MOCK_AGENT_NODES[0].id);
+  const [nodes, setNodes] = useState<AgentNodeData[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
 
   // ────── 运行状态 ──────
   const [isRunning, setIsRunning] = useState(false);
@@ -244,62 +240,9 @@ export function WorkflowPage({
   }, []);
 
   // ══════════════════════════════════════════════
-  //  Mock 模式：纯前端模拟执行
-  // ══════════════════════════════════════════════
-  const runMockPipeline = useCallback(() => {
-    setIsRunning(true);
-    setIsLoading(false);
-    setErrorMessage(null);
-    let idx = 0;
-    const runNext = () => {
-      setNodes((prev) => {
-        const next = [...prev];
-        if (idx < next.length) {
-          next[idx] = { ...next[idx], status: 'running' as const, duration: null };
-        }
-        return next;
-      });
-      setNodes((prev) => {
-        if (idx < prev.length) setSelectedId(prev[idx].id);
-        return prev;
-      });
-
-      setTimeout(() => {
-        setNodes((prev) => {
-          const next = [...prev];
-          if (idx < next.length) {
-            const dur = 1500 + Math.random() * 3500;
-            next[idx] = {
-              ...next[idx],
-              status: 'completed' as const,
-              duration: Math.round(dur),
-              logs: [...next[idx].logs, `[${new Date().toLocaleTimeString()}] 执行完成 (mock)`],
-            };
-          }
-          return next;
-        });
-        idx++;
-        if (idx < MOCK_AGENT_NODES.length) {
-          runNext();
-        } else {
-          setIsRunning(false);
-        }
-      }, 1500 + Math.random() * 2000);
-    };
-    runNext();
-  }, []);
-
-  // ══════════════════════════════════════════════
-  //  运行全部（核心入口，严格区分 mock / real）
+  //  运行全部
   // ══════════════════════════════════════════════
   const handleRunAll = useCallback(async () => {
-    // ── Mock 模式 ──
-    if (env.USE_MOCK) {
-      runMockPipeline();
-      return;
-    }
-
-    // ── 真实模式：前置校验 ──
     if (!projectId) {
       setErrorMessage('缺少项目 ID，无法运行真实 Pipeline。');
       return;
@@ -358,7 +301,6 @@ export function WorkflowPage({
   }, [
     projectId,
     finalResearchQuestion,
-    runMockPipeline,
     resetNodes,
     applyStageResults,
     startPolling,
@@ -389,53 +331,15 @@ export function WorkflowPage({
     setErrorMessage(null);
     setCurrentRunId(null);
     setLocalResearchQuestion('');
-    setNodes(MOCK_AGENT_NODES.map((n) => ({ ...n })));
-    setSelectedId(MOCK_AGENT_NODES[0].id);
+    setNodes([]);
+    setSelectedId('');
   }, []);
 
   // ══════════════════════════════════════════════
-  //  重新运行（严格区分 mock / real）
+  //  重新运行
   // ══════════════════════════════════════════════
   const handleRerun = useCallback(
-    async (id: string) => {
-      // ── Mock 模式 ──
-      if (env.USE_MOCK) {
-        setNodes((prev) =>
-          prev.map((n) =>
-            n.id === id
-              ? {
-                  ...n,
-                  status: 'running' as const,
-                  duration: null,
-                  logs: [
-                    ...n.logs,
-                    `[${new Date().toLocaleTimeString()}] 重新运行…`,
-                  ],
-                }
-              : n,
-          ),
-        );
-        setTimeout(() => {
-          setNodes((prev) =>
-            prev.map((n) =>
-              n.id === id
-                ? {
-                    ...n,
-                    status: 'completed' as const,
-                    duration: Math.round(2000 + Math.random() * 3000),
-                    logs: [
-                      ...n.logs,
-                      `[${new Date().toLocaleTimeString()}] 运行完成 (mock)`,
-                    ],
-                  }
-                : n,
-            ),
-          );
-        }, 1500 + Math.random() * 2000);
-        return;
-      }
-
-      // ── 真实模式：重新运行整个 Pipeline ──
+    async (_id: string) => {
       if (!projectId) {
         setErrorMessage('缺少项目 ID，无法重新运行。');
         return;
@@ -459,14 +363,9 @@ export function WorkflowPage({
         <h1 className="text-3xl font-bold text-white mb-2">智能体工作流</h1>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-gray-400 text-sm">从文献/数据输入到可验证科学假设输出的多智能体闭环</p>
-          {env.USE_MOCK && (
-            <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-medium">
-              当前为 Mock 模式
-            </span>
-          )}
-          {!env.USE_MOCK && projectId && (
+          {projectId && (
             <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded">
-              Live API Mode
+              API Connected
             </span>
           )}
         </div>
@@ -486,8 +385,8 @@ export function WorkflowPage({
         )}
       </div>
 
-      {/* ========== 真实模式下研究问题缺失时的兜底输入 ========== */}
-      {!env.USE_MOCK && !researchQuestion && (
+      {/* ========== 研究问题缺失时的兜底输入 ========== */}
+      {!researchQuestion && (
         <div className="mb-5 p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
           <p className="text-sm text-yellow-300 font-medium mb-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />

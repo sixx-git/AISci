@@ -3,30 +3,19 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FlaskConical, Calendar, ArrowRight } from 'lucide-react';
 import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
-import env from '@/config/env';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
+import type { StatusType } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
-import type { Project } from '@/types';
-import { MOCK_PROJECTS } from '@/data/mockData';
-
-function mockProjectsAsList(): Project[] {
-  return Object.values(MOCK_PROJECTS).map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    status: p.status,
-    created_at: p.created_at,
-    updated_at: p.updated_at,
-  }));
-}
+import type { ProjectOverview } from '@/types';
 
 export function Home() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectOverview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -34,24 +23,17 @@ export function Home() {
 
   const loadProjects = async () => {
     setLoading(true);
+    setError(null);
     try {
       const response = await projectService.getProjects();
       if (response.code === 200) {
-        const data = response.data || [];
-        if (data.length > 0) {
-          setProjects(data);
-        } else if (env.USE_MOCK) {
-          setProjects(mockProjectsAsList());
-        } else {
-          setProjects([]);
-        }
-      }
-    } catch {
-      if (env.USE_MOCK) {
-        setProjects(mockProjectsAsList());
+        const list = (response.data as any)?.list ?? response.data ?? [];
+        setProjects(Array.isArray(list) ? list : []);
       } else {
-        setProjects([]);
+        setError(response.message || '获取项目列表失败');
       }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '获取项目列表失败，请检查后端服务是否启动');
     } finally {
       setLoading(false);
     }
@@ -59,7 +41,6 @@ export function Home() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
       <PageHeader
         title="项目工作台"
         subtitle="管理您的 AI 科研项目"
@@ -70,7 +51,6 @@ export function Home() {
         }
       />
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="text-center">
           <div className="text-3xl font-bold text-primary-400 mb-2">
@@ -92,7 +72,6 @@ export function Home() {
         </Card>
       </div>
 
-      {/* Project List */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">我的项目</h2>
@@ -108,10 +87,18 @@ export function Home() {
               </Card>
             ))}
           </div>
+        ) : error ? (
+          <Card className="border-red-800/30 bg-red-950/20">
+            <div className="text-center py-8">
+              <p className="text-red-400 mb-2">加载失败</p>
+              <p className="text-gray-400 text-sm mb-4">{error}</p>
+              <Button onClick={loadProjects} variant="secondary">重试</Button>
+            </div>
+          </Card>
         ) : projects.length === 0 ? (
           <EmptyState
             icon={<FlaskConical className="w-8 h-8" />}
-            title="还没有项目"
+            title="暂无项目，请创建新项目。"
             description="创建您的第一个 AI 科研项目"
             action={{
               label: '创建项目',
@@ -132,7 +119,7 @@ export function Home() {
                       <FlaskConical className="w-5 h-5 text-white" />
                     </div>
                     <StatusBadge
-                      status={(project.status as any) || 'draft'}
+                      status={(project.status as StatusType) || 'draft'}
                     />
                   </div>
                   <h3 className="font-semibold text-white mb-2 group-hover:text-primary-400 transition-colors">

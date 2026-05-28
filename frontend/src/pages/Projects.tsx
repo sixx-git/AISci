@@ -6,13 +6,9 @@ import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
-import { MOCK_PROJECT_OVERVIEW } from '@/data/mockData';
 import { projectService } from '@/services/projectService';
 import { formatDate } from '@/lib/utils';
-import env from '@/config/env';
-import type { Project } from '@/types';
-
-const MOCK_FALLBACK = Object.values(MOCK_PROJECT_OVERVIEW);
+import type { ProjectOverview } from '@/types';
 
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
@@ -24,7 +20,7 @@ const STATUS_OPTIONS = [
 export function Projects() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,12 +30,6 @@ export function Projects() {
     async function loadProjects() {
       setLoading(true);
       setError(null);
-
-      if (env.USE_MOCK) {
-        setProjects(MOCK_FALLBACK);
-        setLoading(false);
-        return;
-      }
 
       try {
         const res = await projectService.getProjects();

@@ -9,7 +9,6 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
-import { StatCard } from '@/components/StatCard';
 import { PipelineProgress } from '@/components/PipelineProgress';
 import { ResearchQuestionPage } from '@/components/ResearchQuestionPage';
 import { LiteratureLibrary } from '@/components/LiteratureLibrary';
@@ -18,14 +17,9 @@ import { HypothesesPage } from '@/components/HypothesesPage';
 import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
-import {
-  MOCK_PROJECT_OVERVIEW, MOCK_STATS, DEFAULT_STATS,
-  MOCK_PIPELINE_NODES, DEFAULT_PIPELINE_NODES,
-} from '@/data/mockData';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
-import env from '@/config/env';
-import type { ProjectOverview, StatItem, PipelineNodeData, Project, PipelineRunResult, PipelineRunSummary } from '@/types';
+import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
 import { cn } from '@/lib/utils';
 
 // ============ 标签页定义 ============
@@ -90,31 +84,36 @@ const STAGE_CN_MAP: Record<string, string> = {
 // ============ 项目概览 ============
 function ProjectOverview({ project, stats, pipelineNodes }: {
   project: ProjectOverview;
-  stats: StatItem[];
-  pipelineNodes: PipelineNodeData[];
+  stats: { label: string; value: string }[];
+  pipelineNodes: { id: string; label: string; status: string }[];
 }) {
   const navigate = useNavigate();
 
   return (
     <div className="space-y-6">
-      {/* 统计卡片 */}
       <Card title="研究数据概览" subtitle="当前项目的关键指标">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {stats.map((stat) => (
-            <StatCard
-              key={stat.id}
-              label={stat.label}
-              value={stat.value}
-              icon={<stat.icon className="w-5 h-5" />}
-              colorClass={stat.color}
-            />
-          ))}
-        </div>
+        {stats.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <TrendingUp className="w-8 h-8 mx-auto mb-3 opacity-50" />
+            <p>暂无统计数据</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {stats.map((stat, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-lg bg-dark-800/50 border border-dark-700 text-center"
+              >
+                <div className="text-2xl font-bold text-primary-400">{stat.value}</div>
+                <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
-      {/* Pipeline 进度 */}
       <Card title="研究 Pipeline" subtitle="各阶段执行状态">
-        <PipelineProgress nodes={pipelineNodes} />
+        <PipelineProgress nodes={pipelineNodes as any} />
         <div className="mt-6 flex justify-end">
           <Button
             icon={<Play className="w-4 h-4" />}
@@ -125,7 +124,6 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
         </div>
       </Card>
 
-      {/* 快捷操作 */}
       <Card title="快捷操作">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
@@ -217,23 +215,6 @@ function LogsTab({ projectId, revalidateKey, latestRunId }: {
   return <RunLogsPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-/**
- * 从 Project 类型（API 返回）转换为 ProjectOverview 类型（UI 使用）
- */
-function toProjectOverview(p: Project): ProjectOverview {
-  return {
-    id: p.id,
-    name: p.name,
-    description: p.description ?? '',
-    research_field: (p as any).research_domain || (p as any).research_field || (p as any).researchField || '',
-    current_stage: (p as any).current_stage || (p as any).currentStage || '未开始',
-    research_question: (p as any).research_question || (p as any).researchQuestion || '',
-    status: (p as any).status || 'draft',
-    created_at: p.created_at,
-    updated_at: p.updated_at,
-  };
-}
-
 // ============ 主组件 ============
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -266,7 +247,7 @@ export function ProjectWorkspace() {
 
   // --- 加载 Pipeline 运行记录 ---
   useEffect(() => {
-    if (env.USE_MOCK || !id) {
+    if (!id) {
       setPipelineRuns([]);
       return;
     }
@@ -303,32 +284,11 @@ export function ProjectWorkspace() {
       setLoading(true);
       setError(null);
 
-      if (env.USE_MOCK) {
-        const mock = MOCK_PROJECT_OVERVIEW[id];
-        if (mock) {
-          setProject(mock);
-        } else {
-          // 没有 mock 数据时使用默认值
-          setProject({
-            id,
-            name: `项目 #${id}`,
-            research_field: '人工智能',
-            description: '这是一个 AI 科研项目。',
-            current_stage: '未开始',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            status: 'draft',
-          });
-        }
-        setLoading(false);
-        return;
-      }
-
       try {
         const res = await projectService.getProject(id);
         if (cancelled) return;
         if (res.code === 200 && res.data) {
-          setProject(toProjectOverview(res.data));
+          setProject(res.data);
         } else {
           setError(res.message || '获取项目详情失败');
         }
@@ -366,19 +326,6 @@ export function ProjectWorkspace() {
     return '未开始';
   }, [isPipelineRunning, pipelineRuns]);
 
-  // --- stats / pipelineNodes ---
-  const stats = useMemo<StatItem[]>(() => {
-    if (env.USE_MOCK) return MOCK_STATS[id] ?? DEFAULT_STATS;
-    // 后端暂未提供 stats 接口，使用 DEFAULT_STATS 作为默认展示数据
-    return DEFAULT_STATS;
-  }, [id]);
-
-  const pipelineNodes = useMemo<PipelineNodeData[]>(() => {
-    if (env.USE_MOCK) return MOCK_PIPELINE_NODES[id] ?? DEFAULT_PIPELINE_NODES;
-    // 后端暂未提供 pipeline nodes 接口，使用 DEFAULT_PIPELINE_NODES 作为默认展示数据
-    return DEFAULT_PIPELINE_NODES;
-  }, [id]);
-
   // --- 研究问题汇总（后端优先 → localStorage fallback） ---
   const resolvedResearchQuestion = useMemo(() => {
     if (project?.research_question) return project.research_question;
@@ -393,10 +340,10 @@ export function ProjectWorkspace() {
 
   // --- 保存研究问题后刷新项目数据 ---
   const handleResearchSaved = () => {
-    if (env.USE_MOCK || !id) return;
+    if (!id) return;
     projectService.getProject(id).then((res) => {
       if (res.code === 200 && res.data) {
-        setProject(toProjectOverview(res.data));
+        setProject(res.data);
       }
     });
   };
@@ -472,7 +419,7 @@ export function ProjectWorkspace() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <ProjectOverview project={project} stats={stats} pipelineNodes={pipelineNodes} />;
+        return <ProjectOverview project={project} stats={[]} pipelineNodes={[]} />;
       case 'questions':
         return <QuestionsTab projectId={id} onSaved={handleResearchSaved} />;
       case 'literature':
@@ -495,7 +442,7 @@ export function ProjectWorkspace() {
       case 'logs':
         return <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       default:
-        return <ProjectOverview project={project} stats={stats} pipelineNodes={pipelineNodes} />;
+        return <ProjectOverview project={project} stats={[]} pipelineNodes={[]} />;
     }
   };
 
