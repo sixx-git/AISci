@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   BookOpen, Upload, FileText,
   Database, Eye, Sparkles, Trash2,
-  FileSearch, Loader2, CheckCircle, Clock, AlertCircle, Plus,
+  FileSearch, Loader2, CheckCircle, Clock, AlertCircle, AlertTriangle, Plus,
   Layers, BrainCircuit,
   XCircle, ArrowUp, Search, Download, ExternalLink,
   ClipboardList, Info, FileCode,
@@ -409,7 +409,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     setArxivImporting((prev) => ({ ...prev, [paper.external_id]: true }));
 
     try {
-      const res = await literatureService.importArxiv(projectId, [paper]);
+      const res = await literatureService.importArxiv(projectId, [paper], arxivFallback);
       if (res.code === 200) {
         const result = res.data as ImportArxivResult;
         if (result.imported > 0) {

@@ -197,6 +197,7 @@ export interface PipelineRunSummary {
   total_duration_ms?: number;
   final_report_id?: string;
   failed_stage?: string;
+  error_message?: string;
   created_at: string;
 }
 
@@ -244,6 +245,7 @@ export interface PipelineRunResult {
   final_report?: Record<string, unknown>;
   final_report_id?: string;
   failed_stage?: string;
+  error_message?: string;
   created_at: string;
   completed_at?: string;
 }

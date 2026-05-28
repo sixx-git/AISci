@@ -253,9 +253,10 @@ export const literatureService = {
   async importArxiv(
     projectId: string,
     papers: ArxivPaper[],
+    fallback: boolean = false,
   ): Promise<ApiResponse<ImportArxivResult>> {
     if (env.USE_MOCK) {
-      console.log('[Mock] literatureService.importArxiv', { projectId, count: papers.length });
+      console.log('[Mock] literatureService.importArxiv', { projectId, count: papers.length, fallback });
       await new Promise((r) => setTimeout(r, 400));
       return {
         code: 200,
@@ -278,6 +279,7 @@ export const literatureService = {
     const { data } = await api.post<ApiResponse<ImportArxivResult>>('/literature/import/arxiv', {
       project_id: projectId,
       papers,
+      fallback,
     });
     return data;
   },

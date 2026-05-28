@@ -76,6 +76,7 @@ class LiteratureIngestionService:
         project_id: str,
         papers: List[Dict[str, Any]],
         source_type: SourceType = SourceType.ARXIV,
+        fallback: bool = False,
     ) -> Dict[str, Any]:
         """
         批量导入论文元数据到 Document 表（支持 arXiv / OpenAlex 等多来源）
@@ -103,7 +104,7 @@ class LiteratureIngestionService:
 
         for paper in papers:
             try:
-                doc_id, is_dup = self._import_single_paper(project_id, paper, source_type)
+                doc_id, is_dup = self._import_single_paper(project_id, paper, source_type, fallback)
                 results.append({
                     "external_id": paper.get("external_id", ""),
                     "document_id": doc_id,
@@ -138,6 +139,7 @@ class LiteratureIngestionService:
         project_id: str,
         paper: Dict[str, Any],
         source_type: SourceType = SourceType.ARXIV,
+        fallback: bool = False,
     ) -> Tuple[str, bool]:
         """
         导入单篇论文元数据
@@ -203,6 +205,7 @@ class LiteratureIngestionService:
                 "comment": paper.get("comment"),
                 "journal_ref": paper.get("journal_ref"),
                 "source_type": "arxiv",
+                "fallback": fallback,
             },
             created_at=datetime.now(),
         )

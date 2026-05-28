@@ -40,9 +40,28 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
 
 // ============ 工具函数 ============
 
+/** 归一化阶段名：统一处理大小写、短横线、空格等变体 */
+function normalizeStageName(stage?: string): string {
+  if (!stage) return '';
+  return stage
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .trim();
+}
+
+/** 归一化状态名：统一处理大写、小写、短横线、空格等变体 */
+function normalizeStatus(status?: string): string {
+  if (!status) return 'pending';
+  return status
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .trim();
+}
+
 /** 后端状态 → 前端 AgentStatus */
 function mapStatus(status: string): AgentStatus {
-  switch (status) {
+  const normalized = normalizeStatus(status);
+  switch (normalized) {
     case 'running':
       return 'running';
     case 'completed':
@@ -139,13 +158,15 @@ export function WorkflowPage({
     setNodes((prev) => {
       const updated = prev.map((node) => {
         const matchedStage = result.stages?.find(
-          (s) => STAGE_TO_NODE_ID[s.stage] === node.id,
+          (s) => normalizeStageName(s.stage) === node.id ||
+            STAGE_TO_NODE_ID[normalizeStageName(s.stage)] === node.id,
         );
         return matchedStage ? mergeStageData(node, matchedStage) : node;
       });
 
       if (result.failed_stage) {
-        const failedNodeId = STAGE_TO_NODE_ID[result.failed_stage];
+        const normalized = normalizeStageName(result.failed_stage);
+        const failedNodeId = STAGE_TO_NODE_ID[normalized] ?? normalized;
         if (failedNodeId) setSelectedId(failedNodeId);
       }
 

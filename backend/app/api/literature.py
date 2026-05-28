@@ -36,6 +36,7 @@ class ArxivSearchRequest(BaseModel):
 class ArxivImportRequest(BaseModel):
     project_id: str = Field(..., description="目标项目ID")
     papers: List[dict] = Field(..., min_length=1, description="待导入论文元数据列表（来自 /search/arxiv 返回结果）")
+    fallback: bool = Field(default=False, description="是否为 fallback 数据")
 
 
 class ProjectLiteratureQuery(BaseModel):
@@ -216,6 +217,7 @@ async def import_arxiv(
         result = service.import_arxiv_papers(
             project_id=req.project_id,
             papers=req.papers,
+            fallback=req.fallback,
         )
         return success(data=result, message=f"导入完成: 新增 {result['imported']}, 重复 {result['duplicates']}, 失败 {result['failed']}")
     except Exception as e:

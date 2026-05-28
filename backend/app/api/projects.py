@@ -162,7 +162,13 @@ async def upload_file(
     project_id: Optional[str] = Query(None, description="所属项目ID"),
     doc_service: DocumentService = Depends(get_document_service)
 ):
-    """上传文件（支持 PDF）"""
+    """
+    上传文件（支持 PDF）
+
+    .. deprecated::
+        推荐使用 /api/v1/documents/upload 代替。
+        该接口将在未来版本中移除。
+    """
     # 读取文件内容
     file_content = await file.read()
     
@@ -217,7 +223,13 @@ def list_documents(
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     doc_service: DocumentService = Depends(get_document_service)
 ):
-    """获取项目文档列表"""
+    """
+    获取项目文档列表
+
+    .. deprecated::
+        推荐使用 /api/v1/documents?project_id={project_id} 代替。
+        该接口将在未来版本中移除。
+    """
     documents, total = doc_service.list_documents(
         project_id=project_id,
         page=page,
