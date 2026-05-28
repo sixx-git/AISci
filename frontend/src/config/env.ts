@@ -8,7 +8,7 @@ export const env = {
   USE_MOCK: import.meta.env.VITE_USE_MOCK === 'true',
 
   /** 后端 API 基础地址。空字符串表示使用 Vite proxy（开发模式） */
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? '',
 } as const;
 
 // 类型安全断言

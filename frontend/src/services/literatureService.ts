@@ -51,6 +51,8 @@ export interface SearchArxivData {
   query: string;
   total: number;
   results: ArxivPaper[];
+  fallback?: boolean;
+  warning?: string;
 }
 
 /** 导入响应 */
@@ -117,6 +119,8 @@ export interface ArxivRecommendData {
   search_query: string;
   total: number;
   results: ArxivPaper[];
+  fallback?: boolean;
+  warning?: string;
 }
 
 // ==================== Mock 数据 ====================
@@ -228,6 +232,8 @@ export const literatureService = {
           query,
           total: MOCK_ARXIV_RESULTS.length,
           results: MOCK_ARXIV_RESULTS,
+          fallback: false,
+          warning: '',
         },
       };
     }
@@ -298,6 +304,8 @@ export const literatureService = {
           search_query: 'all:chain-of-thought AND all:reasoning AND all:large language models',
           total: MOCK_ARXIV_RESULTS.length,
           results: MOCK_ARXIV_RESULTS,
+          fallback: false,
+          warning: '',
         },
       };
     }

@@ -5,13 +5,17 @@ arXiv 文献搜索（通过官方 API，零额外依赖）
   https://export.arxiv.org/api/query?search_query={query}&max_results={n}
 
 返回标准化论文元数据，当前阶段不下载 PDF。
+
+支持 fallback：当 arXiv API 不可访问时，从本地 JSON 文件返回演示数据。
 """
 import urllib.request
 import urllib.parse
 import urllib.error
 import ssl
+import os
+import json
 import xml.etree.ElementTree as ET
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 import logging
@@ -20,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 # arXiv API 配置
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
-ARXIV_TIMEOUT = 30  # 秒（国内网络访问 arXiv 较慢，需更长超时）
 ARXIV_NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
     'arxiv': 'http://arxiv.org/schemas/atom',
@@ -63,9 +66,149 @@ class ArxivPaper:
 class ArxivSource:
     """arXiv 文献数据源（只检索元数据，不下载 PDF）"""
 
-    def __init__(self, timeout: int = ARXIV_TIMEOUT, max_retries: int = 2):
+    FALLBACK_WARNING = "arXiv API 当前不可访问，已使用本地演示文献缓存。"
+
+    def __init__(
+        self,
+        timeout: int = 15,
+        max_retries: int = 1,
+        http_proxy: str = "",
+        https_proxy: str = "",
+        fallback_data_path: str = "./data/arxiv_fallback.json",
+    ):
         self.timeout = timeout
         self.max_retries = max_retries
+        self.fallback_data_path = fallback_data_path
+
+        # 代理配置
+        proxy_handlers = {}
+        if https_proxy:
+            proxy_handlers["https"] = https_proxy
+        if http_proxy:
+            proxy_handlers["http"] = http_proxy
+        self._opener = None
+        if proxy_handlers:
+            self._opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler(proxy_handlers)
+            )
+            logger.info(f"arXiv 使用代理: {proxy_handlers}")
+
+        # 预加载 fallback 数据
+        self._fallback_data: Optional[List[Dict[str, Any]]] = None
+
+    def _get_opener(self):
+        return self._opener or urllib.request.build_opener()
+
+    def _load_fallback_data(self) -> List[Dict[str, Any]]:
+        if self._fallback_data is not None:
+            return self._fallback_data
+        path = os.path.normpath(self.fallback_data_path)
+        if not os.path.isfile(path):
+            logger.warning(f"Fallback 数据文件不存在: {path}")
+            self._fallback_data = []
+            return self._fallback_data
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self._fallback_data = json.load(f)
+            logger.info(f"已加载 fallback 数据: {len(self._fallback_data)} 条")
+        except Exception as e:
+            logger.warning(f"Fallback 数据加载失败: {e}")
+            self._fallback_data = []
+        return self._fallback_data
+
+    def _match_keywords(self, query: str, paper: Dict[str, Any]) -> int:
+        query_lower = query.lower()
+        score = 0
+        title = (paper.get("title") or "").lower()
+        abstract = (paper.get("abstract") or "").lower()
+        categories = (paper.get("categories") or "").lower()
+
+        # 分词匹配
+        tokens = query_lower.replace('"', '').replace("'", "").split()
+        for token in tokens:
+            token = token.strip().strip(".,;:!?()-")
+            if not token:
+                continue
+            if token in title:
+                score += 3
+            if token in abstract:
+                score += 1
+            if token in categories:
+                score += 2
+
+        # 短语匹配加分
+        if query_lower in title:
+            score += 5
+        if query_lower in abstract:
+            score += 2
+
+        return score
+
+    def _search_fallback(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+        data = self._load_fallback_data()
+        if not data:
+            return []
+
+        scored = [(self._match_keywords(query, paper), paper) for paper in data]
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        results = [paper for score, paper in scored if score > 0]
+        if not results:
+            results = data[:max_results]
+        return results[:max_results]
+
+    def search_with_fallback(
+        self,
+        query: str,
+        max_results: int = 10,
+        start: int = 0,
+        sort_by: str = "relevance",
+    ) -> Tuple[List[ArxivPaper], bool, str]:
+        if not query or not query.strip():
+            raise ValueError("查询关键词不能为空")
+
+        max_results = max(1, min(max_results, 100))
+
+        # 尝试真实 API
+        try:
+            papers = self.search(query, max_results, start, sort_by)
+            return (papers, False, "")
+        except Exception as e:
+            logger.warning(f"arXiv 真实 API 失败，尝试 fallback: {e}")
+
+        # fallback
+        try:
+            fallback_results = self._search_fallback(query, max_results)
+            if not fallback_results:
+                raise RuntimeError("Fallback 数据为空，无法提供搜索结果。")
+
+            papers = []
+            for item in fallback_results:
+                published_at = None
+                if item.get("published_at"):
+                    try:
+                        published_at = datetime.fromisoformat(item["published_at"].replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pass
+
+                papers.append(ArxivPaper(
+                    title=item.get("title", ""),
+                    authors=item.get("authors", ""),
+                    abstract=item.get("abstract", ""),
+                    published_at=published_at,
+                    categories=item.get("categories", ""),
+                    external_id=item.get("external_id", ""),
+                    source_url=item.get("source_url", ""),
+                    pdf_url=item.get("pdf_url", ""),
+                    source_type=item.get("source_type", "arxiv"),
+                    doi=item.get("doi"),
+                    journal_ref=item.get("journal_ref"),
+                    comment=item.get("comment"),
+                ))
+
+            return (papers, True, self.FALLBACK_WARNING)
+        except Exception as e2:
+            raise RuntimeError(f"arXiv 搜索失败且 fallback 不可用: {e2}")
 
     def search(
         self,
@@ -107,10 +250,9 @@ class ArxivSource:
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
-                # 创建 SSL context
                 ctx = ssl.create_default_context()
                 req = urllib.request.Request(url)
-                with urllib.request.urlopen(req, timeout=self.timeout, context=ctx) as response:
+                with self._get_opener().open(req, timeout=self.timeout, context=ctx) as response:
                     raw_xml = response.read().decode("utf-8")
 
                 papers = self._parse_atom_response(raw_xml)

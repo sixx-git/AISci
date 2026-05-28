@@ -36,8 +36,16 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 52428800
     ALLOWED_EXTENSIONS: str = "txt,pdf,docx,md,csv"
     
+    # arXiv 配置
+    ARXIV_TIMEOUT: int = 15
+    ARXIV_MAX_RETRIES: int = 1
+    ARXIV_ENABLE_FALLBACK: bool = True
+    ARXIV_FALLBACK_DATA_PATH: str = "./data/arxiv_fallback.json"
+    ARXIV_HTTP_PROXY: str = ""
+    ARXIV_HTTPS_PROXY: str = ""
+    
     # CORS 配置
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     
     # 日志配置
     LOG_LEVEL: str = "INFO"

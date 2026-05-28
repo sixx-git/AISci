@@ -153,7 +153,7 @@ async def recommend_arxiv_from_question(
 
         # 2. 搜索 arXiv
         service = LiteratureIngestionService(db)
-        results = service.search_arxiv(
+        results, fallback, warning = service.search_arxiv(
             query=search_query,
             max_results=req.max_results,
             start=0,
@@ -167,6 +167,8 @@ async def recommend_arxiv_from_question(
             "search_query": search_query,
             "total": len(results),
             "results": results,
+            "fallback": fallback,
+            "warning": warning,
         })
     except ValueError as e:
         return error(str(e), code=400)
@@ -182,7 +184,7 @@ async def search_arxiv(
     """搜索 arXiv 文献"""
     try:
         service = LiteratureIngestionService(db)
-        results = service.search_arxiv(
+        results, fallback, warning = service.search_arxiv(
             query=req.query,
             max_results=req.max_results,
             start=req.start,
@@ -192,6 +194,8 @@ async def search_arxiv(
             "query": req.query,
             "total": len(results),
             "results": results,
+            "fallback": fallback,
+            "warning": warning,
         })
     except ValueError as e:
         return error(str(e), code=400)

@@ -13,6 +13,8 @@ class PipelineStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
 
 
 class PipelineStage(str, Enum):
@@ -33,6 +35,7 @@ class PipelineStageStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
 
 
 class PipelineRunRequest(BaseModel):

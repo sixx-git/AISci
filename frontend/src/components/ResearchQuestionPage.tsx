@@ -1,13 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Save, Play, ArrowRight, CheckCircle,
+  Save, Play, ArrowRight, CheckCircle, XCircle, AlertTriangle,
   Tag, Target, BookOpen, Database,
-  AlertTriangle, FileOutput, Brain,
-  HelpCircle, ClipboardCheck,
+  FileOutput, Brain,
+  HelpCircle, ClipboardCheck, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { projectService } from '@/services/projectService';
 
 // ============ 表单数据类型 ============
 export interface ResearchQuestionForm {
@@ -20,8 +21,6 @@ export interface ResearchQuestionForm {
   expectedOutput: string;
 }
 
-const STORAGE_KEY = 'aisci_research_question_draft';
-
 const EMPTY_FORM: ResearchQuestionForm = {
   researchDomain: '',
   researchQuestion: '',
@@ -31,6 +30,27 @@ const EMPTY_FORM: ResearchQuestionForm = {
   constraints: '',
   expectedOutput: '',
 };
+
+// ============ localStorage 工具函数 ============
+const getStorageKey = (projectId: string) => `aisci_research_question_${projectId}`;
+
+function loadDraft(projectId: string | undefined): ResearchQuestionForm {
+  if (!projectId) return { ...EMPTY_FORM };
+  try {
+    const saved = localStorage.getItem(getStorageKey(projectId));
+    return saved ? { ...EMPTY_FORM, ...JSON.parse(saved) } : { ...EMPTY_FORM };
+  } catch {
+    return { ...EMPTY_FORM };
+  }
+}
+
+function saveDraft(projectId: string, form: ResearchQuestionForm): void {
+  try {
+    localStorage.setItem(getStorageKey(projectId), JSON.stringify(form));
+  } catch {
+    // localStorage 写入失败时静默，不影响主流程
+  }
+}
 
 // ============ 表单字段定义 ============
 interface FormField {
@@ -108,6 +128,35 @@ const PREVIEW_ITEMS: PreviewItem[] = [
   { label: '期望输出', key: 'expectedOutput' },
 ];
 
+// ============ 前端字段 → 后端 snake_case 映射 ============
+const FORM_TO_API_MAP: Partial<Record<keyof ResearchQuestionForm, string>> = {
+  researchDomain: 'research_domain',
+  researchQuestion: 'research_question',
+  researchGoal: 'research_goal',
+  background: 'research_background',
+  dataSource: 'data_source',
+  constraints: 'constraints',
+  expectedOutput: 'expected_output',
+};
+
+function formToApiPayload(form: ResearchQuestionForm): Record<string, string> {
+  const payload: Record<string, string> = {};
+  for (const [formKey, apiKey] of Object.entries(FORM_TO_API_MAP)) {
+    if (apiKey && form[formKey as keyof ResearchQuestionForm]) {
+      payload[apiKey] = form[formKey as keyof ResearchQuestionForm];
+    }
+  }
+  return payload;
+}
+
+// ============ 状态类型 ============
+type SaveStatus =
+  | { type: 'idle' }
+  | { type: 'saving' }
+  | { type: 'success' }
+  | { type: 'error'; message: string }
+  | { type: 'localSaved'; message: string };
+
 // ============ 输入框组件 ============
 interface InputFieldProps {
   field: FormField;
@@ -154,37 +203,86 @@ function InputField({ field, value, onChange }: InputFieldProps) {
 // ============ 主组件 ============
 interface ResearchQuestionPageProps {
   projectId: string;
+  onSaved?: () => void;
 }
 
-export function ResearchQuestionPage({ projectId }: ResearchQuestionPageProps) {
+export function ResearchQuestionPage({ projectId, onSaved }: ResearchQuestionPageProps) {
   const navigate = useNavigate();
-  const [form, setForm] = useState<ResearchQuestionForm>(() => {
+  const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: 'idle' });
+
+  const updateField = useCallback(
+    (key: keyof ResearchQuestionForm, value: string) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
+      // 输入变化时清除成功/错误提示，回到空闲状态
+      setSaveStatus((prev) => (prev.type === 'idle' ? prev : { type: 'idle' }));
+    },
+    [],
+  );
+
+  // ========== 保存（localStorage + 后端） ==========
+  const handleSave = useCallback(async () => {
+    if (!projectId) return;
+
+    // 第一步：始终保存到 localStorage
+    saveDraft(projectId, form);
+    setSaveStatus({ type: 'saving' });
+
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? { ...EMPTY_FORM, ...JSON.parse(saved) } : { ...EMPTY_FORM };
-    } catch {
-      return { ...EMPTY_FORM };
+      const payload = formToApiPayload(form);
+      const res = await projectService.updateProject(projectId, payload);
+
+      if (res.code === 200) {
+        setSaveStatus({ type: 'success' });
+        onSaved?.();
+      } else {
+        throw new Error(res.message || '后端返回异常');
+      }
+    } catch (err: unknown) {
+      const detail =
+        err instanceof Error ? err.message : String(err);
+      // localStorage 已保存，但后端失败
+      setSaveStatus({
+        type: 'localSaved',
+        message: `已保存本地草稿，但同步后端失败: ${detail}`,
+      });
     }
-  });
-  const [saved, setSaved] = useState(false);
-  const [agentRunning, setAgentRunning] = useState(false);
 
-  const updateField = (key: keyof ResearchQuestionForm, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setSaved(false);
-  };
+    // 3 秒后自动清除提示
+    setTimeout(() => setSaveStatus({ type: 'idle' }), 4000);
+  }, [projectId, form, onSaved]);
 
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
+  // ========== 运行问题理解智能体 ==========
+  const handleRunAgent = useCallback(async () => {
+    if (!projectId) return;
 
-  const handleRunAgent = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-    setAgentRunning(true);
-    setTimeout(() => setAgentRunning(false), 2000);
-  };
+    // 先保存
+    saveDraft(projectId, form);
+    setSaveStatus({ type: 'saving' });
+
+    try {
+      const payload = formToApiPayload(form);
+      await projectService.updateProject(projectId, payload);
+
+      // 问题理解 Agent 暂未实现独立 API
+      // 保存成功后提示用户进入工作流运行完整 Pipeline
+      setSaveStatus({ type: 'success' });
+      onSaved?.();
+
+      // 延迟导航提示，让用户看到成功状态
+      setTimeout(() => {
+        setSaveStatus({ type: 'idle' });
+      }, 3000);
+    } catch (err: unknown) {
+      const detail =
+        err instanceof Error ? err.message : String(err);
+      setSaveStatus({
+        type: 'localSaved',
+        message: `已保存本地草稿，但同步后端失败: ${detail}`,
+      });
+      setTimeout(() => setSaveStatus({ type: 'idle' }), 5000);
+    }
+  }, [projectId, form, onSaved]);
 
   const filledCount = useMemo(
     () => Object.values(form).filter((v) => v.trim().length > 0).length,
@@ -193,11 +291,59 @@ export function ResearchQuestionPage({ projectId }: ResearchQuestionPageProps) {
 
   const totalFields = Object.keys(form).length;
 
+  // ========== 保存状态提示条 ==========
+  const renderStatusBar = () => {
+    if (saveStatus.type === 'idle') return null;
+
+    const iconClass = 'w-4 h-4 flex-shrink-0';
+
+    const configs: Record<SaveStatus['type'], { icon: React.ReactNode; bg: string; text: string; textColor: string } | null> = {
+      idle: null,
+      saving: {
+        icon: <Loader2 className={`${iconClass} animate-spin`} />,
+        bg: 'bg-blue-500/10 border-blue-500/30',
+        text: '保存中...',
+        textColor: 'text-blue-300',
+      },
+      success: {
+        icon: <CheckCircle className={iconClass} />,
+        bg: 'bg-green-500/10 border-green-500/30',
+        text: '研究问题已保存',
+        textColor: 'text-green-300',
+      },
+      error: {
+        icon: <XCircle className={iconClass} />,
+        bg: 'bg-red-500/10 border-red-500/30',
+        text: `保存失败: ${(saveStatus as { type: 'error'; message: string }).message}`,
+        textColor: 'text-red-300',
+      },
+      localSaved: {
+        icon: <AlertTriangle className={iconClass} />,
+        bg: 'bg-yellow-500/10 border-yellow-500/30',
+        text: (saveStatus as { type: 'localSaved'; message: string }).message,
+        textColor: 'text-yellow-300',
+      },
+    };
+
+    const config = configs[saveStatus.type];
+    if (!config) return null;
+
+    return (
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${config.bg} mb-4 text-sm`}>
+        <span className={config.textColor}>{config.icon}</span>
+        <span className={config.textColor}>{config.text}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* ========== 左侧：表单 ========== */}
       <div className="lg:col-span-2 space-y-5">
         <Card title="研究问题定义" subtitle="填写以下信息，AI 将基于这些内容展开研究">
+          {/* 状态提示 */}
+          {renderStatusBar()}
+
           <div className="space-y-4">
             {FORM_FIELDS.map((field) => (
               <InputField
@@ -212,23 +358,28 @@ export function ResearchQuestionPage({ projectId }: ResearchQuestionPageProps) {
           {/* 操作按钮 */}
           <div className="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-dark-700">
             <Button
-              icon={saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-              variant={saved ? 'primary' : 'secondary'}
+              icon={
+                saveStatus.type === 'saving' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : saveStatus.type === 'success' ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )
+              }
+              variant={saveStatus.type === 'success' ? 'primary' : 'secondary'}
+              disabled={saveStatus.type === 'saving'}
               onClick={handleSave}
             >
-              {saved ? '已保存' : '保存研究问题'}
+              {saveStatus.type === 'saving' ? '保存中...' : '保存研究问题'}
             </Button>
             <Button
-              icon={
-                agentRunning
-                  ? undefined
-                  : <Play className="w-4 h-4" />
-              }
-              isLoading={agentRunning}
+              icon={<Play className="w-4 h-4" />}
+              disabled={saveStatus.type === 'saving'}
               variant="primary"
               onClick={handleRunAgent}
             >
-              {agentRunning ? '智能体运行中…' : '运行问题理解智能体'}
+              保存并进入工作流
             </Button>
             <Button
               icon={<ArrowRight className="w-4 h-4" />}

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Calendar, LayoutDashboard, HelpCircle,
   BookOpen, GitBranch, Lightbulb, FlaskConical,
   FileText, ScrollText, Tag, TrendingUp, Play,
-  Loader2, AlertTriangle,
+  Loader2, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -46,6 +46,22 @@ const TABS: TabItem[] = [
 ];
 
 const VALID_TAB_IDS = new Set(TABS.map((t) => t.id));
+
+// ============ localStorage 研究问题读取 ============
+/**
+ * 从 localStorage 中读取按 projectId 隔离的研究问题草稿。
+ * 作为后端 research_question 字段的 fallback。
+ */
+function getStoredResearchQuestion(projectId: string): string {
+  try {
+    const raw = localStorage.getItem(`aisci_research_question_${projectId}`);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return parsed.researchQuestion || parsed.research_question || '';
+  } catch {
+    return '';
+  }
+}
 
 // ============ 项目概览 ============
 function ProjectOverview({ project, stats, pipelineNodes }: {
@@ -112,16 +128,36 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
 }
 
 // ============ 各 Tab 子组件包装 ============
-function QuestionsTab({ projectId }: { projectId: string }) {
-  return <ResearchQuestionPage projectId={projectId} />;
+function QuestionsTab({ projectId, onSaved }: { projectId: string; onSaved?: () => void }) {
+  return <ResearchQuestionPage projectId={projectId} onSaved={onSaved} />;
 }
 
 function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
 }
 
-function WorkflowTab({ projectId, researchQuestion }: { projectId: string; researchQuestion: string }) {
-  return <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact />;
+function WorkflowTab({ projectId, researchQuestion, questionSource }: {
+  projectId: string;
+  researchQuestion: string;
+  questionSource?: 'backend' | 'localStorage' | 'none';
+}) {
+  return (
+    <div className="space-y-4">
+      {researchQuestion && questionSource === 'localStorage' && (
+        <div className="px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          研究问题来自本地草稿，建议保存到后端
+        </div>
+      )}
+      {researchQuestion && questionSource === 'backend' && (
+        <div className="px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-300 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          研究问题已从项目配置读取
+        </div>
+      )}
+      <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact />
+    </div>
+  );
 }
 
 function HypothesesTab({ projectId }: { projectId: string }) {
@@ -240,6 +276,28 @@ export function ProjectWorkspace() {
     return DEFAULT_PIPELINE_NODES;
   }, [id]);
 
+  // --- 研究问题汇总（后端优先 → localStorage fallback） ---
+  const resolvedResearchQuestion = useMemo(() => {
+    if (project?.research_question) return project.research_question;
+    return getStoredResearchQuestion(id || '');
+  }, [project?.research_question, id]);
+
+  const questionSource = useMemo<'backend' | 'localStorage' | 'none'>(() => {
+    if (!resolvedResearchQuestion) return 'none';
+    if (project?.research_question) return 'backend';
+    return 'localStorage';
+  }, [resolvedResearchQuestion, project?.research_question]);
+
+  // --- 保存研究问题后刷新项目数据 ---
+  const handleResearchSaved = () => {
+    if (env.USE_MOCK || !id) return;
+    projectService.getProject(id).then((res) => {
+      if (res.code === 200 && res.data) {
+        setProject(toProjectOverview(res.data));
+      }
+    });
+  };
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('zh-CN', {
@@ -313,11 +371,17 @@ export function ProjectWorkspace() {
       case 'overview':
         return <ProjectOverview project={project} stats={stats} pipelineNodes={pipelineNodes} />;
       case 'questions':
-        return <QuestionsTab projectId={id} />;
+        return <QuestionsTab projectId={id} onSaved={handleResearchSaved} />;
       case 'literature':
         return <LiteratureTab projectId={id} />;
       case 'workflow':
-        return <WorkflowTab projectId={id} researchQuestion={project.research_question ?? ''} />;
+        return (
+          <WorkflowTab
+            projectId={id}
+            researchQuestion={resolvedResearchQuestion}
+            questionSource={questionSource}
+          />
+        );
       case 'hypotheses':
         return <HypothesesTab projectId={id} />;
       case 'experiments':

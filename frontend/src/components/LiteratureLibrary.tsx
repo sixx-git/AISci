@@ -148,6 +148,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [arxivImporting, setArxivImporting] = useState<Record<string, boolean>>({});
   const [arxivImported, setArxivImported] = useState<Record<string, boolean>>({});
   const [arxivSearched, setArxivSearched] = useState(false);
+  const [arxivFallback, setArxivFallback] = useState(false);
+  const [arxivWarning, setArxivWarning] = useState('');
 
   // ========== 研究问题推荐状态 ==========
   const [researchQuestion, setResearchQuestion] = useState('');
@@ -173,6 +175,13 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   // ========== 全局状态消息 ==========
   const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
 
+  // ========== 显示状态消息（error 10s，其他 4s） ==========
+  const showStatus = useCallback((msg: StatusMsg) => {
+    setStatusMsg(msg);
+    const duration = msg.type === 'error' ? 10000 : 4000;
+    setTimeout(() => setStatusMsg(null), duration);
+  }, []);
+
   const stats: LiteratureStats = useMemo(() => computeStats(literature), [literature]);
 
   // ========== 数据加载 ==========
@@ -186,11 +195,13 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         setLiterature(items);
       }
     } catch (err: any) {
-      console.error('获取文献列表失败:', err);
+      const message = err?.response?.data?.detail || err?.response?.data?.message || err.message || String(err);
+      if (import.meta.env.DEV) console.error('获取文献列表失败:', err);
+      showStatus({ type: 'error', text: `文献列表加载失败: ${message}` });
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, showStatus]);
 
   const loadImportedDocs = useCallback(async () => {
     if (!projectId) return;
@@ -201,22 +212,18 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         setImportedDocs(res.data?.items ?? []);
       }
     } catch (err: any) {
-      console.error('获取已入库文献失败:', err);
+      const message = err?.response?.data?.detail || err?.response?.data?.message || err.message || String(err);
+      if (import.meta.env.DEV) console.error('获取已入库文献失败:', err);
+      showStatus({ type: 'error', text: `已入库文献加载失败: ${message}` });
     } finally {
       setImportedLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, showStatus]);
 
   useEffect(() => {
     loadDocuments();
     loadImportedDocs();
   }, [loadDocuments, loadImportedDocs]);
-
-  // ========== 显示状态消息 ==========
-  const showStatus = useCallback((msg: StatusMsg) => {
-    setStatusMsg(msg);
-    setTimeout(() => setStatusMsg(null), 4000);
-  }, []);
 
   // ========== 上传 PDF ==========
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -299,20 +306,26 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     setArxivSearching(true);
     setArxivSearched(true);
     setArxivResults([]);
+    setArxivFallback(false);
+    setArxivWarning('');
 
     try {
       const res = await literatureService.searchArxiv(q, arxivMaxResults);
       if (res.code === 200) {
         setArxivResults(res.data?.results ?? []);
+        setArxivFallback(!!res.data?.fallback);
+        setArxivWarning(res.data?.warning || '');
         if (!res.data?.results?.length) {
           showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文' });
+        } else if (res.data?.fallback) {
+          showStatus({ type: 'error', text: res.data.warning || 'arXiv API 不可访问，已使用本地演示文献缓存。' });
         }
       } else {
         showStatus({ type: 'error', text: res.message || '搜索失败' });
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.response?.data?.detail || err.message;
-      showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}` });
+      showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}。可尝试 BibTeX 导入或使用本地示例文献。` });
     } finally {
       setArxivSearching(false);
     }
@@ -326,6 +339,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     setRecommendSearching(true);
     setArxivSearched(true);
     setArxivResults([]);
+    setArxivFallback(false);
+    setArxivWarning('');
     setRecommendInfo(null);
 
     try {
@@ -333,6 +348,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       if (res.code === 200 && res.data) {
         const d = res.data;
         setArxivResults(d.results ?? []);
+        setArxivFallback(!!d.fallback);
+        setArxivWarning(d.warning || '');
         setRecommendInfo({
           query_mode: d.query_mode,
           keywords: d.keywords,
@@ -340,6 +357,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         });
         if (!d.results?.length) {
           showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文，请尝试其他研究问题' });
+        } else if (d.fallback) {
+          showStatus({ type: 'error', text: d.warning || 'arXiv API 不可访问，已使用本地演示文献缓存。' });
         } else {
           showStatus({
             type: 'success',
@@ -353,11 +372,37 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
-      showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}` });
+      showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}。可尝试手动搜索、BibTeX 导入或使用本地示例文献。` });
     } finally {
       setRecommendSearching(false);
     }
   }, [researchQuestion, arxivMaxResults, projectId, showStatus]);
+
+  // ========== 使用本地示例文献 ==========
+  const handleUseFallback = useCallback(async () => {
+    setArxivQuery('AI scientist machine learning');
+    // 强制触发一次搜索以使用 fallback
+    setArxivSearching(true);
+    setArxivSearched(true);
+    setArxivResults([]);
+    setArxivFallback(false);
+    setArxivWarning('');
+    try {
+      const res = await literatureService.searchArxiv('AI scientist machine learning', arxivMaxResults);
+      if (res.code === 200) {
+        setArxivResults(res.data?.results ?? []);
+        setArxivFallback(!!res.data?.fallback);
+        setArxivWarning(res.data?.warning || '');
+        if (res.data?.fallback) {
+          showStatus({ type: 'error', text: res.data.warning || '已加载本地演示文献。' });
+        }
+      }
+    } catch {
+      showStatus({ type: 'error', text: '本地示例文献加载失败' });
+    } finally {
+      setArxivSearching(false);
+    }
+  }, [arxivMaxResults, showStatus]);
 
   // ========== arXiv 导入 ==========
   const handleImportArxiv = useCallback(async (paper: ArxivPaper) => {
@@ -487,6 +532,23 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     { key: 'library' as const, label: '已入库文献', icon: Database },
   ];
 
+  // ============ 加载中 ============
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <StatusBar msg={statusMsg} />
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
+          <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+          <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary-400" />
+          <p className="text-sm">正在加载文献库...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ============ 空状态（首次加载且无数据） ============
   if (!loading && literature.length === 0) {
     return (
@@ -522,6 +584,9 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
               recommendSearching={recommendSearching}
               recommendInfo={recommendInfo}
               onRecommend={handleRecommendArxiv}
+              fallback={arxivFallback}
+              fallbackWarning={arxivWarning}
+              onUseFallback={handleUseFallback}
             />
           )}
           {activeTab === 'library' && <LibraryTabEmpty />}
@@ -660,8 +725,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             recommendSearching={recommendSearching}
             recommendInfo={recommendInfo}
             onRecommend={handleRecommendArxiv}
-          />
-        )}
+              fallback={arxivFallback}
+              fallbackWarning={arxivWarning}
+              onUseFallback={handleUseFallback}
+            />
+          )}
 
         {/* TAB 3: 已入库文献 */}
         {activeTab === 'library' && (
@@ -760,6 +828,7 @@ function ArxivTabContent({
   query, onQueryChange, maxResults, onMaxResultsChange, onSearch, searching,
   results, searched, importing, imported, onImport, truncate,
   researchQuestion, onResearchQuestionChange, recommendSearching, recommendInfo, onRecommend,
+  fallback, fallbackWarning, onUseFallback,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
@@ -773,6 +842,9 @@ function ArxivTabContent({
   imported: Record<string, boolean>;
   onImport: (paper: ArxivPaper) => void;
   truncate: (text: string, maxLen: number) => string;
+  fallback?: boolean;
+  fallbackWarning?: string;
+  onUseFallback?: () => void;
   // 研究问题推荐
   researchQuestion: string;
   onResearchQuestionChange: (v: string) => void;
@@ -883,6 +955,18 @@ function ArxivTabContent({
               {searching ? '搜索中…' : '搜索 arXiv'}
             </Button>
           </div>
+          {onUseFallback && (
+            <div className="flex items-end">
+              <Button
+                icon={<Database className="w-4 h-4" />}
+                disabled={searching}
+                onClick={onUseFallback}
+                variant="secondary"
+              >
+                使用本地示例文献
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -903,6 +987,17 @@ function ArxivTabContent({
 
       {!searching && results.length > 0 && (
         <div className="space-y-4">
+          {fallback && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/25">
+              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-yellow-400">使用本地演示文献</p>
+                <p className="text-xs text-yellow-400/70 mt-1">
+                  {fallbackWarning || 'arXiv API 当前不可访问，已使用本地演示文献缓存。'}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="text-sm text-gray-500 mb-2">共 {results.length} 条结果</div>
           {results.map((paper) => {
             const isImporting = importing[paper.external_id];
@@ -1409,7 +1504,14 @@ function BibTexTabContent({
 
 // ========== 状态提示条 ==========
 function StatusBar({ msg }: { msg: StatusMsg | null }) {
-  if (!msg) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  // 当 msg 变化时重置 dismiss 状态
+  useEffect(() => {
+    setDismissed(false);
+  }, [msg]);
+
+  if (!msg || dismissed) return null;
 
   const config = {
     loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-white' },
@@ -1427,6 +1529,14 @@ function StatusBar({ msg }: { msg: StatusMsg | null }) {
     )}>
       <Icon className={cn('w-4 h-4', config.text, isSpinning && 'animate-spin')} />
       <span className={cn('text-sm font-medium', config.text)}>{msg.text}</span>
+      {msg.type === 'error' && (
+        <button
+          onClick={() => setDismissed(true)}
+          className="ml-2 text-white/60 hover:text-white transition-colors"
+        >
+          <XCircle className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 }

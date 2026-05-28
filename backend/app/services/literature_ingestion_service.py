@@ -28,7 +28,13 @@ class LiteratureIngestionService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.arxiv_source = ArxivSource()
+        self.arxiv_source = ArxivSource(
+            timeout=settings.ARXIV_TIMEOUT,
+            max_retries=settings.ARXIV_MAX_RETRIES,
+            http_proxy=settings.ARXIV_HTTP_PROXY,
+            https_proxy=settings.ARXIV_HTTPS_PROXY,
+            fallback_data_path=settings.ARXIV_FALLBACK_DATA_PATH,
+        )
 
     # ==================== arXiv 搜索 ====================
 
@@ -38,26 +44,20 @@ class LiteratureIngestionService:
         max_results: int = 10,
         start: int = 0,
         sort_by: str = "relevance",
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], bool, str]:
         """
-        搜索 arXiv 文献
-
-        Args:
-            query: 搜索关键词
-            max_results: 最大返回数
-            start: 分页偏移
-            sort_by: 排序方式
+        搜索 arXiv 文献（支持 fallback）
 
         Returns:
-            List[Dict]: ArxivPaper.to_dict() 列表
+            (results, fallback, warning)
         """
-        papers: List[ArxivPaper] = self.arxiv_source.search(
+        papers, fallback, warning = self.arxiv_source.search_with_fallback(
             query=query,
             max_results=max_results,
             start=start,
             sort_by=sort_by,
         )
-        return [paper.to_dict() for paper in papers]
+        return [paper.to_dict() for paper in papers], fallback, warning
 
     def search_arxiv_by_id(self, arxiv_id: str) -> Optional[Dict[str, Any]]:
         """
