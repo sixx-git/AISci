@@ -1,9 +1,11 @@
 """
 项目 API 路由
 """
+import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 
 from app.core.database import get_db
 from app.schemas.common import (
@@ -21,7 +23,13 @@ from app.schemas.project import (
     UploadResponse,
     DocumentInfo
 )
+from app.schemas.research import HypothesisResponse, ExperimentDesignDBResponse
 from app.services.project_service import ProjectService, DocumentService
+from app.services.hypothesis_service import HypothesisService
+from app.services.experiment_service import ExperimentDesignService
+from app.models.pipeline import PipelineRun, PipelineStageExecution
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["projects"])
 
@@ -249,4 +257,181 @@ def list_documents(
             )
         ),
         message="获取文档列表成功"
+    )
+
+
+# ============= 假设查询 API =============
+
+@router.get("/{project_id}/hypotheses", response_model=ResponseModel[List[HypothesisResponse]])
+def list_project_hypotheses(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    获取项目的假设列表
+
+    优先从 Hypothesis 表读取；若无数据则从最近一次 PipelineRun 的
+    hypothesis_generation / hypothesis_review 阶段 output_data 中解析。
+    """
+    hypo_service = HypothesisService(db)
+
+    # 1. 尝试从 Hypothesis 表读取
+    hypotheses = hypo_service.get_hypotheses_by_project(project_id)
+
+    if hypotheses:
+        return success_response(
+            data=[HypothesisResponse.model_validate(h) for h in hypotheses],
+            message=f"获取假设列表成功，共 {len(hypotheses)} 条"
+        )
+
+    # 2. Fallback: 从最近一次成功 PipelineRun 的阶段输出中解析
+    latest_run = (
+        db.query(PipelineRun)
+        .filter(
+            PipelineRun.project_id == project_id,
+            PipelineRun.status.in_(["completed", "failed"])
+        )
+        .order_by(PipelineRun.created_at.desc())
+        .first()
+    )
+
+    pipeline_hypotheses: List[HypothesisResponse] = []
+
+    if latest_run:
+        stage_names = ["hypothesis_generation", "hypothesis_review"]
+        for stage_name in stage_names:
+            stage_exec = (
+                db.query(PipelineStageExecution)
+                .filter(
+                    PipelineStageExecution.pipeline_run_id == latest_run.id,
+                    PipelineStageExecution.stage == stage_name
+                )
+                .first()
+            )
+            if stage_exec and stage_exec.output_data:
+                output = stage_exec.output_data
+                try:
+                    items = output.get("hypotheses", [])
+                    if isinstance(items, list):
+                        for idx, item in enumerate(items):
+                            pipeline_hypotheses.append(HypothesisResponse(
+                                id=f"pipeline-{latest_run.id}-{stage_name}-{idx}",
+                                project_id=project_id,
+                                research_question=latest_run.research_question or "",
+                                hypothesis=item.get("hypothesis", ""),
+                                rationale=item.get("rationale", ""),
+                                novelty=item.get("novelty", ""),
+                                testability=item.get("testability", ""),
+                                required_data=item.get("required_data", ""),
+                                possible_method=item.get("possible_method", ""),
+                                risk=item.get("risk", ""),
+                                supporting_fact_ids=item.get("supporting_fact_ids", []),
+                                evidence_level=item.get("evidence_level", "medium"),
+                                status="draft",
+                                priority=idx + 1 if idx + 1 <= 5 else 3,
+                                confidence=0.7,
+                                created_at=stage_exec.completed_at or latest_run.created_at,
+                            ))
+                except Exception as parse_err:
+                    logger.warning(f"解析 Pipeline 阶段 {stage_name} 输出失败: {parse_err}")
+
+    if pipeline_hypotheses:
+        return success_response(
+            data=pipeline_hypotheses,
+            message=f"从 Pipeline 运行结果解析假设列表成功，共 {len(pipeline_hypotheses)} 条"
+        )
+
+    return success_response(
+        data=[],
+        message="暂无假设数据，请先运行 Pipeline"
+    )
+
+
+# ============= 实验设计查询 API =============
+
+@router.get("/{project_id}/experiment-designs", response_model=ResponseModel[List[ExperimentDesignDBResponse]])
+def list_project_experiment_designs(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    获取项目的实验设计列表
+
+    优先从 ExperimentDesign 表读取；若无数据则从最近一次 PipelineRun 的
+    experiment_design 阶段 output_data 中解析。
+    """
+    experiment_service = ExperimentDesignService(db)
+
+    designs = experiment_service.get_experiment_designs_by_project(project_id)
+
+    if designs:
+        return success_response(
+            data=[ExperimentDesignDBResponse.model_validate(d) for d in designs],
+            message=f"获取实验设计列表成功，共 {len(designs)} 条"
+        )
+
+    latest_run = (
+        db.query(PipelineRun)
+        .filter(
+            PipelineRun.project_id == project_id,
+            PipelineRun.status.in_(["completed", "failed"])
+        )
+        .order_by(PipelineRun.created_at.desc())
+        .first()
+    )
+
+    pipeline_designs: List[ExperimentDesignDBResponse] = []
+
+    if latest_run:
+        stage_exec = (
+            db.query(PipelineStageExecution)
+            .filter(
+                PipelineStageExecution.pipeline_run_id == latest_run.id,
+                PipelineStageExecution.stage == "experiment_design"
+            )
+            .first()
+        )
+        if stage_exec and stage_exec.output_data:
+            output = stage_exec.output_data
+            try:
+                def safe_str(val, default=""):
+                    if val is None:
+                        return default
+                    if isinstance(val, (list, dict)):
+                        try:
+                            return json.dumps(val, ensure_ascii=False)
+                        except Exception:
+                            return str(val)
+                    return str(val)
+
+                pipeline_designs.append(ExperimentDesignDBResponse(
+                    id=f"pipeline-{latest_run.id}-experiment_design",
+                    project_id=project_id,
+                    hypothesis_id=output.get("hypothesis_id", "") or f"pipeline-run-{latest_run.id}",
+                    hypothesis=output.get("hypothesis", ""),
+                    methods=safe_str(output.get("methods", "")),
+                    datasets=safe_str(output.get("datasets", "")),
+                    source_data=safe_str(output.get("source_data", "")),
+                    target_data=safe_str(output.get("target_data", "")),
+                    baselines=safe_str(output.get("baselines", "")),
+                    metrics=safe_str(output.get("metrics", "")),
+                    experimental_steps=safe_str(output.get("experimental_steps", "")),
+                    expected_results=safe_str(output.get("expected_results", "")),
+                    limitations=safe_str(output.get("limitations", "")),
+                    status="draft",
+                    priority=1,
+                    created_at=stage_exec.completed_at or latest_run.created_at,
+                ))
+            except Exception as parse_err:
+                logger.warning(f"解析 Pipeline 阶段 experiment_design 输出失败: {parse_err}")
+
+    if pipeline_designs:
+        return success_response(
+            data=pipeline_designs,
+            message=f"从 Pipeline 运行结果解析实验设计成功，共 {len(pipeline_designs)} 条"
+        )
+
+    return success_response(
+        data=[],
+        message="暂无实验设计数据，请先运行 Pipeline 或生成实验设计"
     )

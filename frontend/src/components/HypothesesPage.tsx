@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Lightbulb, Info } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Lightbulb, Info, Loader2, AlertCircle, AlertTriangle, FlaskConical } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
@@ -7,11 +7,14 @@ import { ScoreBar } from '@/components/ScoreBar';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import { MOCK_DETAILED_HYPOTHESES, MOCK_EVIDENCE_CHAINS } from '@/data/mockData';
 import env from '@/config/env';
+import hypothesisService, { type BackendHypothesis, type BackendEvidence } from '@/services/hypothesisService';
 import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
   compact?: boolean;
+  revalidateKey?: number;
+  latestRunId?: string | null;
 }
 
 const SCORE_DIMENSIONS = [
@@ -47,33 +50,130 @@ const SCORE_DIMENSIONS = [
   },
 ];
 
-export function HypothesesPage({ projectId: _projectId, compact: _compact = false }: HypothesesPageProps) {
-  const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>(MOCK_DETAILED_HYPOTHESES);
+function evidenceLevelToScore(level: string): number {
+  switch (level) {
+    case 'high': return 88;
+    case 'medium': return 70;
+    case 'low': return 50;
+    default: return 65;
+  }
+}
+
+function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
+  const evidenceScore = evidenceLevelToScore(h.evidence_level);
+  return {
+    id: h.id,
+    title: h.hypothesis || '未命名假设',
+    content: h.hypothesis || '',
+    reasoning: h.rationale || '',
+    evidenceCount: (h.supporting_fact_ids || []).length,
+    novelty: evidenceScore,
+    verifiability: h.testability === 'high' ? 88 : h.testability === 'low' ? 55 : 75,
+    dataAvailability: h.required_data === 'high' ? 85 : h.required_data === 'low' ? 55 : 70,
+    overallScore: Math.round((h.confidence || 0.5) * 100),
+    riskWarning: h.risk || '',
+    isPrimary: h.priority === 1,
+    status: (h.status === 'testing' || h.status === 'accepted' || h.status === 'confirmed')
+      ? 'evaluated' : 'draft',
+  };
+}
+
+function mapBackendEvidence(e: BackendEvidence): EvidenceItem {
+  return {
+    id: e.id,
+    project_id: e.project_id,
+    hypothesis_id: e.hypothesis_id,
+    document_id: e.document_id,
+    chunk_id: e.chunk_id,
+    fact_text: e.fact_text,
+    quote_text: e.quote_text,
+    page_number: e.page_number,
+    relevance_score: e.relevance_score,
+    source_title: e.source_title,
+    created_at: e.created_at,
+  };
+}
+
+export function HypothesesPage({
+  projectId: _projectId,
+  compact: _compact = false,
+  revalidateKey: _revalidateKey,
+  latestRunId: _latestRunId,
+}: HypothesesPageProps) {
+  const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>(
+    env.USE_MOCK ? MOCK_DETAILED_HYPOTHESES : [],
+  );
+  const [loading, setLoading] = useState(!env.USE_MOCK);
+  const [error, setError] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
-  // 证据链抽屉状态
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedHypothesis, setSelectedHypothesis] = useState<DetailedHypothesis | null>(null);
   const [currentEvidence, setCurrentEvidence] = useState<EvidenceItem[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
-    setTimeout(() => setAlertMsg(null), 2500);
+    setTimeout(() => setAlertMsg(null), 3000);
   }, []);
+
+  useEffect(() => {
+    if (env.USE_MOCK) return;
+    if (!_projectId) {
+      setLoading(false);
+      setError('未提供项目 ID');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    hypothesisService.getProjectHypotheses(_projectId)
+      .then((res) => {
+        if (res.code === 200 && Array.isArray(res.data)) {
+          const mapped = res.data.map(mapBackendToDetailed);
+          setHypotheses(mapped);
+        } else {
+          setError(res.message || '获取假设列表失败');
+        }
+      })
+      .catch((err) => {
+        setError(err?.message || '获取假设列表失败，请检查后端服务是否启动');
+      })
+      .finally(() => setLoading(false));
+  }, [_projectId, _revalidateKey, _latestRunId]);
 
   const handleViewEvidence = useCallback((id: string) => {
     const hypo = hypotheses.find(h => h.id === id);
-    if (hypo) {
-      setSelectedHypothesis(hypo);
+    if (!hypo) return;
+    setSelectedHypothesis(hypo);
+
+    if (env.USE_MOCK) {
       setCurrentEvidence(MOCK_EVIDENCE_CHAINS[id] || []);
       setDrawerOpen(true);
+      return;
     }
+
+    setEvidenceLoading(true);
+    setDrawerOpen(true);
+
+    hypothesisService.getHypothesisEvidence(id)
+      .then((res) => {
+        if (res.code === 200 && Array.isArray(res.data)) {
+          setCurrentEvidence(res.data.map(mapBackendEvidence));
+        } else {
+          setCurrentEvidence([]);
+        }
+      })
+      .catch(() => setCurrentEvidence([]))
+      .finally(() => setEvidenceLoading(false));
   }, [hypotheses]);
 
   const handleCloseDrawer = useCallback(() => {
     setDrawerOpen(false);
     setSelectedHypothesis(null);
     setCurrentEvidence([]);
+    setEvidenceLoading(false);
   }, []);
 
   const handleSetPrimary = useCallback((id: string) => {
@@ -88,12 +188,23 @@ export function HypothesesPage({ projectId: _projectId, compact: _compact = fals
   }, [showAlert]);
 
   const handleRegenerate = useCallback((_id: string) => {
-    showAlert('重新生成请求已提交（模拟）');
+    if (env.USE_MOCK) {
+      showAlert('重新生成请求已提交（模拟）');
+      return;
+    }
+    showAlert('请在工作流页面运行 Pipeline 以重新生成假设');
+  }, [showAlert]);
+
+  const handleGenerateNew = useCallback(() => {
+    if (env.USE_MOCK) {
+      showAlert('生成新假设中…（模拟 3s）');
+      return;
+    }
+    showAlert('请先在工作流页面运行 Pipeline，完成后返回此页面查看生成的假设');
   }, [showAlert]);
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* ========== 头部 ========== */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">候选假设</h1>
@@ -111,100 +222,131 @@ export function HypothesesPage({ projectId: _projectId, compact: _compact = fals
             variant="primary"
             size="sm"
             icon={<Lightbulb className="w-4 h-4" />}
-            onClick={() => showAlert('生成新假设中…（模拟 3s）')}
+            onClick={handleGenerateNew}
           >
             生成新假设
           </Button>
         </div>
       </div>
 
-      {/* 短暂提示 */}
       {alertMsg && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-300 animate-pulse">
           {alertMsg}
         </div>
       )}
 
-      {/* ========== 主布局 ========== */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* 左侧/中间：假设卡片 */}
-        <div className="lg:col-span-3 space-y-5">
-          {hypotheses.map((h) => (
-            <HypothesisCard
-              key={h.id}
-              hypothesis={h}
-              onViewEvidence={handleViewEvidence}
-              onSetPrimary={handleSetPrimary}
-              onEnterExperiment={handleEnterExperiment}
-              onRegenerate={handleRegenerate}
-            />
-          ))}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary-400" />
+          <p className="text-sm">正在加载假设列表...</p>
         </div>
+      )}
 
-        {/* 右侧：评分维度说明 */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-6 space-y-4">
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Info className="w-4 h-4 text-primary-400" />
-                <h3 className="text-sm font-semibold text-white">评分维度说明</h3>
-              </div>
-              {SCORE_DIMENSIONS.map((dim) => (
-                <div key={dim.label} className="mb-4 last:mb-0">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-xs">{dim.icon}</span>
-                    <span className="text-xs font-medium text-gray-300">{dim.label}</span>
+      {!loading && error && (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
+          <p className="text-sm text-red-400 mb-2">加载假设失败</p>
+          <p className="text-xs text-gray-500">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && !env.USE_MOCK && hypotheses.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
+          <p className="text-sm text-gray-400 mb-2">暂无假设数据</p>
+          <p className="text-xs text-gray-500 mb-4">
+            请先在工作流页面运行 Pipeline，完成 hypothesis_generation 阶段后即可查看
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<FlaskConical className="w-4 h-4" />}
+            onClick={() => showAlert('请前往工作流页面运行 Pipeline')}
+          >
+            前往工作流
+          </Button>
+        </div>
+      )}
+
+      {!loading && !error && hypotheses.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 space-y-5">
+            {hypotheses.map((h) => (
+              <HypothesisCard
+                key={h.id}
+                hypothesis={h}
+                onViewEvidence={handleViewEvidence}
+                onSetPrimary={handleSetPrimary}
+                onEnterExperiment={handleEnterExperiment}
+                onRegenerate={handleRegenerate}
+              />
+            ))}
+          </div>
+
+          <div className="lg:col-span-1">
+            <div className="sticky top-6 space-y-4">
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <Info className="w-4 h-4 text-primary-400" />
+                  <h3 className="text-sm font-semibold text-white">评分维度说明</h3>
+                </div>
+                {SCORE_DIMENSIONS.map((dim) => (
+                  <div key={dim.label} className="mb-4 last:mb-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs">{dim.icon}</span>
+                      <span className="text-xs font-medium text-gray-300">{dim.label}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-2">{dim.desc}</p>
+                    <ScoreBar
+                      label=""
+                      score={dim.label === '创新性' ? 85 : dim.label === '自洽性' ? 90 : dim.label === '可验证性' ? 88 : dim.label === '数据可得性' ? 75 : 65}
+                      color={dim.color}
+                    />
                   </div>
-                  <p className="text-xs text-gray-500 leading-relaxed mb-2">{dim.desc}</p>
-                  <ScoreBar
-                    label=""
-                    score={dim.label === '创新性' ? 85 : dim.label === '自洽性' ? 90 : dim.label === '可验证性' ? 88 : dim.label === '数据可得性' ? 75 : 65}
-                    color={dim.color}
-                  />
-                </div>
-              ))}
-            </Card>
+                ))}
+              </Card>
 
-            {/* 统计摘要 */}
-            <Card>
-              <h4 className="text-sm font-semibold text-white mb-3">假设统计</h4>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">假设总数</span>
-                  <span className="text-white font-mono">{hypotheses.length}</span>
+              <Card>
+                <h4 className="text-sm font-semibold text-white mb-3">假设统计</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">假设总数</span>
+                    <span className="text-white font-mono">{hypotheses.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">平均综合评分</span>
+                    <span className="text-green-400 font-mono">
+                      {hypotheses.length > 0
+                        ? Math.round(hypotheses.reduce((s, h) => s + h.overallScore, 0) / hypotheses.length)
+                        : 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">总证据引用</span>
+                    <span className="text-blue-400 font-mono">
+                      {hypotheses.reduce((s, h) => s + h.evidenceCount, 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">已评估</span>
+                    <span className="text-gray-300 font-mono">
+                      {hypotheses.filter((h) => h.status === 'evaluated').length}/{hypotheses.length}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">平均综合评分</span>
-                  <span className="text-green-400 font-mono">
-                    {Math.round(hypotheses.reduce((s, h) => s + h.overallScore, 0) / hypotheses.length)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">总证据引用</span>
-                  <span className="text-blue-400 font-mono">
-                    {hypotheses.reduce((s, h) => s + h.evidenceCount, 0)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">已评估</span>
-                  <span className="text-gray-300 font-mono">
-                    {hypotheses.filter((h) => h.status === 'evaluated').length}/{hypotheses.length}
-                  </span>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 证据链抽屉 */}
       {selectedHypothesis && (
         <EvidenceChainDrawer
           open={drawerOpen}
           onClose={handleCloseDrawer}
           hypothesisTitle={`${selectedHypothesis.title} (${selectedHypothesis.id})`}
           hypothesisContent={selectedHypothesis.content}
-          evidenceCount={currentEvidence.length}
+          evidenceCount={evidenceLoading ? 0 : currentEvidence.length}
           evidenceList={currentEvidence}
         />
       )}

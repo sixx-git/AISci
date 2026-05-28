@@ -11,6 +11,8 @@ import type { RunLog, PipelineRunSummary, PipelineStageExecutionSummary } from '
 interface RunLogsPageProps {
   projectId?: string;
   compact?: boolean;
+  revalidateKey?: number;
+  latestRunId?: string | null;
 }
 
 // 阶段英文 → 中文映射
@@ -81,7 +83,12 @@ function mapStageToRunLog(
   };
 }
 
-export function RunLogsPage({ projectId, compact: _compact = false }: RunLogsPageProps) {
+export function RunLogsPage({
+  projectId,
+  compact: _compact = false,
+  revalidateKey: _revalidateKey,
+  latestRunId: _latestRunId,
+}: RunLogsPageProps) {
   const [logs, setLogs] = useState<RunLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<RunLog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -143,7 +150,7 @@ export function RunLogsPage({ projectId, compact: _compact = false }: RunLogsPag
         setIsLoading(false);
       }
     })();
-  }, [projectId]);
+  }, [projectId, _revalidateKey, _latestRunId]);
 
   const handleSelect = useCallback((log: RunLog) => {
     setSelectedLog(log);

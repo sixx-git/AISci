@@ -28,6 +28,7 @@ class LiteratureIngestionService:
 
     def __init__(self, db: Session):
         self.db = db
+        settings = get_settings()
         self.arxiv_source = ArxivSource(
             timeout=settings.ARXIV_TIMEOUT,
             max_retries=settings.ARXIV_MAX_RETRIES,

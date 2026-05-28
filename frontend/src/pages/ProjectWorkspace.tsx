@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, LayoutDashboard, HelpCircle,
@@ -23,8 +23,9 @@ import {
   MOCK_PIPELINE_NODES, DEFAULT_PIPELINE_NODES,
 } from '@/data/mockData';
 import { projectService } from '@/services/projectService';
+import { pipelineService } from '@/services/pipelineService';
 import env from '@/config/env';
-import type { ProjectOverview, StatItem, PipelineNodeData, Project } from '@/types';
+import type { ProjectOverview, StatItem, PipelineNodeData, Project, PipelineRunResult, PipelineRunSummary } from '@/types';
 import { cn } from '@/lib/utils';
 
 // ============ 标签页定义 ============
@@ -62,6 +63,29 @@ function getStoredResearchQuestion(projectId: string): string {
     return '';
   }
 }
+
+function getStoredResearchDomain(projectId: string): string {
+  try {
+    const raw = localStorage.getItem(`aisci_research_question_${projectId}`);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return parsed.researchDomain || parsed.research_domain || '';
+  } catch {
+    return '';
+  }
+}
+
+// ============ Pipeline 阶段中英文映射表 ============
+const STAGE_CN_MAP: Record<string, string> = {
+  problem_understanding: '问题理解',
+  literature_mining: '文献挖掘',
+  knowledge_gap: '知识缺口',
+  hypothesis_generation: '假设生成',
+  hypothesis_review: '假设评估',
+  experiment_design: '实验设计',
+  small_validation: '小样验证',
+  report_generation: '报告生成',
+};
 
 // ============ 项目概览 ============
 function ProjectOverview({ project, stats, pipelineNodes }: {
@@ -136,10 +160,11 @@ function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
 }
 
-function WorkflowTab({ projectId, researchQuestion, questionSource }: {
+function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted }: {
   projectId: string;
   researchQuestion: string;
   questionSource?: 'backend' | 'localStorage' | 'none';
+  onPipelineCompleted?: (result: PipelineRunResult) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -155,25 +180,41 @@ function WorkflowTab({ projectId, researchQuestion, questionSource }: {
           研究问题已从项目配置读取
         </div>
       )}
-      <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact />
+      <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact onPipelineCompleted={onPipelineCompleted} />
     </div>
   );
 }
 
-function HypothesesTab({ projectId }: { projectId: string }) {
-  return <HypothesesPage projectId={projectId} compact />;
+function HypothesesTab({ projectId, revalidateKey, latestRunId }: {
+  projectId: string;
+  revalidateKey: number;
+  latestRunId: string | null;
+}) {
+  return <HypothesesPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function ExperimentsTab({ projectId }: { projectId: string }) {
-  return <ExperimentDesignPage projectId={projectId} compact />;
+function ExperimentsTab({ projectId, revalidateKey, latestRunId }: {
+  projectId: string;
+  revalidateKey: number;
+  latestRunId: string | null;
+}) {
+  return <ExperimentDesignPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function ReportsTab({ projectId }: { projectId: string }) {
-  return <ReportPage projectId={projectId} compact />;
+function ReportsTab({ projectId, revalidateKey, latestRunId }: {
+  projectId: string;
+  revalidateKey: number;
+  latestRunId: string | null;
+}) {
+  return <ReportPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function LogsTab({ projectId }: { projectId: string }) {
-  return <RunLogsPage projectId={projectId} compact />;
+function LogsTab({ projectId, revalidateKey, latestRunId }: {
+  projectId: string;
+  revalidateKey: number;
+  latestRunId: string | null;
+}) {
+  return <RunLogsPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
 /**
@@ -184,7 +225,7 @@ function toProjectOverview(p: Project): ProjectOverview {
     id: p.id,
     name: p.name,
     description: p.description ?? '',
-    research_field: (p as any).research_field || (p as any).researchField || '',
+    research_field: (p as any).research_domain || (p as any).research_field || (p as any).researchField || '',
     current_stage: (p as any).current_stage || (p as any).currentStage || '未开始',
     research_question: (p as any).research_question || (p as any).researchQuestion || '',
     status: (p as any).status || 'draft',
@@ -197,6 +238,7 @@ function toProjectOverview(p: Project): ProjectOverview {
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const id = projectId ?? '1';
 
   // 从 URL 读取 tab，非法值回退 overview
@@ -209,6 +251,45 @@ export function ProjectWorkspace() {
   const handleTabChange = (tabId: string) => {
     setSearchParams({ tab: tabId });
   };
+
+  // --- Pipeline 运行状态 ---
+  const [latestRunId, setLatestRunId] = useState<string | null>(null);
+  const [revalidateKey, setRevalidateKey] = useState(0);
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
+  const [pipelineRuns, setPipelineRuns] = useState<PipelineRunSummary[]>([]);
+
+  const handlePipelineCompleted = useCallback((_result: PipelineRunResult) => {
+    setLatestRunId(_result.run_id);
+    setIsPipelineRunning(false);
+    setRevalidateKey((k) => k + 1);
+  }, []);
+
+  // --- 加载 Pipeline 运行记录 ---
+  useEffect(() => {
+    if (env.USE_MOCK || !id) {
+      setPipelineRuns([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    pipelineService.getRuns(id).then((res) => {
+      if (cancelled) return;
+      if (res.code === 200 && Array.isArray(res.data)) {
+        setPipelineRuns(
+          [...res.data].sort(
+            (a, b) =>
+              new Date(b.created_at || '').getTime() -
+              new Date(a.created_at || '').getTime(),
+          ),
+        );
+      }
+    }).catch(() => {
+      if (!cancelled) setPipelineRuns([]);
+    });
+
+    return () => { cancelled = true; };
+  }, [id, revalidateKey]);
 
   // --- 项目数据加载 ---
   const [project, setProject] = useState<ProjectOverview | null>(null);
@@ -262,6 +343,28 @@ export function ProjectWorkspace() {
     loadProject();
     return () => { cancelled = true; };
   }, [id]);
+
+  // --- 研究领域 ---
+  const resolvedResearchField = useMemo(() => {
+    if (project?.research_field) return project.research_field;
+    return getStoredResearchDomain(id || '') || '未知领域';
+  }, [project?.research_field, id]);
+
+  // --- 当前阶段 ---
+  const resolvedCurrentStage = useMemo(() => {
+    if (isPipelineRunning) return '运行中';
+    const latestRun = pipelineRuns[0];
+    if (!latestRun) return '未开始';
+    if (latestRun.status === 'completed') return '已完成';
+    if (latestRun.status === 'running') return '运行中';
+    if (latestRun.status === 'failed') {
+      const failedCn = latestRun.failed_stage
+        ? STAGE_CN_MAP[latestRun.failed_stage] || latestRun.failed_stage
+        : '';
+      return failedCn ? `失败于 ${failedCn}` : '失败';
+    }
+    return '未开始';
+  }, [isPipelineRunning, pipelineRuns]);
 
   // --- stats / pipelineNodes ---
   const stats = useMemo<StatItem[]>(() => {
@@ -380,16 +483,17 @@ export function ProjectWorkspace() {
             projectId={id}
             researchQuestion={resolvedResearchQuestion}
             questionSource={questionSource}
+            onPipelineCompleted={handlePipelineCompleted}
           />
         );
       case 'hypotheses':
-        return <HypothesesTab projectId={id} />;
+        return <HypothesesTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'experiments':
-        return <ExperimentsTab projectId={id} />;
+        return <ExperimentsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'reports':
-        return <ReportsTab projectId={id} />;
+        return <ReportsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'logs':
-        return <LogsTab projectId={id} />;
+        return <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       default:
         return <ProjectOverview project={project} stats={stats} pipelineNodes={pipelineNodes} />;
     }
@@ -417,11 +521,11 @@ export function ProjectWorkspace() {
             <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary-500/10 border border-primary-500/20 text-primary-400">
                 <Tag className="w-3.5 h-3.5" />
-                {project.research_field || '未知领域'}
+                {resolvedResearchField}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
                 <TrendingUp className="w-3.5 h-3.5" />
-                当前阶段：{project.current_stage}
+                当前阶段：{resolvedCurrentStage}
               </span>
             </div>
 
@@ -434,10 +538,18 @@ export function ProjectWorkspace() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <Button variant="secondary" icon={<BookOpen className="w-4 h-4" />}>
+            <Button
+              variant="secondary"
+              icon={<BookOpen className="w-4 h-4" />}
+              onClick={() => navigate(`/projects/${project.id}?tab=literature`)}
+            >
               上传文献
             </Button>
-            <Button variant="primary" icon={<Play className="w-4 h-4" />}>
+            <Button
+              variant="primary"
+              icon={<Play className="w-4 h-4" />}
+              onClick={() => navigate(`/projects/${project.id}?tab=workflow`)}
+            >
               运行 Pipeline
             </Button>
           </div>

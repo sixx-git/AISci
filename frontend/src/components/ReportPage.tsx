@@ -17,9 +17,17 @@ interface ReportPageProps {
   compact?: boolean;
   /** 文献库中的真实文献总数（从父级 stats 传入） */
   literatureCount?: number;
+  revalidateKey?: number;
+  latestRunId?: string | null;
 }
 
-export function ReportPage({ projectId, compact: _compact = false, literatureCount }: ReportPageProps) {
+export function ReportPage({
+  projectId,
+  compact: _compact = false,
+  literatureCount,
+  revalidateKey: _revalidateKey,
+  latestRunId: _latestRunId,
+}: ReportPageProps) {
   const navigate = useNavigate();
   const [report, setReport] = useState<ReportData | null>(env.USE_MOCK ? MOCK_REPORT : null);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +57,7 @@ export function ReportPage({ projectId, compact: _compact = false, literatureCou
         setIsLoading(false);
       }
     })();
-  }, [projectId]);
+  }, [projectId, _revalidateKey, _latestRunId]);
 
   const handleExport = useCallback(async (action: ExportType) => {
     if (action === 'generate') {

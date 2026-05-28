@@ -22,6 +22,7 @@ interface WorkflowPageProps {
   projectId?: string;
   researchQuestion?: string;
   compact?: boolean;
+  onPipelineCompleted?: (result: PipelineRunResult) => void;
 }
 
 // ============ 常量 ============
@@ -118,6 +119,7 @@ export function WorkflowPage({
   projectId,
   researchQuestion,
   compact: _compact = false,
+  onPipelineCompleted,
 }: WorkflowPageProps) {
   // ────── 节点与选中状态 ──────
   const [nodes, setNodes] = useState<AgentNodeData[]>(
@@ -196,6 +198,11 @@ export function WorkflowPage({
             setIsRunning(false);
             setCurrentRunId(null);
 
+            if (result.status === 'completed') {
+              setErrorMessage(null);
+              onPipelineCompleted?.(result);
+            }
+
             if (result.status === 'failed') {
               setErrorMessage(
                 result.error_message ||
@@ -203,8 +210,6 @@ export function WorkflowPage({
                   ? `执行失败在阶段: ${result.failed_stage}`
                   : 'Pipeline 执行失败'),
               );
-            } else {
-              setErrorMessage(null);
             }
           }
         } catch (err: unknown) {
@@ -215,7 +220,7 @@ export function WorkflowPage({
         }
       }, 1500);
     },
-    [applyStageResults],
+    [applyStageResults, onPipelineCompleted],
   );
 
   // ══════════════════════════════════════════════
@@ -329,6 +334,10 @@ export function WorkflowPage({
       if (result.status === 'completed' || result.status === 'failed') {
         applyStageResults(result);
         setIsRunning(false);
+        if (result.status === 'completed') {
+          setErrorMessage(null);
+          onPipelineCompleted?.(result);
+        }
         if (result.status === 'failed') {
           setErrorMessage(
             result.error_message ||
@@ -353,6 +362,7 @@ export function WorkflowPage({
     resetNodes,
     applyStageResults,
     startPolling,
+    onPipelineCompleted,
   ]);
 
   // ══════════════════════════════════════════════
