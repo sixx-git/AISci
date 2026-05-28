@@ -67,6 +67,7 @@ class PipelineService:
         self.run_id = str(uuid.uuid4())
         self.db_pipeline_run: Optional[DB_PipelineRun] = None
         self.db_stage_executions: Dict[int, DB_PipelineStageExecution] = {}
+        self._stage_results: Dict[str, Any] = {}
         
     def run_pipeline(self, request: PipelineRunRequest) -> PipelineRunResult:
         """
@@ -250,6 +251,7 @@ class PipelineService:
             stage_log.status = PipelineStageStatus.COMPLETED
             stage_log.output_data = output if isinstance(output, dict) else self._safe_model_dump(output)
             results[stage_key] = stage_log.output_data
+            self._stage_results[stage_key] = stage_log.output_data
             
             # 捕获模型调用参数
             self._capture_model_params(db_stage)
@@ -382,7 +384,12 @@ class PipelineService:
             )
             for h in hypotheses
         ]
-        result = agent.review(hypotheses=candidates)
+        lit_mining = self._stage_results.get("literature_mining", {})
+        result = agent.review(
+            hypotheses=candidates,
+            retrieved_papers=self._build_retrieved_papers(lit_mining),
+            literature_facts=lit_mining.get("facts", []),
+        )
         return self._safe_model_dump(result)
     
     def _exec_experiment_design(self, hypothesis_review: Optional[Dict]):
@@ -440,7 +447,9 @@ class PipelineService:
             final_hypothesis=hr,
             experiment_design=ed,
             small_validation=sv,
-            pipeline_run_info=pipeline_run_info
+            pipeline_run_info=pipeline_run_info,
+            novelty_review_skill_outputs=hr.get("skill_outputs"),
+            sanity_check_skill_outputs=ed.get("skill_outputs"),
         )
         return self._safe_model_dump(result)
     
@@ -576,6 +585,20 @@ class PipelineService:
                 self.db_pipeline_run.failed_stage = DB_PipelineStage.PROBLEM_UNDERSTANDING
         self.db.commit()
     
+    @staticmethod
+    def _build_retrieved_papers(lit_mining: Dict[str, Any]) -> List[Dict[str, Any]]:
+        papers = []
+        citation_map = lit_mining.get("citation_map", [])
+        for cit in citation_map:
+            papers.append({
+                "title": cit.get("paper_title") or cit.get("title", ""),
+                "authors": cit.get("authors", ""),
+                "abstract": "",
+                "external_id": cit.get("external_id", ""),
+                "source_url": cit.get("source_url", ""),
+            })
+        return papers
+
     def _create_report(self, project_id: str, report_data: Dict[str, Any]) -> Optional[str]:
         """创建报告记录"""
         if not report_data:

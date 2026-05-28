@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import {
   Cpu, FileCode, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Clock, Hash,
+  Puzzle,
 } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -57,6 +58,105 @@ function formatDuration(ms: number | null): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}min`;
+}
+
+function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unknown> }) {
+  if (!skillOutputs || Object.keys(skillOutputs).length === 0) return null;
+
+  const entries = Object.entries(skillOutputs);
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Puzzle className="w-4 h-4 text-purple-400" />
+        <h4 className="text-sm font-semibold text-purple-300">Skill 适配层输出</h4>
+      </div>
+      <div className="space-y-2">
+        {entries.map(([skillName, skillData]) => {
+          const s = skillData as Record<string, unknown>;
+          const sSuccess = s?.success;
+          const sWarnings = (s?.warnings as string[]) || [];
+          const sErrors = (s?.errors as string[]) || [];
+
+          // 嵌套 hypothesis_novelty_review 等聚合类型
+          const isAggregated = s && !('success' in s) && typeof s === 'object';
+
+          if (isAggregated) {
+            return (
+              <CollapsibleSection key={skillName} title={formatSkillName(skillName)} defaultOpen={false}>
+                <div className="space-y-1.5">
+                  {Object.entries(s).map(([k, v]) => {
+                    const vd = v as Record<string, unknown>;
+                    return (
+                      <div key={k} className="flex items-center justify-between px-2 py-1 rounded bg-gray-900/50 border border-gray-800/50">
+                        <span className="text-[10px] text-gray-400">{k}</span>
+                        <span className={cn(
+                          'text-[10px] font-medium',
+                          vd?.success === true ? 'text-green-400' :
+                          vd?.success === false ? 'text-red-400' : 'text-gray-500',
+                        )}>
+                          {vd?.success === true ? '✓' : vd?.success === false ? '✗' : '—'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CollapsibleSection>
+            );
+          }
+
+          return (
+            <CollapsibleSection key={skillName} title={formatSkillName(skillName)} defaultOpen={false}>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                    sSuccess === true ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400',
+                  )}>
+                    {sSuccess === true ? '成功' : sSuccess === false ? '失败' : '未知'}
+                  </span>
+                </div>
+                {sWarnings.length > 0 && (
+                  <div className="space-y-0.5">
+                    {sWarnings.map((w, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                        <span className="text-amber-400/80">{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {sErrors.length > 0 && (
+                  <div className="space-y-0.5">
+                    {sErrors.map((e, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                        <AlertTriangle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+                        <span className="text-red-400/80">{e}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {sWarnings.length === 0 && sErrors.length === 0 && (
+                  <p className="text-[10px] text-gray-500">无警告或错误</p>
+                )}
+              </div>
+            </CollapsibleSection>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function formatSkillName(key: string): string {
+  const map: Record<string, string> = {
+    pdf_evidence_extraction: 'PDF 证据提取',
+    arxiv_search: 'arXiv 检索',
+    citation_grounding: '引用真实性验证',
+    hypothesis_novelty_review: '假设新颖性审查',
+    experiment_sanity_check: '实验真实性检查',
+  };
+  return map[key] || key.replace(/_/g, ' ');
 }
 
 export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
@@ -175,6 +275,11 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
           </div>
         )}
       </Card>
+
+      {/* ────── Skill 输出 ────── */}
+      {node.output_data && typeof node.output_data === 'object' && 'skill_outputs' in node.output_data && (
+        <SkillOutputsCard skillOutputs={(node.output_data as Record<string, unknown>).skill_outputs as Record<string, unknown> | undefined} />
+      )}
 
       {/* ────── 技术信息 ────── */}
       <Card>

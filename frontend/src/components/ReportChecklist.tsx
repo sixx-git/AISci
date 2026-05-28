@@ -104,6 +104,51 @@ export function ReportChecklist({ sections, complianceCheck, className }: Report
           </div>
         )}
 
+        {/* Skill 评估指标 */}
+        {cc && (cc.novelty_score != null || cc.experiment_sanity_check) && (
+          <div className="mb-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/15">
+            <p className="text-[10px] text-purple-400 font-semibold mb-2 uppercase tracking-wide">
+              Skill 评估
+            </p>
+            {cc.novelty_score != null && (
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] text-gray-400">新颖性评分</span>
+                <span className={cn(
+                  'text-xs font-mono font-bold',
+                  cc.novelty_score >= 7 ? 'text-green-400' :
+                  cc.novelty_score >= 4 ? 'text-amber-400' : 'text-red-400',
+                )}>
+                  {cc.novelty_score}/10
+                </span>
+              </div>
+            )}
+            {cc.experiment_sanity_check && (
+              <div className="space-y-1 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-400">实验可执行性</span>
+                  <span className={cn(
+                    'text-[10px] font-medium',
+                    cc.experiment_sanity_check.executable
+                      ? 'text-green-400' : 'text-red-400',
+                  )}>
+                    {cc.experiment_sanity_check.executable ? '可执行' : '存在问题'}
+                  </span>
+                </div>
+                {cc.experiment_sanity_check.missing_items?.length > 0 && (
+                  <p className="text-[9px] text-red-400/70 leading-relaxed">
+                    缺失: {cc.experiment_sanity_check.missing_items.join(', ')}
+                  </p>
+                )}
+                {cc.experiment_sanity_check.recommendations?.length > 0 && (
+                  <p className="text-[9px] text-purple-400/70 leading-relaxed">
+                    建议: {cc.experiment_sanity_check.recommendations.slice(0, 2).join('; ')}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 章节字段检查列表 */}
         <div className="space-y-1.5">
           {sections.map((s) => {

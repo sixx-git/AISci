@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
+from app.skills.reasoning.hypothesis_novelty_review_skill import HypothesisNoveltyReviewSkill
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class HypothesisReviewResult(BaseModel):
     """假设评审结果"""
     reviews: List[HypothesisReview] = Field(..., description="评审列表，按综合得分降序排列")
     summary: str = Field(..., description="总体评价和推荐建议")
+    skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
 
 
 class HypothesisCandidate(BaseModel):
@@ -71,14 +73,18 @@ class HypothesisReviewAgent:
     
     def review(
         self,
-        hypotheses: List[HypothesisCandidate]
+        hypotheses: List[HypothesisCandidate],
+        retrieved_papers: Optional[List[Dict[str, Any]]] = None,
+        literature_facts: Optional[List[Dict[str, Any]]] = None,
     ) -> HypothesisReviewResult:
         """
         评审假设列表
-        
+
         Args:
             hypotheses: 候选假设列表
-            
+            retrieved_papers: 检索到的相关论文（供新颖性审查 Skill 使用）
+            literature_facts: 文献事实列表（供新颖性审查 Skill 使用）
+
         Returns:
             评审结果，按综合得分降序排列
         """
@@ -122,7 +128,12 @@ class HypothesisReviewAgent:
             
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict, hypotheses)
-            
+
+            # ── 运行新颖性审查 Skill ──
+            result.skill_outputs = self._run_novelty_skills_sync(
+                hypotheses, retrieved_papers, literature_facts
+            )
+
             logger.info(f"评审完成，最高综合得分: {result.reviews[0].overall_score if result.reviews else 0}")
             
             return result
@@ -131,6 +142,54 @@ class HypothesisReviewAgent:
             logger.error(f"评审假设时出错: {e}", exc_info=True)
             raise
     
+    @staticmethod
+    def _run_novelty_skills_sync(
+        hypotheses: list,
+        retrieved_papers: Optional[list] = None,
+        literature_facts: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        if not retrieved_papers:
+            return {"hypothesis_novelty_review": {"success": True, "data": {}, "warnings": ["无检索文献可供新颖性对比"]}}
+
+        async def _run():
+            outputs = {}
+            for i, hypo in enumerate(hypotheses):
+                if isinstance(hypo, dict):
+                    h_text = hypo.get("hypothesis", "")
+                else:
+                    h_text = getattr(hypo, "hypothesis", str(hypo))
+                if not h_text:
+                    continue
+
+                try:
+                    skill = HypothesisNoveltyReviewSkill()
+                    skill_result = await skill.run(
+                        input_data={
+                            "hypothesis": h_text,
+                            "retrieved_papers": retrieved_papers or [],
+                            "facts": literature_facts or [],
+                        },
+                        context={"stage": "hypothesis_review", "hypothesis_index": i},
+                    )
+                    outputs[f"hypothesis_{i}"] = {
+                        "success": skill_result.success,
+                        "data": skill_result.data,
+                        "warnings": skill_result.warnings,
+                        "errors": skill_result.errors,
+                    }
+                except Exception as e:
+                    logger.warning(f"NoveltyReviewSkill 失败 (hypothesis {i}): {e}")
+                    outputs[f"hypothesis_{i}"] = {"success": False, "error": str(e)}
+            return {"hypothesis_novelty_review": outputs}
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"NoveltyReviewSkill 异常: {e}")
+            return {}
+
     def _format_hypotheses(self, hypotheses: List[HypothesisCandidate]) -> str:
         """格式化假设列表"""
         if not hypotheses:

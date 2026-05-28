@@ -14,6 +14,7 @@ from app.services.vector_store import (
 )
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
+from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ class LiteratureMiningResponse(BaseModel):
     citation_map: List[CitationMapItem] = Field(default_factory=list, description="引用映射")
     uncertain_points: List[str] = Field(default_factory=list, description="不确定的点")
     warning: Optional[str] = Field(None, description="警告信息（文献库为空 / 无检索结果时）")
+    skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
 
 
 # ==================== Agent 实现 ====================
@@ -139,6 +141,11 @@ class LiteratureMiningAgent:
 
             # ── 4. 后校验 + 从 search_results 补全元数据 ──
             response = self._validate_and_normalize(result, search_results)
+
+            # ── 5. 运行关联 Skill ──
+            response.skill_outputs = self._run_skills_sync(
+                project_id, research_question, top_k, search_results
+            )
 
             logger.info(
                 f"文献挖掘完成: {len(response.facts)} 个事实, "
@@ -373,6 +380,46 @@ class LiteratureMiningAgent:
 
         # ── Pydantic 验证 ──
         return LiteratureMiningResponse(**result)
+
+    # ────────── Skills ──────────
+
+    @staticmethod
+    def _run_skills_sync(
+        project_id: str,
+        research_question: str,
+        top_k: int,
+        search_results: list,
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            outputs = {}
+            try:
+                pdf_skill = PdfEvidenceExtractionSkill()
+                pdf_result = await pdf_skill.run(
+                    input_data={
+                        "project_id": project_id,
+                        "research_question": research_question,
+                        "top_k": top_k,
+                    },
+                    context={"stage": "literature_mining"},
+                )
+                outputs["pdf_evidence_extraction"] = {
+                    "success": pdf_result.success,
+                    "data": pdf_result.data,
+                    "warnings": pdf_result.warnings,
+                    "errors": pdf_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"PdfEvidenceExtractionSkill 运行失败: {e}")
+                outputs["pdf_evidence_extraction"] = {"success": False, "error": str(e)}
+            return outputs
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"Skills 运行异常: {e}")
+            return {}
 
     # ────────── 空响应 ──────────
 

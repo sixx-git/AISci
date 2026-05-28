@@ -363,7 +363,14 @@ export interface ComplianceCheck {
   evidence_fact_count: number;
   hypothesis_with_evidence_count: number;
   has_actual_or_simulated_result: boolean;
-  result_type?: string;
+  /** ── Skill 适配层指标 ── */
+  novelty_score?: number;
+  experiment_sanity_check?: {
+    executable: boolean;
+    missing_items: string[];
+    weak_points: string[];
+    recommendations: string[];
+  };
   items: ReportSection[];
 }
 

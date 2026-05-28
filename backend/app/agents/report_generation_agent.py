@@ -12,6 +12,7 @@ from datetime import datetime
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.services.pdf_export_service import export_markdown_to_pdf
+from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,8 @@ class ReportGenerationAgent:
         experiment_design: Dict[str, Any],
         small_validation: Optional[Dict[str, Any]] = None,
         pipeline_run_info: Optional[Dict[str, Any]] = None,
+        novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
+        sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
          Args:
@@ -89,6 +92,8 @@ class ReportGenerationAgent:
             experiment_design: 实验设计
             small_validation: 小样验证结果
             pipeline_run_info: Pipeline 运行信息
+            novelty_review_skill_outputs: 假设新颖性审查 Skill 输出
+            sanity_check_skill_outputs: 实验真实性审查 Skill 输出
         """
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
@@ -145,7 +150,8 @@ class ReportGenerationAgent:
 
             # ── 后校验 + 合规检查 ──
             result = self._validate_and_normalize_result(
-                result_dict, literature_facts, citation_map, all_hypotheses
+                result_dict, literature_facts, citation_map, all_hypotheses,
+                novelty_review_skill_outputs, sanity_check_skill_outputs,
             )
 
             # ── 附加运行摘要 ──
@@ -206,6 +212,8 @@ class ReportGenerationAgent:
         literature_facts: List[Dict[str, Any]],
         citation_map: List[Dict[str, Any]],
         all_hypotheses: List[Dict[str, Any]],
+        novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
+        sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """验证章节完整性、References 真实性、合规标记"""
         # 顶层字段
@@ -230,14 +238,21 @@ class ReportGenerationAgent:
 
         ref_check = self._validate_references(refs, literature_facts, citation_map)
 
+        # ── 运行 CitationGroundingSkill ──
+        skill_outputs = self._run_citation_grounding_sync(refs, citation_map, literature_facts)
+
         if ref_check["suspicious_count"] > 0 and ref_check["verified_count"] == 0:
             logger.warning(f"参考文献全不可验证: {ref_check['suspicious_count']} 条可疑")
             chapters["references"] = []
             ref_check["references_replaced"] = True
 
         # ── 合规检查 ──
-        compliance = self._build_compliance_check(result_dict, ref_check, literature_facts, all_hypotheses)
+        compliance = self._build_compliance_check(
+            result_dict, ref_check, literature_facts, all_hypotheses,
+            novelty_review_skill_outputs, sanity_check_skill_outputs,
+        )
         result_dict["compliance_check"] = compliance
+        result_dict["skill_outputs"] = skill_outputs
 
         return result_dict
 
@@ -314,12 +329,51 @@ class ReportGenerationAgent:
 
     # ──────── 合规检查 ────────
 
+    @staticmethod
+    def _run_citation_grounding_sync(
+        references: list,
+        citation_map: list,
+        literature_facts: list,
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            try:
+                skill = CitationGroundingSkill()
+                skill_result = await skill.run(
+                    input_data={
+                        "references": references,
+                        "citation_map": citation_map,
+                        "literature_facts": literature_facts,
+                    },
+                    context={"stage": "report_generation"},
+                )
+                return {
+                    "citation_grounding": {
+                        "success": skill_result.success,
+                        "data": skill_result.data,
+                        "warnings": skill_result.warnings,
+                        "errors": skill_result.errors,
+                    }
+                }
+            except Exception as e:
+                logger.warning(f"CitationGroundingSkill 失败: {e}")
+                return {"citation_grounding": {"success": False, "error": str(e)}}
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"CitationGroundingSkill 异常: {e}")
+            return {}
+
     def _build_compliance_check(
         self,
         result_dict: Dict[str, Any],
         ref_check: Dict[str, Any],
         literature_facts: List[Dict[str, Any]],
         all_hypotheses: List[Dict[str, Any]],
+        novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
+        sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """16 项合规检查（含 References / Evidence / Hypothesis / Result）"""
         chapters = result_dict.get("chapters", {})
@@ -389,6 +443,10 @@ class ReportGenerationAgent:
                 has_result = True
                 result_type = "simulated_or_expected"
 
+        # ── 汇总 Skill 指标 ──
+        novelty_score = self._aggregate_novelty_score(novelty_review_skill_outputs)
+        experiment_sanity = self._aggregate_sanity_check(sanity_check_skill_outputs)
+
         return {
             "total_items": len(CHALLENGE_CUP_FIELDS),
             "completed": completed,
@@ -402,10 +460,48 @@ class ReportGenerationAgent:
             "hypothesis_with_evidence_count": hypothesis_with_evidence,
             "has_actual_or_simulated_result": has_result,
             "result_type": result_type,
+            # ── Skill 适配层指标 ──
+            "novelty_score": novelty_score,
+            "experiment_sanity_check": experiment_sanity,
             "items": items,
         }
 
     # ──────── 运行摘要 ────────
+
+    @staticmethod
+    def _aggregate_novelty_score(
+        novelty_outputs: Optional[Dict[str, Any]],
+    ) -> Optional[float]:
+        if not novelty_outputs:
+            return None
+        hr_data = novelty_outputs.get("hypothesis_novelty_review", {})
+        if isinstance(hr_data, dict) and "success" in hr_data:
+            first_key = next(iter(hr_data), None)
+            if first_key and isinstance(hr_data.get(first_key), dict):
+                return hr_data[first_key].get("data", {}).get("novelty_score")
+        scores = []
+        for __, val in hr_data.items():
+            if isinstance(val, dict):
+                s = val.get("data", {}).get("novelty_score")
+                if s is not None:
+                    scores.append(float(s))
+        return round(sum(scores) / len(scores), 1) if scores else None
+
+    @staticmethod
+    def _aggregate_sanity_check(
+        sanity_outputs: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        if not sanity_outputs:
+            return None
+        sc_data = sanity_outputs.get("experiment_sanity_check", {})
+        if isinstance(sc_data, dict):
+            return sc_data.get("data") or {
+                "executable": sc_data.get("executable"),
+                "missing_items": sc_data.get("missing_items", []),
+                "weak_points": sc_data.get("weak_points", []),
+                "recommendations": sc_data.get("recommendations", []),
+            }
+        return None
 
     def _append_run_summary_to_report(
         self, result: Dict[str, Any], run_info: Dict[str, Any]

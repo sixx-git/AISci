@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
+from app.skills.experiment.experiment_sanity_check_skill import ExperimentSanityCheckSkill
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class ExperimentDesignResult(BaseModel):
     experimental_steps: str = Field("", description="实验步骤")
     expected_results: str = Field("", description="预期结果")
     limitations: str = Field("", description="局限性")
+    skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
 
     @field_validator(
         "datasets", "baselines", "metrics",
@@ -111,15 +113,47 @@ class ExperimentDesignAgent:
             
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict)
-            
+
+            # ── 运行实验真实性审查 Skill ──
+            result["skill_outputs"] = self._run_sanity_check_sync(result)
+
             logger.info("实验设计完成")
-            
+
             return ExperimentDesignResult(**result)
             
         except Exception as e:
             logger.error(f"设计实验时出错：{e}", exc_info=True)
             raise
     
+    @staticmethod
+    def _run_sanity_check_sync(result: Dict[str, Any]) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            try:
+                skill = ExperimentSanityCheckSkill()
+                skill_result = await skill.run(
+                    input_data={"experiment_design": result},
+                    context={"stage": "experiment_design"},
+                )
+                return {
+                    "experiment_sanity_check": {
+                        "success": skill_result.success,
+                        "data": skill_result.data,
+                        "warnings": skill_result.warnings,
+                        "errors": skill_result.errors,
+                    }
+                }
+            except Exception as e:
+                logger.warning(f"ExperimentSanityCheckSkill 失败: {e}")
+                return {"experiment_sanity_check": {"success": False, "error": str(e)}}
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"SanityCheckSkill 异常: {e}")
+            return {}
+
     def _format_hypothesis_info(
         self,
         hypothesis: str,
