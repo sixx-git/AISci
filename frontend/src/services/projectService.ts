@@ -71,7 +71,7 @@ export const projectService = {
     return data;
   },
 
-  /** PUT /api/v1/projects/:id */
+  /** PATCH /api/v1/projects/:id */
   async updateProject(projectId: string, payload: Partial<ProjectCreate>): Promise<ApiResponse<Project>> {
     if (env.USE_MOCK) {
       console.log('[Mock] projectService.updateProject', projectId, payload);
@@ -83,7 +83,7 @@ export const projectService = {
       };
     }
 
-    const { data } = await api.put(`/projects/${projectId}`, payload);
+    const { data } = await api.patch(`/projects/${projectId}`, payload);
     return data;
   },
 

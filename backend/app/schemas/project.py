@@ -23,14 +23,30 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = Field(None, description="项目描述")
     keywords: Optional[str] = Field(None, description="关键词，逗号分隔")
     created_by: Optional[str] = Field(None, description="创建者")
+    # 研究问题字段
+    research_question: Optional[str] = Field(None, description="研究问题")
+    research_domain: Optional[str] = Field(None, description="研究领域")
+    research_goal: Optional[str] = Field(None, description="研究目标")
+    research_background: Optional[str] = Field(None, description="已知背景")
+    data_source: Optional[str] = Field(None, description="数据来源")
+    constraints: Optional[str] = Field(None, description="限制条件")
+    expected_output: Optional[str] = Field(None, description="期望输出")
 
 
 class ProjectUpdate(BaseModel):
-    """更新项目请求"""
+    """更新项目请求（部分字段更新）"""
     name: Optional[str] = Field(None, min_length=1, max_length=200, description="项目名称")
     description: Optional[str] = Field(None, description="项目描述")
     status: Optional[ProjectStatus] = Field(None, description="项目状态")
     keywords: Optional[str] = Field(None, description="关键词，逗号分隔")
+    # 研究问题字段（可选更新）
+    research_question: Optional[str] = Field(None, description="研究问题")
+    research_domain: Optional[str] = Field(None, description="研究领域")
+    research_goal: Optional[str] = Field(None, description="研究目标")
+    research_background: Optional[str] = Field(None, description="已知背景")
+    data_source: Optional[str] = Field(None, description="数据来源")
+    constraints: Optional[str] = Field(None, description="限制条件")
+    expected_output: Optional[str] = Field(None, description="期望输出")
 
 
 class ProjectQuery(BaseModel):
@@ -48,6 +64,14 @@ class ProjectBase(BaseModel):
     description: Optional[str] = None
     status: ProjectStatus
     keywords: Optional[str] = None
+    # 研究问题字段
+    research_question: Optional[str] = None
+    research_domain: Optional[str] = None
+    research_goal: Optional[str] = None
+    research_background: Optional[str] = None
+    data_source: Optional[str] = None
+    constraints: Optional[str] = None
+    expected_output: Optional[str] = None
     
     class Config:
         from_attributes = True

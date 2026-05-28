@@ -22,11 +22,27 @@ export interface Project {
   created_at: string;
   updated_at: string;
   status?: string;
+  // 研究问题字段
+  research_question?: string;
+  research_domain?: string;
+  research_goal?: string;
+  research_background?: string;
+  data_source?: string;
+  constraints?: string;
+  expected_output?: string;
 }
 
 export interface ProjectCreate {
   name: string;
   description?: string;
+  // 研究问题字段（可选）
+  research_question?: string;
+  research_domain?: string;
+  research_goal?: string;
+  research_background?: string;
+  data_source?: string;
+  constraints?: string;
+  expected_output?: string;
 }
 
 export interface ProjectOverview {

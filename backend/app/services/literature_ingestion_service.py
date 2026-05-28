@@ -75,13 +75,15 @@ class LiteratureIngestionService:
         self,
         project_id: str,
         papers: List[Dict[str, Any]],
+        source_type: SourceType = SourceType.ARXIV,
     ) -> Dict[str, Any]:
         """
-        批量导入 arXiv 论文元数据到 Document 表
+        批量导入论文元数据到 Document 表（支持 arXiv / OpenAlex 等多来源）
 
         Args:
             project_id: 目标项目 ID
-            papers: ArxivPaper.to_dict() 列表
+            papers: 标准化论文 dict 列表
+            source_type: 来源类型标记（SourceType.ARXIV 或 SourceType.OPENALEX）
 
         Returns:
             {
@@ -101,7 +103,7 @@ class LiteratureIngestionService:
 
         for paper in papers:
             try:
-                doc_id, is_dup = self._import_single_paper(project_id, paper)
+                doc_id, is_dup = self._import_single_paper(project_id, paper, source_type)
                 results.append({
                     "external_id": paper.get("external_id", ""),
                     "document_id": doc_id,
@@ -135,9 +137,15 @@ class LiteratureIngestionService:
         self,
         project_id: str,
         paper: Dict[str, Any],
+        source_type: SourceType = SourceType.ARXIV,
     ) -> Tuple[str, bool]:
         """
-        导入单篇 arXiv 论文
+        导入单篇论文元数据
+
+        Args:
+            project_id: 目标项目 ID
+            paper: 论文元数据 dict
+            source_type: 来源类型
 
         Returns:
             Tuple[str, bool]: (document_id, is_duplicate)
@@ -185,12 +193,12 @@ class LiteratureIngestionService:
             pdf_url=paper.get("pdf_url", ""),
             external_id=external_id,
             # 多来源字段
-            source_type=SourceType.ARXIV,
+            source_type=source_type,
             library_scope=LibraryScope.BASE,
             import_status=ImportStatus.IMPORTED,
             is_personal=False,
             metadata_json={
-                "arxiv_id": external_id,
+                "arxiv_id" if source_type == SourceType.ARXIV else "openalex_id": external_id,
                 "categories": paper.get("categories", ""),
                 "comment": paper.get("comment"),
                 "journal_ref": paper.get("journal_ref"),

@@ -264,14 +264,16 @@ db.commit()
 print(f"[OK] 测试项目创建: {project_id}")
 
 # ================================================================
-#  4. arXiv 搜索 + 导入
+#  4. 文献搜索 + 导入（arXiv → OpenAlex 自动降级）
 # ================================================================
-import_label_arxiv = "arXiv 检索"
+import_label_arxiv = "文献搜索"
 arxiv_imported = 0
+search_query = "multimodal medical diagnosis transformer"
+
 try:
     from app.services.literature_sources.arxiv_source import ArxivSource
-    arxiv_source = ArxivSource(timeout=30)  # 国内网络需更长超时
-    papers = arxiv_source.search("multimodal medical diagnosis transformer", max_results=2)
+    arxiv_source = ArxivSource(timeout=30)
+    papers = arxiv_source.search(search_query, max_results=2)
     if papers:
         ingestion = LiteratureIngestionService(db)
         paper_dicts = [p.to_dict() for p in papers]
@@ -279,12 +281,29 @@ try:
         arxiv_imported = result.get("imported", 0)
         for r in result.get("results", []):
             print(f"  [arXiv] 导入: {r.get('title', '?')[:80]}  (dup={r.get('duplicate')})")
-        print(f"[OK] {import_label_arxiv}: {arxiv_imported} 篇导入成功, {result.get('duplicates', 0)} 篇重复")
+        print(f"[OK] arXiv 检索: {arxiv_imported} 篇导入成功, {result.get('duplicates', 0)} 篇重复")
     else:
         print(f"[SKIP] arXiv 搜索返回空结果")
 except Exception as e:
-    print(f"[WARN] arXiv 搜索失败（网络不可用？）: {e}")
-    print("       将使用预存 Mock 文献继续进行后续验证")
+    print(f"[WARN] arXiv 搜索失败: {e}")
+    # ── 自动回退到 OpenAlex ──
+    try:
+        from app.services.literature_sources.openalex_source import OpenAlexSource
+        from app.models.project import SourceType
+        openalex_source = OpenAlexSource(timeout=15)
+        papers = openalex_source.search(search_query, max_results=2)
+        if papers:
+            ingestion = LiteratureIngestionService(db)
+            result = ingestion.import_arxiv_papers(project_id, papers, source_type=SourceType.OPENALEX)
+            arxiv_imported = result.get("imported", 0)
+            for r in result.get("results", []):
+                print(f"  [OpenAlex] 导入: {r.get('title', '?')[:80]}  (dup={r.get('duplicate')})")
+            print(f"[OK] OpenAlex 回退检索: {arxiv_imported} 篇导入成功, {result.get('duplicates', 0)} 篇重复")
+        else:
+            print(f"[WARN] OpenAlex 搜索返回空结果，将使用预存 Mock 文献")
+    except Exception as e2:
+        print(f"[WARN] OpenAlex 回退也失败: {e2}")
+        print("       将使用预存 Mock 文献继续进行后续验证")
 
 # ================================================================
 #  5. BibTeX 导入

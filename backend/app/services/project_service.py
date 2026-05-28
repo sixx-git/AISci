@@ -43,7 +43,14 @@ class ProjectService:
             description=data.description,
             keywords=data.keywords,
             status=ProjectStatus.DRAFT,
-            created_by=data.created_by
+            created_by=data.created_by,
+            research_question=data.research_question,
+            research_domain=data.research_domain,
+            research_goal=data.research_goal,
+            research_background=data.research_background,
+            data_source=data.data_source,
+            constraints=data.constraints,
+            expected_output=data.expected_output,
         )
         
         self.db.add(project)

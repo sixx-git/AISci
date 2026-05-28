@@ -111,7 +111,24 @@ def update_project(
     data: ProjectUpdate,
     service: ProjectService = Depends(get_project_service)
 ):
-    """更新项目"""
+    """全量更新项目"""
+    project = service.update_project(project_id, data)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    
+    return success_response(
+        data=ProjectDetail.model_validate(project),
+        message="项目更新成功"
+    )
+
+
+@router.patch("/{project_id}", response_model=ResponseModel[ProjectDetail])
+def patch_project(
+    project_id: str,
+    data: ProjectUpdate,
+    service: ProjectService = Depends(get_project_service)
+):
+    """部分更新项目（推荐用于更新研究问题字段）"""
     project = service.update_project(project_id, data)
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")

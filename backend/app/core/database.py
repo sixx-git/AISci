@@ -64,3 +64,49 @@ def create_tables():
     if engine is None:
         init_db()
     Base.metadata.create_all(bind=engine)
+    # 对已有 SQLite 数据库运行迁移（补加可能缺失的列）
+    migrate_projects_table()
+
+
+def migrate_projects_table():
+    """
+    SQLite 兼容迁移：为 projects 表补加缺失的列。
+    SQLite 的 ALTER TABLE 只支持 ADD COLUMN，不支持 IF NOT EXISTS，
+    因此通过查询 PRAGMA table_info 检查列是否已存在。
+    """
+    if engine is None:
+        init_db()
+
+    import sqlite3
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(projects)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        new_columns = [
+            ("research_question", "TEXT"),
+            ("research_domain", "VARCHAR(200)"),
+            ("research_goal", "TEXT"),
+            ("research_background", "TEXT"),
+            ("data_source", "TEXT"),
+            ("constraints", "TEXT"),
+            ("expected_output", "TEXT"),
+        ]
+
+        for col_name, col_type in new_columns:
+            if col_name not in existing_columns:
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE projects ADD COLUMN {col_name} {col_type}"
+                    )
+                    print(f"    迁移: 列 projects.{col_name} 已添加")
+                except sqlite3.OperationalError as e:
+                    print(f"    迁移警告: 添加 projects.{col_name} 失败: {e}")
+
+        conn.commit()
+    except Exception:
+        # 非 SQLite 数据库会抛出异常，忽略即可
+        pass
+    finally:
+        conn.close()

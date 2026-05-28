@@ -35,6 +35,15 @@ class Project(Base):
     description = Column(Text, nullable=True, comment="项目描述")
     research_topic = Column(Text, nullable=True, comment="研究主题")
     keywords = Column(Text, nullable=True, comment="关键词，逗号分隔")
+    # ========== 研究问题字段（对应前端 ResearchQuestionPage 表单） ==========
+    research_question = Column(Text, nullable=True, comment="研究问题")
+    research_domain = Column(String(200), nullable=True, comment="研究领域")
+    research_goal = Column(Text, nullable=True, comment="研究目标")
+    research_background = Column(Text, nullable=True, comment="已知背景")
+    data_source = Column(Text, nullable=True, comment="数据来源")
+    constraints = Column(Text, nullable=True, comment="限制条件")
+    expected_output = Column(Text, nullable=True, comment="期望输出")
+    # ==========
     status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.DRAFT, nullable=False, index=True, comment="项目状态")
     created_by = Column(String(100), nullable=True, comment="创建者")
     priority = Column(Integer, default=5, comment="优先级（1-10）")
@@ -77,6 +86,7 @@ class SourceType(str, Enum):
     """文献来源类型枚举"""
     UPLOAD = "upload"
     ARXIV = "arxiv"
+    OPENALEX = "openalex"
     GOOGLE_SCHOLAR_IMPORT = "google_scholar_import"
     BIBTEX = "bibtex"
     MANUAL = "manual"
