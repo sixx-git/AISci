@@ -991,9 +991,9 @@ function ArxivTabContent({
             <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/25">
               <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-yellow-400">使用本地演示文献</p>
+                <p className="text-sm font-medium text-yellow-400">当前展示本地缓存文献</p>
                 <p className="text-xs text-yellow-400/70 mt-1">
-                  {fallbackWarning || 'arXiv API 当前不可访问，已使用本地演示文献缓存。'}
+                  {fallbackWarning || 'arXiv API 当前不可访问，已使用本地缓存文献。'}
                 </p>
               </div>
             </div>

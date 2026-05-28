@@ -168,6 +168,7 @@ class LiteratureMiningAgent:
             doi = f" DOI: {r.doi}" if r.doi else ""
             ext_id = f" arXiv: {r.external_id}" if r.external_id else ""
             url = f" URL: {r.source_url}" if r.source_url else ""
+            fb = " [FALLBACK: 本地缓存文献]" if r.fallback else ""
 
             chunk_text = (
                 f"--- 片段 {i} ---\n"
@@ -175,7 +176,7 @@ class LiteratureMiningAgent:
                 f"Document ID: {r.document_id}\n"
                 f"标题: {r.source_title or '未知'}\n"
                 f"作者: {authors}{year_str}\n"
-                f"来源: {source}{page_str}{doi}{ext_id}{url}\n"
+                f"来源: {source}{page_str}{doi}{ext_id}{url}{fb}\n"
                 f"相似度: {r.similarity_score:.4f}\n"
                 f"原文内容:\n{r.content}"
             )
@@ -344,6 +345,7 @@ class LiteratureMiningAgent:
                 "source_url": item.get("source_url") or (sr.source_url if sr else None),
                 "doi": item.get("doi") or (sr.doi if sr else None),
                 "external_id": item.get("external_id") or (sr.external_id if sr else None),
+                "fallback": item.get("fallback") or (sr.fallback if sr else False),
                 "fact_ids": item.get("fact_ids", []),
                 "chunk_ids": item.get("chunk_ids", []),
             }

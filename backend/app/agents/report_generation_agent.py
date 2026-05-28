@@ -152,6 +152,13 @@ class ReportGenerationAgent:
             if pipeline_run_info:
                 result = self._append_run_summary_to_report(result, pipeline_run_info)
 
+            # ── 标记是否引用自 fallback 文献 ──
+            has_fallback_ref = any(
+                cit.get("fallback", False) for cit in (citation_map or [])
+            )
+            if has_fallback_ref:
+                result["source_is_fallback"] = True
+
             # ── 保存文件 ──
             file_info = self._save_report_files(result, project_info)
             result.update(file_info)

@@ -282,7 +282,7 @@ class PipelineService:
             "duration_ms": last_call.duration_ms,
         }
         db_stage.prompt_used = last_call.input[:2000] if last_call.input else ""
-        db_stage.token_count = last_call.token_count if hasattr(last_call, 'token_count') else None
+        db_stage.token_count = last_call.total_tokens
         db_stage.duration_ms = last_call.duration_ms
         self.db.commit()
     

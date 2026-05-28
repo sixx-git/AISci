@@ -64,6 +64,9 @@ class CallLog:
     duration_ms: int = 0
     success: bool = True
     error: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 # 模块级调用日志存储
@@ -291,7 +294,10 @@ class QwenClient:
         output_text: str,
         duration_ms: int,
         success: bool,
-        error: str = ""
+        error: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int = 0
     ):
         """记录一次调用"""
         log_entry = CallLog(
@@ -303,13 +309,17 @@ class QwenClient:
             output=_truncate(output_text),
             duration_ms=duration_ms,
             success=success,
-            error=error
+            error=error,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
         )
         _call_logs.append(log_entry)
         if success:
             logger.info(
                 f"[QwenCall] model={model_name} temp={temperature} "
-                f"version={prompt_version} duration={duration_ms}ms OK"
+                f"version={prompt_version} duration={duration_ms}ms "
+                f"tokens={total_tokens} OK"
             )
         else:
             logger.warning(
@@ -358,7 +368,13 @@ class QwenClient:
                 raise QwenAPIError("Empty response from Qwen API")
 
             duration_ms = int((time.time() - t0) * 1000)
-            self._log_call(self.model, temperature, "", prompt, content, duration_ms, True)
+            usage = response.usage
+            self._log_call(
+                self.model, temperature, "", prompt, content, duration_ms, True,
+                prompt_tokens=usage.prompt_tokens if usage else 0,
+                completion_tokens=usage.completion_tokens if usage else 0,
+                total_tokens=usage.total_tokens if usage else 0,
+            )
             logger.debug(f"Received Qwen response: {content[:100]}...")
             return content
 
@@ -444,6 +460,11 @@ class QwenClient:
             if raw_content is None:
                 raise QwenAPIError("Empty response from Qwen API")
 
+            usage_data = response.usage
+            pt = usage_data.prompt_tokens if usage_data else 0
+            ct = usage_data.completion_tokens if usage_data else 0
+            tt = usage_data.total_tokens if usage_data else 0
+
         except (QwenAPIError, QwenTimeoutError) as e:
             duration_ms = int((time.time() - t0) * 1000)
             self._log_call(self.model, temperature, prompt_version, prompt, "", duration_ms, False, str(e))
@@ -461,7 +482,7 @@ class QwenClient:
             first_error = e
 
         if json_obj is not None:
-            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True)
+            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
             return json_obj
 
         # ──── 第二次尝试：自动修复 JSON ────
@@ -469,14 +490,14 @@ class QwenClient:
         try:
             json_obj = _repair_json(raw_content)
             logger.info("JSON auto-repair succeeded")
-            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True)
+            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
             return json_obj
         except json.JSONDecodeError as e:
             pass  # 修复也失败了
 
         # ──── 仍然失败：抛出 AgentOutputParseError，绝不允许 raw_response 继续 ────
         error_msg = f"模型输出 JSON 解析失败（原始+修复均失败）: {first_error}"
-        self._log_call(self.model, temperature, prompt_version, prompt, raw_content, duration_ms, False, error_msg)
+        self._log_call(self.model, temperature, prompt_version, prompt, raw_content, duration_ms, False, error_msg, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
         raise AgentOutputParseError(
             message=f"Agent 输出无法解析为合法 JSON。原始错误: {first_error}。"

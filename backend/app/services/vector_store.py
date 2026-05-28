@@ -37,6 +37,7 @@ class SearchResult:
     doi: Optional[str] = None
     external_id: Optional[str] = None
     source_url: Optional[str] = None
+    fallback: bool = False
 
 
 class BaseEmbedding:
@@ -228,6 +229,7 @@ class VectorStore:
                     "doi": doc.doi,
                     "external_id": doc.external_id,
                     "source_url": doc.source_url,
+                    "fallback": (doc.metadata_json or {}).get("fallback", False) if doc.metadata_json else False,
                     "faiss_index": start_idx + i,
                 }
                 self._mappings[project_id].append(item)
@@ -304,6 +306,7 @@ class VectorStore:
                 doi=item.get("doi"),
                 external_id=item.get("external_id"),
                 source_url=item.get("source_url"),
+                fallback=item.get("fallback", False),
             ))
 
         logger.info(f"Search {project_id}: {len(results)} results for '{query[:50]}...'")

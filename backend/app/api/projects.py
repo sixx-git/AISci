@@ -27,7 +27,7 @@ from app.schemas.research import HypothesisResponse, ExperimentDesignDBResponse
 from app.services.project_service import ProjectService, DocumentService
 from app.services.hypothesis_service import HypothesisService
 from app.services.experiment_service import ExperimentDesignService
-from app.models.pipeline import PipelineRun, PipelineStageExecution
+from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ def list_project_hypotheses(
         db.query(PipelineRun)
         .filter(
             PipelineRun.project_id == project_id,
-            PipelineRun.status.in_(["completed", "failed"])
+            PipelineRun.status.in_([PipelineStatus.COMPLETED, PipelineStatus.FAILED])
         )
         .order_by(PipelineRun.created_at.desc())
         .first()
@@ -374,7 +374,7 @@ def list_project_experiment_designs(
         db.query(PipelineRun)
         .filter(
             PipelineRun.project_id == project_id,
-            PipelineRun.status.in_(["completed", "failed"])
+            PipelineRun.status.in_([PipelineStatus.COMPLETED, PipelineStatus.FAILED])
         )
         .order_by(PipelineRun.created_at.desc())
         .first()

@@ -125,10 +125,16 @@ function mapStatus(status: string): AgentStatus {
   const normalized = normalizeStatus(status);
   switch (normalized) {
     case 'running':
+    case 'processing':
       return 'running';
     case 'completed':
+    case 'success':
+    case 'done':
+    case 'finished':
       return 'completed';
     case 'failed':
+    case 'error':
+    case 'fault':
       return 'failed';
     case 'human_review_required':
     case 'review':
@@ -253,6 +259,26 @@ export function WorkflowPage({
   }, []);
 
   // ══════════════════════════════════════════════
+  //  用数据库中的真实 stages 刷新节点
+  // ══════════════════════════════════════════════
+  const refreshFromRunDetail = useCallback(async (runId: string) => {
+    try {
+      const detailRes = await pipelineService.getRunDetail(runId);
+      if (detailRes.code !== 200 || !detailRes.data) return;
+      const runDetail = detailRes.data;
+      setNodes(createInitialNodes().map((node) => {
+        const matchedStage = runDetail.stages?.find(
+          (s) => normalizeStageName(s.stage) === node.id ||
+            STAGE_TO_NODE_ID[normalizeStageName(s.stage)] === node.id,
+        );
+        return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
+      }));
+    } catch (err: unknown) {
+      console.error('刷新运行详情失败:', err);
+    }
+  }, []);
+
+  // ══════════════════════════════════════════════
   //  将 API stages 合并到节点
   // ══════════════════════════════════════════════
   const applyStageResults = useCallback((result: PipelineRunResult) => {
@@ -309,6 +335,9 @@ export function WorkflowPage({
             setIsRunning(false);
             setCurrentRunId(null);
 
+            refreshFromRunDetail(runId);
+            setHasExistingRuns(true);
+
             if (result.status === 'completed') {
               setErrorMessage(null);
               onPipelineCompleted?.(result);
@@ -331,7 +360,7 @@ export function WorkflowPage({
         }
       }, 1500);
     },
-    [applyStageResults, onPipelineCompleted],
+    [applyStageResults, refreshFromRunDetail, onPipelineCompleted],
   );
 
   // ══════════════════════════════════════════════
@@ -378,7 +407,9 @@ export function WorkflowPage({
       // 同步返回（已完成 / 失败）
       if (result.status === 'completed' || result.status === 'failed') {
         applyStageResults(result);
+        refreshFromRunDetail(result.run_id);
         setIsRunning(false);
+        setHasExistingRuns(true);
         if (result.status === 'completed') {
           setErrorMessage(null);
           onPipelineCompleted?.(result);
@@ -405,6 +436,7 @@ export function WorkflowPage({
     finalResearchQuestion,
     resetNodes,
     applyStageResults,
+    refreshFromRunDetail,
     startPolling,
     onPipelineCompleted,
   ]);
