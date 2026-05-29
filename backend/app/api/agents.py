@@ -154,7 +154,6 @@ async def hypothesis_generation(
     生成的假设将保存到 Hypothesis 表中，并将关联 facts 写入 Evidence 证据链表。
     """
     try:
-        # 生成假设
         agent = get_hypothesis_generation_agent()
         result = agent.generate(
             research_question=request.research_question,
@@ -163,11 +162,44 @@ async def hypothesis_generation(
             constraints=request.constraints,
             project_id=request.project_id
         )
-        
+
+        hypotheses_list = [hypo.model_dump() for hypo in result.hypotheses]
+
+        # ── 问题对齐检查 ──
+        alignment_results = []
+        if request.research_question and hypotheses_list:
+            try:
+                import asyncio
+                from app.skills.reasoning.question_alignment_skill import QuestionAlignmentSkill
+
+                async def _run_alignment():
+                    skill = QuestionAlignmentSkill()
+                    return await skill.run(
+                        input_data={
+                            "research_question": request.research_question,
+                            "hypotheses": hypotheses_list,
+                        },
+                        context={"stage": "hypothesis_generation"},
+                    )
+
+                skill_result = asyncio.run(_run_alignment())
+                alignment_data = skill_result.data
+                alignment_results = alignment_data.get("alignments", [])
+            except Exception as align_err:
+                logger.warning(f"问题对齐检查失败: {align_err}")
+
+        # 为每条假设附上对齐结果
+        for i, h in enumerate(hypotheses_list):
+            if i < len(alignment_results):
+                a = alignment_results[i]
+                h["alignment_score"] = a.get("alignment_score")
+                h["off_topic"] = a.get("off_topic")
+                h["off_topic_reason"] = a.get("off_topic_reason")
+                h["matched_keywords"] = a.get("matched_keywords")
+                h["missing_keywords"] = a.get("missing_keywords")
+
         # 保存假设到数据库
         hypothesis_service = HypothesisService(db)
-        hypotheses_list = [hypo.model_dump() for hypo in result.hypotheses]
-        
         created_hypotheses = hypothesis_service.create_hypotheses_batch(
             project_id=request.project_id,
             research_question=request.research_question,

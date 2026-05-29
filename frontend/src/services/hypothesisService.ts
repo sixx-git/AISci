@@ -19,6 +19,11 @@ export interface BackendHypothesis {
   confidence: number;
   created_at: string;
   updated_at?: string;
+  alignment_score?: number;
+  off_topic?: boolean;
+  off_topic_reason?: string;
+  matched_keywords?: string[];
+  missing_keywords?: string[];
 }
 
 export interface BackendEvidence {

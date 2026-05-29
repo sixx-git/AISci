@@ -9,7 +9,7 @@ from app.skills.literature import (
     PdfEvidenceExtractionSkill,
     CitationGroundingSkill,
 )
-from app.skills.reasoning import HypothesisNoveltyReviewSkill
+from app.skills.reasoning import HypothesisNoveltyReviewSkill, QuestionAlignmentSkill
 from app.skills.experiment import ExperimentSanityCheckSkill
 
 __all__ = [
@@ -19,5 +19,6 @@ __all__ = [
     "PdfEvidenceExtractionSkill",
     "CitationGroundingSkill",
     "HypothesisNoveltyReviewSkill",
+    "QuestionAlignmentSkill",
     "ExperimentSanityCheckSkill",
 ]

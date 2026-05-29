@@ -177,6 +177,34 @@ function HypothesisCardDetailed({
         <p className="text-sm text-gray-300 leading-relaxed">{hypothesis.content}</p>
       </div>
 
+      {/* 偏题警告 */}
+      {hypothesis.off_topic && (
+        <div className="mb-4 p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+          <div className="flex items-center gap-1.5 mb-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+            <span className="text-xs font-semibold text-red-400">偏题警告 — 与研究问题关联度低</span>
+          </div>
+          {hypothesis.off_topic_reason && (
+            <p className="text-xs text-red-300/80 leading-relaxed mt-1">{hypothesis.off_topic_reason}</p>
+          )}
+          {hypothesis.alignment_score !== undefined && (
+            <p className="text-xs text-red-400/70 mt-1">
+              对齐分数: <span className="font-mono">{hypothesis.alignment_score}/100</span>
+            </p>
+          )}
+          {hypothesis.matched_keywords && hypothesis.matched_keywords.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              匹配关键词: {hypothesis.matched_keywords.join(', ')}
+            </p>
+          )}
+          {hypothesis.missing_keywords && hypothesis.missing_keywords.length > 0 && (
+            <p className="text-xs text-red-400/50 mt-0.5">
+              缺失关键词: {hypothesis.missing_keywords.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* 推理依据 */}
       <div className="mb-4">
         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">

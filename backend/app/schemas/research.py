@@ -1,9 +1,10 @@
 """
 研究相关 Schemas
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import json
 
 
 class ResearchRequest(BaseModel):
@@ -58,6 +59,21 @@ class HypothesisCreate(BaseModel):
     status: Optional[str] = Field("draft", description="状态")
     priority: Optional[int] = Field(3, ge=1, le=5, description="优先级 1-5")
     confidence: Optional[float] = Field(0.5, ge=0, le=1, description="置信度 0-1")
+    alignment_score: Optional[int] = Field(None, ge=0, le=100, description="问题对齐度 0-100")
+    off_topic: Optional[bool] = Field(None, description="是否偏题")
+    off_topic_reason: Optional[str] = Field(None, description="偏题原因")
+    matched_keywords: Optional[List[str]] = Field(None, description="匹配到的关键词")
+    missing_keywords: Optional[List[str]] = Field(None, description="缺失的关键词")
+
+    @field_validator("matched_keywords", "missing_keywords", mode="before")
+    @classmethod
+    def _parse_json_list(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
 
 
 class HypothesisResponse(HypothesisCreate):

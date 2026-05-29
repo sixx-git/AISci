@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.core import Base, BaseModel
@@ -123,6 +123,13 @@ class Hypothesis(BaseModel):
     status = Column(String(50), default="draft", nullable=False)  # draft, testing, accepted, rejected
     priority = Column(Integer, default=3, nullable=False)  # 1-5
     confidence = Column(Float, default=0.5, nullable=False)  # 0-1
+    
+    # 问题对齐
+    alignment_score = Column(Integer, nullable=True, default=None, comment="问题对齐度 0-100")
+    off_topic = Column(Boolean, nullable=True, default=None, comment="是否偏题")
+    off_topic_reason = Column(Text, nullable=True, default=None, comment="偏题原因")
+    matched_keywords = Column(Text, nullable=True, default=None, comment="匹配到的关键词（JSON 数组）")
+    missing_keywords = Column(Text, nullable=True, default=None, comment="缺失的关键词（JSON 数组）")
     
     # 关系
     project = relationship("Project", back_populates="hypotheses")

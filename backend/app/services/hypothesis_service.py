@@ -37,7 +37,12 @@ class HypothesisService:
                 evidence_level=hypothesis_data.evidence_level or "medium",
                 status=hypothesis_data.status or "draft",
                 priority=hypothesis_data.priority or 3,
-                confidence=hypothesis_data.confidence or 0.5
+                confidence=hypothesis_data.confidence or 0.5,
+                alignment_score=hypothesis_data.alignment_score,
+                off_topic=hypothesis_data.off_topic,
+                off_topic_reason=hypothesis_data.off_topic_reason,
+                matched_keywords=json.dumps(hypothesis_data.matched_keywords, ensure_ascii=False) if hypothesis_data.matched_keywords else None,
+                missing_keywords=json.dumps(hypothesis_data.missing_keywords, ensure_ascii=False) if hypothesis_data.missing_keywords else None,
             )
             
             self.db.add(db_hypothesis)
@@ -84,7 +89,12 @@ class HypothesisService:
                     supporting_fact_ids=hypo_data.get("supporting_fact_ids") if isinstance(hypo_data.get("supporting_fact_ids"), list) else None,
                     evidence_level=hypo_data.get("evidence_level", "medium"),
                     status=status,
-                    priority=idx + 1 if idx + 1 <= 5 else 3  # 前 5 个优先级更高
+                    priority=idx + 1 if idx + 1 <= 5 else 3,  # 前 5 个优先级更高
+                    alignment_score=hypo_data.get("alignment_score"),
+                    off_topic=hypo_data.get("off_topic"),
+                    off_topic_reason=hypo_data.get("off_topic_reason"),
+                    matched_keywords=hypo_data.get("matched_keywords"),
+                    missing_keywords=hypo_data.get("missing_keywords"),
                 )
 
                 db_hypothesis = self.create_hypothesis(hypothesis_create)

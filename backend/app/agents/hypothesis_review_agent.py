@@ -44,6 +44,8 @@ class HypothesisReviewResult(BaseModel):
     reviews: List[HypothesisReview] = Field(..., description="评审列表，按综合得分降序排列")
     summary: str = Field(..., description="总体评价和推荐建议")
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
+    _off_topic_penalized: bool = False
+    _alignments: Optional[List[Dict[str, Any]]] = None
 
 
 class HypothesisCandidate(BaseModel):
@@ -76,6 +78,7 @@ class HypothesisReviewAgent:
         hypotheses: List[HypothesisCandidate],
         retrieved_papers: Optional[List[Dict[str, Any]]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
+        alignments: Optional[List[Dict[str, Any]]] = None,
     ) -> HypothesisReviewResult:
         """
         评审假设列表
@@ -84,6 +87,7 @@ class HypothesisReviewAgent:
             hypotheses: 候选假设列表
             retrieved_papers: 检索到的相关论文（供新颖性审查 Skill 使用）
             literature_facts: 文献事实列表（供新颖性审查 Skill 使用）
+            alignments: 问题对齐结果列表（来自 QuestionAlignmentSkill）
 
         Returns:
             评审结果，按综合得分降序排列
@@ -128,6 +132,19 @@ class HypothesisReviewAgent:
             
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict, hypotheses)
+
+            # ── 对齐结果：降低 off_topic 假设的评分 ──
+            if alignments:
+                result._alignments = alignments
+                for i, review in enumerate(result.reviews):
+                    if i < len(alignments) and alignments[i].get("off_topic"):
+                        off_topic_penalty = 0.4
+                        result._off_topic_penalized = True
+                        for score_field_name in ["scientific_value", "novelty", "testability", "data_availability", "cost_risk"]:
+                            if hasattr(review.scores, score_field_name):
+                                score_detail = getattr(review.scores, score_field_name)
+                                score_detail.score = max(1, int(score_detail.score * (1 - off_topic_penalty)))
+                        review.overall_score = round(review.overall_score * (1 - off_topic_penalty), 1)
 
             # ── 运行新颖性审查 Skill ──
             result.skill_outputs = self._run_novelty_skills_sync(

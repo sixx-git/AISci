@@ -291,6 +291,11 @@ export interface DetailedHypothesis {
   riskWarning: string;
   isPrimary: boolean;
   status: 'draft' | 'evaluated' | 'confirmed';
+  alignment_score?: number;
+  off_topic?: boolean;
+  off_topic_reason?: string;
+  matched_keywords?: string[];
+  missing_keywords?: string[];
 }
 
 // ==================== 实验设计 ====================

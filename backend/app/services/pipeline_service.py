@@ -428,19 +428,53 @@ class PipelineService:
         pu = problem_understanding or {}
         lm = literature_mining or {}
         kg = knowledge_gap or {}
+        research_question = pu.get("research_question", "")
         result = agent.generate(
-            research_question=pu.get("research_question", ""),
+            research_question=research_question,
             facts=lm.get("facts", []),
             knowledge_gaps=kg.get("knowledge_gaps", []),
             constraints=[]
         )
-        return self._safe_model_dump(result)
+        result_dict = self._safe_model_dump(result)
+
+        # ── 问题对齐检查 ──
+        if research_question and result_dict.get("hypotheses"):
+            try:
+                alignment = self._run_alignment_skill(research_question, result_dict["hypotheses"])
+                result_dict["alignment"] = alignment
+
+                # 如果所有假设都 off_topic，重试一次
+                all_off_topic = alignment.get("all_off_topic", False)
+                if all_off_topic and alignment.get("off_topic_summary"):
+                    logger.warning(
+                        f"所有假设偏题，触发重试。摘要: {alignment['off_topic_summary'][:200]}"
+                    )
+                    retry = agent.generate(
+                        research_question=research_question,
+                        facts=lm.get("facts", []),
+                        knowledge_gaps=kg.get("knowledge_gaps", []),
+                        constraints=[
+                            alignment["off_topic_summary"]
+                        ],
+                    )
+                    result_dict = self._safe_model_dump(retry)
+                    # 重试后再做一次对齐检查
+                    if result_dict.get("hypotheses"):
+                        result_dict["alignment"] = self._run_alignment_skill(
+                            research_question, result_dict["hypotheses"]
+                        )
+            except Exception as align_err:
+                logger.warning(f"问题对齐检查失败: {align_err}")
+
+        return result_dict
     
     def _exec_hypothesis_review(self, hypothesis_generation: Optional[Dict]) -> dict:
         from app.agents.hypothesis_review_agent import HypothesisCandidate
         agent = get_hypothesis_review_agent()
         hg = hypothesis_generation or {}
         hypotheses = hg.get("hypotheses", [])
+        alignment_data = hg.get("alignment", {})
+        alignments = alignment_data.get("alignments", []) if alignment_data else []
         candidates = [
             HypothesisCandidate(
                 hypothesis=h.get("hypothesis", ""),
@@ -458,6 +492,7 @@ class PipelineService:
             hypotheses=candidates,
             retrieved_papers=self._build_retrieved_papers(lit_mining),
             literature_facts=lit_mining.get("facts", []),
+            alignments=alignments,
         )
         return self._safe_model_dump(result)
     
@@ -554,11 +589,28 @@ class PipelineService:
         lm = results.get("literature_mining", {})
         if not hg or not hg.get("hypotheses"):
             return
+
+        alignment_data = hg.get("alignment", {})
+        alignments = alignment_data.get("alignments", []) if alignment_data else []
+
+        # 为每条假设附上对齐结果
+        hypotheses_with_alignment = []
+        for i, h in enumerate(hg["hypotheses"]):
+            h = dict(h)
+            if i < len(alignments):
+                a = alignments[i]
+                h["alignment_score"] = a.get("alignment_score")
+                h["off_topic"] = a.get("off_topic")
+                h["off_topic_reason"] = a.get("off_topic_reason")
+                h["matched_keywords"] = a.get("matched_keywords")
+                h["missing_keywords"] = a.get("missing_keywords")
+            hypotheses_with_alignment.append(h)
+
         hypo_service = HypothesisService(self.db)
         created_hypos = hypo_service.create_hypotheses_batch(
             project_id=project_id,
             research_question=research_question,
-            hypotheses_list=hg["hypotheses"]
+            hypotheses_list=hypotheses_with_alignment
         )
         # ── 为每条假设创建证据链：只关联其 supporting_fact_ids 对应的事实 ──
         all_facts = lm.get("facts", [])
@@ -742,6 +794,31 @@ class PipelineService:
 
 
 # ────────────── 工具函数 ──────────────
+
+    @staticmethod
+    def _run_alignment_skill(research_question: str, hypotheses: List[Dict]) -> Dict[str, Any]:
+        """运行问题对齐 Skill"""
+        import asyncio
+        from app.skills.reasoning.question_alignment_skill import QuestionAlignmentSkill
+
+        async def _run():
+            skill = QuestionAlignmentSkill()
+            result = await skill.run(
+                input_data={
+                    "research_question": research_question,
+                    "hypotheses": hypotheses,
+                },
+                context={"stage": "hypothesis_generation"},
+            )
+            return result
+
+        try:
+            skill_result = asyncio.run(_run())
+            return skill_result.data
+        except Exception as e:
+            logger.warning(f"QuestionAlignmentSkill 异常: {e}")
+            return {"alignments": [], "all_off_topic": False, "off_topic_summary": ""}
+
 
 def _find_failed_stage(stages: List[PipelineStageLog]) -> Optional[PipelineStageLog]:
     """找到第一个失败的阶段"""

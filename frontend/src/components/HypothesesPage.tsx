@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Lightbulb, Info, Loader2, AlertCircle, AlertTriangle, FlaskConical } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -73,6 +73,11 @@ function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
     isPrimary: h.priority === 1,
     status: (h.status === 'testing' || h.status === 'accepted' || h.status === 'confirmed')
       ? 'evaluated' : 'draft',
+    alignment_score: h.alignment_score ?? undefined,
+    off_topic: h.off_topic ?? undefined,
+    off_topic_reason: h.off_topic_reason ?? undefined,
+    matched_keywords: h.matched_keywords ?? undefined,
+    missing_keywords: h.missing_keywords ?? undefined,
   };
 }
 
@@ -102,6 +107,7 @@ export function HypothesesPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [hideOffTopic, setHideOffTopic] = useState(true);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedHypothesis, setSelectedHypothesis] = useState<DetailedHypothesis | null>(null);
@@ -164,6 +170,16 @@ export function HypothesesPage({
     setCurrentEvidence([]);
     setEvidenceLoading(false);
   }, []);
+
+  const offTopicCount = useMemo(
+    () => hypotheses.filter((h) => h.off_topic).length,
+    [hypotheses]
+  );
+
+  const displayedHypotheses = useMemo(
+    () => hideOffTopic ? hypotheses.filter((h) => !h.off_topic) : hypotheses,
+    [hypotheses, hideOffTopic]
+  );
 
   const handleSetPrimary = useCallback((id: string) => {
     setHypotheses((prev) =>
@@ -245,9 +261,24 @@ export function HypothesesPage({
       )}
 
       {!loading && !error && hypotheses.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3 space-y-5">
-            {hypotheses.map((h) => (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3 space-y-5">
+              {offTopicCount > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-amber-400">
+                    {hideOffTopic
+                      ? `已隐藏 ${offTopicCount} 条偏题假设`
+                      : `显示中 ${offTopicCount} 条偏题假设`}
+                  </span>
+                  <button
+                    onClick={() => setHideOffTopic(!hideOffTopic)}
+                    className="text-primary-400 hover:text-primary-300 underline text-xs"
+                  >
+                    {hideOffTopic ? '显示全部' : '隐藏偏题'}
+                  </button>
+                </div>
+              )}
+              {displayedHypotheses.map((h) => (
               <HypothesisCard
                 key={h.id}
                 hypothesis={h}
