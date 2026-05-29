@@ -92,7 +92,9 @@ class PipelineService:
                 stage=d["db_stage_enum"],
                 stage_order=idx + 1,
                 status=DB_PipelineStatus.PENDING,
-                started_at=datetime.now(timezone.utc),
+                started_at=None,
+                completed_at=None,
+                duration_ms=None,
             )
             self.db.add(db_stage)
             self.db_stage_executions[idx + 1] = db_stage
@@ -367,6 +369,9 @@ class PipelineService:
             base["knowledge_gap"] = results.get("knowledge_gap", {})
         if idx >= 3:
             base["problem_understanding"] = results.get("problem_understanding", {})
+            project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else request.project_id
+            data_context = self._build_data_context(project_id)
+            base["data_context"] = data_context
         if idx >= 4:
             base["hypothesis_generation"] = results.get("hypothesis_generation", {})
         if idx >= 5:

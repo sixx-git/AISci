@@ -29,6 +29,8 @@ class HypothesisItem(BaseModel):
     data_evidence_ids: List[str] = Field(default_factory=list, description="引用的数据证据 ID")
     validation_target: str = Field(default="", description="验证目标指标，如 Accuracy/F1/AUC")
     expected_measurable_effect: str = Field(default="", description="预期的可量化效果")
+    alignment_score: Optional[int] = Field(default=None, description="对齐分数 0-100")
+    off_topic: bool = Field(default=False, description="是否偏题")
 
 
 class HypothesisGenerationResult(BaseModel):
@@ -51,7 +53,39 @@ class HypothesisGenerationAgent:
     def __init__(self):
         pass
 
-    # 明显偏离研究问题的领域关键词（强制 off_topic）
+    _QUESTION_DOMAIN_KEYWORDS: Dict[str, Set[str]] = {
+        "medical_neuro": {
+            "肠道菌群", "肠道微生物", "肠", "gut", "阿尔茨海默", "alzheimer",
+            "帕金森", "parkinson", "SCFA", "短链脂肪酸", "粪便", "fecal",
+            "大脑皮层", "cerebral cortex", "海马体", "hippocampus",
+            "神经退行", "neurodegen", "amyloid", "tau", "小胶质细胞",
+            "microglia", "炎症因子", "inflammatory", "血脂屏障",
+            "blood-brain barrier", "抑郁症", "depression", "焦虑", "anxiety",
+        },
+        "medical_oncology": {
+            "tumor", "癌", "cancer", "肿瘤", "oncology", "抗原", "antigen",
+            "免疫细胞", "immune cell", "T细胞",
+        },
+        "medical_clinical": {
+            "临床", "药", "随机对照", "RCT", "药物", "药理学",
+            "流行病", "epidemiology", "公共卫生", "public health",
+            "疫苗", "vaccine", "病毒", "virus", "细菌", "bacteria",
+        },
+        "biology_molecular": {
+            "基因编辑", "CRISPR", "genome edit", "干细胞", "stem cell",
+            "蛋白", "protein", "酶", "enzyme", "DNA", "RNA", "核苷酸",
+            "nucleotide", "细胞凋亡", "apoptosis", "信号通路",
+            "signaling pathway", "受体", "receptor",
+        },
+        "social_policy": {
+            "社会经济", "socioeconomic", "教育", "education", "政治", "politics",
+            "政策", "policy",
+        },
+        "psychology": {
+            "心理", "psychology",
+        },
+    }
+
     OFF_DOMAIN_KEYWORDS = {
         "肠道菌群", "肠道微生物", "gut microbiota", "gut microbiome",
         "阿尔茨海默", "Alzheimer", "帕金森", "Parkinson",
@@ -62,6 +96,26 @@ class HypothesisGenerationAgent:
         "心血管", "心肌", "coronary", "cardiovascular",
         "中医", "中药", "针灸",
     }
+
+    def _detect_question_domain(self, question: str) -> Set[str]:
+        """从研究问题中检测所属领域"""
+        lower_q = question.lower()
+        domains: Set[str] = set()
+        for domain, keywords in self._QUESTION_DOMAIN_KEYWORDS.items():
+            for kw in keywords:
+                if kw.lower() in lower_q:
+                    domains.add(domain)
+                    break
+        return domains
+
+    def _is_keyword_in_domains(self, keyword_lower: str, domains: Set[str]) -> bool:
+        """检查关键词是否属于给定领域"""
+        for domain, keywords in self._QUESTION_DOMAIN_KEYWORDS.items():
+            if domain in domains:
+                for kw in keywords:
+                    if kw.lower() in keyword_lower or keyword_lower in kw.lower():
+                        return True
+        return False
 
     def generate(
         self,
@@ -351,27 +405,43 @@ class HypothesisGenerationAgent:
             is_off_topic = False
             off_topic_reason = ""
 
-            # 1. 检查是否包含明显无关领域关键词
+            question_domains = self._detect_question_domain(research_question)
+
+            # 1. 检查是否包含明显无关领域关键词（动态过滤：跳过研究问题所属领域的关键词）
             matched_off_domain = []
             for kw in self.OFF_DOMAIN_KEYWORDS:
                 if kw.lower() in hypo_lower:
+                    if self._is_keyword_in_domains(kw.lower(), question_domains):
+                        continue
                     matched_off_domain.append(kw)
-            if matched_off_domain:
-                is_off_topic = True
-                off_topic_reason = f"假设内容涉及无关领域: {', '.join(matched_off_domain)}"
-                logger.warning(f"假设偏题检测命中: {matched_off_domain}, 假设: {hypo_text[:80]}")
 
-            # 2. 检查与研究问题的关键词重叠度
-            if not is_off_topic and research_question:
-                rq_keywords = self._extract_topic_keywords(research_question)
-                if rq_keywords:
-                    hypo_keywords = self._extract_topic_keywords(hypo_text)
-                    overlap = rq_keywords & hypo_keywords
-                    # 如果研究问题关键词和假设关键词无交集，可能偏题
-                    if not overlap:
-                        is_off_topic = True
-                        off_topic_reason = f"假设关键词 '{', '.join(list(hypo_keywords)[:5])}' 与研究问题关键词 '{', '.join(list(rq_keywords)[:5])}' 无交集"
-                        logger.warning(f"假设关键词无交集，标记偏题: {off_topic_reason}")
+            # 2. 计算对齐分数
+            rq_keywords = self._extract_topic_keywords(research_question) if research_question else set()
+            hypo_keywords = self._extract_topic_keywords(hypo_text)
+            overlap = rq_keywords & hypo_keywords if rq_keywords else set()
+
+            # 对齐分数：基于关键词重叠度和领域匹配度
+            if not rq_keywords:
+                alignment_score = 50
+            elif overlap:
+                overlap_ratio = len(overlap) / max(len(rq_keywords), 1)
+                alignment_score = int(30 + overlap_ratio * 70)
+            else:
+                alignment_score = max(5, len(hypo_keywords) * 2)
+
+            if matched_off_domain:
+                alignment_score = min(alignment_score, 20)
+
+            # 3. 只有 alignment_score < 30 才标记为偏题
+            if alignment_score < 30:
+                is_off_topic = True
+                if matched_off_domain:
+                    off_topic_reason = f"假设内容涉及无关领域: {', '.join(matched_off_domain)}, alignment_score={alignment_score}"
+                elif not overlap and rq_keywords:
+                    off_topic_reason = f"假设关键词与研究问题关键词无交集, alignment_score={alignment_score}"
+                else:
+                    off_topic_reason = f"假设对齐度不足, alignment_score={alignment_score}"
+                logger.warning(f"假设偏题检测命中: off_topic={is_off_topic}, score={alignment_score}, 假设: {hypo_text[:80]}")
 
             # 3. 如果 supporting_fact_ids、dataset_field_refs、data_evidence_ids 全为空 → evidence_level=low
             has_any_evidence = (
@@ -393,6 +463,7 @@ class HypothesisGenerationAgent:
             # 标记 off_topic
             hypo["off_topic"] = is_off_topic
             hypo["off_topic_reason"] = off_topic_reason
+            hypo["alignment_score"] = alignment_score
 
             validated_hypotheses.append(HypothesisItem(**hypo))
 

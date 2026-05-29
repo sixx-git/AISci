@@ -157,12 +157,23 @@ export function HypothesesPage({
     [hypotheses, hideOffTopic]
   );
 
-  const handleSetPrimary = useCallback((id: string) => {
-    setHypotheses((prev) =>
-      prev.map((h) => ({ ...h, isPrimary: h.id === id })),
-    );
-    showAlert('已设为主假设');
-  }, [showAlert]);
+  const handleSetPrimary = useCallback(async (id: string) => {
+    if (!_projectId) return;
+    try {
+      const res = await hypothesisService.setPrimaryHypothesis(_projectId, id);
+      if (res.code === 200) {
+        setHypotheses((prev) =>
+          prev.map((h) => ({ ...h, isPrimary: h.id === id })),
+        );
+        showAlert('已设为主假设');
+      } else {
+        showAlert(res.message || '设置主假设失败');
+      }
+    } catch (err: unknown) {
+      console.error('设置主假设失败', err);
+      showAlert('设置主假设失败');
+    }
+  }, [_projectId, showAlert]);
 
   const handleEnterExperiment = useCallback((id: string) => {
     localStorage.setItem(`selected_hypothesis_${_projectId}`, id);

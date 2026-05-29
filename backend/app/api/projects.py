@@ -347,6 +347,35 @@ def list_project_hypotheses(
     )
 
 
+@router.post("/{project_id}/hypotheses/{hypothesis_id}/set-primary", response_model=ResponseModel[HypothesisResponse])
+def set_primary_hypothesis(
+    project_id: str,
+    hypothesis_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    将指定假设设为主假设
+
+    - **project_id**: 项目 ID
+    - **hypothesis_id**: 假设 ID
+    """
+    hypo_service = HypothesisService(db)
+
+    try:
+        result = hypo_service.set_primary_hypothesis(project_id, hypothesis_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="假设记录未找到")
+
+        return success_response(
+            data=HypothesisResponse.model_validate(result),
+            message="设为主假设成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"设置主假设失败: {str(e)}")
+
+
 # ============= 实验设计查询 API =============
 
 @router.get("/{project_id}/experiment-designs", response_model=ResponseModel[List[ExperimentDesignDBResponse]])

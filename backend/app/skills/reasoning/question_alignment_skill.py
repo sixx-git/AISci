@@ -110,6 +110,39 @@ _OFF_DOMAIN_PATTERNS: List[str] = [
 
 _OFF_DOMAIN_COMPILED: List[re.Pattern] = [re.compile(p, re.IGNORECASE) for p in _OFF_DOMAIN_PATTERNS]
 
+_DOMAIN_CATEGORIES: Dict[str, Set[str]] = {
+    "medical_neuro": {
+        "肠道菌群", "肠道微生物", "肠", "gut", "阿尔茨海默", "alzheimer",
+        "帕金森", "parkinson", "SCFA", "短链脂肪酸", "粪便", "fecal",
+        "大脑皮层", "cerebral cortex", "海马体", "hippocampus",
+        "神经退行", "neurodegen", "amyloid", "tau", "小胶质细胞",
+        "microglia", "炎症因子", "inflammatory", "血脂屏障",
+        "blood-brain barrier", "抑郁症", "depression", "焦虑", "anxiety",
+    },
+    "medical_oncology": {
+        "tumor", "癌", "cancer", "肿瘤", "oncology", "抗原", "antigen",
+        "免疫细胞", "immune cell", "T细胞", "T淋巴细胞",
+    },
+    "medical_clinical": {
+        "临床", "药", "随机对照", "RCT", "药物", "药理学",
+        "流行病", "epidemiology", "公共卫生", "public health",
+        "疫苗", "vaccine", "病毒", "virus", "细菌", "bacteria",
+    },
+    "biology_molecular": {
+        "基因编辑", "CRISPR", "genome edit", "干细胞", "stem cell",
+        "蛋白", "protein", "酶", "enzyme", "DNA", "RNA", "核苷酸",
+        "nucleotide", "细胞凋亡", "apoptosis", "信号通路",
+        "signaling pathway", "受体", "receptor",
+    },
+    "social_policy": {
+        "社会经济", "socioeconomic", "教育", "education", "政治", "politics",
+        "政策", "policy",
+    },
+    "psychology": {
+        "心理", "psychology",
+    },
+}
+
 _ML_CS_CORE_KEYWORDS: Dict[str, List[str]] = {
     "method": [
         "CNN", "RNN", "LSTM", "GRU", "Transformer", "BERT", "GPT", "ResNet",
@@ -146,6 +179,18 @@ _ML_CS_CORE_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
+def _detect_question_domain(question: str) -> Set[str]:
+    """从研究问题中检测所属领域类别"""
+    lower_q = question.lower()
+    domains: Set[str] = set()
+    for domain, keywords in _DOMAIN_CATEGORIES.items():
+        for kw in keywords:
+            if kw.lower() in lower_q:
+                domains.add(domain)
+                break
+    return domains
+
+
 def _extract_keywords_from_question(question: str) -> Dict[str, Set[str]]:
     """从研究问题中提取核心关键词"""
     keywords: Dict[str, Set[str]] = {
@@ -173,8 +218,8 @@ def _extract_keywords_from_question(question: str) -> Dict[str, Set[str]]:
     return keywords
 
 
-def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]]) -> Dict[str, Any]:
-    """计算单条假设的对齐度"""
+def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]], question_domains: Optional[Set[str]] = None) -> Dict[str, Any]:
+    """计算单条假设的对齐度（基于研究问题领域动态过滤无关关键词）"""
     lower_h = hypothesis.lower()
 
     matched_methods = {kw for kw in question_keywords.get("methods", set()) if kw.lower() in lower_h}
@@ -188,12 +233,10 @@ def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]]) 
     matched_all = {kw for kw in all_question_kw if kw.lower() in lower_h}
     missing_all = all_question_kw - matched_all
 
-    # 评分逻辑
     has_method = len(matched_methods) > 0
     has_task = len(matched_tasks) > 0
     has_metric = len(matched_metrics) > 0
 
-    # 基础分
     if not all_question_kw:
         score = 50
     elif has_method and has_task and has_metric:
@@ -209,17 +252,23 @@ def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]]) 
 
     score = min(100, score)
 
-    # 检查明显无关领域
+    question_domains = question_domains or set()
+
     off_topic = score < 30
     off_topic_reason = ""
+
     for pattern in _OFF_DOMAIN_COMPILED:
-        if pattern.search(hypothesis):
-            off_topic = True
-            score = min(score, 20)
-            match_text = pattern.search(hypothesis)
-            if match_text:
-                off_topic_reason = f"假设包含无关领域关键词: \"{match_text.group(0)}\""
-            break
+        match = pattern.search(hypothesis)
+        if not match:
+            continue
+        match_text = match.group(0)
+        matched_domain = _find_pattern_domain(pattern.pattern)
+        if matched_domain and matched_domain in question_domains:
+            continue
+        off_topic = True
+        score = min(score, 20)
+        off_topic_reason = f"假设包含无关领域关键词: \"{match_text}\""
+        break
 
     if not off_topic and score < 30:
         off_topic = True
@@ -235,6 +284,20 @@ def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]]) 
         "matched_keywords": sorted(list(matched_all)),
         "missing_keywords": sorted(list(missing_all)),
     }
+
+
+def _find_pattern_domain(pattern_str: str) -> Optional[str]:
+    """根据模式字符串查找所属领域类别"""
+    pattern_lower = pattern_str.lower().replace(r"\s*", " ").replace(r"\s", " ").replace(r"\.", ".").replace(r"\?", "?")
+    pattern_clean = re.sub(r"[\[\]\(\)\?\+\*\{\}]", "", pattern_lower).replace("\\", "").strip()
+    for domain, keywords in _DOMAIN_CATEGORIES.items():
+        for kw in keywords:
+            kw_clean = kw.lower()
+            if kw_clean in pattern_clean or pattern_clean in kw_clean:
+                return domain
+            if len(pattern_clean) >= 3 and pattern_clean[:3] in kw_clean:
+                return domain
+    return None
 
 
 class QuestionAlignmentSkill(BaseSkill):
@@ -276,12 +339,13 @@ class QuestionAlignmentSkill(BaseSkill):
             return result
 
         question_keywords = _extract_keywords_from_question(research_question)
-        logger.info(f"研究问题关键词: {question_keywords}")
+        question_domains = _detect_question_domain(research_question)
+        logger.info(f"研究问题关键词: {question_keywords}, 所属领域: {question_domains}")
 
         alignments = []
         for h in hypotheses_raw:
             hypothesis_text = h.get("hypothesis", "") if isinstance(h, dict) else str(h)
-            alignment = _compute_alignment(hypothesis_text, question_keywords)
+            alignment = _compute_alignment(hypothesis_text, question_keywords, question_domains)
             alignment["hypothesis"] = hypothesis_text[:100]
             alignments.append(alignment)
 

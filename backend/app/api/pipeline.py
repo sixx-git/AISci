@@ -2,6 +2,8 @@
 Pipeline API 路由
 """
 import threading
+from enum import Enum
+from typing import Any, Optional, Type
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -24,6 +26,36 @@ from app.models.pipeline import PipelineRun, PipelineStageExecution
 from app.services.pipeline_service import get_pipeline_service, PipelineService
 
 router = APIRouter()
+
+
+def _safe_enum_value(enum_cls: Type[Enum], value: Any, default: Any = None) -> Any:
+    """安全获取枚举值，兼容旧数据格式。
+
+    - 如果 value 是 enum_cls 类型，直接返回
+    - 如果 value 有 .value 属性，提取字符串
+    - 如果字符串含点号，取最后一段
+    - 统一 lowercase 后通过 value 匹配
+
+    返回枚举成员或 default。
+    """
+    if value is None:
+        return default
+    if isinstance(value, enum_cls):
+        return value
+    if hasattr(value, 'value') and not isinstance(value, str):
+        return _safe_enum_value(enum_cls, value.value, default)
+    s = str(value)
+    if '.' in s:
+        s = s.split('.')[-1]
+    s_lower = s.lower()
+    for member in enum_cls:
+        if member.value.lower() == s_lower:
+            return member
+    try:
+        return enum_cls(s)
+    except (ValueError, KeyError):
+        pass
+    return default
 
 
 @router.post("/run", response_model=ResponseModel[PipelineRunResult])
@@ -244,8 +276,8 @@ async def get_run_status(
 
         stage_logs = [
             PipelineStageLog(
-                stage=PipelineStage(s.stage.value if hasattr(s.stage, "value") else str(s.stage)),
-                status=PipelineStageStatus(s.status.value if hasattr(s.status, "value") else str(s.status)),
+                stage=_safe_enum_value(PipelineStage, s.stage, PipelineStage.PROBLEM_UNDERSTANDING),
+                status=_safe_enum_value(PipelineStageStatus, s.status, PipelineStageStatus.PENDING),
                 start_time=s.started_at,
                 end_time=s.completed_at,
                 duration=s.duration_ms / 1000.0 if s.duration_ms else None,
@@ -270,7 +302,7 @@ async def get_run_status(
                 run_id=run.run_id,
                 project_id=run.project_id,
                 research_question=run.research_question,
-                status=PipelineStatus(run.status.value if hasattr(run.status, "value") else str(run.status)),
+                status=_safe_enum_value(PipelineStatus, run.status, PipelineStatus.RUNNING),
                 stages=stage_logs,
                 total_duration=total_duration,
                 failed_stage=run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,

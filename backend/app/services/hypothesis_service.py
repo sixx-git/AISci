@@ -161,6 +161,30 @@ class HypothesisService:
             self.db.rollback()
             logger.error(f"更新假设失败：{e}", exc_info=True)
             raise
+
+    def set_primary_hypothesis(self, project_id: str, hypothesis_id: str) -> Optional[Hypothesis]:
+        """将指定假设设为主假设，其他假设取消主假设标记"""
+        target = self.get_hypothesis_by_id(hypothesis_id)
+        if not target:
+            return None
+
+        try:
+            self.db.query(Hypothesis).filter(
+                Hypothesis.project_id == project_id,
+                Hypothesis.priority == 1,
+            ).update({"priority": 3})
+
+            target.priority = 1
+            self.db.commit()
+            self.db.refresh(target)
+
+            logger.info(f"设置主假设成功，ID：{hypothesis_id}, 项目：{project_id}")
+            return target
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"设置主假设失败：{e}", exc_info=True)
+            raise
     
     def create_evidence_batch(
         self,

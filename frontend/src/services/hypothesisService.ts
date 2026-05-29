@@ -59,6 +59,13 @@ const hypothesisService = {
     );
     return data;
   },
+
+  async setPrimaryHypothesis(projectId: string, hypothesisId: string): Promise<ApiResponse<BackendHypothesis>> {
+    const { data } = await api.post<ApiResponse<BackendHypothesis>>(
+      `/projects/${projectId}/hypotheses/${hypothesisId}/set-primary`,
+    );
+    return data;
+  },
 };
 
 export default hypothesisService;

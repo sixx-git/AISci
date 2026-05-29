@@ -1,3 +1,4 @@
+from curses.ascii import alt
 """
 报告图表生成 Skill
 根据 PreliminaryAnalysisSkill 输出生成折线图、柱状图、散点图、热力图等，
@@ -285,10 +286,11 @@ class ReportChartGenerationSkill(BaseSkill):
             return False
 
         elif chart_type == "scatter":
-            if "," in spec.get("data_source", ""):
-                keys = spec["data_source"].split(",")
-                x_key_actual = keys[0].strip()
-                y_key_actual = keys[1].strip() if len(keys) > 1 else y_key
+            data_source_raw = spec.get("data_source", "")
+            if isinstance(data_source_raw, str) and "," in data_source_raw:
+                keys = [k.strip() for k in data_source_raw.split(",")]
+                x_key_actual = keys[0]
+                y_key_actual = keys[1] if len(keys) > 1 else y_key
             else:
                 x_key_actual = x_key
                 y_key_actual = y_key
@@ -361,10 +363,13 @@ class ReportChartGenerationSkill(BaseSkill):
             numeric_cols = numeric_cols[:8]
             n = len(numeric_cols)
             matrix = np.zeros((n, n))
+            computed = np.zeros((n, n), dtype=bool)
+
             for i, c1 in enumerate(numeric_cols):
                 for j, c2 in enumerate(numeric_cols):
                     if i == j:
-                        matrix[i][j] = 1.0
+                        matrix[i, j] = 1.0
+                        computed[i, j] = True
                     else:
                         pairs = []
                         for r in data_rows[:200]:
@@ -382,17 +387,23 @@ class ReportChartGenerationSkill(BaseSkill):
                             std1 = (sum((p[0] - mean1) ** 2 for p in pairs) / len(pairs)) ** 0.5
                             std2 = (sum((p[1] - mean2) ** 2 for p in pairs) / len(pairs)) ** 0.5
                             if std1 and std2:
-                                matrix[i][j] = cov / (std1 * std2)
+                                matrix[i, j] = cov / (std1 * std2)
+                                computed[i, j] = True
 
             im = ax.imshow(matrix, cmap="RdBu_r", aspect="auto", vmin=-1, vmax=1)
             plt.colorbar(im, ax=ax, shrink=0.8)
             for i in range(n):
                 for j in range(n):
-                    ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=7)
+                    if computed[i, j]:
+                        ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=7)
+                    else:
+                        ax.text(j, i, "N/A", ha="center", va="center", fontsize=6,
+                                color="gray", style="italic")
             ax.set_xticks(range(n))
             ax.set_yticks(range(n))
             ax.set_xticklabels([c[:12] for c in numeric_cols], rotation=45, fontsize=7)
             ax.set_yticklabels([c[:12] for c in numeric_cols], fontsize=7)
             return True
 
+        logger.warning("不支持的图表类型: %s", chart_type)
         return False
