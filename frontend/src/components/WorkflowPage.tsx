@@ -91,6 +91,79 @@ function summarizeStageData(stageName: string, data: unknown): string {
     return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
   }
 
+  if (stageName === 'small_validation') {
+    const parts: string[] = [];
+    if (d.results && typeof d.results === 'object') {
+      const r = d.results as Record<string, unknown>;
+      if (r.result_type_summary && typeof r.result_type_summary === 'string') {
+        const typeMap: Record<string, string> = {
+          has_actual_results: '有真实分析结果',
+          simulated_only: '仅有模拟结果',
+          expected_only: '仅有预期结果',
+          none: '无结果',
+        };
+        parts.push(typeMap[r.result_type_summary] || r.result_type_summary);
+      }
+    }
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    if (so) {
+      const pa = so.preliminary_analysis as Record<string, unknown> | undefined;
+      if (pa && pa.data) {
+        const paData = pa.data as Record<string, unknown>;
+        if (paData.summary_statistics && typeof paData.summary_statistics === 'object') {
+          parts.push(`分析 ${Object.keys(paData.summary_statistics as Record<string, unknown>).length} 个数据源`);
+        }
+        if (Array.isArray(paData.feature_vectors)) {
+          parts.push(`${paData.feature_vectors.length} 组特征向量`);
+        }
+        if (Array.isArray(paData.plots)) {
+          parts.push(`${paData.plots.length} 个图表规格`);
+        }
+        if (Array.isArray(paData.correlations) && paData.correlations.length > 0) {
+          parts.push(`${paData.correlations.length} 对相关性`);
+        }
+        if (Array.isArray(paData.anomalies) && paData.anomalies.length > 0) {
+          parts.push(`${paData.anomalies.length} 个异常点`);
+        }
+        if (paData.data_source_flag && typeof paData.data_source_flag === 'string') {
+          const flagMap: Record<string, string> = { real_data: '真实数据', simulated: '模拟', no_data: '无数据' };
+          parts.push(`数据来源: ${flagMap[paData.data_source_flag] || paData.data_source_flag}`);
+        }
+      }
+    }
+    return parts.join(' | ') || '可折叠查看详细输出';
+  }
+
+  if (stageName === 'report_generation') {
+    const parts: string[] = [];
+    if (d.plots && Array.isArray(d.plots)) {
+      const plotsArr = d.plots as unknown[];
+      const realCount = plotsArr.filter((p: unknown) => p && typeof p === 'object' && (p as Record<string, unknown>).is_generated_from_real_data === true).length;
+      parts.push(`${plotsArr.length} 张图表 (${realCount} 张基于真实数据)`);
+    }
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    if (so) {
+      const cg = so.report_chart_generation as Record<string, unknown> | undefined;
+      if (cg && cg.data) {
+        const cgData = cg.data as Record<string, unknown>;
+        if (cgData.total_charts != null) {
+          parts.push(`ChartGeneration: ${cgData.total_charts} 张`);
+        }
+      }
+      const sp = so.scientific_plot as Record<string, unknown> | undefined;
+      if (sp && sp.success) {
+        parts.push('ScientificPlot ✓');
+      }
+    }
+    if (d.compliance_check && typeof d.compliance_check === 'object') {
+      const cc = d.compliance_check as Record<string, unknown>;
+      if (cc.completed != null && cc.total_items != null) {
+        parts.push(`合规: ${cc.completed}/${cc.total_items}`);
+      }
+    }
+    return parts.join(' | ') || '可折叠查看详细输出';
+  }
+
   return JSON.stringify(data).slice(0, 200);
 }
 

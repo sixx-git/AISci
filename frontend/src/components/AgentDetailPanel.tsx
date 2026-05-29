@@ -65,6 +65,134 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
 
   const entries = Object.entries(skillOutputs);
 
+  function renderPreliminaryAnalysisData(skillName: string, s: Record<string, unknown>) {
+    const sData = s.data as Record<string, unknown> | undefined;
+    if (!sData) return null;
+
+    const items: { label: string; value: string; extra?: string }[] = [];
+
+    if (sData.data_source_flag && typeof sData.data_source_flag === 'string') {
+      const flagMap: Record<string, string> = { real_data: '真实数据', simulated: '模拟数据', no_data: '无数据' };
+      items.push({ label: '数据来源', value: flagMap[sData.data_source_flag] || sData.data_source_flag });
+    }
+
+    if (sData.summary_statistics && typeof sData.summary_statistics === 'object') {
+      const ss = sData.summary_statistics as Record<string, unknown>;
+      items.push({ label: '分析数据源', value: `${Object.keys(ss).length} 个` });
+    }
+
+    if (Array.isArray(sData.feature_vectors)) {
+      const fv = sData.feature_vectors as unknown[];
+      const totalFeats: number = fv.reduce((sum: number, f) => {
+        const features = (f as Record<string, unknown>).features;
+        return sum + (Array.isArray(features) ? features.length : 0);
+      }, 0);
+      items.push({ label: '特征向量', value: `${fv.length} 组`, extra: totalFeats > 0 ? `共 ${totalFeats} 个特征` : undefined });
+    }
+
+    if (Array.isArray(sData.plots)) {
+      items.push({ label: '图表规格', value: `${sData.plots.length} 个 (供 ReportChartGeneration 使用)` });
+    }
+
+    if (Array.isArray(sData.correlations)) {
+      const corrs = sData.correlations as unknown[];
+      const strongCorrs = corrs.filter((c: unknown) => {
+        const r = (c as Record<string, unknown>).pearson_r;
+        return typeof r === 'number' && Math.abs(r) > 0.7;
+      }).length;
+      items.push({ label: '相关性分析', value: `${corrs.length} 对`, extra: strongCorrs > 0 ? `${strongCorrs} 对强相关 (|r|>0.7)` : undefined });
+    }
+
+    if (Array.isArray(sData.anomalies)) {
+      items.push({ label: '异常点检测', value: `${sData.anomalies.length} 个 (>2.5σ)` });
+    }
+
+    if (sData.image_summary && typeof sData.image_summary === 'object') {
+      const isum = sData.image_summary as Record<string, unknown>;
+      if (isum.total_images && Number(isum.total_images) > 0) {
+        items.push({ label: '图像数据', value: `${isum.total_images} 张` });
+      }
+    }
+
+    if (sData.time_series_summary && typeof sData.time_series_summary === 'object') {
+      const tsum = sData.time_series_summary as Record<string, unknown>;
+      if (tsum.total_series && Number(tsum.total_series) > 0) {
+        items.push({ label: '时序数据', value: `${tsum.total_series} 条序列` });
+      }
+    }
+
+    if (sData.preliminary_result && typeof sData.preliminary_result === 'object') {
+      const pr = sData.preliminary_result as Record<string, unknown>;
+      if (Array.isArray(pr.recommendations)) {
+        items.push({ label: '分析建议', value: `${pr.recommendations.length} 条` });
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    return (
+      <div className="mb-2">
+        <p className="text-[10px] text-purple-400/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 分析输出</p>
+        <div className="space-y-1">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-gray-900/50 border border-gray-800/50">
+              <span className="text-[10px] text-gray-400 shrink-0">{item.label}</span>
+              <span className="text-[10px] text-gray-200 font-medium">{item.value}</span>
+              {item.extra && <span className="text-[9px] text-gray-500">{item.extra}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderChartGenerationData(skillName: string, s: Record<string, unknown>) {
+    const sData = s.data as Record<string, unknown> | undefined;
+    if (!sData) return null;
+
+    const items: { label: string; value: string }[] = [];
+
+    if (sData.total_charts != null) {
+      items.push({ label: '生成图表', value: `${sData.total_charts} 张` });
+    }
+
+    if (Array.isArray(sData.charts)) {
+      const charts = sData.charts as unknown[];
+      const realCount = charts.filter((c: unknown) => {
+        const ch = c as Record<string, unknown>;
+        return ch.is_generated_from_real_data === true;
+      }).length;
+      items.push({ label: '基于真实数据', value: `${realCount} 张` });
+
+      const typeCounts: Record<string, number> = {};
+      charts.forEach((c: unknown) => {
+        const ch = c as Record<string, unknown>;
+        const t = String(ch.type || 'unknown');
+        typeCounts[t] = (typeCounts[t] || 0) + 1;
+      });
+      const typeSummary = Object.entries(typeCounts).map(([t, n]) => `${t}×${n}`).join(', ');
+      if (typeSummary) {
+        items.push({ label: '图表类型', value: typeSummary });
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    return (
+      <div className="mb-2">
+        <p className="text-[10px] text-emerald-400/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 图表输出</p>
+        <div className="space-y-1">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-gray-900/50 border border-gray-800/50">
+              <span className="text-[10px] text-gray-400 shrink-0">{item.label}</span>
+              <span className="text-[10px] text-gray-200 font-medium">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
       <div className="flex items-center gap-2 mb-3">
@@ -77,6 +205,9 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
           const sSuccess = s?.success;
           const sWarnings = (s?.warnings as string[]) || [];
           const sErrors = (s?.errors as string[]) || [];
+
+          const isPreliminary = skillName === 'preliminary_analysis';
+          const isChartGeneration = skillName === 'report_chart_generation';
 
           // 嵌套 hypothesis_novelty_review 等聚合类型
           const isAggregated = s && !('success' in s) && typeof s === 'object';
@@ -106,7 +237,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
           }
 
           return (
-            <CollapsibleSection key={skillName} title={formatSkillName(skillName)} defaultOpen={false}>
+            <CollapsibleSection key={skillName} title={formatSkillName(skillName)} defaultOpen={isPreliminary}>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className={cn(
@@ -116,6 +247,10 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                     {sSuccess === true ? '成功' : sSuccess === false ? '失败' : '未知'}
                   </span>
                 </div>
+
+                {isPreliminary && renderPreliminaryAnalysisData(skillName, s)}
+                {isChartGeneration && renderChartGenerationData(skillName, s)}
+
                 {sWarnings.length > 0 && (
                   <div className="space-y-0.5">
                     {sWarnings.map((w, i) => (
@@ -136,7 +271,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                     ))}
                   </div>
                 )}
-                {sWarnings.length === 0 && sErrors.length === 0 && (
+                {!isPreliminary && !isChartGeneration && sWarnings.length === 0 && sErrors.length === 0 && (
                   <p className="text-[10px] text-gray-500">无警告或错误</p>
                 )}
               </div>

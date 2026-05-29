@@ -76,6 +76,7 @@ class ReportGenerationAgent:
         verified_references: Optional[List[Dict[str, Any]]] = None,
         preliminary_analysis_skill_outputs: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
+        data_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
@@ -92,6 +93,7 @@ class ReportGenerationAgent:
                 small_validation,
                 evidence_facts or [],
                 verified_references or [],
+                data_context,
             )
 
             prompt_loader = get_prompt_loader()
@@ -145,7 +147,24 @@ class ReportGenerationAgent:
             result["plots"] = charts_data.get("charts", [])
             result["chart_skill_outputs"] = charts_data.get("skill_outputs", {})
 
-            # ── 重新保存 JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
+            # ── 嵌入图表到 markdown ──
+            result["markdown_content"] = self._embed_charts_in_markdown(
+                result.get("markdown_content", ""),
+                result.get("plots", []),
+            )
+
+            # ── 丰富 Results 章节（区分 actual/simulated/expected）──
+            result = self._enrich_results_with_categorized(
+                result, small_validation, preliminary_analysis_skill_outputs
+            )
+
+            # ── 重新保存 PDF & JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
+            pdf_result_enriched = export_markdown_to_pdf(
+                markdown_content=result.get("markdown_content", ""),
+                output_path=result.get("pdf_file", ""),
+                css_path=os.path.join(os.path.dirname(__file__), "report_style.css"),
+            )
+            result["pdf_success"] = pdf_result_enriched.get("success", False)
             self._update_json_with_plots(result)
 
             logger.info("研究报告生成完成")
@@ -168,6 +187,7 @@ class ReportGenerationAgent:
         small_validation: Optional[Dict[str, Any]] = None,
         evidence_facts: List[Dict[str, Any]] = None,
         verified_references: List[Dict[str, Any]] = None,
+        data_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         return {
             "project_info": json.dumps(project_info, ensure_ascii=False, indent=2),
@@ -183,6 +203,7 @@ class ReportGenerationAgent:
             else "null",
             "evidence_facts": json.dumps(evidence_facts, ensure_ascii=False, indent=2),
             "verified_references": json.dumps(verified_references, ensure_ascii=False, indent=2),
+            "data_context": json.dumps(data_context, ensure_ascii=False, indent=2) if data_context else "{}",
         }
 
     def _validate_and_normalize_result(
@@ -746,6 +767,124 @@ class ReportGenerationAgent:
                 json.dump(data, f, ensure_ascii=False, indent=2, default=str)
         except Exception as e:
             logger.warning(f"更新 JSON plots 失败: {e}")
+
+    @staticmethod
+    def _embed_charts_in_markdown(
+        markdown_content: str,
+        plots: List[Dict[str, Any]],
+    ) -> str:
+        if not plots:
+            return markdown_content
+
+        figures_section = "\n\n---\n\n## Figures\n\n"
+
+        for i, plot in enumerate(plots):
+            pid = plot.get("plot_id", f"chart_{i}")
+            title = plot.get("title", f"Chart {i + 1}")
+            desc = plot.get("description", "")
+            chart_type = plot.get("type", "")
+            is_real = plot.get("is_generated_from_real_data", False)
+            source_id = plot.get("source_dataset_id", "")
+            markdown_embed = plot.get("markdown_embed", "")
+            base64 = plot.get("base64", "")
+            url = plot.get("url", "")
+
+            figures_section += f"### {title}\n\n"
+            if desc:
+                figures_section += f"{desc}\n\n"
+
+            if markdown_embed:
+                figures_section += f"{markdown_embed}\n\n"
+
+            if source_id:
+                figures_section += f"- **数据来源**: `{source_id}`\n"
+            if is_real:
+                figures_section += f"- **数据真实性**: 基于真实数据生成\n"
+            else:
+                figures_section += f"- **数据真实性**: ⚠️ 非真实数据\n"
+            if chart_type:
+                figures_section += f"- **图表类型**: {chart_type}\n"
+
+            if not markdown_embed:
+                if base64:
+                    figures_section += f"  (Base64 编码图片，见 JSON report_data.plots[{i}])\n\n"
+                elif url:
+                    figures_section += f"  (图片 URL: {url})\n\n"
+                else:
+                    figures_section += f"  (图表数据不可用)\n\n"
+
+            figures_section += "\n"
+
+        if markdown_content.strip():
+            return markdown_content.rstrip() + "\n" + figures_section
+        return figures_section
+
+    @staticmethod
+    def _enrich_results_with_categorized(
+        result: Dict[str, Any],
+        small_validation: Optional[Dict[str, Any]],
+        preliminary_analysis_skill_outputs: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        sv = small_validation or {}
+        sv_results = sv.get("results", {})
+
+        if not sv_results or not isinstance(sv_results, dict):
+            return result
+
+        pa_so = preliminary_analysis_skill_outputs or {}
+        pa_data = pa_so.get("preliminary_analysis", {}).get("data", {})
+
+        result["results"] = {
+            "actual_results": sv_results.get("actual_results", {}),
+            "simulated_results": sv_results.get("simulated_results", {}),
+            "expected_results": sv_results.get("expected_results", {}),
+            "result_type_summary": sv_results.get("result_type_summary", "none"),
+            "warnings": sv_results.get("warnings", []),
+        }
+
+        chapters = result.get("chapters", {})
+        if isinstance(chapters, dict):
+            existing_results = chapters.get("results", "")
+            if not existing_results or len(str(existing_results).strip()) < 50:
+                result_type = sv_results.get("result_type_summary", "none")
+                enriched = "## 11. Results\n\n"
+
+                actual = sv_results.get("actual_results", {})
+                if actual and isinstance(actual, dict) and actual.get("summary_statistics"):
+                    enriched += "### Actual Results（实际分析结果）\n\n"
+                    enriched += f"- 基于真实数据的统计分析已完成\n"
+                    enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
+                    if actual.get("correlations"):
+                        enriched += f"- 检测到 {len(actual.get('correlations', []))} 对相关性\n"
+                    if actual.get("anomalies"):
+                        enriched += f"- 发现 {len(actual.get('anomalies', []))} 个异常数据点\n"
+                    enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
+
+                simulated = sv_results.get("simulated_results", {})
+                if simulated and isinstance(simulated, dict) and simulated.get("data"):
+                    enriched += "### Simulated Results（模拟结果）\n\n"
+                    enriched += f"- 模拟数据已生成\n"
+                    if simulated.get("assumptions"):
+                        enriched += f"- 模拟假设: {simulated.get('assumptions', '')[:200]}\n"
+                    enriched += f"- 说明: {simulated.get('note', 'LLM 生成的模拟数据')}\n\n"
+
+                expected = sv_results.get("expected_results", {})
+                if expected and isinstance(expected, dict) and expected.get("hypothesis"):
+                    enriched += "### Expected Results（预期结果）\n\n"
+                    enriched += f"- 假设: {expected.get('hypothesis', '')[:200]}\n"
+                    if expected.get("expected_outcome"):
+                        enriched += f"- 预期结果: {expected.get('expected_outcome')}\n"
+                    if expected.get("target_variable"):
+                        enriched += f"- 目标变量: {expected.get('target_variable')}\n"
+                    enriched += f"- 说明: {expected.get('note', '预期结果，需通过实验验证')}\n\n"
+
+                if result_type == "none":
+                    enriched += "⚠️ 当前缺少真实数据，未生成实际分析结果。请上传数据集以启用数据驱动分析。\n"
+
+                chapters["results"] = enriched
+
+        result["chapters"] = chapters
+        return result
 
 
 _agent_instance: Optional[ReportGenerationAgent] = None

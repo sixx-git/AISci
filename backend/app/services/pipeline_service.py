@@ -578,6 +578,11 @@ class PipelineService:
 
         preliminary_analysis_outputs = sv.get("skill_outputs", {})
 
+        data_context = {}
+        hg_input = hg.get("input_data") or hg
+        if isinstance(hg_input, dict):
+            data_context = hg_input.get("data_context", {})
+
         result = agent.generate_report(
             project_info=project_info,
             problem_understanding=pu,
@@ -595,6 +600,7 @@ class PipelineService:
             verified_references=verified_references,
             preliminary_analysis_skill_outputs=preliminary_analysis_outputs,
             multimodal_datasets=multimodal_datasets,
+            data_context=data_context,
         )
         return self._safe_model_dump(result)
     
