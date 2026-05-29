@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { HypothesisCard } from '@/components/HypothesisCard';
+import { Card } from '@/components/Card';
 import { ScoresVisualization } from '@/components/ScoresVisualization';
 import { LiteratureEvidenceComponent } from '@/components/LiteratureEvidence';
 import { ExperimentDesignTable } from '@/components/ExperimentDesignTable';
 import { Button } from '@/components/Button';
-import { Sparkles, FileText, Download } from 'lucide-react';
-import type { ResearchResult } from '@/types';
+import { Sparkles, FileText, Download, Award, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { ResearchResult, Hypothesis } from '@/types';
 
 interface ResearchResultsProps {
   results?: ResearchResult;
@@ -102,9 +103,8 @@ ${exp.description}
         <h3 className="text-lg font-semibold text-white mb-4">候选假设</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {results.hypotheses.map((hyp, idx) => (
-            <HypothesisCard
+            <CompactHypothesisCard
               key={hyp.id}
-              variant="compact"
               hypothesis={hyp}
               index={idx}
               isSelected={selectedHypothesisId === hyp.id}
@@ -129,3 +129,76 @@ ${exp.description}
     </div>
   );
 };
+
+function getScoreColor(score: number) {
+  if (score >= 85) return 'text-green-400';
+  if (score >= 70) return 'text-yellow-400';
+  return 'text-orange-400';
+}
+
+function getScoreBg(score: number) {
+  if (score >= 85) return 'bg-green-500/20';
+  if (score >= 70) return 'bg-yellow-500/20';
+  return 'bg-orange-500/20';
+}
+
+function CompactHypothesisCard({ hypothesis, isSelected, onSelect, index }: {
+  hypothesis: Hypothesis;
+  isSelected: boolean;
+  onSelect: () => void;
+  index: number;
+}) {
+  return (
+    <Card
+      className={cn(
+        'cursor-pointer transition-all duration-200 hover:border-blue-500/50',
+        isSelected && 'border-blue-500 bg-blue-500/5',
+      )}
+      onClick={onSelect}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+            <span className="text-white font-bold text-sm">{index + 1}</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-1">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <h4 className="font-semibold text-white">{hypothesis.title}</h4>
+            </div>
+          </div>
+        </div>
+        <div className={cn(
+          'px-3 py-1 rounded-full text-sm font-bold',
+          getScoreBg(hypothesis.score),
+          getScoreColor(hypothesis.score),
+        )}>
+          {hypothesis.score}/100
+        </div>
+      </div>
+      <p className="text-gray-300 text-sm mb-4 line-clamp-3">{hypothesis.description}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          ['新颖性', hypothesis.scores.novelty, CheckCircle2, 'text-blue-400'],
+          ['可行性', hypothesis.scores.feasibility, CheckCircle2, 'text-green-400'],
+          ['科学价值', hypothesis.scores.scientific_value, Award, 'text-yellow-400'],
+          ['可验证性', hypothesis.scores.testability, CheckCircle2, 'text-purple-400'],
+        ] as const).map(([label, score, Icon, iconColor]) => (
+          <div key={label} className="flex items-center gap-2">
+            <Icon className={cn('w-4 h-4', iconColor)} />
+            <div className="flex-1">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-400">{label}</span>
+                <span className={getScoreColor(score)}>{score}</span>
+              </div>
+              <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className={cn('h-full rounded-full transition-all duration-500', getScoreBg(score))}
+                  style={{ width: `${score}%` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}

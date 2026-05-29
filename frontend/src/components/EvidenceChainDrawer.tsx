@@ -54,16 +54,22 @@ export function EvidenceChainDrawer({
                 <FileText className="w-3.5 h-3.5" />
                 证据项 {evidenceCount}
               </span>
+              {evidenceList.length > 0 && (
+                <span className="flex items-center gap-1">
+                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                  最高相关度 {Math.round(Math.max(...evidenceList.map(e => e.relevance_score)) * 100)}%
+                </span>
+              )}
             </div>
           </div>
 
           {/* 证据列表 */}
           <div className="space-y-4">
             {evidenceList.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>暂无证据记录</p>
-                <p className="text-xs mt-1">运行假设生成后，证据链将自动建立</p>
+              <div className="text-center py-16 text-gray-500">
+                <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                <p className="text-sm text-gray-400 mb-2">当前假设尚无可追踪证据</p>
+                <p className="text-xs text-gray-500">请补充文献或数据集以建立证据链</p>
               </div>
             ) : (
               evidenceList.map((ev, idx) => (
@@ -112,6 +118,11 @@ export function EvidenceChainDrawer({
                       <span className="flex items-center gap-1">
                         <Hash className="w-3 h-3" />
                         第 {ev.page_number} 页
+                      </span>
+                    )}
+                    {ev.document_id && (
+                      <span className="font-mono text-gray-600">
+                        doc:{ev.document_id.slice(0, 12)}...
                       </span>
                     )}
                     {ev.chunk_id && (

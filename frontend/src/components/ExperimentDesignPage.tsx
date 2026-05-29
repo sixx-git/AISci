@@ -16,6 +16,7 @@ interface ExperimentDesignPageProps {
   compact?: boolean;
   revalidateKey?: number;
   latestRunId?: string | null;
+  selectedHypothesisId?: string | null;
 }
 
 const categoryLabel: Record<string, string> = {
@@ -147,11 +148,18 @@ export function ExperimentDesignPage({
   compact: _compact = false,
   revalidateKey: _revalidateKey,
   latestRunId: _latestRunId,
+  selectedHypothesisId: _selectedHypothesisId,
 }: ExperimentDesignPageProps) {
   const [experiment, setExperiment] = useState<DetailedExperimentDesign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+
+  const selectedHypothesisId = _selectedHypothesisId
+    || (() => {
+      try { return _projectId ? localStorage.getItem(`aisci_selected_hypothesis_${_projectId}`) : null; }
+      catch { return null; }
+    })();
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
@@ -223,11 +231,23 @@ export function ExperimentDesignPage({
 
       {!loading && !error && !experiment && (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
-          <p className="text-sm text-gray-400 mb-2">暂无实验设计</p>
-          <p className="text-xs text-gray-500 mb-4">
-            请先运行 Pipeline 或生成实验设计。
-          </p>
+          {selectedHypothesisId ? (
+            <>
+              <Lightbulb className="w-8 h-8 mb-3 text-amber-400" />
+              <p className="text-base text-gray-300 mb-2">当前主假设尚未生成实验设计</p>
+              <p className="text-xs text-gray-500 mb-4">
+                请在候选假设页面选择主假设后，运行工作流中的实验设计阶段。
+              </p>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
+              <p className="text-sm text-gray-400 mb-2">暂无实验设计</p>
+              <p className="text-xs text-gray-500 mb-4">
+                请先在候选假设页面选择一个主假设，然后运行 Pipeline 的实验设计阶段。
+              </p>
+            </>
+          )}
           <Button
             variant="secondary"
             size="sm"

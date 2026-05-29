@@ -193,12 +193,13 @@ function HypothesesTab({ projectId, revalidateKey, latestRunId }: {
   return <HypothesesPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function ExperimentsTab({ projectId, revalidateKey, latestRunId }: {
+function ExperimentsTab({ projectId, revalidateKey, latestRunId, hypothesisId }: {
   projectId: string;
   revalidateKey: number;
   latestRunId: string | null;
+  hypothesisId: string | null;
 }) {
-  return <ExperimentDesignPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
+  return <ExperimentDesignPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} selectedHypothesisId={hypothesisId} />;
 }
 
 function ReportsTab({ projectId, revalidateKey, latestRunId }: {
@@ -440,7 +441,7 @@ export function ProjectWorkspace() {
       case 'hypotheses':
         return <HypothesesTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'experiments':
-        return <ExperimentsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
+        return <ExperimentsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} hypothesisId={searchParams.get('hypothesis_id')} />;
       case 'reports':
         return <ReportsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'logs':
