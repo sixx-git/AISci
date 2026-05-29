@@ -4,7 +4,7 @@
 """
 import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from pydantic import BaseModel, Field
 
 from app.services.qwen_client import qwen_structured_chat

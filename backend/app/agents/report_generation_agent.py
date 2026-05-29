@@ -8,11 +8,13 @@ import json
 import os
 import uuid
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.services.pdf_export_service import export_markdown_to_pdf
+
+CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.report.report_chart_generation_skill import ReportChartGenerationSkill
 
@@ -635,11 +637,16 @@ class ReportGenerationAgent:
             if isinstance(ts, str):
                 try:
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+                    dt_cn = dt.astimezone(CHINA_TZ)
+                    return dt_cn.strftime("%Y-%m-%d %H:%M:%S")
                 except Exception:
                     return str(ts)
             elif isinstance(ts, datetime):
-                return ts.strftime("%Y-%m-%d %H:%M:%S")
+                if ts.tzinfo:
+                    dt_cn = ts.astimezone(CHINA_TZ)
+                else:
+                    dt_cn = ts
+                return dt_cn.strftime("%Y-%m-%d %H:%M:%S")
             return "N/A"
 
         def fmt_dur(ms):

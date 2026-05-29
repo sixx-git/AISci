@@ -5,9 +5,11 @@ import uuid
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
+
+CHINA_TZ = timezone(timedelta(hours=8))
 
 from app.agents.problem_understanding_agent import get_problem_understanding_agent
 from app.agents.literature_mining_agent import get_literature_mining_agent
@@ -164,7 +166,7 @@ class PipelineService:
         # 存储各阶段结果
         results: Dict[str, Any] = {}
         final_report_id: Optional[str] = None
-        pipeline_start = datetime.now(timezone.utc)
+        pipeline_start = datetime.now(CHINA_TZ)
         self._pipeline_start = pipeline_start  # 供 _build_pipeline_run_info 实时计算耗时
         
         try:
@@ -225,7 +227,7 @@ class PipelineService:
             final_report_id = self._create_report(request.project_id, results.get("report_generation", {}))
             
             # Pipeline 完成
-            pipeline_end = datetime.now(timezone.utc)
+            pipeline_end = datetime.now(CHINA_TZ)
             total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
             
             logger.info(f"Pipeline 执行成功: {self.run_id}, 总耗时: {total_duration_ms}ms")
@@ -256,7 +258,7 @@ class PipelineService:
             )
             
         except Exception as e:
-            pipeline_end = datetime.now(timezone.utc)
+            pipeline_end = datetime.now(CHINA_TZ)
             total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
             
             failed_stage = _find_failed_stage(stages)
@@ -307,7 +309,7 @@ class PipelineService:
         stage_key = stage_def["key"]
         
         stage_log.status = PipelineStageStatus.RUNNING
-        stage_log.start_time = datetime.now(timezone.utc)
+        stage_log.start_time = datetime.now(CHINA_TZ)
         
         input_data = self._build_stage_input(idx, results, request)
         
@@ -336,7 +338,7 @@ class PipelineService:
             logger.error(f"{stage_def['label']}阶段失败: {e}", exc_info=True)
             raise
         finally:
-            stage_log.end_time = datetime.now(timezone.utc)
+            stage_log.end_time = datetime.now(CHINA_TZ)
             if stage_log.start_time:
                 stage_log.duration = (stage_log.end_time - stage_log.start_time).total_seconds()
     
@@ -382,8 +384,7 @@ class PipelineService:
     
     def _build_pipeline_run_info(self) -> Dict[str, Any]:
         """构建 Pipeline 运行摘要信息"""
-        now = datetime.now(timezone.utc)
-        # 实时计算耗时：从 pipeline 启动到当前时刻
+        now = datetime.now(CHINA_TZ)
         duration_ms = self.db_pipeline_run.total_duration_ms or (
             int((now - self._pipeline_start).total_seconds() * 1000)
             if hasattr(self, '_pipeline_start') and self._pipeline_start
@@ -681,7 +682,7 @@ class PipelineService:
             project_id=request.project_id,
             research_question=request.research_question,
             status=DB_PipelineStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(CHINA_TZ),
             input_data=request.model_dump(),
             version=1
         )
@@ -691,7 +692,7 @@ class PipelineService:
     
     def _create_stage_execution(self, order: int, stage: DB_PipelineStage, input_data: Dict[str, Any]) -> DB_PipelineStageExecution:
         """创建或更新阶段执行记录"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(CHINA_TZ)
         existing = self.db_stage_executions.get(order)
         if existing:
             existing.status = DB_PipelineStatus.RUNNING
@@ -718,7 +719,7 @@ class PipelineService:
     
     def _update_stage_execution(self, db_stage: DB_PipelineStageExecution, status: str, output: Optional[Any] = None, error: Optional[str] = None):
         """更新阶段执行记录"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(CHINA_TZ)
         if status == "completed":
             db_stage.status = DB_PipelineStatus.COMPLETED
             if output is not None:
@@ -733,7 +734,7 @@ class PipelineService:
             # 如果 started_at 数据库返回的是 naive datetime，而 now 是 tz-aware，需要统一处理
             started = db_stage.started_at
             if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
+                started = started.replace(tzinfo=CHINA_TZ)
             db_stage.duration_ms = int((now - started).total_seconds() * 1000)
         
         self.db.commit()
@@ -804,6 +805,7 @@ class PipelineService:
             experiments=chapters.get("experiments", ""),
             results=chapters.get("results", ""),
             references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else chapters.get("references", ""),
+            created_at=datetime.now(CHINA_TZ),
             pdf_path=report_data.get("report_id"),
             status="ready",
             extra_metadata=extra_meta,

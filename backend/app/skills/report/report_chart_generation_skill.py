@@ -1,4 +1,4 @@
-from curses.ascii import alt
+
 """
 报告图表生成 Skill
 根据 PreliminaryAnalysisSkill 输出生成折线图、柱状图、散点图、热力图等，
@@ -12,7 +12,7 @@ import logging
 import hashlib
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-
+import matplotlib.pyplot as plt
 from app.skills.base import BaseSkill, SkillResult
 
 logger = logging.getLogger(__name__)
