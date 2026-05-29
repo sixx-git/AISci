@@ -44,6 +44,38 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
 
 // ============ 工具函数 ============
 
+/** 为 hypothesis_generation 阶段生成可读摘要 */
+function summarizeStageData(stageName: string, data: unknown): string {
+  if (typeof data !== 'object' || data === null) {
+    return JSON.stringify(data).slice(0, 200);
+  }
+
+  const d = data as Record<string, unknown>;
+
+  if (stageName === 'hypothesis_generation') {
+    const parts: string[] = [];
+    if (d.research_question) {
+      parts.push(`研究问题: ${String(d.research_question).slice(0, 80)}`);
+    }
+    if (d.data_context && typeof d.data_context === 'object') {
+      const dc = d.data_context as Record<string, unknown>;
+      if (dc.summary) parts.push(`数据: ${String(dc.summary).slice(0, 80)}`);
+      if (dc.dataset_count != null) parts.push(`${dc.dataset_count} 个数据集`);
+      if (Array.isArray(dc.field_candidates)) parts.push(`${dc.field_candidates.length} 个字段`);
+    }
+    if (d.hypotheses && Array.isArray(d.hypotheses)) {
+      const hyps = d.hypotheses as unknown[];
+      parts.push(`生成了 ${hyps.length} 条假设`);
+    }
+    if (d.off_topic_count != null) {
+      parts.push(`${d.off_topic_count} 条偏题`);
+    }
+    return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
+  }
+
+  return JSON.stringify(data).slice(0, 200);
+}
+
 /** 固定的 Pipeline 节点拓扑定义 —— 系统的8个真实智能体 */
 const BASE_AGENT_NODES: AgentNodeData[] = [
   {
@@ -177,10 +209,10 @@ function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNode
     token_count: stage.token_count ?? node.token_count,
     model: stage.model_used || node.model,
     inputSummary: stage.input_data
-      ? JSON.stringify(stage.input_data).slice(0, 200)
+      ? summarizeStageData(stage.stage ?? '', stage.input_data)
       : node.inputSummary,
     outputSummary: stage.output_data
-      ? JSON.stringify(stage.output_data).slice(0, 200)
+      ? summarizeStageData(stage.stage ?? '', stage.output_data)
       : node.outputSummary,
   };
 }

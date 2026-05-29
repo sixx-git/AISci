@@ -296,6 +296,7 @@ export interface DetailedHypothesis {
   off_topic_reason?: string;
   matched_keywords?: string[];
   missing_keywords?: string[];
+  domain_conflict_keywords?: string[];
   evidenceLevel?: string;
   question_alignment?: string;
   dataset_field_refs?: string[];

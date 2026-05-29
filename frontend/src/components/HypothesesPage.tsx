@@ -38,6 +38,7 @@ function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
     off_topic_reason: h.off_topic_reason ?? undefined,
     matched_keywords: h.matched_keywords ?? undefined,
     missing_keywords: h.missing_keywords ?? undefined,
+    domain_conflict_keywords: h.domain_conflict_keywords ?? undefined,
     evidenceLevel: h.evidence_level || 'medium',
     question_alignment: h.question_alignment ?? undefined,
     dataset_field_refs: h.dataset_field_refs ?? undefined,
@@ -204,6 +205,17 @@ export function HypothesesPage({
     [hypotheses]
   );
 
+  const allOffTopic = useMemo(
+    () => hypotheses.length > 0 && hypotheses.every((h) => h.off_topic),
+    [hypotheses]
+  );
+
+  const avgAlignment = useMemo(() => {
+    if (hypotheses.length === 0) return 0;
+    const scores = hypotheses.filter((h) => h.alignment_score != null).map((h) => h.alignment_score!);
+    return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  }, [hypotheses]);
+
   const statValues = useMemo(() => ({
     total: hypotheses.length,
     primary: primaryHypothesis ? 1 : 0,
@@ -272,6 +284,24 @@ export function HypothesesPage({
 
       {!loading && !error && hypotheses.length > 0 && (
         <>
+          {/* 全部偏题警告 */}
+          {allOffTopic && (
+            <div className="mb-5 p-4 rounded-lg border border-red-500/30 bg-red-500/5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-300 mb-1">
+                    当前生成结果与研究问题关联不足
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    所有 {hypotheses.length} 条假设均被标记为偏题（平均对齐分数 {avgAlignment}/100），
+                    请重新运行假设生成流程或补充相关数据/文献后再试。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 摘要卡片 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
             {STAT_CARDS.map((sc) => {

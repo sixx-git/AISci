@@ -139,9 +139,15 @@ function HypothesisCardDetailed({
   const oc = overallColor(hypothesis.overallScore);
   const sb = statusBadge(hypothesis.status);
   const el = evidenceLevelBadge(hypothesis.evidenceLevel || 'medium');
+  const hasDatasetFields = (hypothesis.dataset_field_refs?.length ?? 0) > 0;
+  const hasNoDataSupport = !hasDatasetFields && !hypothesis.off_topic;
 
   return (
-    <Card className="hover:border-gray-600 transition-colors">
+    <Card className={cn(
+      'hover:border-gray-600 transition-colors',
+      hypothesis.off_topic && 'border-red-500/30 bg-red-500/5',
+      hasNoDataSupport && 'border-amber-500/20 bg-amber-500/5',
+    )}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className={cn(
@@ -231,6 +237,28 @@ function HypothesisCardDetailed({
                   对齐分数: {hypothesis.alignment_score}/100
                 </p>
               )}
+              {hypothesis.domain_conflict_keywords && hypothesis.domain_conflict_keywords.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {hypothesis.domain_conflict_keywords.map((kw) => (
+                    <span key={kw} className="text-[10px] text-red-400/70 bg-red-500/10 px-1.5 py-0.5 rounded">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 无数据支撑提示 */}
+          {hasNoDataSupport && (
+            <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-semibold text-amber-400">缺少数据支撑</span>
+              </div>
+              <p className="text-xs text-amber-300/80 leading-relaxed">
+                当前假设缺少真实数据字段支撑，建议上传数据集或导入文献。
+              </p>
             </div>
           )}
 
@@ -290,7 +318,9 @@ function HypothesisCardDetailed({
           </Button>
         )}
         <Button variant="secondary" size="sm" icon={<FlaskConical className="w-3.5 h-3.5" />}
-          onClick={() => onEnterExperiment?.(hypothesis.id)}>
+          onClick={hypothesis.off_topic ? undefined : () => onEnterExperiment?.(hypothesis.id)}
+          disabled={hypothesis.off_topic}
+          title={hypothesis.off_topic ? '偏题假设无法进入实验设计' : '进入实验设计'}>
           进入实验设计
         </Button>
         <button

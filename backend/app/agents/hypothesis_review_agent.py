@@ -46,6 +46,8 @@ class HypothesisReviewResult(BaseModel):
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
     _off_topic_penalized: bool = False
     _alignments: Optional[List[Dict[str, Any]]] = None
+    primary_index: Optional[int] = Field(default=None, description="推荐的主假设索引（0-based）")
+    primary_reason: Optional[str] = Field(default=None, description="主假设推荐理由")
 
 
 class HypothesisCandidate(BaseModel):
@@ -145,6 +147,11 @@ class HypothesisReviewAgent:
                                 score_detail = getattr(review.scores, score_field_name)
                                 score_detail.score = max(1, int(score_detail.score * (1 - off_topic_penalty)))
                         review.overall_score = round(review.overall_score * (1 - off_topic_penalty), 1)
+
+            # ── 主假设选择：排除 off_topic 和低证据假设 ──
+            result.primary_index, result.primary_reason = self._select_primary(
+                result.reviews, alignments, original_hypotheses
+            )
 
             # ── 运行新颖性审查 Skill ──
             result.skill_outputs = self._run_novelty_skills_sync(
@@ -325,6 +332,71 @@ class HypothesisReviewAgent:
             "data_availability": default_score.copy(),
             "cost_risk": default_score.copy()
         }
+
+    @staticmethod
+    def _select_primary(
+        reviews: List[HypothesisReview],
+        alignments: Optional[List[Dict[str, Any]]],
+        original_hypotheses: List[HypothesisCandidate],
+    ) -> tuple:
+        """选择主假设"""
+        if not reviews:
+            return None, "无候选假设"
+
+        eligible = []
+        rejected_reasons: List[str] = []
+
+        for i, review in enumerate(reviews):
+            alignment = alignments[i] if alignments and i < len(alignments) else {}
+            is_off_topic = alignment.get("off_topic", False)
+            alignment_score = alignment.get("alignment_score", 50)
+            evidence_level = "medium"
+            has_supporting_facts = False
+            has_data_fields = False
+            if i < len(original_hypotheses):
+                h = original_hypotheses[i]
+                if hasattr(h, 'evidence_level'):
+                    evidence_level = getattr(h, 'evidence_level', 'medium')
+                if hasattr(h, 'supporting_fact_ids'):
+                    has_supporting_facts = bool(getattr(h, 'supporting_fact_ids', []))
+                if hasattr(h, 'dataset_field_refs'):
+                    has_data_fields = bool(getattr(h, 'dataset_field_refs', []))
+
+            if is_off_topic:
+                rejected_reasons.append(f"假设 {i}: off_topic (alignment_score={alignment_score})")
+                continue
+
+            if evidence_level == "low" and not has_supporting_facts and not has_data_fields:
+                rejected_reasons.append(
+                    f"假设 {i}: evidence_level=low 且无事实/数据支撑 (score={review.overall_score})"
+                )
+                continue
+
+            eligible.append((i, review, alignment_score, evidence_level))
+
+        if not eligible:
+            return None, (
+                f"所有 {len(reviews)} 条假设均不符合主假设条件: "
+                + "; ".join(rejected_reasons)
+                + "。建议补充文献或数据后重新生成假设。"
+            )
+
+        eligible.sort(key=lambda x: (
+            x[2] if x[2] is not None else 0,
+            0 if x[3] == "high" else 1 if x[3] == "medium" else 2,
+            -x[1].overall_score,
+        ), reverse=True)
+
+        best_idx = eligible[0][0]
+        best_score = eligible[0][2]
+        best_evidence = eligible[0][3]
+
+        return best_idx, (
+            f"推荐假设 {best_idx} 为主假设: "
+            f"alignment_score={best_score}, evidence_level={best_evidence}, "
+            f"overall_score={eligible[0][1].overall_score}"
+            + (f" (已排除 {len(rejected_reasons)} 条: {'; '.join(rejected_reasons)})" if rejected_reasons else "")
+        )
 
 
 # 全局单例

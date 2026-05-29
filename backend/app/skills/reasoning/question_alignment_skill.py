@@ -277,12 +277,24 @@ def _compute_alignment(hypothesis: str, question_keywords: Dict[str, Set[str]], 
         else:
             off_topic_reason = "假设与研究问题的核心领域关联度不足"
 
+    domain_conflict_keywords: List[str] = []
+    for pattern in _OFF_DOMAIN_COMPILED:
+        match = pattern.search(hypothesis)
+        if not match:
+            continue
+        match_text = match.group(0)
+        matched_domain = _find_pattern_domain(pattern.pattern)
+        if matched_domain and (question_domains and matched_domain in question_domains):
+            continue
+        domain_conflict_keywords.append(match_text)
+
     return {
         "alignment_score": score,
         "off_topic": off_topic,
         "off_topic_reason": off_topic_reason,
         "matched_keywords": sorted(list(matched_all)),
         "missing_keywords": sorted(list(missing_all)),
+        "domain_conflict_keywords": sorted(list(set(domain_conflict_keywords))),
     }
 
 
@@ -314,6 +326,7 @@ class QuestionAlignmentSkill(BaseSkill):
           - off_topic_reason: str         偏题原因
           - matched_keywords: List[str]   匹配到的关键词
           - missing_keywords: List[str]   缺失的关键词
+          - domain_conflict_keywords: List[str]  领域冲突关键词（出现在假设中但不在研究问题领域内）
       - all_off_topic: bool              是否所有假设都偏题
       - off_topic_summary: str            偏题汇总（供重新生成 Prompt 使用）
     """

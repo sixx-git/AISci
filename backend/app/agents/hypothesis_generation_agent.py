@@ -295,27 +295,53 @@ class HypothesisGenerationAgent:
 
         if data_context:
             parts.append("## 项目数据上下文")
-            if data_context.get("dataset_summary"):
-                parts.append(f"数据集摘要: {data_context['dataset_summary']}")
-            if data_context.get("fields"):
-                parts.append(f"数据字段: {', '.join(data_context['fields'])}")
+
+            if data_context.get("summary"):
+                parts.append(f"**数据摘要**: {data_context['summary']}")
+
+            if data_context.get("dataset_count", 0) > 0:
+                parts.append(f"**数据集总数**: {data_context['dataset_count']}")
+
+            if data_context.get("warnings"):
+                for w in data_context["warnings"]:
+                    parts.append(f"⚠️ {w}")
+
+            if data_context.get("field_candidates"):
+                flds = data_context["field_candidates"]
+                parts.append(f"**可用字段** ({len(flds)} 个): {', '.join(flds[:40])}")
+                if len(flds) > 40:
+                    parts.append(f"  ... 及其他 {len(flds) - 40} 个字段")
+
+            if data_context.get("target_candidates"):
+                tgts = data_context["target_candidates"]
+                parts.append(f"**候选目标字段**: {', '.join(tgts[:10])}")
+
+            if data_context.get("available_modalities"):
+                parts.append(f"**数据模态**: {', '.join(data_context['available_modalities'])}")
+
+            if data_context.get("datasets"):
+                parts.append("**数据集详情**:")
+                for ds in data_context["datasets"][:5]:
+                    name = ds.get("filename", ds.get("dataset_id", "unknown"))
+                    dtype = ds.get("data_type", "unknown")
+                    n_rows = ds.get("n_rows", 0)
+                    n_cols = ds.get("n_columns", 0)
+                    columns = ds.get("columns", [])
+                    missing_rate = ds.get("missing_rate", 0)
+                    parts.append(
+                        f"  - [{dtype}] {name}: {n_rows} 行 × {n_cols} 列, "
+                        f"列: {columns[:10]}{'...' if len(columns) > 10 else ''}, "
+                        f"缺失率: {missing_rate}"
+                    )
+
             if data_context.get("statistics"):
                 stats = data_context["statistics"]
-                stat_lines = []
-                if isinstance(stats, dict):
-                    stat_lines.append(f"- 样本数: {stats.get('sample_count', 'N/A')}")
-                    stat_lines.append(f"- 字段数: {stats.get('field_count', 'N/A')}")
-                    stat_lines.append(f"- 缺失值比例: {stats.get('missing_rate', 'N/A')}")
-                    if stats.get("field_distributions"):
-                        stat_lines.append("- 字段分布:")
-                        for fd in stats["field_distributions"]:
-                            stat_lines.append(f"  {fd}")
-                elif isinstance(stats, str):
-                    stat_lines.append(stats)
-                if stat_lines:
-                    parts.append("初步统计:\n" + "\n".join(stat_lines))
-            if data_context.get("preprocessing"):
-                parts.append(f"预处理摘要: {data_context['preprocessing']}")
+                stat_lines = ["**总体统计**:"]
+                stat_lines.append(f"  - 样本总量: {stats.get('sample_count', 'N/A')}")
+                stat_lines.append(f"  - 字段总数: {stats.get('field_count', 'N/A')}")
+                stat_lines.append(f"  - 缺失率: {stats.get('missing_rate', 'N/A')}")
+                stat_lines.append(f"  - 数据集数: {stats.get('dataset_count', 'N/A')}")
+                parts.append("\n".join(stat_lines))
 
         if multimodal_datasets:
             parts.append("## 多模态数据集")
@@ -336,7 +362,7 @@ class HypothesisGenerationAgent:
                 parts.append(f"- fact:{fact_id} → field:{field_ref}: {relation}")
 
         if not parts:
-            return "（无项目数据上下文 — 假设必须基于文献事实或理论推测，evidence_level 建议为 low）"
+            return "（无项目数据上下文 — 假设必须基于文献事实或理论推测，evidence_level 强制为 low）"
 
         return "\n".join(parts)
 

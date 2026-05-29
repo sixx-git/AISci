@@ -29,6 +29,8 @@ export interface BackendHypothesis {
   data_evidence_ids?: string[];
   validation_target?: string;
   expected_measurable_effect?: string;
+  domain_conflict_keywords?: string[];
+  is_primary?: boolean;
 }
 
 export interface BackendEvidence {

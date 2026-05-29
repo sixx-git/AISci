@@ -819,11 +819,20 @@ class PipelineService:
 
     def _build_data_context(self, project_id: str) -> Dict[str, Any]:
         """构建项目数据上下文，供 HypothesisGenerationAgent 使用"""
-        context: Dict[str, Any] = {}
+        context: Dict[str, Any] = {
+            "datasets": [],
+            "dataset_count": 0,
+            "available_modalities": [],
+            "field_candidates": [],
+            "target_candidates": [],
+            "summary": "",
+            "warnings": [],
+        }
         multimodal_datasets: List[Dict] = []
         data_linking_evidence: List[Dict] = []
 
         if not project_id:
+            context["warnings"].append("未提供 project_id，无法构建数据上下文")
             return context
 
         try:
@@ -837,7 +846,9 @@ class PipelineService:
             ).all()
 
             fields_set: List[str] = []
+            modalities_set: set = set()
             doc_summaries: List[str] = []
+            target_candidate_fields: List[str] = []
 
             for doc in docs:
                 if doc.title:
@@ -858,6 +869,7 @@ class PipelineService:
                             "fields": ds_fields if isinstance(ds_fields, list) else [],
                         }
                         multimodal_datasets.append(ds_info)
+                        modalities_set.add(ds_info["modality"])
 
             # ── 从 Dataset 表读取用户上传的多模态数据集 ──
             datasets = self.db.query(Dataset).filter(
@@ -896,20 +908,39 @@ class PipelineService:
                 entry = {
                     "dataset_id": ds.id,
                     "filename": ds.filename,
-                    "data_type": ds.data_type,
-                    "n_rows": ds.n_rows,
-                    "n_columns": ds.n_columns,
+                    "data_type": ds.data_type or "unknown",
+                    "source_type": getattr(ds, "source_type", "upload") or "upload",
+                    "n_rows": ds.n_rows or 0,
+                    "n_columns": ds.n_columns or 0,
                     "columns": cols,
                     "dtypes": dtypes,
                     "statistics": stats,
                     "preview": preview[:5] if preview else [],
-                    "missing_count": ds.missing_count,
-                    "missing_rate": ds.missing_rate,
-                    "preprocessing_status": ds.preprocessing_status,
+                    "missing_count": ds.missing_count or 0,
+                    "missing_rate": ds.missing_rate or 0.0,
+                    "use_for_hypothesis": True,
                 }
                 dataset_entries.append(entry)
 
                 fields_set.extend(cols)
+                modalities_set.add(ds.data_type or "unknown")
+
+                for col in cols:
+                    col_lower = col.lower()
+                    if any(t in col_lower for t in ["label", "target", "class", "category",
+                                                      "标签", "目标", "类别", "分类",
+                                                      "score", "评分", "result", "结果",
+                                                      "yield", "output"]):
+                        if isinstance(ds.columns_json, str):
+                            try:
+                                col_list = json.loads(ds.columns_json)
+                                if col in col_list:
+                                    target_candidate_fields.append(f"{ds.filename}.{col}")
+                            except Exception:
+                                target_candidate_fields.append(f"{ds.filename}.{col}")
+                        else:
+                            target_candidate_fields.append(f"{ds.filename}.{col}")
+
                 multimodal_datasets.append({
                     "name": ds.filename,
                     "dataset_id": ds.id,
@@ -920,26 +951,40 @@ class PipelineService:
                     "statistics": stats,
                 })
 
+            context["datasets"] = dataset_entries
+            context["dataset_count"] = len(dataset_entries)
+            context["available_modalities"] = sorted(list(modalities_set))
+            context["field_candidates"] = list(dict.fromkeys(fields_set))[:50]
+            context["target_candidates"] = list(dict.fromkeys(target_candidate_fields))[:20]
+
+            if not dataset_entries:
+                context["warnings"].append("当前项目缺少可用于假设生成的数据集，假设将基于文献事实和理论推测")
+
+            summary_parts = []
             if dataset_entries:
-                context["datasets"] = dataset_entries
-
-            if fields_set:
-                context["fields"] = list(dict.fromkeys(fields_set))[:30]
+                total_rows = sum(ds.get("n_rows", 0) or 0 for ds in dataset_entries)
+                summary_parts.append(
+                    f"共 {len(dataset_entries)} 个数据集，"
+                    f"总行数 {total_rows}，"
+                    f"总字段数 {len(context['field_candidates'])}，"
+                    f"模态: {', '.join(context['available_modalities'])}"
+                )
             if doc_summaries:
-                context["dataset_summary"] = "; ".join(doc_summaries[:5])
+                summary_parts.append(f"文献摘要: {'; '.join(doc_summaries[:3])}")
+            context["summary"] = " | ".join(summary_parts) if summary_parts else "无可用数据或文献摘要"
 
-            stats_info: Dict[str, Any] = {}
-            stats_info["sample_count"] = sum(ds.n_rows or 0 for ds in datasets) + len(docs)
-            stats_info["field_count"] = len(fields_set)
-            stats_info["missing_rate"] = (
-                round(sum(ds.missing_rate or 0 for ds in datasets) / max(len(datasets), 1), 4)
-                if datasets else "N/A（可从数据文件实际分析获取）"
-            )
-            stats_info["dataset_count"] = len(datasets)
-            context["statistics"] = stats_info
+            context["statistics"] = {
+                "sample_count": sum(ds.n_rows or 0 for ds in datasets) + len(docs),
+                "field_count": len(fields_set),
+                "missing_rate": round(
+                    sum(ds.missing_rate or 0 for ds in datasets) / max(len(datasets), 1), 4
+                ) if datasets else None,
+                "dataset_count": len(datasets),
+            }
 
         except Exception as e:
             logger.warning(f"构建数据上下文失败: {e}")
+            context["warnings"].append(f"构建数据上下文时发生异常: {str(e)}")
 
         context["_multimodal_datasets"] = multimodal_datasets
         context["_data_linking_evidence"] = data_linking_evidence
