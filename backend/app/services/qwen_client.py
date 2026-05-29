@@ -247,13 +247,30 @@ class QwenClient:
         if not self.api_key:
             logger.warning("QWEN_API_KEY not set in environment")
 
-        self.client = openai.OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout
-        )
+        self.client = self._create_openai_client()
 
         logger.info(f"QwenClient initialized with model: {self.model}")
+
+    def _create_openai_client(self):
+        try:
+            client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout,
+            )
+            return client
+        except Exception as e:
+            from importlib.metadata import version as pkg_version
+
+            logger.error(
+                f"OpenAI client 初始化失败:\n"
+                f"  openai version: {pkg_version('openai')}\n"
+                f"  httpx version: {pkg_version('httpx')}\n"
+                f"  base_url: {self.base_url}\n"
+                f"  model: {self.model}\n"
+                f"  error: {type(e).__name__}: {e}"
+            )
+            raise
 
     # ==================== 内部工具 ====================
 

@@ -186,6 +186,21 @@ A:
 1. 确认 API Key 正确
 2. 确认账户有足够额度
 3. 检查网络连接
+4. 运行测试脚本验证连通性：
+   ```bash
+   cd backend
+   python scripts/test_qwen_client.py
+   ```
+
+### Q: 报错 "Client.__init__() got an unexpected keyword argument 'proxies'"
+A: 这是由于 openai / httpx 版本不兼容导致的。请执行：
+```bash
+pip uninstall -y openai httpx
+pip install "openai>=1.55.3,<3.0" "httpx==0.27.2"
+```
+然后重启后端。
+
+**原因说明**：httpx 0.28+ 移除了 `proxies` 参数，而 openai >= 1.55 需要 httpx <= 0.27 才能兼容。本项目固定 httpx==0.27.2 避免此问题。
 
 ### Q: 端口被占用
 A: 
