@@ -1,6 +1,7 @@
 """
 报告图表生成 Skill
 根据 PreliminaryAnalysisSkill 输出生成折线图、柱状图、散点图、热力图等，
+仅基于真实数据生成图表，禁止在无数据时生成随机图。
 输出 Base64 编码图片或文件路径，可在 Markdown/PDF/JSON 中嵌入。
 """
 import os
@@ -8,22 +9,12 @@ import io
 import base64
 import logging
 import hashlib
-import json
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from app.skills.base import BaseSkill, SkillResult
 
 logger = logging.getLogger(__name__)
-
-PLOT_TYPE_TO_FUNC = {
-    "line": "plot_line",
-    "bar": "plot_bar",
-    "scatter": "plot_scatter",
-    "heatmap": "plot_heatmap",
-    "histogram": "plot_histogram",
-    "box": "plot_box",
-}
 
 
 class ReportChartGenerationSkill(BaseSkill):
@@ -38,13 +29,14 @@ class ReportChartGenerationSkill(BaseSkill):
       - figure_size: tuple                  图表尺寸 (w, h) （默认 (10, 6)）
 
     输出 (SkillResult.data):
-      - charts: List[dict]                  图表列表，每项含 plot_id、type、title、base64、url、file_path
+      - charts: List[dict]                  图表列表，每项含 plot_id、type、title、base64、url、
+                                            source_dataset_id、is_generated_from_real_data
       - total_charts: int                   图表总数
       - output_dir: str                     输出目录
     """
 
     name = "ReportChartGeneration"
-    description = "根据分析结果生成折线图、柱状图、散点图、热力图，输出 Base64/文件路径供报告嵌入"
+    description = "根据分析结果基于真实数据生成图表，输出 Base64/文件路径供报告嵌入"
     source_reference = "AI Scientist (arxiv:2408.06292) — report generation & visualization 能力参考"
 
     async def run(self, input_data: Dict[str, Any], context: Dict[str, Any]) -> SkillResult:
@@ -63,8 +55,6 @@ class ReportChartGenerationSkill(BaseSkill):
             )
         os.makedirs(output_dir, exist_ok=True)
 
-        charts: List[dict] = []
-
         if not plot_specs:
             result.add_warning("无图表规格")
             result.data = {
@@ -74,7 +64,28 @@ class ReportChartGenerationSkill(BaseSkill):
             }
             return result
 
+        if not data_rows:
+            result.add_warning("无真实数据，未生成图表")
+            result.data = {
+                "charts": [],
+                "total_charts": 0,
+                "output_dir": output_dir,
+                "warning": "无真实数据，未生成图表。请上传 CSV/Excel 等结构化数据集以启用图表生成。",
+            }
+            result.metadata = {
+                "format": output_format,
+                "dpi": dpi,
+                "generated_at": datetime.now().isoformat(),
+                "note": "skipped_due_to_no_data",
+            }
+            return result
+
+        charts: List[dict] = []
+
         for spec in plot_specs:
+            if not spec.get("is_generated_from_real_data"):
+                logger.info(f"跳过非真实数据图表: {spec.get('plot_id', '?')}")
+                continue
             try:
                 chart_data = self._generate_chart(
                     spec, data_rows, output_dir, output_format, dpi, fig_size
@@ -85,6 +96,9 @@ class ReportChartGenerationSkill(BaseSkill):
                 logger.warning(f"图表生成失败 {spec.get('plot_id', '?')}: {e}")
                 result.add_warning(f"图表 {spec.get('plot_id', '?')} 生成失败: {e}")
 
+        if not charts:
+            result.add_warning("数据行不足以生成任何图表")
+
         result.data = {
             "charts": charts,
             "total_charts": len(charts),
@@ -93,6 +107,8 @@ class ReportChartGenerationSkill(BaseSkill):
         result.metadata = {
             "format": output_format,
             "dpi": dpi,
+            "total_charts": len(charts),
+            "has_real_data": True,
             "generated_at": datetime.now().isoformat(),
         }
         return result
@@ -110,12 +126,13 @@ class ReportChartGenerationSkill(BaseSkill):
         chart_id = spec.get("plot_id", hashlib.md5(str(spec).encode()).hexdigest()[:12])
         title = spec.get("title", chart_type)
         description = spec.get("description", "")
+        source_dataset_id = spec.get("source_dataset_id", "")
+        is_from_real = spec.get("is_generated_from_real_data", False)
 
         try:
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
-            import numpy as np
 
             plt.rcParams["font.sans-serif"] = ["SimHei", "DejaVu Sans"]
             plt.rcParams["axes.unicode_minus"] = False
@@ -166,6 +183,8 @@ class ReportChartGenerationSkill(BaseSkill):
                 "url": url,
                 "file_path": file_path,
                 "markdown_embed": f"![{title}]({url})" if url else "",
+                "source_dataset_id": source_dataset_id,
+                "is_generated_from_real_data": is_from_real,
             }
         except ImportError:
             logger.warning("matplotlib 未安装，无法生成图表")
@@ -178,6 +197,8 @@ class ReportChartGenerationSkill(BaseSkill):
                 "url": "",
                 "file_path": "",
                 "markdown_embed": f"*[{title}]* (图表库不可用)",
+                "source_dataset_id": source_dataset_id,
+                "is_generated_from_real_data": False,
             }
 
     def _plot_by_type(self, ax, chart_type: str, spec: dict, data_rows: List[dict]) -> bool:
@@ -190,50 +211,77 @@ class ReportChartGenerationSkill(BaseSkill):
         y_key = spec.get("y_key", "")
 
         if not data_rows:
-            if chart_type == "heatmap":
-                matrix = np.random.rand(5, 5)
-                ax.imshow(matrix, cmap="viridis", aspect="auto")
-                for i in range(5):
-                    for j in range(5):
-                        ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=8)
-                ax.set_xticks(range(5))
-                ax.set_yticks(range(5))
-                ax.set_xticklabels([f"F{i+1}" for i in range(5)])
-                ax.set_yticklabels([f"F{i+1}" for i in range(5)])
-                return True
-            ax.text(0.5, 0.5, f"[{chart_type}] 无数据", ha="center", va="center",
-                    transform=ax.transAxes, fontsize=12)
-            return True
-
-        x_data = [r.get(x_key, i) for i, r in enumerate(data_rows[:100])]
+            return False
 
         if chart_type == "line":
-            if y_key and y_key in data_rows[0]:
-                y_data = [r.get(y_key) for r in data_rows[:100]]
-                y_data = [float(v) if v is not None else 0 for v in y_data]
+            if y_key:
+                keys_in_data = [y_key in r for r in data_rows[:5]]
+                if not any(keys_in_data):
+                    numeric_cols = [k for k, v in data_rows[0].items()
+                                    if isinstance(v, (int, float)) and v is not None]
+                    if numeric_cols:
+                        y_key = numeric_cols[0]
+                    else:
+                        return False
+                y_data = []
+                for r in data_rows[:200]:
+                    v = r.get(y_key)
+                    if v is not None:
+                        try:
+                            y_data.append(float(v))
+                        except (ValueError, TypeError):
+                            y_data.append(0)
+                    else:
+                        y_data.append(0)
+                if not y_data:
+                    return False
                 ax.plot(range(len(y_data)), y_data, marker="o", markersize=3, linewidth=1.5)
                 return True
             return False
 
         elif chart_type == "bar":
-            if y_key and y_key in data_rows[0]:
-                vals = [r.get(y_key) for r in data_rows[:min(30, len(data_rows))]]
-                vals = [float(v) if v is not None else 0 for v in vals]
-                labels = [str(r.get(x_key, f"#{i}")) for i, r in enumerate(data_rows[:len(vals)])]
-                ax.bar(range(len(vals)), vals, tick_label=labels, color="steelblue", alpha=0.8)
-                ax.tick_params(axis="x", rotation=45, labelsize=8)
-                return True
             if y_key:
-                val_counts = {}
-                for r in data_rows[:200]:
-                    v = str(r.get(y_key, ""))[:30]
-                    val_counts[v] = val_counts.get(v, 0) + 1
-                sorted_items = sorted(val_counts.items(), key=lambda kv: kv[1], reverse=True)[:15]
-                labels = [k for k, _ in sorted_items]
-                values = [v for _, v in sorted_items]
-                ax.bar(range(len(values)), values, tick_label=labels, color="steelblue", alpha=0.8)
-                ax.tick_params(axis="x", rotation=45, labelsize=8)
-                return True
+                is_numeric_data = True
+                for r in data_rows[:5]:
+                    v = r.get(y_key)
+                    if v is not None and not isinstance(v, (int, float)):
+                        try:
+                            float(v)
+                        except (ValueError, TypeError):
+                            is_numeric_data = False
+                            break
+
+                if is_numeric_data:
+                    vals = []
+                    labels = []
+                    for i, r in enumerate(data_rows[:30]):
+                        v = r.get(y_key)
+                        if v is not None:
+                            try:
+                                vals.append(float(v))
+                            except (ValueError, TypeError):
+                                vals.append(0)
+                        else:
+                            vals.append(0)
+                        labels.append(str(r.get(x_key, f"#{i}"))[:12])
+                    if not vals:
+                        return False
+                    ax.bar(range(len(vals)), vals, tick_label=labels, color="steelblue", alpha=0.8)
+                    ax.tick_params(axis="x", rotation=45, labelsize=8)
+                    return True
+                else:
+                    val_counts: Dict[str, int] = {}
+                    for r in data_rows[:200]:
+                        v = str(r.get(y_key, ""))[:30]
+                        val_counts[v] = val_counts.get(v, 0) + 1
+                    if not val_counts:
+                        return False
+                    sorted_items = sorted(val_counts.items(), key=lambda kv: kv[1], reverse=True)[:15]
+                    labels = [k for k, _ in sorted_items]
+                    values = [v for _, v in sorted_items]
+                    ax.bar(range(len(values)), values, tick_label=labels, color="steelblue", alpha=0.8)
+                    ax.tick_params(axis="x", rotation=45, labelsize=8)
+                    return True
             return False
 
         elif chart_type == "scatter":
@@ -245,62 +293,106 @@ class ReportChartGenerationSkill(BaseSkill):
                 x_key_actual = x_key
                 y_key_actual = y_key
 
-            xs = [float(r.get(x_key_actual, 0) or 0) for r in data_rows[:200]]
-            ys = [float(r.get(y_key_actual, 0) or 0) for r in data_rows[:200]]
+            xs = []
+            ys = []
+            for r in data_rows[:200]:
+                xv = r.get(x_key_actual)
+                yv = r.get(y_key_actual)
+                if xv is not None and yv is not None:
+                    try:
+                        xs.append(float(xv))
+                        ys.append(float(yv))
+                    except (ValueError, TypeError):
+                        continue
+            if not xs:
+                return False
             ax.scatter(xs, ys, alpha=0.6, s=20, c="steelblue")
             return True
 
         elif chart_type == "histogram":
-            if y_key and y_key in data_rows[0]:
-                vals = [float(r.get(y_key) or 0) for r in data_rows[:200]]
-                ax.hist(vals, bins=20, color="steelblue", alpha=0.7, edgecolor="white")
+            if y_key:
+                vals = []
+                for r in data_rows[:500]:
+                    v = r.get(y_key)
+                    if v is not None:
+                        try:
+                            vals.append(float(v))
+                        except (ValueError, TypeError):
+                            continue
+                if not vals:
+                    return False
+                ax.hist(vals, bins=min(30, len(set(vals))), color="steelblue", alpha=0.7, edgecolor="white")
                 return True
             return False
 
         elif chart_type == "box":
-            if y_key and y_key in data_rows[0]:
-                vals = [float(r.get(y_key) or 0) for r in data_rows[:200]]
+            if y_key:
+                vals = []
+                for r in data_rows[:500]:
+                    v = r.get(y_key)
+                    if v is not None:
+                        try:
+                            vals.append(float(v))
+                        except (ValueError, TypeError):
+                            continue
+                if not vals:
+                    return False
                 ax.boxplot(vals, vert=True, patch_artist=True,
                            boxprops={"facecolor": "steelblue", "alpha": 0.7})
-                ax.set_xticklabels([y_key])
+                ax.set_xticklabels([y_key[:20]])
                 return True
             return False
 
         elif chart_type == "heatmap":
             numeric_cols = [k for k, v in data_rows[0].items()
                             if isinstance(v, (int, float)) and v is not None]
-            if len(numeric_cols) >= 2:
-                numeric_cols = numeric_cols[:6]
-                n = len(numeric_cols)
-                matrix = np.zeros((n, n))
-                for i, c1 in enumerate(numeric_cols):
-                    for j, c2 in enumerate(numeric_cols):
-                        if i == j:
-                            matrix[i][j] = 1.0
-                        else:
-                            vals1 = [r.get(c1) for r in data_rows[:100] if r.get(c1) is not None and r.get(c2) is not None]
-                            vals2 = [r.get(c2) for r in data_rows[:100] if r.get(c1) is not None and r.get(c2) is not None]
-                            if len(vals1) >= 2:
-                                mean1 = sum(vals1) / len(vals1)
-                                mean2 = sum(vals2) / len(vals2)
-                                cov = sum((v1 - mean1) * (v2 - mean2) for v1, v2 in zip(vals1, vals2)) / len(vals1)
-                                std1 = (sum((v - mean1) ** 2 for v in vals1) / len(vals1)) ** 0.5
-                                std2 = (sum((v - mean2) ** 2 for v in vals2) / len(vals2)) ** 0.5
-                                if std1 and std2:
-                                    matrix[i][j] = cov / (std1 * std2)
+            if len(numeric_cols) < 2:
+                numeric_cols = []
+                for k, v in data_rows[0].items():
+                    try:
+                        float(v)
+                        numeric_cols.append(k)
+                    except (ValueError, TypeError):
+                        pass
 
-                im = ax.imshow(matrix, cmap="RdBu_r", aspect="auto", vmin=-1, vmax=1)
-                plt.colorbar(im, ax=ax, shrink=0.8)
-                for i in range(n):
-                    for j in range(n):
-                        ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=7)
-                ax.set_xticks(range(n))
-                ax.set_yticks(range(n))
-                ax.set_xticklabels([c[:10] for c in numeric_cols], rotation=45, fontsize=7)
-                ax.set_yticklabels([c[:10] for c in numeric_cols], fontsize=7)
-                return True
-            ax.text(0.5, 0.5, "[heatmap] 无足够数值列", ha="center", va="center",
-                    transform=ax.transAxes, fontsize=12)
+            if len(numeric_cols) < 2:
+                return False
+
+            numeric_cols = numeric_cols[:8]
+            n = len(numeric_cols)
+            matrix = np.zeros((n, n))
+            for i, c1 in enumerate(numeric_cols):
+                for j, c2 in enumerate(numeric_cols):
+                    if i == j:
+                        matrix[i][j] = 1.0
+                    else:
+                        pairs = []
+                        for r in data_rows[:200]:
+                            v1 = r.get(c1)
+                            v2 = r.get(c2)
+                            if v1 is not None and v2 is not None:
+                                try:
+                                    pairs.append((float(v1), float(v2)))
+                                except (ValueError, TypeError):
+                                    continue
+                        if len(pairs) >= 2:
+                            mean1 = sum(p[0] for p in pairs) / len(pairs)
+                            mean2 = sum(p[1] for p in pairs) / len(pairs)
+                            cov = sum((p[0] - mean1) * (p[1] - mean2) for p in pairs) / len(pairs)
+                            std1 = (sum((p[0] - mean1) ** 2 for p in pairs) / len(pairs)) ** 0.5
+                            std2 = (sum((p[1] - mean2) ** 2 for p in pairs) / len(pairs)) ** 0.5
+                            if std1 and std2:
+                                matrix[i][j] = cov / (std1 * std2)
+
+            im = ax.imshow(matrix, cmap="RdBu_r", aspect="auto", vmin=-1, vmax=1)
+            plt.colorbar(im, ax=ax, shrink=0.8)
+            for i in range(n):
+                for j in range(n):
+                    ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=7)
+            ax.set_xticks(range(n))
+            ax.set_yticks(range(n))
+            ax.set_xticklabels([c[:12] for c in numeric_cols], rotation=45, fontsize=7)
+            ax.set_yticklabels([c[:12] for c in numeric_cols], fontsize=7)
             return True
 
         return False

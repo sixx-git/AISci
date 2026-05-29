@@ -490,6 +490,8 @@ export interface ReportPlot {
   url: string;
   file_path: string;
   markdown_embed: string;
+  source_dataset_id?: string;
+  is_generated_from_real_data: boolean;
 }
 
 export interface ReportGenerationRequest {

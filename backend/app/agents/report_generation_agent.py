@@ -412,15 +412,21 @@ class ReportGenerationAgent:
         rf = chapters.get("results", "")
         if isinstance(rf, str):
             rf_lower = rf.lower()
-            if "actual" in rf_lower or "实际" in rf_lower:
+            if "actual_result" in rf_lower or "actual results" in rf_lower or "实际结果" in rf_lower:
                 has_result = True
                 result_type = "actual_result"
-            elif "simulat" in rf_lower or "模拟" in rf_lower:
+            elif "simulated_result" in rf_lower or "simulated results" in rf_lower or "模拟结果" in rf_lower:
                 has_result = True
                 result_type = "simulated_result"
-            elif "expect" in rf_lower or "预期" in rf_lower:
+            elif "expected_result" in rf_lower or "expected results" in rf_lower or "预期结果" in rf_lower:
                 has_result = True
                 result_type = "expected_result"
+            elif len(rf.strip()) >= 50:
+                has_result = True
+                if "simulat" in rf_lower or "模拟" in rf_lower:
+                    result_type = "simulated_result"
+                elif "expect" in rf_lower or "预期" in rf_lower:
+                    result_type = "expected_result"
 
         has_datasets = bool(
             chapters.get("datasets", "") and len(chapters.get("datasets", "").strip()) >= 10
@@ -554,14 +560,26 @@ class ReportGenerationAgent:
                 if isinstance(pa_data, dict) and pa_data.get("data"):
                     pa_inner = pa_data["data"]
                     plot_specs = pa_inner.get("plots", [])
-                    data_rows = pa_inner.get("feature_vectors", [])
+                    data_rows = pa_inner.get("sample_data_rows", [])
+                    if not data_rows:
+                        data_rows = pa_inner.get("feature_vectors", [])
 
-            if multimodal_datasets:
+            if not data_rows and multimodal_datasets:
                 for ds in multimodal_datasets:
-                    sample_rows = ds.get("sample_data", [])
+                    sample_rows = ds.get("sample_data", []) or ds.get("preview", [])
                     if sample_rows:
-                        data_rows.extend(sample_rows[:50])
+                        data_rows.extend(sample_rows[:200])
                         break
+
+            if not data_rows:
+                outputs["skill_outputs"] = {
+                    "report_chart_generation": {
+                        "success": True,
+                        "data": {"charts": [], "total_charts": 0},
+                        "warnings": ["无真实数据，未生成图表"],
+                    }
+                }
+                return outputs
 
             if not plot_specs:
                 return outputs

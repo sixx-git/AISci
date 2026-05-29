@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3 } from 'lucide-react';
+import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database } from 'lucide-react';
 import { Card } from './Card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
@@ -342,7 +342,8 @@ export function ReportPage({
                 <div>
                   <h3 className="text-sm font-semibold text-white">数据可视化</h3>
                   <p className="text-xs text-gray-500">
-                    共 {report.plots.length} 张图表，基于多模态数据分析自动生成
+                    共 {report.plots.length} 张图表 · 
+                    {report.plots.filter(p => p.is_generated_from_real_data).length} 张基于真实数据
                   </p>
                 </div>
               </div>
@@ -357,9 +358,28 @@ export function ReportPage({
                       {plot.description && (
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{plot.description}</p>
                       )}
-                      <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] rounded bg-gray-700/50 text-gray-400">
-                        {plot.type}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-700/50 text-gray-400">
+                          {plot.type}
+                        </span>
+                        {plot.is_generated_from_real_data ? (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-emerald-500/15 text-emerald-400">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            真实数据
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/15 text-amber-400">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            非真实数据
+                          </span>
+                        )}
+                        {plot.source_dataset_id && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-400">
+                            <Database className="w-2.5 h-2.5" />
+                            {plot.source_dataset_id.slice(0, 8)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="p-3 flex items-center justify-center bg-gray-950/40 min-h-[200px]">
                       {plot.base64 ? (
@@ -385,6 +405,27 @@ export function ReportPage({
                     )}
                   </div>
                 ))}
+              </div>
+            </Card>
+          )}
+
+          {/* 无图表时的提示 */}
+          {(!report.plots || report.plots.length === 0) && (
+            <Card className="mt-4">
+              <div className="flex items-start gap-3 p-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-amber-300 mb-1">缺少真实数据，未生成图表</p>
+                  {hasNoDatasets ? (
+                    <p className="text-xs text-amber-300/70">
+                      请通过"数据集"页面上传 CSV/Excel 等结构化数据文件，以启用统计图表生成。
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-300/70">
+                      当前数据集可能不包含可分析的结构化数据，无法生成统计图表。
+                    </p>
+                  )}
+                </div>
               </div>
             </Card>
           )}

@@ -95,10 +95,14 @@ class SmallValidationAgent:
             result = self._validate_and_normalize_result(result_dict, has_csv_data)
             
             # ── 运行初步分析 Skill ──
-            result["skill_outputs"] = self._run_preliminary_analysis_sync(
+            skill_outputs = self._run_preliminary_analysis_sync(
                 hypothesis, methods, datasets, metrics, experiment_design, multimodal_datasets
             )
-            
+            result["skill_outputs"] = skill_outputs
+
+            # ── 构建分类结果（actual / simulated / expected）──
+            result["results"] = self._build_categorized_results(result, skill_outputs, hypothesis, experiment_design)
+
             # 保存验证文件
             self._save_validation_files(result)
             
@@ -152,6 +156,73 @@ class SmallValidationAgent:
             logger.warning(f"PreliminaryAnalysisSkill 异常: {e}")
             return {}
     
+    def _build_categorized_results(
+        self,
+        result: Dict[str, Any],
+        skill_outputs: Dict[str, Any],
+        hypothesis: str,
+        experiment_design: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        pa_data = skill_outputs.get("preliminary_analysis", {}).get("data", {})
+        data_source_flag = pa_data.get("data_source_flag", "no_data")
+        has_real = (data_source_flag == "real_data" or result.get("has_real_data", 0) == 1)
+
+        categorized = {
+            "actual_results": {},
+            "simulated_results": {},
+            "expected_results": {},
+            "result_type_summary": "none",
+        }
+
+        if has_real and pa_data:
+            categorized["actual_results"] = {
+                "summary_statistics": pa_data.get("summary_statistics", {}),
+                "feature_vectors": pa_data.get("feature_vectors", []),
+                "correlations": pa_data.get("correlations", []),
+                "anomalies": pa_data.get("anomalies", []),
+                "n_datasets_analyzed": pa_data.get("summary_statistics", {}).__len__() if isinstance(pa_data.get("summary_statistics"), dict) else 0,
+                "data_source": "real_data",
+                "image_summary": pa_data.get("image_summary", {}),
+                "time_series_summary": pa_data.get("time_series_summary", {}),
+            }
+            categorized["result_type_summary"] = "has_actual_results"
+
+        simulated_data = result.get("simulated_data", "")
+        simulation_assumptions = result.get("simulation_assumptions", "")
+        if simulated_data or simulation_assumptions:
+            categorized["simulated_results"] = {
+                "data": simulated_data,
+                "assumptions": simulation_assumptions,
+                "note": "LLM 生成的模拟数据，非真实观测数据" if not has_real else "作为真实数据的补充模拟",
+                "data_source": "simulation",
+            }
+            if not has_real:
+                categorized["result_type_summary"] = "simulated_only"
+
+        target_var = experiment_design.get("target_variable", "") if experiment_design else ""
+        expected = experiment_design.get("expected_outcome", "") if experiment_design else ""
+        if hypothesis or expected or target_var:
+            categorized["expected_results"] = {
+                "hypothesis": hypothesis[:300],
+                "expected_outcome": expected,
+                "target_variable": target_var,
+                "metrics": experiment_design.get("metrics", "") if experiment_design else "",
+                "note": "预期结果，需通过实验验证",
+                "data_source": "expected",
+            }
+            if categorized["result_type_summary"] == "none":
+                categorized["result_type_summary"] = "expected_only"
+
+        if not has_real and not simulated_data and not simulation_assumptions:
+            categorized["result_type_summary"] = "none"
+            categorized["actual_results"] = {"note": "缺少真实数据，未生成实际分析结果"}
+            categorized["simulated_results"] = {"note": "未生成模拟数据"}
+            categorized["expected_results"] = categorized["expected_results"] or {"note": "未提供预期结果"}
+
+        categorized["warnings"] = skill_outputs.get("preliminary_analysis", {}).get("warnings", [])
+
+        return categorized
+
     def _validate_and_normalize_result(
         self,
         result_dict: Dict[str, Any],
