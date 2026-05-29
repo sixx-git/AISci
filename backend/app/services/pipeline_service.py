@@ -418,11 +418,20 @@ class PipelineService:
         hypothesis = ed.get("hypothesis") or (
             reviews[0].get("hypothesis", "") if reviews else ""
         )
+
+        multimodal_datasets = []
+        ed_skill_outputs = ed.get("skill_outputs", {})
+        ingest_output = ed_skill_outputs.get("multimodal_data_ingest", {})
+        if isinstance(ingest_output, dict) and ingest_output.get("data"):
+            multimodal_datasets = ingest_output["data"].get("datasets", [])
+
         result = agent.generate_validation(
             hypothesis=hypothesis,
             methods=ed.get("methods", ""),
             datasets=ed.get("datasets", ""),
-            metrics=ed.get("metrics", "")
+            metrics=ed.get("metrics", ""),
+            experiment_design=ed,
+            multimodal_datasets=multimodal_datasets,
         )
         return result if isinstance(result, dict) else self._safe_model_dump(result)
     
@@ -441,6 +450,15 @@ class PipelineService:
         verified_references = lm.get("verified_references", []) if isinstance(lm.get("verified_references"), list) else citation_map
         
         project_info = {"title": "研究项目", "id": self.run_id}
+
+        multimodal_datasets = []
+        ed_skill_outputs = ed.get("skill_outputs", {})
+        ingest_output = ed_skill_outputs.get("multimodal_data_ingest", {})
+        if isinstance(ingest_output, dict) and ingest_output.get("data"):
+            multimodal_datasets = ingest_output["data"].get("datasets", [])
+
+        preliminary_analysis_outputs = sv.get("skill_outputs", {})
+
         result = agent.generate_report(
             project_info=project_info,
             problem_understanding=pu,
@@ -456,6 +474,8 @@ class PipelineService:
             sanity_check_skill_outputs=ed.get("skill_outputs"),
             evidence_facts=evidence_facts,
             verified_references=verified_references,
+            preliminary_analysis_skill_outputs=preliminary_analysis_outputs,
+            multimodal_datasets=multimodal_datasets,
         )
         return self._safe_model_dump(result)
     
@@ -612,6 +632,11 @@ class PipelineService:
         report_id = str(uuid.uuid4())
         title = report_data.get("paper_title", report_data.get("title", "研究报告"))
         chapters = report_data.get("chapters", {})
+
+        extra_meta = report_data.get("compliance_check") or {}
+        if report_data.get("plots"):
+            extra_meta["plots"] = report_data["plots"]
+
         report = Report(
             id=report_id,
             project_id=project_id,
@@ -630,7 +655,8 @@ class PipelineService:
             results=chapters.get("results", ""),
             references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else chapters.get("references", ""),
             pdf_path=report_data.get("report_id"),
-            status="ready"
+            status="ready",
+            extra_metadata=extra_meta,
         )
         self.db.add(report)
         self.db.commit()

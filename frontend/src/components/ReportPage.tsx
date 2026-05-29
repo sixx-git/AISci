@@ -1,13 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink } from 'lucide-react';
+import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3 } from 'lucide-react';
 import { Card } from './Card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
 import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
-import type { ReportData } from '@/types';
+import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
 
 interface ReportPageProps {
@@ -333,6 +333,61 @@ export function ReportPage({
               <MarkdownPreview content={report.markdownContent} />
             </div>
           </Card>
+
+          {/* ── 数据图表区域 ── */}
+          {report.plots && report.plots.length > 0 && (
+            <Card className="mt-4">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-semibold text-white">数据可视化</h3>
+                  <p className="text-xs text-gray-500">
+                    共 {report.plots.length} 张图表，基于多模态数据分析自动生成
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {report.plots.map((plot: ReportPlot) => (
+                  <div
+                    key={plot.plot_id}
+                    className="rounded-lg border border-gray-700 bg-gray-950/60 overflow-hidden"
+                  >
+                    <div className="px-3 py-2 border-b border-gray-700/60 bg-gray-900/50">
+                      <p className="text-xs font-medium text-gray-200 truncate">{plot.title}</p>
+                      {plot.description && (
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{plot.description}</p>
+                      )}
+                      <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] rounded bg-gray-700/50 text-gray-400">
+                        {plot.type}
+                      </span>
+                    </div>
+                    <div className="p-3 flex items-center justify-center bg-gray-950/40 min-h-[200px]">
+                      {plot.base64 ? (
+                        <img
+                          src={`data:image/png;base64,${plot.base64}`}
+                          alt={plot.title}
+                          className="max-w-full max-h-[300px] object-contain rounded"
+                        />
+                      ) : plot.url ? (
+                        <img
+                          src={plot.url}
+                          alt={plot.title}
+                          className="max-w-full max-h-[300px] object-contain rounded"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-600">图表不可用</span>
+                      )}
+                    </div>
+                    {plot.markdown_embed && (
+                      <div className="px-3 py-1.5 border-t border-gray-700/60 bg-gray-900/30">
+                        <code className="text-[10px] text-gray-500 break-all">{plot.markdown_embed}</code>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         {/* 右侧：比赛规范检查 + 证据链质量 + 操作 */}

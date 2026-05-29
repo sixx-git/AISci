@@ -29,7 +29,8 @@ interface ReportDbRaw {
 }
 
 function mapDbToReportData(db: ReportDbRaw): ReportData {
-  const complianceCheck = db.extra_metadata as ReportData['complianceCheck'];
+  const extraMeta = db.extra_metadata || {};
+  const complianceCheck = extraMeta as ReportData['complianceCheck'];
 
   return {
     id: db.id,
@@ -38,6 +39,7 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     markdownContent: db.markdown_content || '',
     sections: complianceCheck?.items || [],
     complianceCheck,
+    plots: (extraMeta as Record<string, unknown>)?.plots as ReportData['plots'] || [],
     mdDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/md` : undefined,
     pdfDownloadUrl: db.report_id && db.pdf_generated ? `/api/v1/reports/download/${db.report_id}/pdf` : undefined,
   };

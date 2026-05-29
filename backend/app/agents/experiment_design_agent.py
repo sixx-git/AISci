@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, field_validator
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.experiment.experiment_sanity_check_skill import ExperimentSanityCheckSkill
+from app.skills.data.multimodal_ingest_skill import MultimodalDataIngestSkill
+from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,9 @@ class ExperimentDesignAgent:
         testability: Optional[str] = None,
         required_data: Optional[str] = None,
         possible_method: Optional[str] = None,
-        risk: Optional[str] = None
+        risk: Optional[str] = None,
+        data_files: Optional[List[str]] = None,
+        literature_facts: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         设计实验
@@ -71,6 +75,8 @@ class ExperimentDesignAgent:
             required_data: 所需数据
             possible_method: 可能的方法
             risk: 风险
+            data_files: 项目数据文件路径列表
+            literature_facts: 文献挖掘事实列表
             
         Returns:
             实验设计结果
@@ -114,8 +120,10 @@ class ExperimentDesignAgent:
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict)
 
-            # ── 运行实验真实性审查 Skill ──
-            result["skill_outputs"] = self._run_sanity_check_sync(result)
+            # ── 运行实验真实性审查 + 多模态数据 Skill ──
+            result["skill_outputs"] = self._run_skills_sync(
+                result, hypothesis, data_files or [], literature_facts or []
+            )
 
             logger.info("实验设计完成")
 
@@ -126,32 +134,82 @@ class ExperimentDesignAgent:
             raise
     
     @staticmethod
-    def _run_sanity_check_sync(result: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_skills_sync(
+        result: Dict[str, Any],
+        hypothesis: str,
+        data_files: List[str],
+        literature_facts: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         import asyncio
 
         async def _run():
+            outputs = {}
             try:
                 skill = ExperimentSanityCheckSkill()
                 skill_result = await skill.run(
                     input_data={"experiment_design": result},
                     context={"stage": "experiment_design"},
                 )
-                return {
-                    "experiment_sanity_check": {
-                        "success": skill_result.success,
-                        "data": skill_result.data,
-                        "warnings": skill_result.warnings,
-                        "errors": skill_result.errors,
-                    }
+                outputs["experiment_sanity_check"] = {
+                    "success": skill_result.success,
+                    "data": skill_result.data,
+                    "warnings": skill_result.warnings,
+                    "errors": skill_result.errors,
                 }
             except Exception as e:
                 logger.warning(f"ExperimentSanityCheckSkill 失败: {e}")
-                return {"experiment_sanity_check": {"success": False, "error": str(e)}}
+                outputs["experiment_sanity_check"] = {"success": False, "error": str(e)}
+
+            multimodal_datasets = []
+            if data_files:
+                try:
+                    ingest_skill = MultimodalDataIngestSkill()
+                    ingest_result = await ingest_skill.run(
+                        input_data={
+                            "file_paths": data_files,
+                            "project_id": result.get("project_id", ""),
+                            "missing_strategy": "median",
+                        },
+                        context={"stage": "experiment_design"},
+                    )
+                    multimodal_datasets = ingest_result.data.get("datasets", [])
+                    outputs["multimodal_data_ingest"] = {
+                        "success": ingest_result.success,
+                        "data": ingest_result.data,
+                        "warnings": ingest_result.warnings,
+                        "errors": ingest_result.errors,
+                    }
+                except Exception as e:
+                    logger.warning(f"MultimodalDataIngestSkill 失败: {e}")
+                    outputs["multimodal_data_ingest"] = {"success": False, "error": str(e)}
+
+            if literature_facts or multimodal_datasets:
+                try:
+                    linking_skill = MultimodalDataLinkingSkill()
+                    linking_result = await linking_skill.run(
+                        input_data={
+                            "literature_facts": literature_facts,
+                            "multimodal_datasets": multimodal_datasets,
+                            "hypothesis": hypothesis,
+                        },
+                        context={"stage": "experiment_design"},
+                    )
+                    outputs["multimodal_data_linking"] = {
+                        "success": linking_result.success,
+                        "data": linking_result.data,
+                        "warnings": linking_result.warnings,
+                        "errors": linking_result.errors,
+                    }
+                except Exception as e:
+                    logger.warning(f"MultimodalDataLinkingSkill 失败: {e}")
+                    outputs["multimodal_data_linking"] = {"success": False, "error": str(e)}
+
+            return outputs
 
         try:
             return asyncio.run(_run())
         except Exception as e:
-            logger.warning(f"SanityCheckSkill 异常: {e}")
+            logger.warning(f"Skills 异常: {e}")
             return {}
 
     def _format_hypothesis_info(

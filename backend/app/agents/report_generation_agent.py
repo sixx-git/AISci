@@ -14,6 +14,7 @@ from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.services.pdf_export_service import export_markdown_to_pdf
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
+from app.skills.report.report_chart_generation_skill import ReportChartGenerationSkill
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,8 @@ class ReportGenerationAgent:
         sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
         evidence_facts: Optional[List[Dict[str, Any]]] = None,
         verified_references: Optional[List[Dict[str, Any]]] = None,
+        preliminary_analysis_skill_outputs: Optional[Dict[str, Any]] = None,
+        multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
@@ -129,6 +132,18 @@ class ReportGenerationAgent:
 
             file_info = self._save_report_files(result, project_info)
             result.update(file_info)
+
+            # ── 生成报告图表 ──
+            charts_data = self._run_chart_generation_sync(
+                preliminary_analysis_skill_outputs,
+                multimodal_datasets,
+                result.get("report_id", ""),
+            )
+            result["plots"] = charts_data.get("charts", [])
+            result["chart_skill_outputs"] = charts_data.get("skill_outputs", {})
+
+            # ── 重新保存 JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
+            self._update_json_with_plots(result)
 
             logger.info("研究报告生成完成")
             return result
@@ -521,6 +536,70 @@ class ReportGenerationAgent:
             }
         return None
 
+    @staticmethod
+    def _run_chart_generation_sync(
+        preliminary_analysis_skill_outputs: Optional[Dict[str, Any]],
+        multimodal_datasets: Optional[List[Dict[str, Any]]],
+        report_id: str,
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            outputs: Dict[str, Any] = {"charts": [], "skill_outputs": {}}
+            plot_specs = []
+            data_rows = []
+
+            if preliminary_analysis_skill_outputs:
+                pa_data = preliminary_analysis_skill_outputs.get("preliminary_analysis", {})
+                if isinstance(pa_data, dict) and pa_data.get("data"):
+                    pa_inner = pa_data["data"]
+                    plot_specs = pa_inner.get("plots", [])
+                    data_rows = pa_inner.get("feature_vectors", [])
+
+            if multimodal_datasets:
+                for ds in multimodal_datasets:
+                    sample_rows = ds.get("sample_data", [])
+                    if sample_rows:
+                        data_rows.extend(sample_rows[:50])
+                        break
+
+            if not plot_specs:
+                return outputs
+
+            try:
+                chart_skill = ReportChartGenerationSkill()
+                chart_result = await chart_skill.run(
+                    input_data={
+                        "plot_specs": plot_specs,
+                        "data": data_rows,
+                        "output_dir": "",
+                        "format": "both",
+                        "dpi": 150,
+                        "figure_size": (10, 6),
+                    },
+                    context={"stage": "report_generation"},
+                )
+                outputs["charts"] = chart_result.data.get("charts", [])
+                outputs["skill_outputs"] = {
+                    "report_chart_generation": {
+                        "success": chart_result.success,
+                        "data": chart_result.data,
+                        "warnings": chart_result.warnings,
+                        "errors": chart_result.errors,
+                    }
+                }
+            except Exception as e:
+                logger.warning(f"ReportChartGenerationSkill 失败: {e}")
+                outputs["skill_outputs"] = {"report_chart_generation": {"success": False, "error": str(e)}}
+
+            return outputs
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"ChartGeneration 异常: {e}")
+            return {"charts": [], "skill_outputs": {}}
+
     def _append_run_summary_to_report(
         self, result: Dict[str, Any], run_info: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -596,6 +675,21 @@ class ReportGenerationAgent:
             "pdf_success": pdf_result.get("success", False),
             "warning": pdf_result.get("warning"),
         }
+
+    @staticmethod
+    def _update_json_with_plots(result: Dict[str, Any]):
+        json_file = result.get("json_file", "")
+        if not json_file or not os.path.exists(json_file):
+            return
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            data["plots"] = result.get("plots", [])
+            data["chart_skill_outputs"] = result.get("chart_skill_outputs", {})
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        except Exception as e:
+            logger.warning(f"更新 JSON plots 失败: {e}")
 
 
 _agent_instance: Optional[ReportGenerationAgent] = None

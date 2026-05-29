@@ -15,6 +15,9 @@ from app.services.vector_store import (
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
+from app.skills.literature.arxiv_search_skill import ArxivSearchSkill
+from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
+from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +416,35 @@ class LiteratureMiningAgent:
             except Exception as e:
                 logger.warning(f"PdfEvidenceExtractionSkill 运行失败: {e}")
                 outputs["pdf_evidence_extraction"] = {"success": False, "error": str(e)}
+
+            try:
+                linking_skill = MultimodalDataLinkingSkill()
+                search_facts = [
+                    {
+                        "fact_id": r.chunk_id,
+                        "content": r.content[:300] if r.content else "",
+                        "keywords": [],
+                    }
+                    for r in (search_results or [])
+                ]
+                linking_result = await linking_skill.run(
+                    input_data={
+                        "literature_facts": search_facts,
+                        "multimodal_datasets": [],
+                        "hypothesis": research_question,
+                    },
+                    context={"stage": "literature_mining"},
+                )
+                outputs["multimodal_data_linking"] = {
+                    "success": linking_result.success,
+                    "data": linking_result.data,
+                    "warnings": linking_result.warnings,
+                    "errors": linking_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"MultimodalDataLinkingSkill 运行失败: {e}")
+                outputs["multimodal_data_linking"] = {"success": False, "error": str(e)}
+
             return outputs
 
         try:

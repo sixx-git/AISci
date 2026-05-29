@@ -404,6 +404,8 @@ export interface ReportData {
   pdfDownloadUrl?: string;
   /** PDF 导出是否成功（后端返回） */
   pdfSuccess?: boolean;
+  /** 图表数据 */
+  plots?: ReportPlot[];
 }
 
 export interface ReportGenerationResult {
@@ -420,6 +422,20 @@ export interface ReportGenerationResult {
   chapters: unknown;
   /** 合规性检查结果 */
   compliance_check?: ComplianceCheck;
+  /** 图表数据 */
+  plots?: ReportPlot[];
+  chart_skill_outputs?: Record<string, unknown>;
+}
+
+export interface ReportPlot {
+  plot_id: string;
+  type: 'line' | 'bar' | 'scatter' | 'heatmap' | 'histogram' | 'box';
+  title: string;
+  description: string;
+  base64: string;
+  url: string;
+  file_path: string;
+  markdown_embed: string;
 }
 
 export interface ReportGenerationRequest {
