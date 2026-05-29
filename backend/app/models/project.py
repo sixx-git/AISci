@@ -58,6 +58,7 @@ class Project(Base):
     chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan")
     hypotheses = relationship("Hypothesis", back_populates="project", cascade="all, delete-orphan")
     experiment_designs = relationship("ExperimentDesign", back_populates="project", cascade="all, delete-orphan")
+    datasets = relationship("Dataset", back_populates="project", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="project", cascade="all, delete-orphan")
     run_logs = relationship("RunLog", back_populates="project", cascade="all, delete-orphan")
     

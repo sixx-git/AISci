@@ -22,6 +22,7 @@ from app.models.research import (
     Hypothesis,
     ExperimentDesign,
     Evidence,
+    Dataset,
 )
 from app.models.pipeline import (
     PipelineRun,
@@ -40,6 +41,7 @@ __all__ = [
     'Hypothesis',
     'ExperimentDesign',
     'Evidence',
+    'Dataset',
     'Report',
     'RunLog',
     'ProjectStatus',

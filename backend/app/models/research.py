@@ -140,3 +140,31 @@ class Hypothesis(BaseModel):
     
     # 关系
     project = relationship("Project", back_populates="hypotheses")
+
+
+class Dataset(BaseModel):
+    """
+    多模态数据集模型
+    记录用户上传的观测数据、实验数据、临床数据等，支持 CSV/Excel/JSON/图像/时间序列等格式
+    """
+    __tablename__ = "datasets"
+
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True, comment="所属项目 ID")
+    filename = Column(String(500), nullable=False, comment="原始文件名")
+    file_path = Column(String(1000), nullable=False, comment="存储路径")
+    file_size = Column(Integer, nullable=True, comment="文件大小 (bytes)")
+    data_type = Column(String(50), default="unknown", nullable=False, comment="数据类型: tabular/image/time_series/json/pdf/unknown")
+    source_type = Column(String(50), default="upload", nullable=False, comment="来源: upload/history/public")
+    n_rows = Column(Integer, nullable=True, comment="行数/样本数")
+    n_columns = Column(Integer, nullable=True, comment="列数/字段数")
+    columns_json = Column(Text, nullable=True, comment="列名列表（JSON 数组）")
+    dtypes_json = Column(Text, nullable=True, comment="字段类型（JSON 对象）")
+    missing_count = Column(Integer, nullable=True, comment="缺失值总数")
+    missing_rate = Column(Float, nullable=True, comment="缺失率 0-1")
+    statistics_json = Column(Text, nullable=True, comment="统计信息（JSON 对象）")
+    preview_json = Column(Text, nullable=True, comment="前 N 行预览（JSON 数组）")
+    preprocessing_status = Column(String(50), default="pending", nullable=False, comment="预处理状态: pending/processing/completed/failed")
+    use_for_hypothesis = Column(Boolean, default=True, nullable=False, comment="是否用于假设生成")
+    extra_metadata = Column(Text, nullable=True, comment="额外元数据（JSON）")
+
+    project = relationship("Project", back_populates="datasets")

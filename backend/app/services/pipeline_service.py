@@ -820,7 +820,9 @@ class PipelineService:
             return context
 
         try:
+            import json
             from app.models.project import Document, DocumentStatus
+            from app.models.research import Dataset
 
             docs = self.db.query(Document).filter(
                 Document.project_id == project_id,
@@ -850,16 +852,83 @@ class PipelineService:
                         }
                         multimodal_datasets.append(ds_info)
 
+            # ── 从 Dataset 表读取用户上传的多模态数据集 ──
+            datasets = self.db.query(Dataset).filter(
+                Dataset.project_id == project_id,
+                Dataset.preprocessing_status.in_(["completed", "pending"]),
+                Dataset.use_for_hypothesis == True,
+            ).all()
+
+            dataset_entries: List[Dict[str, Any]] = []
+            for ds in datasets:
+                cols = []
+                try:
+                    if ds.columns_json:
+                        cols = json.loads(ds.columns_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                stats = {}
+                try:
+                    if ds.statistics_json:
+                        stats = json.loads(ds.statistics_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                preview = []
+                try:
+                    if ds.preview_json:
+                        preview = json.loads(ds.preview_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                dtypes = {}
+                try:
+                    if ds.dtypes_json:
+                        dtypes = json.loads(ds.dtypes_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+                entry = {
+                    "dataset_id": ds.id,
+                    "filename": ds.filename,
+                    "data_type": ds.data_type,
+                    "n_rows": ds.n_rows,
+                    "n_columns": ds.n_columns,
+                    "columns": cols,
+                    "dtypes": dtypes,
+                    "statistics": stats,
+                    "preview": preview[:5] if preview else [],
+                    "missing_count": ds.missing_count,
+                    "missing_rate": ds.missing_rate,
+                    "preprocessing_status": ds.preprocessing_status,
+                }
+                dataset_entries.append(entry)
+
+                fields_set.extend(cols)
+                multimodal_datasets.append({
+                    "name": ds.filename,
+                    "dataset_id": ds.id,
+                    "modality": ds.data_type,
+                    "fields": cols,
+                    "n_samples": ds.n_rows,
+                    "missing_rate": ds.missing_rate,
+                    "statistics": stats,
+                })
+
+            if dataset_entries:
+                context["datasets"] = dataset_entries
+
             if fields_set:
                 context["fields"] = list(dict.fromkeys(fields_set))[:30]
             if doc_summaries:
                 context["dataset_summary"] = "; ".join(doc_summaries[:5])
 
-            # 尝试提取统计数据
             stats_info: Dict[str, Any] = {}
-            stats_info["sample_count"] = len(docs)
+            stats_info["sample_count"] = sum(ds.n_rows or 0 for ds in datasets) + len(docs)
             stats_info["field_count"] = len(fields_set)
-            stats_info["missing_rate"] = "N/A（可从数据文件实际分析获取）"
+            stats_info["missing_rate"] = (
+                round(sum(ds.missing_rate or 0 for ds in datasets) / max(len(datasets), 1), 4)
+                if datasets else "N/A（可从数据文件实际分析获取）"
+            )
+            stats_info["dataset_count"] = len(datasets)
             context["statistics"] = stats_info
 
         except Exception as e:

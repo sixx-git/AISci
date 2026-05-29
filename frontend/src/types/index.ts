@@ -304,6 +304,49 @@ export interface DetailedHypothesis {
   expected_measurable_effect?: string;
 }
 
+/** 后端返回的数据集记录 */
+export interface BackendDataset {
+  id: string;
+  project_id: string;
+  filename: string;
+  file_path: string;
+  file_size?: number;
+  data_type: 'tabular' | 'image' | 'time_series' | 'json' | 'pdf' | 'unknown';
+  source_type: 'upload' | 'history' | 'public';
+  n_rows?: number;
+  n_columns?: number;
+  columns_json?: string;
+  dtypes_json?: string;
+  missing_count?: number;
+  missing_rate?: number;
+  statistics_json?: string;
+  preview_json?: string;
+  preprocessing_status: 'pending' | 'processing' | 'completed' | 'failed';
+  use_for_hypothesis: boolean;
+  extra_metadata?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+/** 前端展示用的数据集摘要 */
+export interface DatasetSummary {
+  id: string;
+  filename: string;
+  dataType: string;
+  nRows?: number;
+  nColumns?: number;
+  columns?: string[];
+  dtypes?: Record<string, string>;
+  missingCount?: number;
+  missingRate?: number;
+  statistics?: Record<string, unknown>;
+  preview?: Record<string, unknown>[];
+  preprocessingStatus: string;
+  useForHypothesis: boolean;
+  fileSize?: number;
+  createdAt: string;
+}
+
 // ==================== 实验设计 ====================
 
 export interface ExperimentDesign {

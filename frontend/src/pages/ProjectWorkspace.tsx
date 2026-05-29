@@ -4,7 +4,7 @@ import {
   ArrowLeft, Calendar, LayoutDashboard, HelpCircle,
   BookOpen, GitBranch, Lightbulb, FlaskConical,
   FileText, ScrollText, Tag, TrendingUp, Play,
-  Loader2, AlertTriangle, CheckCircle2,
+  Loader2, AlertTriangle, CheckCircle2, Database,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -17,6 +17,7 @@ import { HypothesesPage } from '@/components/HypothesesPage';
 import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
+import { DatasetPage } from '@/components/DatasetPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
@@ -33,6 +34,7 @@ const TABS: TabItem[] = [
   { id: 'overview', label: '项目概览', icon: LayoutDashboard },
   { id: 'questions', label: '研究问题', icon: HelpCircle },
   { id: 'literature', label: '文献库', icon: BookOpen },
+  { id: 'datasets', label: '数据集', icon: Database },
   { id: 'workflow', label: '智能体工作流', icon: GitBranch },
   { id: 'hypotheses', label: '候选假设', icon: Lightbulb },
   { id: 'experiments', label: '实验设计', icon: FlaskConical },
@@ -424,6 +426,8 @@ export function ProjectWorkspace() {
         return <QuestionsTab projectId={id} onSaved={handleResearchSaved} />;
       case 'literature':
         return <LiteratureTab projectId={id} />;
+      case 'datasets':
+        return <DatasetPage projectId={id} />;
       case 'workflow':
         return (
           <WorkflowTab

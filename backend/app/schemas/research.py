@@ -319,3 +319,51 @@ class ReportDBResponse(ReportCreate):
     
     class Config:
         from_attributes = True
+
+
+class DatasetCreate(BaseModel):
+    """创建数据集"""
+    project_id: str = Field(..., description="项目 ID")
+    filename: str = Field(..., description="文件名")
+    file_path: str = Field(..., description="存储路径")
+    file_size: Optional[int] = Field(None, description="文件大小 (bytes)")
+    data_type: str = Field("unknown", description="数据类型")
+    source_type: str = Field("upload", description="来源: upload/history/public")
+    n_rows: Optional[int] = Field(None, description="行数")
+    n_columns: Optional[int] = Field(None, description="列数")
+    columns_json: Optional[str] = Field(None, description="列名列表 JSON")
+    dtypes_json: Optional[str] = Field(None, description="字段类型 JSON")
+    missing_count: Optional[int] = Field(None, description="缺失值总数")
+    missing_rate: Optional[float] = Field(None, description="缺失率")
+    statistics_json: Optional[str] = Field(None, description="统计信息 JSON")
+    preview_json: Optional[str] = Field(None, description="前 N 行预览 JSON")
+    preprocessing_status: str = Field("pending", description="预处理状态")
+    use_for_hypothesis: bool = Field(True, description="是否用于假设生成")
+    extra_metadata: Optional[str] = Field(None, description="额外元数据 JSON")
+
+
+class DatasetResponse(BaseModel):
+    """数据集响应"""
+    id: str
+    project_id: str
+    filename: str
+    file_path: str
+    file_size: Optional[int] = None
+    data_type: str
+    source_type: str
+    n_rows: Optional[int] = None
+    n_columns: Optional[int] = None
+    columns_json: Optional[str] = None
+    dtypes_json: Optional[str] = None
+    missing_count: Optional[int] = None
+    missing_rate: Optional[float] = None
+    statistics_json: Optional[str] = None
+    preview_json: Optional[str] = None
+    preprocessing_status: str
+    use_for_hypothesis: bool
+    extra_metadata: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
