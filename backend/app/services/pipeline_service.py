@@ -429,11 +429,22 @@ class PipelineService:
         lm = literature_mining or {}
         kg = knowledge_gap or {}
         research_question = pu.get("research_question", "")
+
+        # ── 构建数据上下文 ──
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        data_context = self._build_data_context(project_id)
+        multimodal_datasets = data_context.pop("_multimodal_datasets", [])
+        data_linking_evidence = data_context.pop("_data_linking_evidence", [])
+
         result = agent.generate(
             research_question=research_question,
             facts=lm.get("facts", []),
             knowledge_gaps=kg.get("knowledge_gaps", []),
-            constraints=[]
+            constraints=[],
+            project_id=project_id,
+            data_context=data_context,
+            multimodal_datasets=multimodal_datasets,
+            data_linking_evidence=data_linking_evidence,
         )
         result_dict = self._safe_model_dump(result)
 
@@ -456,6 +467,10 @@ class PipelineService:
                         constraints=[
                             alignment["off_topic_summary"]
                         ],
+                        project_id=project_id,
+                        data_context=data_context,
+                        multimodal_datasets=multimodal_datasets,
+                        data_linking_evidence=data_linking_evidence,
                     )
                     result_dict = self._safe_model_dump(retry)
                     # 重试后再做一次对齐检查
@@ -794,6 +809,65 @@ class PipelineService:
 
 
 # ────────────── 工具函数 ──────────────
+
+    def _build_data_context(self, project_id: str) -> Dict[str, Any]:
+        """构建项目数据上下文，供 HypothesisGenerationAgent 使用"""
+        context: Dict[str, Any] = {}
+        multimodal_datasets: List[Dict] = []
+        data_linking_evidence: List[Dict] = []
+
+        if not project_id:
+            return context
+
+        try:
+            from app.models.project import Document, DocumentStatus
+
+            docs = self.db.query(Document).filter(
+                Document.project_id == project_id,
+                Document.status == DocumentStatus.PROCESSED,
+            ).all()
+
+            fields_set: List[str] = []
+            doc_summaries: List[str] = []
+
+            for doc in docs:
+                if doc.title:
+                    doc_summaries.append(doc.title[:100])
+                if doc.abstract:
+                    doc_summaries.append(f"摘要: {doc.abstract[:150]}")
+                if doc.keywords:
+                    fields_set.extend([k.strip() for k in doc.keywords.split(",") if k.strip()])
+                if doc.extra_metadata:
+                    metadata = doc.extra_metadata
+                    if isinstance(metadata, dict):
+                        ds_fields = metadata.get("fields") or metadata.get("columns") or metadata.get("features")
+                        if isinstance(ds_fields, list):
+                            fields_set.extend([str(f) for f in ds_fields])
+                        ds_info = {
+                            "name": doc.filename or doc.title or "unknown",
+                            "modality": metadata.get("modality", doc.file_type or "tabular"),
+                            "fields": ds_fields if isinstance(ds_fields, list) else [],
+                        }
+                        multimodal_datasets.append(ds_info)
+
+            if fields_set:
+                context["fields"] = list(dict.fromkeys(fields_set))[:30]
+            if doc_summaries:
+                context["dataset_summary"] = "; ".join(doc_summaries[:5])
+
+            # 尝试提取统计数据
+            stats_info: Dict[str, Any] = {}
+            stats_info["sample_count"] = len(docs)
+            stats_info["field_count"] = len(fields_set)
+            stats_info["missing_rate"] = "N/A（可从数据文件实际分析获取）"
+            context["statistics"] = stats_info
+
+        except Exception as e:
+            logger.warning(f"构建数据上下文失败: {e}")
+
+        context["_multimodal_datasets"] = multimodal_datasets
+        context["_data_linking_evidence"] = data_linking_evidence
+        return context
 
     @staticmethod
     def _run_alignment_skill(research_question: str, hypotheses: List[Dict]) -> Dict[str, Any]:

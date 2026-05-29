@@ -78,6 +78,11 @@ function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
     off_topic_reason: h.off_topic_reason ?? undefined,
     matched_keywords: h.matched_keywords ?? undefined,
     missing_keywords: h.missing_keywords ?? undefined,
+    question_alignment: h.question_alignment ?? undefined,
+    dataset_field_refs: h.dataset_field_refs ?? undefined,
+    data_evidence_ids: h.data_evidence_ids ?? undefined,
+    validation_target: h.validation_target ?? undefined,
+    expected_measurable_effect: h.expected_measurable_effect ?? undefined,
   };
 }
 

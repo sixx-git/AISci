@@ -43,6 +43,11 @@ class HypothesisService:
                 off_topic_reason=hypothesis_data.off_topic_reason,
                 matched_keywords=json.dumps(hypothesis_data.matched_keywords, ensure_ascii=False) if hypothesis_data.matched_keywords else None,
                 missing_keywords=json.dumps(hypothesis_data.missing_keywords, ensure_ascii=False) if hypothesis_data.missing_keywords else None,
+                question_alignment=hypothesis_data.question_alignment,
+                dataset_field_refs=json.dumps(hypothesis_data.dataset_field_refs, ensure_ascii=False) if hypothesis_data.dataset_field_refs else None,
+                data_evidence_ids=json.dumps(hypothesis_data.data_evidence_ids, ensure_ascii=False) if hypothesis_data.data_evidence_ids else None,
+                validation_target=hypothesis_data.validation_target,
+                expected_measurable_effect=hypothesis_data.expected_measurable_effect,
             )
             
             self.db.add(db_hypothesis)
@@ -95,6 +100,11 @@ class HypothesisService:
                     off_topic_reason=hypo_data.get("off_topic_reason"),
                     matched_keywords=hypo_data.get("matched_keywords"),
                     missing_keywords=hypo_data.get("missing_keywords"),
+                    question_alignment=hypo_data.get("question_alignment"),
+                    dataset_field_refs=hypo_data.get("dataset_field_refs") if isinstance(hypo_data.get("dataset_field_refs"), list) else None,
+                    data_evidence_ids=hypo_data.get("data_evidence_ids") if isinstance(hypo_data.get("data_evidence_ids"), list) else None,
+                    validation_target=hypo_data.get("validation_target"),
+                    expected_measurable_effect=hypo_data.get("expected_measurable_effect"),
                 )
 
                 db_hypothesis = self.create_hypothesis(hypothesis_create)

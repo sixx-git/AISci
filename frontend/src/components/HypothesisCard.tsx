@@ -205,6 +205,45 @@ function HypothesisCardDetailed({
         </div>
       )}
 
+      {/* 问题对齐说明 */}
+      {hypothesis.question_alignment && (
+        <div className="mb-3 p-2.5 rounded-lg border border-primary-500/15 bg-primary-500/5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Target className="w-3.5 h-3.5 text-primary-400" />
+            <span className="text-xs font-medium text-primary-400">问题对齐</span>
+          </div>
+          <p className="text-xs text-primary-300/80 leading-relaxed">{hypothesis.question_alignment}</p>
+        </div>
+      )}
+
+      {/* 偏题警告 */}
+      {hypothesis.off_topic && (
+        <div className="mb-4 p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+          <div className="flex items-center gap-1.5 mb-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+            <span className="text-xs font-semibold text-red-400">偏题警告 — 与研究问题关联度低</span>
+          </div>
+          {hypothesis.off_topic_reason && (
+            <p className="text-xs text-red-300/80 leading-relaxed mt-1">{hypothesis.off_topic_reason}</p>
+          )}
+          {hypothesis.alignment_score !== undefined && (
+            <p className="text-xs text-red-400/70 mt-1">
+              对齐分数: <span className="font-mono">{hypothesis.alignment_score}/100</span>
+            </p>
+          )}
+          {hypothesis.matched_keywords && hypothesis.matched_keywords.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              匹配关键词: {hypothesis.matched_keywords.join(', ')}
+            </p>
+          )}
+          {hypothesis.missing_keywords && hypothesis.missing_keywords.length > 0 && (
+            <p className="text-xs text-red-400/50 mt-0.5">
+              缺失关键词: {hypothesis.missing_keywords.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* 推理依据 */}
       <div className="mb-4">
         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
@@ -213,6 +252,42 @@ function HypothesisCardDetailed({
         </div>
         <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{hypothesis.reasoning}</p>
       </div>
+
+      {/* 验证信息 */}
+      {(hypothesis.validation_target || hypothesis.expected_measurable_effect || (hypothesis.dataset_field_refs && hypothesis.dataset_field_refs.length > 0)) && (
+        <div className="mb-4 p-3 rounded-lg border border-green-500/15 bg-green-500/5">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Target className="w-3.5 h-3.5 text-green-400" />
+            <span className="text-xs font-medium text-green-400">验证目标与数据</span>
+          </div>
+          {hypothesis.validation_target && (
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-gray-500">验证指标:</span>
+              <span className="text-xs font-mono text-green-300 bg-green-500/10 px-2 py-0.5 rounded">
+                {hypothesis.validation_target}
+              </span>
+            </div>
+          )}
+          {hypothesis.expected_measurable_effect && (
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-gray-500">预期效果:</span>
+              <span className="text-xs text-green-300/90">{hypothesis.expected_measurable_effect}</span>
+            </div>
+          )}
+          {hypothesis.dataset_field_refs && hypothesis.dataset_field_refs.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">数据字段:</span>
+              <div className="flex flex-wrap gap-1">
+                {hypothesis.dataset_field_refs.map((ref) => (
+                  <span key={ref} className="text-[10px] font-mono text-green-300/70 bg-green-500/10 px-1.5 py-0.5 rounded">
+                    {ref}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 评分维度 */}
       <div className="space-y-2 mb-4">

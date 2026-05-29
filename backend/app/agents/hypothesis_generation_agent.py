@@ -24,6 +24,11 @@ class HypothesisItem(BaseModel):
     risk: str = Field(..., description="风险")
     supporting_fact_ids: List[str] = Field(default_factory=list, description="支持的文献事实 ID 列表")
     evidence_level: str = Field(default="medium", description="证据级别: high / medium / low")
+    question_alignment: str = Field(default="", description="假设与研究问题的对齐说明")
+    dataset_field_refs: List[str] = Field(default_factory=list, description="引用的数据集字段")
+    data_evidence_ids: List[str] = Field(default_factory=list, description="引用的数据证据 ID")
+    validation_target: str = Field(default="", description="验证目标指标，如 Accuracy/F1/AUC")
+    expected_measurable_effect: str = Field(default="", description="预期的可量化效果")
 
 
 class HypothesisGenerationResult(BaseModel):
@@ -46,13 +51,28 @@ class HypothesisGenerationAgent:
     def __init__(self):
         pass
 
+    # 明显偏离研究问题的领域关键词（强制 off_topic）
+    OFF_DOMAIN_KEYWORDS = {
+        "肠道菌群", "肠道微生物", "gut microbiota", "gut microbiome",
+        "阿尔茨海默", "Alzheimer", "帕金森", "Parkinson",
+        "SCFA", "短链脂肪酸", "short-chain fatty acid",
+        "肿瘤", "癌症", "tumor", "cancer", "癌",
+        "药物", "药物靶点", "drug", "药理学",
+        "流行病", "传染病", "感染", "临床",
+        "心血管", "心肌", "coronary", "cardiovascular",
+        "中医", "中药", "针灸",
+    }
+
     def generate(
         self,
         research_question: str,
         facts: List[Dict[str, Any]],
         knowledge_gaps: List[Dict[str, Any]],
         constraints: List[str],
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        data_context: Optional[Dict[str, Any]] = None,
+        multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
+        data_linking_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> HypothesisGenerationResult:
         """
         生成科学假设
@@ -63,12 +83,20 @@ class HypothesisGenerationAgent:
             knowledge_gaps: 知识缺口列表
             constraints: 约束条件列表
             project_id: 项目ID（可选）
+            data_context: 项目数据上下文（数据集摘要、统计信息等）
+            multimodal_datasets: 多模态数据集列表
+            data_linking_evidence: 文献事实与数据字段的关联证据
 
         Returns:
             生成的假设结果
         """
         try:
-            logger.info(f"开始生成假设，研究问题：{research_question[:100]}..., facts 数量：{len(facts)}")
+            data_context = data_context or {}
+            multimodal_datasets = multimodal_datasets or []
+            data_linking_evidence = data_linking_evidence or []
+
+            logger.info(f"开始生成假设，研究问题：{research_question[:100]}..., facts 数量：{len(facts)}, "
+                        f"datasets: {len(multimodal_datasets)}, linking_evidence: {len(data_linking_evidence)}")
 
             # ── 构建可用 fact_id 白名单 ──
             available_fact_ids = self._collect_fact_ids(facts)
@@ -77,6 +105,9 @@ class HypothesisGenerationAgent:
             formatted_facts = self._format_facts(facts)
             formatted_gaps = self._format_gaps(knowledge_gaps)
             formatted_constraints = self._format_constraints(constraints)
+            formatted_data_context = self._format_data_context(
+                data_context, multimodal_datasets, data_linking_evidence
+            )
 
             # ── 构建 Prompt ──
             prompt_loader = get_prompt_loader()
@@ -87,8 +118,10 @@ class HypothesisGenerationAgent:
                     "formatted_facts": formatted_facts,
                     "formatted_gaps": formatted_gaps,
                     "formatted_constraints": formatted_constraints,
+                    "formatted_data_context": formatted_data_context,
                     "available_fact_ids": json.dumps(available_fact_ids, ensure_ascii=False),
                     "facts_empty": "true" if not facts else "false",
+                    "data_context_empty": "true" if not data_context and not multimodal_datasets else "false",
                 },
             )
 
@@ -97,13 +130,18 @@ class HypothesisGenerationAgent:
                 "hypotheses": [
                     {
                         "hypothesis": "清晰、具体、可检验的假设陈述",
+                        "question_alignment": "该假设直接针对 [研究问题关键词] 中的 [指标]，通过[方法]验证",
                         "rationale": "基于归纳/演绎推理的详细理由，引用相关事实",
                         "novelty": "明确说明创新性，与现有研究的区别",
                         "testability": "详细说明如何验证，包括实验设计或分析方法",
-                        "required_data": "具体列出所需的数据类型、来源和数量",
-                        "possible_method": "可能的研究方法和技术路线",
+                        "required_data": "具体列出所需的数据类型、来源和数量，优先引用已上传数据集",
+                        "possible_method": "可能的研究方法和技术路线，必须与研究问题一致",
                         "risk": "可能的风险、挑战和局限性",
                         "supporting_fact_ids": ["fact_001", "fact_002"],
+                        "dataset_field_refs": ["dataset.behavior_label", "dataset.cnn_features"],
+                        "data_evidence_ids": ["evidence_001"],
+                        "validation_target": "Accuracy / F1-score / AUC",
+                        "expected_measurable_effect": "相对基线方法提升 5%-10%",
                         "evidence_level": "medium",
                     }
                 ],
@@ -117,8 +155,11 @@ class HypothesisGenerationAgent:
                 prompt_version="hypothesis_generation",
             )
 
-            # ── 后校验：验证 supporting_fact_ids → 补 evidence_level ──
-            result = self._validate_and_normalize_result(result_dict, available_fact_ids, facts)
+            # ── 后校验 ──
+            result = self._validate_and_normalize_result(
+                result_dict, available_fact_ids, facts,
+                research_question=research_question,
+            )
 
             logger.info(f"成功生成 {len(result.hypotheses)} 条假设")
 
@@ -189,6 +230,62 @@ class HypothesisGenerationAgent:
 
         return "\n".join([f"{idx}. {c}" for idx, c in enumerate(constraints, 1)])
 
+    def _format_data_context(
+        self,
+        data_context: Dict[str, Any],
+        multimodal_datasets: List[Dict[str, Any]],
+        data_linking_evidence: List[Dict[str, Any]],
+    ) -> str:
+        """格式化数据上下文"""
+        parts = []
+
+        if data_context:
+            parts.append("## 项目数据上下文")
+            if data_context.get("dataset_summary"):
+                parts.append(f"数据集摘要: {data_context['dataset_summary']}")
+            if data_context.get("fields"):
+                parts.append(f"数据字段: {', '.join(data_context['fields'])}")
+            if data_context.get("statistics"):
+                stats = data_context["statistics"]
+                stat_lines = []
+                if isinstance(stats, dict):
+                    stat_lines.append(f"- 样本数: {stats.get('sample_count', 'N/A')}")
+                    stat_lines.append(f"- 字段数: {stats.get('field_count', 'N/A')}")
+                    stat_lines.append(f"- 缺失值比例: {stats.get('missing_rate', 'N/A')}")
+                    if stats.get("field_distributions"):
+                        stat_lines.append("- 字段分布:")
+                        for fd in stats["field_distributions"]:
+                            stat_lines.append(f"  {fd}")
+                elif isinstance(stats, str):
+                    stat_lines.append(stats)
+                if stat_lines:
+                    parts.append("初步统计:\n" + "\n".join(stat_lines))
+            if data_context.get("preprocessing"):
+                parts.append(f"预处理摘要: {data_context['preprocessing']}")
+
+        if multimodal_datasets:
+            parts.append("## 多模态数据集")
+            for ds in multimodal_datasets:
+                name = ds.get("name", ds.get("filename", "unknown"))
+                modality = ds.get("modality", "unknown")
+                fields = ds.get("fields", [])
+                parts.append(f"- [{modality}] {name}")
+                if fields:
+                    parts.append(f"  字段: {', '.join(fields)}")
+
+        if data_linking_evidence:
+            parts.append("## 文献-数据关联证据")
+            for ev in data_linking_evidence:
+                fact_id = ev.get("fact_id", "?")
+                field_ref = ev.get("field_ref", "?")
+                relation = ev.get("relation", "")
+                parts.append(f"- fact:{fact_id} → field:{field_ref}: {relation}")
+
+        if not parts:
+            return "（无项目数据上下文 — 假设必须基于文献事实或理论推测，evidence_level 建议为 low）"
+
+        return "\n".join(parts)
+
     # ────────── 校验 ──────────
 
     def _validate_and_normalize_result(
@@ -196,19 +293,23 @@ class HypothesisGenerationAgent:
         result_dict: Dict[str, Any],
         available_fact_ids: List[str],
         facts: List[Dict[str, Any]],
+        research_question: str = "",
     ) -> HypothesisGenerationResult:
         """
         验证并标准化 LLM 输出：
           - ensuring supporting_fact_ids 只引用 real fact_ids
           - 自动标的 evidence_level
-          - 过滤无效假设
+          - 偏题检测与标记
+          - 确保 evidence 全空时降级 evidence_level
         """
-        # 确保必要字段存在
         if "hypotheses" not in result_dict or not isinstance(result_dict["hypotheses"], list):
             result_dict["hypotheses"] = []
 
         fact_id_set = set(available_fact_ids)
         validated_hypotheses = []
+
+        # 从研究问题中提取关键词用于偏题检测
+        rq_lower = research_question.lower()
 
         for hypo in result_dict["hypotheses"]:
             if not isinstance(hypo, dict):
@@ -219,6 +320,15 @@ class HypothesisGenerationAgent:
                            "required_data", "possible_method", "risk"]:
                 if field not in hypo:
                     hypo[field] = ""
+
+            for field in ["question_alignment", "validation_target",
+                           "expected_measurable_effect"]:
+                if field not in hypo:
+                    hypo[field] = ""
+
+            for field in ["dataset_field_refs", "data_evidence_ids"]:
+                if field not in hypo or not isinstance(hypo.get(field), list):
+                    hypo[field] = []
 
             # ── 校验 supporting_fact_ids ──
             raw_ids = hypo.get("supporting_fact_ids", [])
@@ -235,25 +345,96 @@ class HypothesisGenerationAgent:
 
             hypo["supporting_fact_ids"] = validated_ids
 
-            # ── 自动标的 evidence_level ──
-            hypo["evidence_level"] = self._determine_evidence_level(
-                raw_level=hypo.get("evidence_level", ""),
-                validated_ids=validated_ids,
-                facts_available=bool(available_fact_ids),
+            # ── 偏题检测 ──
+            hypo_text = hypo.get("hypothesis", "")
+            hypo_lower = hypo_text.lower()
+            is_off_topic = False
+            off_topic_reason = ""
+
+            # 1. 检查是否包含明显无关领域关键词
+            matched_off_domain = []
+            for kw in self.OFF_DOMAIN_KEYWORDS:
+                if kw.lower() in hypo_lower:
+                    matched_off_domain.append(kw)
+            if matched_off_domain:
+                is_off_topic = True
+                off_topic_reason = f"假设内容涉及无关领域: {', '.join(matched_off_domain)}"
+                logger.warning(f"假设偏题检测命中: {matched_off_domain}, 假设: {hypo_text[:80]}")
+
+            # 2. 检查与研究问题的关键词重叠度
+            if not is_off_topic and research_question:
+                rq_keywords = self._extract_topic_keywords(research_question)
+                if rq_keywords:
+                    hypo_keywords = self._extract_topic_keywords(hypo_text)
+                    overlap = rq_keywords & hypo_keywords
+                    # 如果研究问题关键词和假设关键词无交集，可能偏题
+                    if not overlap:
+                        is_off_topic = True
+                        off_topic_reason = f"假设关键词 '{', '.join(list(hypo_keywords)[:5])}' 与研究问题关键词 '{', '.join(list(rq_keywords)[:5])}' 无交集"
+                        logger.warning(f"假设关键词无交集，标记偏题: {off_topic_reason}")
+
+            # 3. 如果 supporting_fact_ids、dataset_field_refs、data_evidence_ids 全为空 → evidence_level=low
+            has_any_evidence = (
+                bool(validated_ids)
+                or bool(hypo.get("dataset_field_refs"))
+                or bool(hypo.get("data_evidence_ids"))
             )
+            if not has_any_evidence:
+                hypo["evidence_level"] = "low"
+                logger.info(f"假设无任何证据引用，强制 evidence_level=low: {hypo_text[:60]}...")
+            else:
+                # ── 自动标的 evidence_level ──
+                hypo["evidence_level"] = self._determine_evidence_level(
+                    raw_level=hypo.get("evidence_level", ""),
+                    validated_ids=validated_ids,
+                    facts_available=bool(available_fact_ids),
+                )
+
+            # 标记 off_topic
+            hypo["off_topic"] = is_off_topic
+            hypo["off_topic_reason"] = off_topic_reason
 
             validated_hypotheses.append(HypothesisItem(**hypo))
 
+        # ── 排序：非 off_topic 优先 ──
+        validated_hypotheses.sort(key=lambda h: h.off_topic if hasattr(h, 'off_topic') and h.off_topic else False)
+
         # 限制 3-5 条
-        if len(validated_hypotheses) < 3:
-            logger.warning(f"生成的假设数量不足 3 条，实际：{len(validated_hypotheses)}")
         if len(validated_hypotheses) > 5:
-            logger.warning(f"生成的假设数量超过 5 条，截断为 5 条")
+            logger.info(f"生成的假设数量超过 5 条，截断为 5 条")
             validated_hypotheses = validated_hypotheses[:5]
 
         result_dict["hypotheses"] = validated_hypotheses
 
+        # 统计偏题
+        off_topic_count = sum(1 for h in validated_hypotheses if hasattr(h, 'off_topic') and h.off_topic)
+        if off_topic_count > 0:
+            logger.warning(f"{off_topic_count}/{len(validated_hypotheses)} 条假设被标记为偏题")
+
         return HypothesisGenerationResult(**result_dict)
+
+    @staticmethod
+    def _extract_topic_keywords(text: str) -> set:
+        """从文本中提取主题关键词（用于偏题检测）"""
+        import re
+        stopwords = {"的", "是", "在", "和", "了", "有", "中", "为", "与", "之",
+                     "a", "an", "the", "of", "in", "to", "for", "and", "on", "is", "at"}
+        # 提取中文词（2-4 字符）和英文词
+        words = set()
+        # 中文词
+        chinese_chars = ''.join(re.findall(r'[\u4e00-\u9fff]+', text))
+        for i in range(len(chinese_chars) - 1):
+            for j in range(2, 5):
+                if i + j <= len(chinese_chars):
+                    w = chinese_chars[i:i + j]
+                    if w not in stopwords:
+                        words.add(w)
+        # 英文词
+        eng_words = re.findall(r'[a-zA-Z]{2,}', text.lower())
+        for w in eng_words:
+            if w not in stopwords:
+                words.add(w)
+        return words
 
     def _determine_evidence_level(
         self,

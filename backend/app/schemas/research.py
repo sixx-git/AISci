@@ -64,8 +64,13 @@ class HypothesisCreate(BaseModel):
     off_topic_reason: Optional[str] = Field(None, description="偏题原因")
     matched_keywords: Optional[List[str]] = Field(None, description="匹配到的关键词")
     missing_keywords: Optional[List[str]] = Field(None, description="缺失的关键词")
+    question_alignment: Optional[str] = Field(None, description="假设与研究问题的对齐说明")
+    dataset_field_refs: Optional[List[str]] = Field(None, description="引用的数据集字段")
+    data_evidence_ids: Optional[List[str]] = Field(None, description="引用的数据证据 ID")
+    validation_target: Optional[str] = Field(None, description="验证目标指标")
+    expected_measurable_effect: Optional[str] = Field(None, description="预期的可量化效果")
 
-    @field_validator("matched_keywords", "missing_keywords", mode="before")
+    @field_validator("matched_keywords", "missing_keywords", "dataset_field_refs", "data_evidence_ids", mode="before")
     @classmethod
     def _parse_json_list(cls, v):
         if isinstance(v, str):
@@ -97,6 +102,11 @@ class HypothesisItem(BaseModel):
     risk: str = Field(..., description="风险")
     supporting_fact_ids: List[str] = Field(default_factory=list, description="支持的文献事实 ID 列表")
     evidence_level: str = Field(default="medium", description="证据级别: high / medium / low")
+    question_alignment: str = Field(default="", description="假设与研究问题的对齐说明")
+    dataset_field_refs: List[str] = Field(default_factory=list, description="引用的数据集字段")
+    data_evidence_ids: List[str] = Field(default_factory=list, description="引用的数据证据 ID")
+    validation_target: str = Field(default="", description="验证目标指标")
+    expected_measurable_effect: str = Field(default="", description="预期的可量化效果")
 
 
 class HypothesisGenerationRequest(BaseModel):

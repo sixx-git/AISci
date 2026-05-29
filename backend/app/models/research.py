@@ -130,6 +130,13 @@ class Hypothesis(BaseModel):
     off_topic_reason = Column(Text, nullable=True, default=None, comment="偏题原因")
     matched_keywords = Column(Text, nullable=True, default=None, comment="匹配到的关键词（JSON 数组）")
     missing_keywords = Column(Text, nullable=True, default=None, comment="缺失的关键词（JSON 数组）")
+
+    # 新增字段：假设与数据/问题的强关联
+    question_alignment = Column(Text, nullable=True, default=None, comment="假设与研究问题的对齐说明")
+    dataset_field_refs = Column(Text, nullable=True, default=None, comment="引用的数据集字段（JSON 数组）")
+    data_evidence_ids = Column(Text, nullable=True, default=None, comment="引用的数据证据 ID（JSON 数组）")
+    validation_target = Column(Text, nullable=True, default=None, comment="验证目标指标，如 Accuracy/F1/AUC")
+    expected_measurable_effect = Column(Text, nullable=True, default=None, comment="预期的可量化效果")
     
     # 关系
     project = relationship("Project", back_populates="hypotheses")

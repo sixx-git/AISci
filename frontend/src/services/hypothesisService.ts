@@ -24,6 +24,11 @@ export interface BackendHypothesis {
   off_topic_reason?: string;
   matched_keywords?: string[];
   missing_keywords?: string[];
+  question_alignment?: string;
+  dataset_field_refs?: string[];
+  data_evidence_ids?: string[];
+  validation_target?: string;
+  expected_measurable_effect?: string;
 }
 
 export interface BackendEvidence {
