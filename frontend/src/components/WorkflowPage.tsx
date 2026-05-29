@@ -14,7 +14,7 @@ import type {
   PipelineStageLog,
 } from '@/types';
 
-// ============ 接口 ============
+// // ============ 接口 ============
 
 interface WorkflowPageProps {
   projectId?: string;
@@ -23,7 +23,12 @@ interface WorkflowPageProps {
   onPipelineCompleted?: (result: PipelineRunResult) => void;
 }
 
-// ============ 常量 ============
+type RunState = 'idle' | 'submitting' | 'running' | 'polling';
+
+/** 轮询连续失败上限 */
+const MAX_CONSECUTIVE_POLL_FAILURES = 3;
+/** 轮询间隔 ms */
+const POLL_INTERVAL_MS = 2000;
 
 /** 阶段名称 → 节点 ID 映射 */
 const STAGE_TO_NODE_ID: Record<string, string> = {
@@ -193,12 +198,12 @@ export function WorkflowPage({
   const [selectedId, setSelectedId] = useState<string>('');
 
   // ────── 运行状态 ──────
-  const [isRunning, setIsRunning] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [runState, setRunState] = useState<RunState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [hasExistingRuns, setHasExistingRuns] = useState<boolean | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveFailuresRef = useRef(0);
 
   // ────── 研究问题兜底输入（当 props 为空时显示） ──────
   const [localResearchQuestion, setLocalResearchQuestion] = useState('');
@@ -319,6 +324,8 @@ export function WorkflowPage({
   const startPolling = useCallback(
     (runId: string) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      consecutiveFailuresRef.current = 0;
+      setRunState('polling');
 
       pollingRef.current = setInterval(async () => {
         try {
@@ -327,15 +334,16 @@ export function WorkflowPage({
 
           if (!result) return;
 
+          consecutiveFailuresRef.current = 0;
           applyStageResults(result);
 
           if (result.status === 'completed' || result.status === 'failed') {
             if (pollingRef.current) clearInterval(pollingRef.current);
             pollingRef.current = null;
-            setIsRunning(false);
+            setRunState('idle');
             setCurrentRunId(null);
 
-            refreshFromRunDetail(runId);
+            await refreshFromRunDetail(runId);
             setHasExistingRuns(true);
 
             if (result.status === 'completed') {
@@ -353,12 +361,19 @@ export function WorkflowPage({
             }
           }
         } catch (err: unknown) {
-          // 轮询网络失败也要显示，且不中断轮询
+          consecutiveFailuresRef.current += 1;
           const msg = err instanceof Error ? err.message : String(err);
-          console.error('轮询状态失败:', msg);
-          setErrorMessage(`轮询状态失败: ${msg}`);
+          console.error(`轮询状态失败 (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_POLL_FAILURES}):`, msg);
+
+          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_POLL_FAILURES) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            setRunState('idle');
+            setCurrentRunId(null);
+            setErrorMessage('无法获取 Pipeline 状态，请检查后端服务是否仍在运行。');
+          }
         }
-      }, 1500);
+      }, POLL_INTERVAL_MS);
     },
     [applyStageResults, refreshFromRunDetail, onPipelineCompleted],
   );
@@ -384,9 +399,7 @@ export function WorkflowPage({
       return;
     }
 
-    // ── 真实模式：调用后端 API ──
-    setIsRunning(true);
-    setIsLoading(true);
+    setRunState('submitting');
     setErrorMessage(null);
     resetNodes();
 
@@ -394,51 +407,27 @@ export function WorkflowPage({
       const response = await pipelineService.run(projectId, finalResearchQuestion);
       const result: PipelineRunResult = response.data;
 
-      if (!result) {
-        setErrorMessage('后端返回空数据，请检查服务状态');
-        setIsLoading(false);
-        setIsRunning(false);
+      if (!result || !result.run_id) {
+        setErrorMessage('后端返回数据无效，请检查服务状态');
+        setRunState('idle');
         return;
       }
 
       setCurrentRunId(result.run_id);
-      setIsLoading(false);
+      setRunState('running');
 
-      // 同步返回（已完成 / 失败）
-      if (result.status === 'completed' || result.status === 'failed') {
-        applyStageResults(result);
-        refreshFromRunDetail(result.run_id);
-        setIsRunning(false);
-        setHasExistingRuns(true);
-        if (result.status === 'completed') {
-          setErrorMessage(null);
-          onPipelineCompleted?.(result);
-        }
-        if (result.status === 'failed') {
-          setErrorMessage(
-            result.error_message ||
-            (result.failed_stage ? `执行失败在阶段: ${result.failed_stage}` : 'Pipeline 执行失败'),
-          );
-        }
-      } else {
-        // 异步执行 → 轮询
-        startPolling(result.run_id);
-      }
+      startPolling(result.run_id);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('Pipeline 执行失败:', message);
-      setErrorMessage(`Pipeline 请求失败: ${message}`);
-      setIsLoading(false);
-      setIsRunning(false);
+      console.error('Pipeline 提交失败:', message);
+      setErrorMessage(`Pipeline 提交失败: ${message}`);
+      setRunState('idle');
     }
   }, [
     projectId,
     finalResearchQuestion,
     resetNodes,
-    applyStageResults,
-    refreshFromRunDetail,
     startPolling,
-    onPipelineCompleted,
   ]);
 
   // ══════════════════════════════════════════════
@@ -449,7 +438,7 @@ export function WorkflowPage({
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
-    setIsRunning(false);
+    setRunState('idle');
   }, []);
 
   // ══════════════════════════════════════════════
@@ -460,8 +449,7 @@ export function WorkflowPage({
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
-    setIsRunning(false);
-    setIsLoading(false);
+    setRunState('idle');
     setErrorMessage(null);
     setCurrentRunId(null);
     setLocalResearchQuestion('');
@@ -575,15 +563,29 @@ export function WorkflowPage({
       )}
 
       {/* ========== Loading 提示 ========== */}
-      {isLoading && (
+      {runState === 'submitting' && (
         <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
           <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-blue-300">正在向后台提交 Pipeline 请求…</p>
+          <p className="text-sm text-blue-300">正在提交 Pipeline 任务…</p>
+        </div>
+      )}
+
+      {runState === 'running' && !pollingRef.current && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-blue-300">Pipeline 后台运行中…</p>
+        </div>
+      )}
+
+      {runState === 'polling' && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-blue-300">正在同步阶段状态…</p>
         </div>
       )}
 
       {/* ========== 无运行记录提示 ========== */}
-      {hasExistingRuns === false && projectId && !isLoading && (
+      {hasExistingRuns === false && projectId && runState === 'idle' && (
         <div className="mb-6 p-4 bg-gray-800/50 border border-gray-700 rounded-lg flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
             <span className="text-gray-400 text-sm">—</span>
@@ -599,7 +601,7 @@ export function WorkflowPage({
       <div className="mb-6">
         <WorkflowActionBar
           nodes={nodes}
-          isRunning={isRunning || isLoading}
+          isRunning={runState !== 'idle'}
           onRunAll={handleRunAll}
           onPause={handlePause}
           onReset={handleReset}

@@ -1,11 +1,13 @@
 """
 Pipeline API 路由
 """
+import threading
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
+from app.core.database import init_db as _ensure_db_initialized
 from app.schemas.common import ResponseModel
 from app.schemas.pipeline import (
     PipelineRunRequest,
@@ -13,10 +15,13 @@ from app.schemas.pipeline import (
     PipelineStatus,
     PipelineRunSummary,
     PipelineRunDetail,
-    PipelineStageExecutionSummary
+    PipelineStageExecutionSummary,
+    PipelineStageLog,
+    PipelineStageStatus,
+    PipelineStage,
 )
 from app.models.pipeline import PipelineRun, PipelineStageExecution
-from app.services.pipeline_service import get_pipeline_service
+from app.services.pipeline_service import get_pipeline_service, PipelineService
 
 router = APIRouter()
 
@@ -27,12 +32,12 @@ async def run_pipeline(
     db: Session = Depends(get_db)
 ):
     """
-    运行完整的 Pipeline
-    
+    异步运行完整的 Pipeline（立即返回，后台执行）
+
     - **project_id**: 项目 ID
     - **research_question**: 研究问题
     - **options**: 可选配置参数
-    
+
     按顺序执行 8 个阶段：
     1. ProblemUnderstandingAgent
     2. LiteratureMiningAgent
@@ -42,27 +47,60 @@ async def run_pipeline(
     6. ExperimentDesignAgent
     7. SmallValidationAgent
     8. ReportGenerationAgent
-    
-    返回完整的执行日志和结果。失败时不抛 500，而是返回 status=failed 的正常结果。
+
+    立即返回 run_id，前端通过 GET /status/{run_id} 轮询进度。
     """
     try:
         pipeline_service = get_pipeline_service(db)
-        result: PipelineRunResult = pipeline_service.run_pipeline(request)
-        
-        if result.status == PipelineStatus.FAILED:
-            # 返回正常 200，但 data.status=failed，前端据此判断
-            return ResponseModel(
-                code=200,
-                message=f"Pipeline 执行失败在阶段: {result.failed_stage or 'unknown'}",
-                data=result
+        run_id = pipeline_service.start_pipeline_async(request)
+
+        def _bg_execute():
+            _ensure_db_initialized()
+            bg_db = SessionLocal()
+            try:
+                bg_service = PipelineService(bg_db)
+                bg_service.execute_pipeline_run(run_id, request)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"后台 Pipeline 执行失败 run_id={run_id}: {exc}", exc_info=True
+                )
+            finally:
+                bg_db.close()
+
+        threading.Thread(target=_bg_execute, daemon=True).start()
+
+        stages = [
+            PipelineStageLog(
+                stage=d["stage_enum"],
+                status=PipelineStageStatus.PENDING
             )
-        
+            for d in [
+                {"stage_enum": PipelineStage.PROBLEM_UNDERSTANDING},
+                {"stage_enum": PipelineStage.LITERATURE_MINING},
+                {"stage_enum": PipelineStage.KNOWLEDGE_GAP},
+                {"stage_enum": PipelineStage.HYPOTHESIS_GENERATION},
+                {"stage_enum": PipelineStage.HYPOTHESIS_REVIEW},
+                {"stage_enum": PipelineStage.EXPERIMENT_DESIGN},
+                {"stage_enum": PipelineStage.SMALL_VALIDATION},
+                {"stage_enum": PipelineStage.REPORT_GENERATION},
+            ]
+        ]
+
         return ResponseModel(
             code=200,
-            message="Pipeline 执行成功",
-            data=result
+            message="Pipeline 已启动，后台执行中",
+            data=PipelineRunResult(
+                pipeline_id=run_id,
+                run_id=run_id,
+                project_id=request.project_id,
+                research_question=request.research_question,
+                status=PipelineStatus.RUNNING,
+                stages=stages,
+                created_at=pipeline_service.db_pipeline_run.created_at,
+            )
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pipeline 服务异常: {str(e)}")
 
@@ -192,50 +230,54 @@ async def get_run_status(
 ):
     """
     轮询 Pipeline 运行状态（供前端实时更新）
-    
+
     - **run_id**: Pipeline 运行 ID
     """
     try:
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         if not run:
             raise HTTPException(status_code=404, detail="Pipeline 运行记录未找到")
-        
-        # 获取阶段信息
+
         stages = db.query(PipelineStageExecution).filter(
             PipelineStageExecution.pipeline_run_id == run.id
         ).order_by(PipelineStageExecution.stage_order).all()
-        
+
+        stage_logs = [
+            PipelineStageLog(
+                stage=PipelineStage(s.stage.value if hasattr(s.stage, "value") else str(s.stage)),
+                status=PipelineStageStatus(s.status.value if hasattr(s.status, "value") else str(s.status)),
+                start_time=s.started_at,
+                end_time=s.completed_at,
+                duration=s.duration_ms / 1000.0 if s.duration_ms else None,
+                input_data=s.input_data,
+                output_data=s.output_data,
+                error_message=s.error_message,
+                model_used=s.model_used,
+                token_count=s.token_count,
+                prompt_used=s.prompt_used,
+                model_parameters=s.model_parameters,
+            )
+            for s in stages
+        ]
+
+        total_duration = run.total_duration_ms / 1000.0 if run.total_duration_ms else None
+
         return ResponseModel(
             code=200,
             message="获取成功",
-            data={
-                "run_id": run.run_id,
-                "project_id": run.project_id,
-                "research_question": run.research_question,
-                "status": run.status.value if hasattr(run.status, "value") else str(run.status),
-                "failed_stage": run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
-                "final_report_id": run.final_report_id,
-                "total_duration_ms": run.total_duration_ms,
-                "created_at": run.created_at.isoformat() if run.created_at else None,
-                "stages": [
-                    {
-                        "stage": s.stage.value if hasattr(s.stage, "value") else str(s.stage),
-                        "stage_order": s.stage_order,
-                        "status": s.status.value if hasattr(s.status, "value") else str(s.status),
-                        "started_at": s.started_at.isoformat() if s.started_at else None,
-                        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
-                        "duration_ms": s.duration_ms,
-                        "input_data": s.input_data,
-                        "output_data": s.output_data,
-                        "error_message": s.error_message,
-                        "prompt_used": s.prompt_used,
-                        "model_used": s.model_used,
-                        "model_parameters": s.model_parameters,
-                        "token_count": s.token_count,
-                    }
-                    for s in stages
-                ]
-            }
+            data=PipelineRunResult(
+                pipeline_id=run.run_id,
+                run_id=run.run_id,
+                project_id=run.project_id,
+                research_question=run.research_question,
+                status=PipelineStatus(run.status.value if hasattr(run.status, "value") else str(run.status)),
+                stages=stage_logs,
+                total_duration=total_duration,
+                failed_stage=run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
+                final_report_id=run.final_report_id,
+                created_at=run.created_at or run.started_at,
+                completed_at=run.completed_at,
+            )
         )
     except HTTPException:
         raise

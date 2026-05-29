@@ -4,6 +4,7 @@ Pipeline 服务 - 负责按顺序执行各个 Agent
 import uuid
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
@@ -68,22 +69,90 @@ class PipelineService:
         self.db_pipeline_run: Optional[DB_PipelineRun] = None
         self.db_stage_executions: Dict[int, DB_PipelineStageExecution] = {}
         self._stage_results: Dict[str, Any] = {}
-        
-    def run_pipeline(self, request: PipelineRunRequest) -> PipelineRunResult:
+        self._pipeline_start: Optional[datetime] = None
+
+    def start_pipeline_async(self, request: PipelineRunRequest) -> str:
         """
-        运行完整的 Pipeline
-        
+        异步启动 Pipeline：创建运行记录和初始阶段记录，立即返回 run_id。
+
         Args:
             request: Pipeline 运行请求
-            
+
+        Returns:
+            str: run_id
+        """
+        logger.info(f"异步启动 Pipeline: {self.run_id}, 项目: {request.project_id}")
+
+        self._create_pipeline_run(request)
+
+        for idx, d in enumerate(STAGE_DEFS):
+            db_stage = DB_PipelineStageExecution(
+                id=str(uuid.uuid4()),
+                pipeline_run_id=self.db_pipeline_run.id,
+                stage=d["db_stage_enum"],
+                stage_order=idx + 1,
+                status=DB_PipelineStatus.PENDING,
+                started_at=datetime.now(timezone.utc),
+            )
+            self.db.add(db_stage)
+            self.db_stage_executions[idx + 1] = db_stage
+        self.db.commit()
+
+        return self.run_id
+
+    def execute_pipeline_run(self, run_id: str, request: PipelineRunRequest):
+        """
+        在后台线程中执行完整 Pipeline（供 start_pipeline_async 调用）。
+
+        Args:
+            run_id: 已创建的 Pipeline 运行 ID
+            request: Pipeline 运行请求
+        """
+        self.run_id = run_id
+
+        self.db_pipeline_run = self.db.query(DB_PipelineRun).filter(
+            DB_PipelineRun.run_id == run_id
+        ).first()
+        if not self.db_pipeline_run:
+            logger.error(f"Pipeline run not found: {run_id}")
+            return
+
+        existing_stages = (
+            self.db.query(DB_PipelineStageExecution)
+            .filter(DB_PipelineStageExecution.pipeline_run_id == self.db_pipeline_run.id)
+            .order_by(DB_PipelineStageExecution.stage_order)
+            .all()
+        )
+        for s in existing_stages:
+            self.db_stage_executions[s.stage_order] = s
+
+        self._run_pipeline_stages(request)
+
+    def run_pipeline(self, request: PipelineRunRequest) -> PipelineRunResult:
+        """
+        同步运行完整的 Pipeline（兼容旧调用方式）。
+
+        Args:
+            request: Pipeline 运行请求
+
         Returns:
             PipelineRunResult: Pipeline 运行结果
         """
-        logger.info(f"开始执行 Pipeline: {self.run_id}, 项目: {request.project_id}")
-        
-        # 创建数据库记录
-        self._create_pipeline_run(request)
-        
+        self.start_pipeline_async(request)
+        return self._run_pipeline_stages(request)
+
+    def _run_pipeline_stages(self, request: PipelineRunRequest) -> PipelineRunResult:
+        """
+        执行 Pipeline 所有阶段（内部方法，供 start_pipeline_async 和 run_pipeline 共用）。
+
+        Args:
+            request: Pipeline 运行请求
+
+        Returns:
+            PipelineRunResult: Pipeline 运行结果
+        """
+        logger.info(f"开始执行 Pipeline 阶段: {self.run_id}, 项目: {request.project_id}")
+
         # 初始化阶段日志
         stages: List[PipelineStageLog] = [
             PipelineStageLog(stage=d["stage_enum"], status=PipelineStageStatus.PENDING)
@@ -549,8 +618,17 @@ class PipelineService:
         self.db.refresh(self.db_pipeline_run)
     
     def _create_stage_execution(self, order: int, stage: DB_PipelineStage, input_data: Dict[str, Any]) -> DB_PipelineStageExecution:
-        """创建阶段执行记录"""
+        """创建或更新阶段执行记录"""
         now = datetime.now(timezone.utc)
+        existing = self.db_stage_executions.get(order)
+        if existing:
+            existing.status = DB_PipelineStatus.RUNNING
+            existing.started_at = now
+            existing.input_data = input_data
+            existing.error_message = None
+            self.db.commit()
+            return existing
+
         db_stage = DB_PipelineStageExecution(
             id=str(uuid.uuid4()),
             pipeline_run_id=self.db_pipeline_run.id,

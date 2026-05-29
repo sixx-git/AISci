@@ -5,7 +5,7 @@
 import logging
 import json
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 

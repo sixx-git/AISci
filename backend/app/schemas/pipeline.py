@@ -55,6 +55,10 @@ class PipelineStageLog(BaseModel):
     input_data: Optional[Dict[str, Any]] = Field(None, description="输入数据")
     output_data: Optional[Dict[str, Any]] = Field(None, description="输出数据")
     error_message: Optional[str] = Field(None, description="错误信息")
+    model_used: Optional[str] = Field(None, description="使用的模型名称")
+    token_count: Optional[int] = Field(None, description="Token 消耗量")
+    prompt_used: Optional[str] = Field(None, description="使用的提示词")
+    model_parameters: Optional[Dict[str, Any]] = Field(None, description="模型参数")
 
 
 class PipelineRunResponse(BaseModel):
@@ -118,6 +122,7 @@ class PipelineRunResult(BaseModel):
     status: PipelineStatus
     stages: List[PipelineStageLog] = Field(default_factory=list)
     total_duration: Optional[float] = None
+    error_message: Optional[str] = Field(None, description="错误信息")
     problem_understanding: Optional[Dict[str, Any]] = None
     literature_mining: Optional[Dict[str, Any]] = None
     knowledge_gap: Optional[Dict[str, Any]] = None
