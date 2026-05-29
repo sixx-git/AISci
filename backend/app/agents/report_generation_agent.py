@@ -17,6 +17,7 @@ from app.services.pdf_export_service import export_markdown_to_pdf
 CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.report.report_chart_generation_skill import ReportChartGenerationSkill
+from app.skills.report.scientific_plot_skill import ScientificPlotSkill
 
 logger = logging.getLogger(__name__)
 
@@ -600,17 +601,47 @@ class ReportGenerationAgent:
                     context={"stage": "report_generation"},
                 )
                 outputs["charts"] = chart_result.data.get("charts", [])
-                outputs["skill_outputs"] = {
-                    "report_chart_generation": {
-                        "success": chart_result.success,
-                        "data": chart_result.data,
-                        "warnings": chart_result.warnings,
-                        "errors": chart_result.errors,
-                    }
+                outputs["skill_outputs"]["report_chart_generation"] = {
+                    "success": chart_result.success,
+                    "data": chart_result.data,
+                    "warnings": chart_result.warnings,
+                    "errors": chart_result.errors,
                 }
             except Exception as e:
                 logger.warning(f"ReportChartGenerationSkill 失败: {e}")
-                outputs["skill_outputs"] = {"report_chart_generation": {"success": False, "error": str(e)}}
+                outputs["skill_outputs"]["report_chart_generation"] = {"success": False, "error": str(e)}
+
+            try:
+                sci_plot_skill = ScientificPlotSkill()
+                sci_result = await sci_plot_skill.run(
+                    input_data={
+                        "plot_specs": plot_specs,
+                        "data": data_rows,
+                        "output_dir": "",
+                        "format": "both",
+                        "dpi": 150,
+                        "figure_size": (10, 6),
+                    },
+                    context={"stage": "report_generation"},
+                )
+                sci_charts = sci_result.data.get("charts", [])
+                if sci_charts:
+                    outputs.setdefault("charts", [])
+                    existing_ids = {c.get("plot_id", "") for c in outputs["charts"]}
+                    for ch in sci_charts:
+                        pid = ch.get("plot_id", "")
+                        if pid not in existing_ids:
+                            outputs["charts"].append(ch)
+                            existing_ids.add(pid)
+                outputs["skill_outputs"]["scientific_plot"] = {
+                    "success": sci_result.success,
+                    "data": sci_result.data,
+                    "warnings": sci_result.warnings,
+                    "errors": sci_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ScientificPlotSkill 失败: {e}")
+                outputs["skill_outputs"]["scientific_plot"] = {"success": False, "error": str(e)}
 
             return outputs
 

@@ -10,6 +10,7 @@ from app.services.prompt_loader import get_prompt_loader
 from app.skills.experiment.experiment_sanity_check_skill import ExperimentSanityCheckSkill
 from app.skills.data.multimodal_ingest_skill import MultimodalDataIngestSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
+from app.skills.data.dataset_discovery_skill import DatasetDiscoverySkill
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,26 @@ class ExperimentDesignAgent:
                 except Exception as e:
                     logger.warning(f"MultimodalDataLinkingSkill 失败: {e}")
                     outputs["multimodal_data_linking"] = {"success": False, "error": str(e)}
+
+            try:
+                discovery_skill = DatasetDiscoverySkill()
+                discovery_result = await discovery_skill.run(
+                    input_data={
+                        "research_question": hypothesis,
+                        "keywords": [],
+                        "max_results": 10,
+                    },
+                    context={"stage": "experiment_design"},
+                )
+                outputs["dataset_discovery"] = {
+                    "success": discovery_result.success,
+                    "data": discovery_result.data,
+                    "warnings": discovery_result.warnings,
+                    "errors": discovery_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"DatasetDiscoverySkill 失败: {e}")
+                outputs["dataset_discovery"] = {"success": False, "error": str(e)}
 
             return outputs
 

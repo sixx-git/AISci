@@ -2,11 +2,13 @@ import os
 import json
 import logging
 import uuid
+import asyncio
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.research import Dataset
 from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
+from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +176,64 @@ class DatasetService:
         self.db.commit()
         self.db.refresh(ds)
         return ds
+
+    def run_quality_analysis(self, project_id: str) -> Dict[str, Any]:
+        datasets = self.get_project_datasets(project_id)
+        if not datasets:
+            return {
+                "success": True,
+                "data": {
+                    "quality_report": {"overall_score": 0.0, "file_count": 0},
+                    "file_reports": [],
+                    "overall_score": 0.0,
+                    "recommendations": ["当前项目无数据文件"],
+                    "cleaned_file_paths": [],
+                },
+                "warnings": ["当前项目无数据文件可供分析"],
+            }
+
+        file_metas = []
+        for ds in datasets:
+            meta = {
+                "file_path": ds.file_path,
+                "filename": ds.filename,
+                "data_type": ds.data_type,
+                "n_rows": ds.n_rows or 0,
+                "n_columns": ds.n_columns or 0,
+                "columns": json.loads(ds.columns_json) if ds.columns_json else [],
+                "dtypes": json.loads(ds.dtypes_json) if ds.dtypes_json else {},
+                "missing_count": ds.missing_count or 0,
+                "statistics": json.loads(ds.statistics_json) if ds.statistics_json else {},
+                "preview": json.loads(ds.preview_json) if ds.preview_json else [],
+            }
+            file_metas.append(meta)
+
+        async def _run():
+            try:
+                skill = DataJuicerLiteSkill()
+                result = await skill.run(
+                    input_data={
+                        "file_metas": file_metas,
+                        "missing_strategy": "report",
+                        "outlier_method": "iqr",
+                    },
+                    context={"stage": "dataset_preprocessing"},
+                )
+                return {
+                    "success": result.success,
+                    "data": result.data,
+                    "warnings": result.warnings,
+                    "errors": result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"DataJuicerLiteSkill 失败: {e}")
+                return {"success": False, "error": str(e)}
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"质量分析异常: {e}")
+            return {"success": False, "error": str(e)}
 
     def toggle_hypothesis_use(self, dataset_id: str) -> Optional[Dataset]:
         ds = self.get_dataset_by_id(dataset_id)

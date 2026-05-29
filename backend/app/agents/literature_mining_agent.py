@@ -17,6 +17,7 @@ from app.services.prompt_loader import get_prompt_loader
 from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
 from app.skills.literature.arxiv_search_skill import ArxivSearchSkill
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
+from app.skills.literature.search_papers_skill import SearchPapersSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
 logger = logging.getLogger(__name__)
@@ -416,6 +417,26 @@ class LiteratureMiningAgent:
             except Exception as e:
                 logger.warning(f"PdfEvidenceExtractionSkill 运行失败: {e}")
                 outputs["pdf_evidence_extraction"] = {"success": False, "error": str(e)}
+
+            try:
+                search_skill = SearchPapersSkill()
+                search_result = await search_skill.run(
+                    input_data={
+                        "research_question": research_question,
+                        "keywords": [],
+                        "max_results": min(top_k, 30),
+                    },
+                    context={"stage": "literature_mining"},
+                )
+                outputs["search_papers"] = {
+                    "success": search_result.success,
+                    "data": search_result.data,
+                    "warnings": search_result.warnings,
+                    "errors": search_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"SearchPapersSkill 运行失败: {e}")
+                outputs["search_papers"] = {"success": False, "error": str(e)}
 
             try:
                 linking_skill = MultimodalDataLinkingSkill()

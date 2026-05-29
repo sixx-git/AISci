@@ -8,9 +8,15 @@ from app.skills.literature import (
     ArxivSearchSkill,
     PdfEvidenceExtractionSkill,
     CitationGroundingSkill,
+    SearchPapersSkill,
 )
 from app.skills.reasoning import HypothesisNoveltyReviewSkill, QuestionAlignmentSkill
 from app.skills.experiment import ExperimentSanityCheckSkill
+from app.skills.data import (
+    DataJuicerLiteSkill,
+    DatasetDiscoverySkill,
+)
+from app.skills.report import ScientificPlotSkill
 
 __all__ = [
     "BaseSkill",
@@ -18,7 +24,11 @@ __all__ = [
     "ArxivSearchSkill",
     "PdfEvidenceExtractionSkill",
     "CitationGroundingSkill",
+    "SearchPapersSkill",
     "HypothesisNoveltyReviewSkill",
     "QuestionAlignmentSkill",
     "ExperimentSanityCheckSkill",
+    "DataJuicerLiteSkill",
+    "DatasetDiscoverySkill",
+    "ScientificPlotSkill",
 ]
