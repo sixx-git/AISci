@@ -1,7 +1,7 @@
 """
 报告质量检查 Skill
 参考能力：挑战杯 XH-202619 赛题规范
-——对 report_data.json 做赛题规范检查，输出评分和修正建议。
+对最终 report_data.json 做赛题规范检查，输出评分和修正建议。
 """
 import logging
 import re
@@ -34,6 +34,21 @@ Qwen_KEYWORDS = [
     re.compile(r"bailian", re.IGNORECASE),
 ]
 
+NON_QWEN_MODEL_PATTERNS = [
+    re.compile(r"\bGPT-?4\b", re.IGNORECASE),
+    re.compile(r"\bGPT-?3\.?5\b", re.IGNORECASE),
+    re.compile(r"\bGPT-?o\b", re.IGNORECASE),
+    re.compile(r"\bChatGPT\b", re.IGNORECASE),
+    re.compile(r"\bClaude\b", re.IGNORECASE),
+    re.compile(r"\bAnthropic\b", re.IGNORECASE),
+    re.compile(r"\bGemini\b", re.IGNORECASE),
+    re.compile(r"\bLlama\b", re.IGNORECASE),
+    re.compile(r"\bLLaMA\b", re.IGNORECASE),
+    re.compile(r"\bMistral\b", re.IGNORECASE),
+    re.compile(r"\bPaLM\b", re.IGNORECASE),
+    re.compile(r"\bFalcon\b", re.IGNORECASE),
+]
+
 UNKNOWN_AUTHOR_PATTERNS = [
     re.compile(r"unknown\s*(author|researcher|creator)", re.IGNORECASE),
     re.compile(r"未知作者", re.IGNORECASE),
@@ -46,6 +61,12 @@ PLACEHOLDER_PATTERNS = [
     re.compile(r"TBD", re.IGNORECASE),
     re.compile(r"to\s+be\s+(determined|added|filled)", re.IGNORECASE),
     re.compile(r"待(补充|填|定|加)", re.IGNORECASE),
+]
+
+LLM_FABRICATION_PATTERNS = [
+    re.compile(r"\bViT\s+(Paper|Model|论文)\b", re.IGNORECASE),
+    re.compile(r"\bCross-modal\s+(Paper|Model|论文)\b", re.IGNORECASE),
+    re.compile(r"\bLLM\s*(自造|生成|hallucinat)", re.IGNORECASE),
 ]
 
 FAKE_DATASET_PATTERNS = [
@@ -62,19 +83,21 @@ class ReportQualityCheckSkill(BaseSkill):
     """报告质量检查 Skill
 
     输入:
-      - report_data: dict                 报告数据 (report_data.json)
+      - report_data: dict                 报告数据
       - references_verified: int          已验证引用数
       - has_real_data_plots: bool         是否有真实数据图表
       - citation_grounding_output: dict   CitationGroundingSkill 输出
 
     输出 (SkillResult.data):
       - score: int                        评分 0-100
+      - passed: bool                      是否通过
       - missing_fields: List[str]         缺失字段
       - warnings: List[str]               警告
       - critical_issues: List[str]        关键问题
       - recommendations: List[str]        建议
       - references_verified: int          已验证引用数
       - has_real_data_plots: bool         是否有真实数据图表
+      - has_actual_or_simulated_results: bool  是否有实际或模拟结果
     """
 
     name = "ReportQualityCheck"
@@ -106,6 +129,7 @@ class ReportQualityCheckSkill(BaseSkill):
                     references_verified = inner["references_verified"]
 
         chapters = report_data.get("chapters", {})
+        has_actual_or_simulated = self._check_results_structure(chapters)
 
         missing_fields: List[str] = []
         warnings: List[str] = []
@@ -114,45 +138,87 @@ class ReportQualityCheckSkill(BaseSkill):
         completed_fields = 0
 
         for key, label in CHECK_FIELDS:
-            if key == "paper_title":
-                value = report_data.get("paper_title", "")
-            elif key == "paper_abstract":
-                value = report_data.get("paper_abstract", "")
-            elif key == "references":
-                value = chapters.get("references", [])
-            else:
-                value = chapters.get(key, "")
+            value = self._extract_field_value(report_data, chapters, key)
+            has_content = False
 
             if key == "references":
                 if isinstance(value, list) and len(value) > 0:
-                    ref_text = " ".join(str(r) for r in value)
                     has_real = any(
-                        r and r != "暂无真实文献引用，需补充文献库" and not r.startswith("[待")
+                        r and r != "暂无真实文献引用，需补充文献库" and not str(r).startswith("[待")
                         for r in value
                     )
                     if has_real:
                         completed_fields += 1
+                        has_content = True
                         self._check_reference_quality(value, warnings, critical_issues)
                     else:
                         missing_fields.append(label)
-                        critical_issues.append(f"References 缺失或无效，不符合赛题要求")
+                        critical_issues.append("References 缺失或无效，不符合赛题要求")
                 else:
                     missing_fields.append(label)
-                    critical_issues.append(f"References 缺失或无效，不符合赛题要求")
+                    critical_issues.append("References 缺失或无效，不符合赛题要求")
+            elif key == "datasets":
+                if isinstance(value, list) and len(value) > 0:
+                    completed_fields += 1
+                    has_content = True
+                    self._check_datasets_structured(value, warnings, critical_issues)
+                elif isinstance(value, str) and len(value.strip()) >= 20:
+                    completed_fields += 1
+                    has_content = True
+                    self._check_datasets(value, warnings, critical_issues)
+                else:
+                    missing_fields.append(label)
+            elif key == "source":
+                if isinstance(value, list) and len(value) > 0:
+                    completed_fields += 1
+                    has_content = True
+                elif isinstance(value, str) and len(value.strip()) >= 20:
+                    completed_fields += 1
+                    has_content = True
+                else:
+                    missing_fields.append(label)
+            elif key == "target":
+                if isinstance(value, dict) and len(value) > 0:
+                    completed_fields += 1
+                    has_content = True
+                elif isinstance(value, str) and len(value.strip()) >= 20:
+                    completed_fields += 1
+                    has_content = True
+                else:
+                    missing_fields.append(label)
+            elif key == "experiments":
+                if isinstance(value, dict):
+                    sub_fields = ["baselines", "metrics", "experimental_setup", "validation_protocol"]
+                    sub_count = sum(1 for sf in sub_fields if value.get(sf))
+                    if sub_count >= 2:
+                        completed_fields += 1
+                        has_content = True
+                    elif isinstance(value.get("experimental_setup"), str) and len(value.get("experimental_setup", "").strip()) >= 20:
+                        completed_fields += 1
+                        has_content = True
+                    else:
+                        missing_fields.append(label)
+                elif isinstance(value, str) and len(value.strip()) >= 20:
+                    completed_fields += 1
+                    has_content = True
+                else:
+                    missing_fields.append(label)
             elif isinstance(value, str) and len(value.strip()) >= 20:
                 completed_fields += 1
-                if key == "technical_details":
-                    self._check_technical_details(value, warnings, critical_issues)
-                if key == "datasets":
-                    self._check_datasets(value, warnings, critical_issues)
-                if key == "results":
-                    self._check_results(value, warnings, critical_issues)
+                has_content = True
             elif isinstance(value, str) and len(value.strip()) > 0:
                 warnings.append(f"{label} 内容较短，建议补充（当前 {len(value.strip())} 字符）")
             else:
                 missing_fields.append(label)
 
+            if has_content:
+                if key == "technical_details":
+                    self._check_technical_details(value, warnings, critical_issues)
+                if key == "results":
+                    self._check_results_field(value, chapters, warnings, critical_issues)
+
         self._check_unknown_patterns(report_data, chapters, warnings, critical_issues)
+        self._check_non_qwen_models(report_data, chapters, critical_issues)
 
         if references_verified == 0:
             critical_issues.append("参考文献未验证，不符合赛题要求。请先导入 arXiv/BibTeX/PDF 文献。")
@@ -172,17 +238,23 @@ class ReportQualityCheckSkill(BaseSkill):
             score += 10
         if not missing_fields:
             score += 10
+        if has_actual_or_simulated:
+            score += 5
         score -= len(critical_issues) * 5
         score = max(0, min(100, score))
 
+        passed = score >= 60 and len(critical_issues) == 0
+
         result.data = {
             "score": score,
+            "passed": passed,
             "missing_fields": missing_fields,
             "warnings": warnings,
             "critical_issues": critical_issues,
             "recommendations": recommendations,
             "references_verified": int(references_verified),
             "has_real_data_plots": has_real_data_plots,
+            "has_actual_or_simulated_results": has_actual_or_simulated,
             "completed_fields": completed_fields,
             "total_fields": total_fields,
         }
@@ -191,17 +263,56 @@ class ReportQualityCheckSkill(BaseSkill):
             result.add_warning(f"发现 {len(critical_issues)} 个关键问题，报告不符合赛题要求")
 
         if score < 60:
-            result.add_warning(f"报告质量评分 {score}，低于及格线 60，建议整改后重新生成")
+            result.add_warning(f"报告质量评分 {score}，低于及格线 60，建议补充文献、数据或实验结果后重新生成")
 
         return result
+
+    # ────────────── Field Extraction ──────────────
+
+    @staticmethod
+    def _extract_field_value(
+        report_data: dict, chapters: dict, key: str
+    ) -> Any:
+        if key == "paper_title":
+            return report_data.get("paper_title", "")
+        if key == "paper_abstract":
+            return report_data.get("paper_abstract", "")
+        if key in ("datasets", "source", "references"):
+            structured = report_data.get(key)
+            if structured is not None and (isinstance(structured, list) and len(structured) > 0):
+                return structured
+        if key == "target":
+            structured = report_data.get(key)
+            if isinstance(structured, dict) and len(structured) > 0:
+                return structured
+        if key == "experiments":
+            structured = report_data.get(key)
+            if isinstance(structured, dict) and len(structured) > 0:
+                return structured
+        return chapters.get(key, "")
+
+    # ────────────── Results Structure Check ──────────────
+
+    @staticmethod
+    def _check_results_structure(chapters: dict) -> bool:
+        results_obj = chapters.get("results")
+        if isinstance(results_obj, dict):
+            has_actual = bool(results_obj.get("actual_results"))
+            has_simulated = bool(results_obj.get("simulated_results"))
+            return has_actual or has_simulated
+        if isinstance(results_obj, str):
+            rl = results_obj.lower()
+            return any(kw in rl for kw in ["actual_result", "actual results", "simulated_result", "simulated results", "实际结果", "模拟结果"])
+        return False
 
     # ────────────── Check Helpers ──────────────
 
     @staticmethod
     def _check_technical_details(
-        value: str, warnings: List[str], critical_issues: List[str],
+        value: Any, warnings: List[str], critical_issues: List[str],
     ) -> None:
-        has_qwen = any(pat.search(value) for pat in Qwen_KEYWORDS)
+        text = str(value) if value else ""
+        has_qwen = any(pat.search(text) for pat in Qwen_KEYWORDS)
         if not has_qwen:
             critical_issues.append("Technical Details 未明确提及 Qwen/千问 和阿里云百炼")
 
@@ -227,10 +338,44 @@ class ReportQualityCheckSkill(BaseSkill):
             warnings.append("Datasets 缺少真实数据来源 URL 或拟采集说明")
 
     @staticmethod
-    def _check_results(
-        value: str, warnings: List[str], critical_issues: List[str],
+    def _check_datasets_structured(
+        datasets: List[Any], warnings: List[str], critical_issues: List[str],
     ) -> None:
-        value_lower = value.lower()
+        has_source = False
+        for ds in datasets:
+            if isinstance(ds, dict):
+                url = ds.get("url") or ds.get("source_url") or ds.get("external_url")
+                license_val = ds.get("license") or ds.get("licence")
+                if url:
+                    has_source = True
+                if license_val:
+                    has_source = True
+            elif isinstance(ds, str) and len(ds.strip()) >= 10:
+                has_source = True
+        if not has_source:
+            warnings.append("Datasets 缺少真实数据来源 URL 或许可证信息")
+
+    @staticmethod
+    def _check_results_field(
+        value: Any, chapters: dict, warnings: List[str], critical_issues: List[str],
+    ) -> None:
+        results_obj = chapters.get("results", {})
+        if isinstance(results_obj, dict):
+            has_actual = bool(results_obj.get("actual_results"))
+            has_simulated = bool(results_obj.get("simulated_results"))
+            has_expected = bool(results_obj.get("expected_results"))
+            has_limitations = bool(results_obj.get("limitations"))
+
+            if not has_actual and not has_simulated and not has_expected:
+                warnings.append("Results 未区分 actual/simulated/expected，建议明确标注结果类型")
+            if has_expected and not (has_actual or has_simulated):
+                warnings.append("Results 仅有预期结果，建议补充模拟验证或小样实验")
+            if not has_limitations:
+                warnings.append("Results 未注明局限性，建议补充")
+            return
+
+        text = str(value) if value else ""
+        value_lower = text.lower()
         has_actual = "actual" in value_lower or "实际" in value_lower
         has_simulated = "simulat" in value_lower or "模拟" in value_lower
         has_expected = "expect" in value_lower or "预期" in value_lower
@@ -242,21 +387,26 @@ class ReportQualityCheckSkill(BaseSkill):
 
     @staticmethod
     def _check_reference_quality(
-        references: List[str], warnings: List[str], critical_issues: List[str],
+        references: List[Any], warnings: List[str], critical_issues: List[str],
     ) -> None:
         has_unknown = False
         has_placeholder = False
+        has_fabrication = False
         for ref in references:
             ref_text = str(ref) if ref else ""
             if any(pat.search(ref_text) for pat in UNKNOWN_AUTHOR_PATTERNS):
                 has_unknown = True
             if any(pat.search(ref_text) for pat in PLACEHOLDER_PATTERNS):
                 has_placeholder = True
+            if any(pat.search(ref_text) for pat in LLM_FABRICATION_PATTERNS):
+                has_fabrication = True
 
         if has_unknown:
             critical_issues.append("References 存在 unknown/匿名作者，需替换为真实文献")
         if has_placeholder:
             critical_issues.append("References 存在 placeholder/待填项，需补全文献信息")
+        if has_fabrication:
+            critical_issues.append("References 存在 LLM 虚构引用模式（ViT Paper/Cross-modal Paper 等）")
 
     @staticmethod
     def _check_unknown_patterns(
@@ -270,19 +420,49 @@ class ReportQualityCheckSkill(BaseSkill):
         for key in ("problem_statement", "rationale", "technical_details",
                      "datasets", "source", "target", "methods", "experiments", "results"):
             val = chapters.get(key, "")
-            if isinstance(val, str):
-                all_text_parts.append(val)
+            all_text_parts.append(str(val) if not isinstance(val, str) else val)
 
         full_text = " ".join(all_text_parts)
 
         unknown_count = 0
         placeholder_count = 0
+        fabrication_count = 0
         for pat in UNKNOWN_AUTHOR_PATTERNS:
             unknown_count += len(pat.findall(full_text))
         for pat in PLACEHOLDER_PATTERNS:
             placeholder_count += len(pat.findall(full_text))
+        for pat in LLM_FABRICATION_PATTERNS:
+            fabrication_count += len(pat.findall(full_text))
 
         if unknown_count > 0:
             warnings.append(f"报告正文中出现 {unknown_count} 处 unknown/未知/匿名作者标记")
         if placeholder_count > 0:
             warnings.append(f"报告正文中出现 {placeholder_count} 处 placeholder/待填项")
+        if fabrication_count > 0:
+            critical_issues.append("报告正文中存在 LLM 虚构引用模式（如 ViT Paper、Cross-modal Paper），需替换为真实文献")
+
+    @staticmethod
+    def _check_non_qwen_models(
+        report_data: dict, chapters: dict, critical_issues: List[str],
+    ) -> None:
+        all_text_parts = [
+            report_data.get("paper_title", ""),
+            report_data.get("paper_abstract", ""),
+        ]
+        for key in ("technical_details", "methods", "experiments", "rationale"):
+            val = chapters.get(key, "")
+            all_text_parts.append(str(val) if not isinstance(val, str) else val)
+
+        full_text = " ".join(all_text_parts)
+        found_models = []
+        for pat in NON_QWEN_MODEL_PATTERNS:
+            matches = pat.findall(full_text)
+            for m in matches:
+                found_models.append(m)
+
+        if found_models:
+            unique_models = list(set(found_models))
+            critical_issues.append(
+                f"报告中出现非 Qwen 模型名: {', '.join(unique_models)}。"
+                f"根据赛题要求，核心技术应基于 Qwen/千问和阿里云百炼。"
+            )

@@ -241,6 +241,75 @@ npm run dev
 
 - 阅读 [README.md](./README.md) 了解更多详情
 - 查看 [API 文档](http://localhost:8000/docs)
+- 运行端到端验收检查：
+  ```bash
+  python scripts/check_e2e.py
+  ```
 - 开始使用 AI Scientist!
 
-祝使用愉快! 🎉
+---
+
+## 端到端验收
+
+项目提供了自动化验收脚本 `scripts/check_e2e.py`，用于检查后端所有核心接口是否正常工作。
+
+```bash
+# 确保后端已启动
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 新终端中运行验收
+python scripts/check_e2e.py
+```
+
+脚本检查项包括：
+1. 后端健康检查 `/health`
+2. 项目列表 `/api/v1/projects`
+3. 千问客户端诊断 `/api/v1/diagnose/qwen-client`
+4. 文献搜索接口 `/api/v1/literature/sources` 和 arXiv 搜索
+5. 数据集接口 `/api/v1/datasets`
+6. Pipeline 运行接口
+7. 报告接口 `/api/v1/reports`
+8. Agent 接口可达性
+9. 核心 Skill 文件完整性
+10. 环境变量配置检查
+
+LLM 检查仅验证 API Key 是否配置，不实际消耗 token。
+
+## 最终报告验收标准
+
+生成的研究报告必须满足以下赛题规范（XH-202619）：
+
+| 检查项 | 要求 |
+|--------|------|
+| **12 字段完整性** | Paper Title / Abstract / Problem Statement / Rationale / Technical Details / Datasets / Source / Target / Methods / Experiments / Results / References 均存在 |
+| **Technical Details** | 必须明确提及 Qwen/千问 和阿里云百炼作为核心技术 |
+| **References** | 必须来自真实文献，不得包含 unknown / 未知作者 / placeholder / ViT Paper / Cross-modal Paper |
+| **Results** | 必须区分 actual_results / simulated_results / expected_results |
+| **Datasets** | 必须有真实数据来源 URL 或明确标记为"拟采集" |
+| **Charts/Plots** | 每张图表必须标记 `is_generated_from_real_data` 和 `source_dataset_id` |
+| **Non-Qwen Models** | 报告中不得出现 GPT-4、Llama、Claude 等非 Qwen 模型名 |
+
+## Reference 真实性要求
+
+- **禁止 LLM 自行编造 References**，所有引用必须来自文献库（Document / Evidence / citation_map）
+- 未验证的引用将在报告生成时自动清除
+- 导入文献方式：
+  1. arXiv URL 直接导入
+  2. BibTeX 批量导入
+  3. 本地上传 PDF + 自动解析
+- 报告中 References 为 0 时，会明确显示："缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。"
+
+## Windows PDF 导出依赖
+
+在 Windows 环境下，PDF 导出功能需要以下依赖：
+- `requirements.txt` 中已包含 `weasyprint` 依赖
+- 如遇到 WeasyPrint 安装问题，可参考 [WeasyPrint Windows 安装指南](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows)
+- PDF 导出失败不会影响 Markdown 和 JSON 格式的报告，其他功能正常使用
+
+## 千问 / 百炼配置说明
+
+- API Key 获取：访问 [阿里云百炼控制台](https://dashscope.console.aliyun.com/)
+- 在 `.env` 中配置 `QWEN_API_KEY=your_key_here`
+- 可选模型：`qwen-max`（推荐）、`qwen-plus`、`qwen-turbo`
+- 运行 `python scripts/check_e2e.py` 可自动诊断千问客户端连通性

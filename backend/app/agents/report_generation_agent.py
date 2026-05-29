@@ -172,6 +172,40 @@ class ReportGenerationAgent:
             if result.get("skill_outputs") and isinstance(result["skill_outputs"], dict):
                 result["skill_outputs"]["report_quality_check"] = quality_check_output
 
+            qc_data = quality_check_output.get("data", {})
+            refs_verified_val = qc_data.get("references_verified", 0) if isinstance(qc_data, dict) else 0
+            has_real_plots = qc_data.get("has_real_data_plots", False) if isinstance(qc_data, dict) else False
+
+            chapters = result.get("chapters", {})
+            if refs_verified_val == 0:
+                if not chapters.get("references"):
+                    chapters["references"] = []
+                placeholder_note = "缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。"
+                if placeholder_note not in chapters["references"]:
+                    chapters["references"].insert(0, placeholder_note)
+                markdown = result.get("markdown_content", "")
+                if "缺少真实引用" not in markdown:
+                    warning_section = (
+                        "\n\n---\n\n## ⚠️ 参考文献提醒\n\n"
+                        "**缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。**\n\n"
+                        "当前报告参考文献均由 LLM 自行生成，未在文献库中找到可验证的真实文献。"
+                        "请前往文献库导入真实文献后重新生成报告。\n"
+                    )
+                    result["markdown_content"] = markdown + warning_section
+
+            if not has_real_plots:
+                markdown = result.get("markdown_content", "")
+                if "缺少真实数据图表" not in markdown:
+                    plot_warning = (
+                        "\n\n---\n\n## ⚠️ 图表数据提醒\n\n"
+                        "**当前缺少真实数据图表。**\n\n"
+                        "请上传 CSV/Excel 等结构化数据集以启用数据驱动图表生成。"
+                        "所有图表均需标记 is_generated_from_real_data=true 以确保数据可追溯。\n"
+                    )
+                    result["markdown_content"] = markdown + plot_warning
+
+            result["chapters"] = chapters
+
             # ── 重新保存 PDF & JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
             pdf_result_enriched = export_markdown_to_pdf(
                 markdown_content=result.get("markdown_content", ""),
@@ -241,7 +275,74 @@ class ReportGenerationAgent:
         chapters = result_dict["chapters"]
         for ch in REPORT_CHAPTERS:
             if ch not in chapters:
-                chapters[ch] = [] if ch == "references" else ""
+                if ch == "references":
+                    chapters[ch] = []
+                elif ch == "datasets":
+                    chapters[ch] = []
+                elif ch == "source":
+                    chapters[ch] = []
+                elif ch == "target":
+                    chapters[ch] = {}
+                elif ch == "experiments":
+                    chapters[ch] = {
+                        "baselines": [],
+                        "metrics": [],
+                        "experimental_setup": "",
+                        "ablation_study": [],
+                        "validation_protocol": "",
+                    }
+                elif ch == "results":
+                    chapters[ch] = {
+                        "actual_results": [],
+                        "simulated_results": [],
+                        "expected_results": [],
+                        "limitations": [],
+                    }
+                else:
+                    chapters[ch] = ""
+
+        chapters["datasets"] = self._normalize_to_list(chapters.get("datasets", []))
+        chapters["source"] = self._normalize_to_list(chapters.get("source", []))
+
+        target_val = chapters.get("target", {})
+        if not isinstance(target_val, dict):
+            chapters["target"] = {}
+
+        experiments_val = chapters.get("experiments", {})
+        if not isinstance(experiments_val, dict):
+            chapters["experiments"] = {
+                "baselines": [],
+                "metrics": [],
+                "experimental_setup": str(experiments_val) if experiments_val else "",
+                "ablation_study": [],
+                "validation_protocol": "",
+            }
+        else:
+            for exp_key, exp_default in [
+                ("baselines", []), ("metrics", []),
+                ("experimental_setup", ""), ("ablation_study", []),
+                ("validation_protocol", ""),
+            ]:
+                if exp_key not in experiments_val:
+                    experiments_val[exp_key] = exp_default
+            chapters["experiments"] = experiments_val
+
+        results_val = chapters.get("results", {})
+        if not isinstance(results_val, dict):
+            chapters["results"] = {
+                "actual_results": [],
+                "simulated_results": [],
+                "expected_results": [],
+                "limitations": [],
+            }
+        else:
+            for res_key, res_default in [
+                ("actual_results", []), ("simulated_results", []),
+                ("expected_results", []), ("limitations", []),
+            ]:
+                if res_key not in results_val:
+                    results_val[res_key] = res_default
+            chapters["results"] = results_val
 
         refs = chapters.get("references", [])
         if not isinstance(refs, list):
@@ -259,6 +360,13 @@ class ReportGenerationAgent:
             chapters["references"] = []
             ref_check["references_replaced"] = True
 
+        result_dict["evidence_facts"] = evidence_facts or []
+        result_dict["plots"] = result_dict.get("plots", [])
+        if "compliance_check" not in result_dict:
+            result_dict["compliance_check"] = {}
+        if "skill_outputs" not in result_dict:
+            result_dict["skill_outputs"] = {}
+
         compliance = self._build_compliance_check(
             result_dict, ref_check, literature_facts, all_hypotheses,
             novelty_review_skill_outputs, sanity_check_skill_outputs,
@@ -267,7 +375,16 @@ class ReportGenerationAgent:
         result_dict["compliance_check"] = compliance
         result_dict["skill_outputs"] = skill_outputs
 
+        result_dict["chapters"] = chapters
         return result_dict
+
+    @staticmethod
+    def _normalize_to_list(value: Any) -> List[Any]:
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str) and value.strip():
+            return [value]
+        return []
 
     def _validate_references(
         self,
