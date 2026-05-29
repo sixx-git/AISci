@@ -74,6 +74,13 @@ bash scripts/run_dev.sh
    - 自动向量化和索引
    - 智能语义检索
 
+4. **🔬 科研 Skill 增强层**
+   - 文献搜索与引用验证：整合 arXiv、Semantic Scholar、OpenAlex、CrossRef 多源搜索，自动去重并验证引用真实性，拒绝 LLM 自造引用
+   - 数据集发现：根据研究问题推荐公开数据集，标注来源、许可和任务类型
+   - 科学图表生成：基于真实数据生成统计图表，无数据时不生成伪图
+   - 报告质量检查：对生成报告做赛题规范检查，输出评分和修正建议
+   > 本项目参考了 Hermes、K-Dense Scientific Skills、PaperQA、OpenScholar、Data-Juicer、MatPlotAgent 等公开项目的能力思想，未直接复制第三方主流程。核心实现为本项目自研适配层，核心推理模型仍为 Qwen/千问，外部 Skill 只作为工具层用于文献搜索、引用校验、数据质量分析、数据集发现、科学图表和报告质量检查。
+
 ---
 
 ## 🛠️ 技术栈

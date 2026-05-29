@@ -52,34 +52,38 @@ function summarizeStageData(stageName: string, data: unknown): string {
 
   const d = data as Record<string, unknown>;
 
+  if (stageName === 'literature_mining') {
+    const parts: string[] = [];
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    if (so) {
+      const sp = so.search_papers as Record<string, unknown> | undefined;
+      if (sp && sp.data) {
+        const spData = sp.data as Record<string, unknown>;
+        if (spData.total != null) {
+          parts.push(`SearchPapersSkill: ${spData.total} 篇论文`);
+        }
+      }
+      const cg = so.citation_grounding as Record<string, unknown> | undefined;
+      if (cg && cg.data) {
+        const cgData = cg.data as Record<string, unknown>;
+        if (cgData.references_verified != null) {
+          parts.push(`CitationGrounding: ${cgData.references_verified} verified`);
+        }
+      }
+    }
+    if (d.facts && Array.isArray(d.facts)) {
+      parts.push(`${d.facts.length} 个事实`);
+    }
+    if (d.citation_map && Array.isArray(d.citation_map)) {
+      parts.push(`${d.citation_map.length} 个引用映射`);
+    }
+    return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
+  }
+
   if (stageName === 'hypothesis_generation') {
     const parts: string[] = [];
     if (d.research_question) {
       parts.push(`研究问题: ${String(d.research_question).slice(0, 80)}`);
-    }
-    if (d.data_context && typeof d.data_context === 'object') {
-      const dc = d.data_context as Record<string, unknown>;
-      if (dc.dataset_count != null) {
-        parts.push(`${dc.dataset_count} 个数据集`);
-      }
-      if (Array.isArray(dc.available_modalities) && dc.available_modalities.length > 0) {
-        parts.push(`模态: ${(dc.available_modalities as string[]).join(', ')}`);
-      }
-      if (Array.isArray(dc.field_candidates)) {
-        parts.push(`${dc.field_candidates.length} 个字段`);
-      }
-      if (Array.isArray(dc.target_candidates) && dc.target_candidates.length > 0) {
-        parts.push(`${dc.target_candidates.length} 个目标候选`);
-      }
-      if (dc.quality_summary && typeof dc.quality_summary === 'object') {
-        const qs = dc.quality_summary as Record<string, unknown>;
-        if (qs.overall_score != null) {
-          parts.push(`质量分: ${Number(qs.overall_score).toFixed(2)}`);
-        }
-      }
-      if (Array.isArray(dc.warnings) && dc.warnings.length > 0) {
-        parts.push(`${dc.warnings.length} 条警告`);
-      }
     }
     if (d.hypotheses && Array.isArray(d.hypotheses)) {
       const hyps = d.hypotheses as unknown[];
@@ -87,6 +91,44 @@ function summarizeStageData(stageName: string, data: unknown): string {
     }
     if (d.off_topic_count != null) {
       parts.push(`${d.off_topic_count} 条偏题`);
+    }
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    if (so) {
+      const qa = so.question_alignment as Record<string, unknown> | undefined;
+      if (qa && qa.data) {
+        const qaData = qa.data as Record<string, unknown>;
+        if (qaData.alignment_score != null) {
+          parts.push(`QuestionAlignment: ${Number(qaData.alignment_score).toFixed(2)}`);
+        }
+        if (qaData.off_topic_count != null) {
+          parts.push(`偏题: ${qaData.off_topic_count}`);
+        }
+      }
+    }
+    return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
+  }
+
+  if (stageName === 'experiment_design') {
+    const parts: string[] = [];
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    if (so) {
+      const dd = so.dataset_discovery as Record<string, unknown> | undefined;
+      if (dd && dd.data) {
+        const ddData = dd.data as Record<string, unknown>;
+        if (ddData.total != null) {
+          parts.push(`DatasetDiscovery: ${ddData.total} 个数据集`);
+        }
+      }
+      const sc = so.experiment_sanity_check as Record<string, unknown> | undefined;
+      if (sc && sc.data) {
+        const scData = sc.data as Record<string, unknown>;
+        if (Array.isArray(scData.warnings) && scData.warnings.length > 0) {
+          parts.push(`SanityCheck: ${scData.warnings.length} warnings`);
+        }
+      }
+    }
+    if (d.methods && typeof d.methods === 'string') {
+      parts.push(`方法: ${d.methods.slice(0, 40)}`);
     }
     return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
   }
@@ -143,6 +185,13 @@ function summarizeStageData(stageName: string, data: unknown): string {
     }
     const so = d.skill_outputs as Record<string, unknown> | undefined;
     if (so) {
+      const sp = so.scientific_plot as Record<string, unknown> | undefined;
+      if (sp && sp.success) {
+        const spData = sp.data as Record<string, unknown> | undefined;
+        if (spData && spData.total_charts != null) {
+          parts.push(`ScientificPlot: ${spData.total_charts} 张`);
+        }
+      }
       const cg = so.report_chart_generation as Record<string, unknown> | undefined;
       if (cg && cg.data) {
         const cgData = cg.data as Record<string, unknown>;
@@ -150,9 +199,12 @@ function summarizeStageData(stageName: string, data: unknown): string {
           parts.push(`ChartGeneration: ${cgData.total_charts} 张`);
         }
       }
-      const sp = so.scientific_plot as Record<string, unknown> | undefined;
-      if (sp && sp.success) {
-        parts.push('ScientificPlot ✓');
+      const qc = so.report_quality_check as Record<string, unknown> | undefined;
+      if (qc && qc.data) {
+        const qcData = qc.data as Record<string, unknown>;
+        if (qcData.score != null) {
+          parts.push(`质量评分: ${qcData.score}`);
+        }
       }
     }
     if (d.compliance_check && typeof d.compliance_check === 'object') {

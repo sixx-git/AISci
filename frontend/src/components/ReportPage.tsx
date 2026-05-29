@@ -5,6 +5,7 @@ import { Card } from './Card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
+import { QualityCheckCard } from './QualityCheckCard';
 import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
 import type { ReportData, ReportPlot } from '@/types';
@@ -438,6 +439,9 @@ export function ReportPage({
               sections={sections}
               complianceCheck={complianceCheck}
               warnings={warnings}
+            />
+            <QualityCheckCard
+              complianceCheck={complianceCheck}
             />
             <EvidenceChainQualityCard
               complianceCheck={complianceCheck}

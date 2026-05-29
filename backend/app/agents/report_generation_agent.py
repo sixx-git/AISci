@@ -18,6 +18,7 @@ CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.report.report_chart_generation_skill import ReportChartGenerationSkill
 from app.skills.report.scientific_plot_skill import ScientificPlotSkill
+from app.skills.report.report_quality_check_skill import ReportQualityCheckSkill
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,19 @@ class ReportGenerationAgent:
             result = self._enrich_results_with_categorized(
                 result, small_validation, preliminary_analysis_skill_outputs
             )
+
+            # ── 报告质量检查 ──
+            quality_check_output = self._run_quality_check_sync(
+                result,
+                verified_references,
+                result.get("chart_skill_outputs", {}),
+            )
+            compliance = result.get("compliance_check", {})
+            if isinstance(compliance, dict):
+                compliance["report_quality_check"] = quality_check_output
+                result["compliance_check"] = compliance
+            if result.get("skill_outputs") and isinstance(result["skill_outputs"], dict):
+                result["skill_outputs"]["report_quality_check"] = quality_check_output
 
             # ── 重新保存 PDF & JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
             pdf_result_enriched = export_markdown_to_pdf(
@@ -364,6 +378,50 @@ class ReportGenerationAgent:
             return asyncio.run(_run())
         except Exception as e:
             logger.warning(f"CitationGroundingSkill 异常: {e}")
+            return {}
+
+    @staticmethod
+    def _run_quality_check_sync(
+        result_dict: Dict[str, Any],
+        verified_references: Optional[List[Dict[str, Any]]],
+        chart_skill_outputs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            try:
+                has_real_plots = False
+                sp_output = chart_skill_outputs.get("scientific_plot", {})
+                if isinstance(sp_output, dict) and sp_output.get("data"):
+                    charts = sp_output["data"].get("charts", [])
+                    has_real_plots = any(
+                        c.get("is_generated_from_real_data") for c in charts
+                    )
+                references_verified = len(verified_references or [])
+
+                qc_skill = ReportQualityCheckSkill()
+                qc_result = await qc_skill.run(
+                    input_data={
+                        "report_data": result_dict,
+                        "references_verified": references_verified,
+                        "has_real_data_plots": has_real_plots,
+                    },
+                    context={"stage": "report_generation"},
+                )
+                return {
+                    "success": qc_result.success,
+                    "data": qc_result.data,
+                    "warnings": qc_result.warnings,
+                    "errors": qc_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ReportQualityCheckSkill 失败: {e}")
+                return {"success": False, "error": str(e)}
+
+        try:
+            return asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"ReportQualityCheckSkill 异常: {e}")
             return {}
 
     def _build_compliance_check(
@@ -609,30 +667,6 @@ class ReportGenerationAgent:
                 return outputs
 
             try:
-                chart_skill = ReportChartGenerationSkill()
-                chart_result = await chart_skill.run(
-                    input_data={
-                        "plot_specs": plot_specs,
-                        "data": data_rows,
-                        "output_dir": "",
-                        "format": "both",
-                        "dpi": 150,
-                        "figure_size": (10, 6),
-                    },
-                    context={"stage": "report_generation"},
-                )
-                outputs["charts"] = chart_result.data.get("charts", [])
-                outputs["skill_outputs"]["report_chart_generation"] = {
-                    "success": chart_result.success,
-                    "data": chart_result.data,
-                    "warnings": chart_result.warnings,
-                    "errors": chart_result.errors,
-                }
-            except Exception as e:
-                logger.warning(f"ReportChartGenerationSkill 失败: {e}")
-                outputs["skill_outputs"]["report_chart_generation"] = {"success": False, "error": str(e)}
-
-            try:
                 sci_plot_skill = ScientificPlotSkill()
                 sci_result = await sci_plot_skill.run(
                     input_data={
@@ -663,6 +697,38 @@ class ReportGenerationAgent:
             except Exception as e:
                 logger.warning(f"ScientificPlotSkill 失败: {e}")
                 outputs["skill_outputs"]["scientific_plot"] = {"success": False, "error": str(e)}
+
+            try:
+                chart_skill = ReportChartGenerationSkill()
+                chart_result = await chart_skill.run(
+                    input_data={
+                        "plot_specs": plot_specs,
+                        "data": data_rows,
+                        "output_dir": "",
+                        "format": "both",
+                        "dpi": 150,
+                        "figure_size": (10, 6),
+                    },
+                    context={"stage": "report_generation"},
+                )
+                rc_charts = chart_result.data.get("charts", [])
+                if rc_charts:
+                    outputs.setdefault("charts", [])
+                    existing_ids = {c.get("plot_id", "") for c in outputs["charts"]}
+                    for ch in rc_charts:
+                        pid = ch.get("plot_id", "")
+                        if pid not in existing_ids:
+                            outputs["charts"].append(ch)
+                            existing_ids.add(pid)
+                outputs["skill_outputs"]["report_chart_generation"] = {
+                    "success": chart_result.success,
+                    "data": chart_result.data,
+                    "warnings": chart_result.warnings,
+                    "errors": chart_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ReportChartGenerationSkill 失败: {e}")
+                outputs["skill_outputs"]["report_chart_generation"] = {"success": False, "error": str(e)}
 
             return outputs
 

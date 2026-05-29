@@ -91,6 +91,7 @@ class SearchPapersSkill(BaseSkill):
         search_query = " ".join(query_terms[:5])
 
         all_papers: List[dict] = []
+        source_status: Dict[str, dict] = {}
         source_warnings: List[str] = []
 
         for source_name in sources:
@@ -99,21 +100,28 @@ class SearchPapersSkill(BaseSkill):
                 for p in source_papers:
                     p["_source"] = source_name
                 all_papers.extend(source_papers)
+                source_status[source_name] = {"success": True, "count": len(source_papers)}
                 logger.info(f"{source_name}: {len(source_papers)} papers")
             except Exception as e:
                 warn_msg = f"{source_name} 搜索失败: {str(e)[:120]}"
                 source_warnings.append(warn_msg)
+                source_status[source_name] = {"success": False, "count": 0, "error": str(e)[:200]}
                 logger.warning(warn_msg)
                 result.add_warning(warn_msg)
 
         deduped, dedup_count = self._deduplicate_papers(all_papers)
         deduped = deduped[:max_results]
 
+        for paper in deduped:
+            paper.pop("_source", None)
+
         result.data = {
             "papers": deduped,
             "total": len(deduped),
             "sources_searched": sources,
             "dedup_count": dedup_count,
+            "source_status": source_status,
+            "warnings": source_warnings,
         }
         result.metadata["sources_with_errors"] = len(source_warnings)
         return result
@@ -184,6 +192,8 @@ class SearchPapersSkill(BaseSkill):
                 "citation_count": 0,
                 "venue": "",
                 "pdf_url": source_url.replace("/abs/", "/pdf/") if arxiv_id else "",
+                "external_id": arxiv_id,
+                "metadata": {"source_api": "arxiv", "raw_id": arxiv_id},
             })
         return papers
 
@@ -214,6 +224,8 @@ class SearchPapersSkill(BaseSkill):
                 "citation_count": item.get("citationCount", 0) or 0,
                 "venue": item.get("venue", "") or "",
                 "pdf_url": "",
+                "external_id": ext_ids.get("ArXiv", "") or ext_ids.get("DOI", "") or str(item.get("paperId", "")),
+                "metadata": {"source_api": "semantic_scholar", "paperId": item.get("paperId", ""), "external_ids": ext_ids},
             })
         return papers
 
@@ -234,6 +246,7 @@ class SearchPapersSkill(BaseSkill):
                 authors_list.append(author_obj.get("display_name", ""))
             primary_loc = item.get("primary_location", {}) or {}
             source_info = primary_loc.get("source", {}) or {}
+            openalex_id = item.get("id", "") or ""
             papers.append({
                 "title": item.get("title", "") or "",
                 "authors": authors_list,
@@ -246,6 +259,8 @@ class SearchPapersSkill(BaseSkill):
                 "citation_count": item.get("cited_by_count", 0) or 0,
                 "venue": source_info.get("display_name", "") or "",
                 "pdf_url": primary_loc.get("pdf_url", "") or "",
+                "external_id": openalex_id.split("/")[-1] if openalex_id else "",
+                "metadata": {"source_api": "openalex", "openalex_id": openalex_id, "type": item.get("type", "")},
             })
             if item.get("abstract_inverted_index"):
                 abstract = self._reconstruct_openalex_abstract(item["abstract_inverted_index"])
@@ -299,6 +314,8 @@ class SearchPapersSkill(BaseSkill):
                 "citation_count": item.get("is-referenced-by-count", 0) or 0,
                 "venue": (item.get("container-title", [""]) or [""])[0],
                 "pdf_url": "",
+                "external_id": item.get("DOI", "") or "",
+                "metadata": {"source_api": "crossref", "publisher": item.get("publisher", ""), "type": item.get("type", "")},
             })
         return papers
 

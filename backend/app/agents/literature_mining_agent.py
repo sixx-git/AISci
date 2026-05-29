@@ -80,6 +80,11 @@ class LiteratureMiningResponse(BaseModel):
     uncertain_points: List[str] = Field(default_factory=list, description="不确定的点")
     warning: Optional[str] = Field(None, description="警告信息（文献库为空 / 无检索结果时）")
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
+    retrieved_papers: List[Dict[str, Any]] = Field(default_factory=list, description="SearchPapersSkill 搜到的论文（candidate_papers）")
+    imported_documents: int = Field(0, description="已导入的文献文档数")
+    evidence_facts: int = Field(0, description="从文献中提取的事实数")
+    verified_references_count: int = Field(0, description="已验证的引用数")
+    candidate_references_count: int = Field(0, description="候选引用数（未导入文献库）")
 
 
 # ==================== Agent 实现 ====================
@@ -150,6 +155,20 @@ class LiteratureMiningAgent:
             response.skill_outputs = self._run_skills_sync(
                 project_id, research_question, top_k, search_results
             )
+
+            response.imported_documents = len(response.citation_map)
+            response.evidence_facts = len(response.facts)
+            response.verified_references_count = len(response.citation_map)
+
+            search_output = response.skill_outputs.get("search_papers", {})
+            if search_output.get("success") and search_output.get("data"):
+                response.retrieved_papers = search_output["data"].get("papers", [])
+                response.candidate_references_count = len(response.retrieved_papers)
+                if not response.citation_map:
+                    response.warning = (
+                        f"当前项目文献不足，自动搜索到 {response.candidate_references_count} "
+                        f"篇候选论文，但未导入文献库，不可作为 verified references。"
+                    )
 
             logger.info(
                 f"文献挖掘完成: {len(response.facts)} 个事实, "

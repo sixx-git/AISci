@@ -27,6 +27,9 @@ class ExperimentDesignResult(BaseModel):
     expected_results: str = Field("", description="预期结果")
     limitations: str = Field("", description="局限性")
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
+    project_datasets: List[Dict[str, Any]] = Field(default_factory=list, description="项目已有数据集")
+    recommended_public_datasets: List[Dict[str, Any]] = Field(default_factory=list, description="推荐公开数据集")
+    data_gap: List[str] = Field(default_factory=list, description="数据缺口说明")
 
     @field_validator(
         "datasets", "baselines", "metrics",
@@ -125,6 +128,15 @@ class ExperimentDesignAgent:
             result["skill_outputs"] = self._run_skills_sync(
                 result, hypothesis, data_files or [], literature_facts or []
             )
+
+            ds_output = result.get("skill_outputs", {}).get("dataset_discovery", {})
+            if ds_output.get("success") and ds_output.get("data"):
+                result["recommended_public_datasets"] = ds_output["data"].get("datasets", [])
+            md_output = result.get("skill_outputs", {}).get("multimodal_data_ingest", {})
+            if md_output.get("success") and md_output.get("data"):
+                result["project_datasets"] = md_output["data"].get("datasets", [])
+            if not result["project_datasets"] and not result["recommended_public_datasets"]:
+                result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
 
             logger.info("实验设计完成")
 

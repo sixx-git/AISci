@@ -27,7 +27,7 @@ from app.schemas.research import HypothesisResponse, ExperimentDesignDBResponse
 from app.services.project_service import ProjectService, DocumentService
 from app.services.hypothesis_service import HypothesisService
 from app.services.experiment_service import ExperimentDesignService
-from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus
+from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus, PipelineStage
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +298,7 @@ def list_project_hypotheses(
     pipeline_hypotheses: List[HypothesisResponse] = []
 
     if latest_run:
-        stage_names = ["hypothesis_generation", "hypothesis_review"]
+        stage_names = [PipelineStage.HYPOTHESIS_GENERATION, PipelineStage.HYPOTHESIS_REVIEW]
         for stage_name in stage_names:
             stage_exec = (
                 db.query(PipelineStageExecution)
@@ -416,7 +416,7 @@ def list_project_experiment_designs(
             db.query(PipelineStageExecution)
             .filter(
                 PipelineStageExecution.pipeline_run_id == latest_run.id,
-                PipelineStageExecution.stage == "experiment_design"
+                PipelineStageExecution.stage == PipelineStage.EXPERIMENT_DESIGN
             )
             .first()
         )

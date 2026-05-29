@@ -41,6 +41,10 @@ LLM_FABRICATION_PATTERNS = [
     re.compile(r"^见\s*(上文|前述|上述|XXX)", re.IGNORECASE),
     re.compile(r"^同上"),
     re.compile(r"^(et\s+al\.?\s*,?\s*)?(19|20)\d{2}[a-z]?\s*[，,]\s*$"),
+    re.compile(r"\bViT\s+(Paper|Model|论文)\b", re.IGNORECASE),
+    re.compile(r"\bCross-modal\s+(Paper|Model|论文)\b", re.IGNORECASE),
+    re.compile(r"\bLLM\s*(自造|生成|hallucinat)", re.IGNORECASE),
+    re.compile(r"\b(fabricated|made.?up|non.?existent)\s+(reference|citation|paper)\b", re.IGNORECASE),
 ]
 
 
@@ -158,6 +162,7 @@ class CitationGroundingSkill(BaseSkill):
             "incomplete_references_detail": incomplete,
             "rejected_references": [r.get("text", "") for r in rejected],
             "rejected_references_detail": rejected,
+            "references_verified": len(verified),
             "risk_level": risk,
             "verification_summary": (
                 f"{len(verified)} verified, {len(incomplete)} incomplete, "
