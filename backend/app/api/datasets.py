@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, Query, Depends, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, Path, Query, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
@@ -60,14 +60,53 @@ async def list_datasets(
 
 @router.get("/{dataset_id}")
 async def get_dataset(
-    dataset_id: str,
+    dataset_id: str = Path(..., description="数据集 ID"),
     db: Session = Depends(get_db),
 ):
     service = DatasetService(db)
-    dataset = service.get_dataset_by_id(dataset_id)
-    if not dataset:
+    ds = service.get_dataset_by_id(dataset_id)
+    if not ds:
         raise HTTPException(status_code=404, detail="数据集不存在")
-    return {"code": 200, "data": service.to_response(dataset), "message": "success"}
+    return {
+        "code": 200,
+        "data": service.to_response(ds),
+        "message": "success",
+    }
+
+
+@router.get("/context")
+async def get_data_context(
+    project_id: str = Query(..., description="项目 ID"),
+    db: Session = Depends(get_db),
+):
+    """获取项目数据上下文
+    返回统一 data_context，包括:
+    - dataset_count、available_modalities、datasets
+    - field_candidates、target_candidates
+    - quality_summary、warnings
+    """
+    service = DatasetService(db)
+    data_context = service.get_project_data_context(project_id)
+    return {
+        "code": 200,
+        "data": data_context,
+        "message": "success",
+    }
+
+
+@router.post("/{dataset_id}/quality")
+async def run_quality_analysis(
+    dataset_id: str = Path(..., description="数据集 ID"),
+    db: Session = Depends(get_db),
+):
+    """对单个数据集运行质量分析，返回 quality_report"""
+    service = DatasetService(db)
+    qa_result = service.run_single_quality_analysis(dataset_id)
+    return {
+        "code": 200,
+        "data": qa_result,
+        "message": "success" if qa_result.get("success") else "质量分析失败",
+    }
 
 
 @router.post("/{dataset_id}/preprocess")

@@ -1,0 +1,11 @@
+behavior_label,frame_count,cnn_accuracy,sensor_score,subject_id
+normal,120,0.95,0.87,S001
+abnormal,85,0.72,0.61,S001
+normal,150,0.93,0.91,S002
+abnormal,63,0.68,0.55,S002
+normal,200,0.98,0.94,S003
+abnormal,47,0.61,0.48,S003
+normal,178,0.96,0.89,S004
+abnormal,92,0.75,0.67,S004
+normal,133,0.91,0.85,S005
+abnormal,71,0.67,0.53,S005

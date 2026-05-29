@@ -59,9 +59,27 @@ function summarizeStageData(stageName: string, data: unknown): string {
     }
     if (d.data_context && typeof d.data_context === 'object') {
       const dc = d.data_context as Record<string, unknown>;
-      if (dc.summary) parts.push(`数据: ${String(dc.summary).slice(0, 80)}`);
-      if (dc.dataset_count != null) parts.push(`${dc.dataset_count} 个数据集`);
-      if (Array.isArray(dc.field_candidates)) parts.push(`${dc.field_candidates.length} 个字段`);
+      if (dc.dataset_count != null) {
+        parts.push(`${dc.dataset_count} 个数据集`);
+      }
+      if (Array.isArray(dc.available_modalities) && dc.available_modalities.length > 0) {
+        parts.push(`模态: ${(dc.available_modalities as string[]).join(', ')}`);
+      }
+      if (Array.isArray(dc.field_candidates)) {
+        parts.push(`${dc.field_candidates.length} 个字段`);
+      }
+      if (Array.isArray(dc.target_candidates) && dc.target_candidates.length > 0) {
+        parts.push(`${dc.target_candidates.length} 个目标候选`);
+      }
+      if (dc.quality_summary && typeof dc.quality_summary === 'object') {
+        const qs = dc.quality_summary as Record<string, unknown>;
+        if (qs.overall_score != null) {
+          parts.push(`质量分: ${Number(qs.overall_score).toFixed(2)}`);
+        }
+      }
+      if (Array.isArray(dc.warnings) && dc.warnings.length > 0) {
+        parts.push(`${dc.warnings.length} 条警告`);
+      }
     }
     if (d.hypotheses && Array.isArray(d.hypotheses)) {
       const hyps = d.hypotheses as unknown[];

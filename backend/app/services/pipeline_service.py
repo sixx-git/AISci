@@ -439,8 +439,6 @@ class PipelineService:
         # ── 构建数据上下文 ──
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id)
-        multimodal_datasets = data_context.pop("_multimodal_datasets", [])
-        data_linking_evidence = data_context.pop("_data_linking_evidence", [])
 
         result = agent.generate(
             research_question=research_question,
@@ -449,8 +447,6 @@ class PipelineService:
             constraints=[],
             project_id=project_id,
             data_context=data_context,
-            multimodal_datasets=multimodal_datasets,
-            data_linking_evidence=data_linking_evidence,
         )
         result_dict = self._safe_model_dump(result)
 
@@ -475,8 +471,6 @@ class PipelineService:
                         ],
                         project_id=project_id,
                         data_context=data_context,
-                        multimodal_datasets=multimodal_datasets,
-                        data_linking_evidence=data_linking_evidence,
                     )
                     result_dict = self._safe_model_dump(retry)
                     # 重试后再做一次对齐检查
@@ -817,178 +811,27 @@ class PipelineService:
 
 # ────────────── 工具函数 ──────────────
 
-    def _build_data_context(self, project_id: str) -> Dict[str, Any]:
-        """构建项目数据上下文，供 HypothesisGenerationAgent 使用"""
-        context: Dict[str, Any] = {
-            "datasets": [],
-            "dataset_count": 0,
-            "available_modalities": [],
-            "field_candidates": [],
-            "target_candidates": [],
-            "summary": "",
-            "warnings": [],
-        }
-        multimodal_datasets: List[Dict] = []
-        data_linking_evidence: List[Dict] = []
+    def _build_data_context(self, project_id: str) -> dict:
 
-        if not project_id:
-            context["warnings"].append("未提供 project_id，无法构建数据上下文")
-            return context
+        from app.services.dataset_service import DatasetService
+
+        ds_service = DatasetService(self.db)
 
         try:
-            import json
-            from app.models.project import Document, DocumentStatus
-            from app.models.research import Dataset
-
-            docs = self.db.query(Document).filter(
-                Document.project_id == project_id,
-                Document.status == DocumentStatus.PROCESSED,
-            ).all()
-
-            fields_set: List[str] = []
-            modalities_set: set = set()
-            doc_summaries: List[str] = []
-            target_candidate_fields: List[str] = []
-
-            for doc in docs:
-                if doc.title:
-                    doc_summaries.append(doc.title[:100])
-                if doc.abstract:
-                    doc_summaries.append(f"摘要: {doc.abstract[:150]}")
-                if doc.keywords:
-                    fields_set.extend([k.strip() for k in doc.keywords.split(",") if k.strip()])
-                if doc.extra_metadata:
-                    metadata = doc.extra_metadata
-                    if isinstance(metadata, dict):
-                        ds_fields = metadata.get("fields") or metadata.get("columns") or metadata.get("features")
-                        if isinstance(ds_fields, list):
-                            fields_set.extend([str(f) for f in ds_fields])
-                        ds_info = {
-                            "name": doc.filename or doc.title or "unknown",
-                            "modality": metadata.get("modality", doc.file_type or "tabular"),
-                            "fields": ds_fields if isinstance(ds_fields, list) else [],
-                        }
-                        multimodal_datasets.append(ds_info)
-                        modalities_set.add(ds_info["modality"])
-
-            # ── 从 Dataset 表读取用户上传的多模态数据集 ──
-            datasets = self.db.query(Dataset).filter(
-                Dataset.project_id == project_id,
-                Dataset.preprocessing_status.in_(["completed", "pending"]),
-                Dataset.use_for_hypothesis == True,
-            ).all()
-
-            dataset_entries: List[Dict[str, Any]] = []
-            for ds in datasets:
-                cols = []
-                try:
-                    if ds.columns_json:
-                        cols = json.loads(ds.columns_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                stats = {}
-                try:
-                    if ds.statistics_json:
-                        stats = json.loads(ds.statistics_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                preview = []
-                try:
-                    if ds.preview_json:
-                        preview = json.loads(ds.preview_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                dtypes = {}
-                try:
-                    if ds.dtypes_json:
-                        dtypes = json.loads(ds.dtypes_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-                entry = {
-                    "dataset_id": ds.id,
-                    "filename": ds.filename,
-                    "data_type": ds.data_type or "unknown",
-                    "source_type": getattr(ds, "source_type", "upload") or "upload",
-                    "n_rows": ds.n_rows or 0,
-                    "n_columns": ds.n_columns or 0,
-                    "columns": cols,
-                    "dtypes": dtypes,
-                    "statistics": stats,
-                    "preview": preview[:5] if preview else [],
-                    "missing_count": ds.missing_count or 0,
-                    "missing_rate": ds.missing_rate or 0.0,
-                    "use_for_hypothesis": True,
-                }
-                dataset_entries.append(entry)
-
-                fields_set.extend(cols)
-                modalities_set.add(ds.data_type or "unknown")
-
-                for col in cols:
-                    col_lower = col.lower()
-                    if any(t in col_lower for t in ["label", "target", "class", "category",
-                                                      "标签", "目标", "类别", "分类",
-                                                      "score", "评分", "result", "结果",
-                                                      "yield", "output"]):
-                        if isinstance(ds.columns_json, str):
-                            try:
-                                col_list = json.loads(ds.columns_json)
-                                if col in col_list:
-                                    target_candidate_fields.append(f"{ds.filename}.{col}")
-                            except Exception:
-                                target_candidate_fields.append(f"{ds.filename}.{col}")
-                        else:
-                            target_candidate_fields.append(f"{ds.filename}.{col}")
-
-                multimodal_datasets.append({
-                    "name": ds.filename,
-                    "dataset_id": ds.id,
-                    "modality": ds.data_type,
-                    "fields": cols,
-                    "n_samples": ds.n_rows,
-                    "missing_rate": ds.missing_rate,
-                    "statistics": stats,
-                })
-
-            context["datasets"] = dataset_entries
-            context["dataset_count"] = len(dataset_entries)
-            context["available_modalities"] = sorted(list(modalities_set))
-            context["field_candidates"] = list(dict.fromkeys(fields_set))[:50]
-            context["target_candidates"] = list(dict.fromkeys(target_candidate_fields))[:20]
-
-            if not dataset_entries:
-                context["warnings"].append("当前项目缺少可用于假设生成的数据集，假设将基于文献事实和理论推测")
-
-            summary_parts = []
-            if dataset_entries:
-                total_rows = sum(ds.get("n_rows", 0) or 0 for ds in dataset_entries)
-                summary_parts.append(
-                    f"共 {len(dataset_entries)} 个数据集，"
-                    f"总行数 {total_rows}，"
-                    f"总字段数 {len(context['field_candidates'])}，"
-                    f"模态: {', '.join(context['available_modalities'])}"
-                )
-            if doc_summaries:
-                summary_parts.append(f"文献摘要: {'; '.join(doc_summaries[:3])}")
-            context["summary"] = " | ".join(summary_parts) if summary_parts else "无可用数据或文献摘要"
-
-            context["statistics"] = {
-                "sample_count": sum(ds.n_rows or 0 for ds in datasets) + len(docs),
-                "field_count": len(fields_set),
-                "missing_rate": round(
-                    sum(ds.missing_rate or 0 for ds in datasets) / max(len(datasets), 1), 4
-                ) if datasets else None,
-                "dataset_count": len(datasets),
+            data_context = ds_service.get_project_data_context(project_id)
+        except Exception as e:
+            logger.error(f"获取项目数据上下文失败: {e}")
+            data_context = {
+                "dataset_count": 0,
+                "available_modalities": [],
+                "datasets": [],
+                "field_candidates": [],
+                "target_candidates": [],
+                "quality_summary": {},
+                "warnings": [f"获取数据上下文失败: {str(e)}"],
             }
 
-        except Exception as e:
-            logger.warning(f"构建数据上下文失败: {e}")
-            context["warnings"].append(f"构建数据上下文时发生异常: {str(e)}")
-
-        context["_multimodal_datasets"] = multimodal_datasets
-        context["_data_linking_evidence"] = data_linking_evidence
-        return context
+        return data_context
 
     @staticmethod
     def _run_alignment_skill(research_question: str, hypotheses: List[Dict]) -> Dict[str, Any]:

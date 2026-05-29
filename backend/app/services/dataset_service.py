@@ -16,6 +16,14 @@ SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".pn
 TABULAR_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff"}
 TIME_SERIES_EXTENSIONS = {".wav", ".npy", ".npz"}
+JSON_EXTENSIONS = {".json", ".jsonl"}
+
+TARGET_COLUMN_KEYWORDS = [
+    "label", "target", "class", "y", "accuracy", "score", "result", "outcome",
+    "行为", "类别", "标签", "准确率", "评分", "目标", "结果", "分类",
+    "diagnosis", "prognosis", "response", "status", "flag",
+    "label_col", "target_col", "outcome_col",
+]
 
 
 class DatasetService:
@@ -30,7 +38,7 @@ class DatasetService:
             return "image"
         if ext in TIME_SERIES_EXTENSIONS:
             return "time_series"
-        if ext == ".json":
+        if ext in JSON_EXTENSIONS:
             return "json"
         if ext == ".pdf":
             return "pdf"
@@ -106,6 +114,126 @@ class DatasetService:
             logger.warning(f"分析表格数据失败: {e}")
         return result
 
+    def _analyze_image_file(self, file_path: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "image_count": 1,
+            "width": 0,
+            "height": 0,
+            "channels": 0,
+            "format": "",
+            "file_size_bytes": 0,
+        }
+        try:
+            result["file_size_bytes"] = os.path.getsize(file_path)
+            ext = os.path.splitext(file_path)[1].lower()
+            result["format"] = ext.lstrip(".")
+            try:
+                from PIL import Image
+                with Image.open(file_path) as img:
+                    result["width"], result["height"] = img.size
+                    mode = img.mode
+                    if mode == "RGB":
+                        result["channels"] = 3
+                    elif mode == "RGBA":
+                        result["channels"] = 4
+                    elif mode == "L":
+                        result["channels"] = 1
+                    else:
+                        result["channels"] = len(mode) if mode else 0
+            except ImportError:
+                result["_pillow_warning"] = "Pillow 不可用，无法获取图像详细信息"
+        except Exception as e:
+            logger.warning(f"分析图像文件失败: {e}")
+            result["_error"] = str(e)
+        return result
+
+    def _analyze_timeseries_file(self, file_path: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "file_format": "",
+            "n_samples": 0,
+            "shape": [],
+            "duration_estimate": "",
+            "file_size_bytes": 0,
+        }
+        try:
+            result["file_size_bytes"] = os.path.getsize(file_path)
+            ext = os.path.splitext(file_path)[1].lower()
+            result["file_format"] = ext.lstrip(".")
+            if ext in (".npy", ".npz"):
+                try:
+                    import numpy as np
+                    if ext == ".npy":
+                        arr = np.load(file_path, allow_pickle=True)
+                        result["shape"] = list(arr.shape) if hasattr(arr, "shape") else []
+                        result["n_samples"] = arr.shape[0] if hasattr(arr, "shape") and len(arr.shape) > 0 else 0
+                    else:
+                        data = np.load(file_path, allow_pickle=True)
+                        keys = list(data.keys()) if hasattr(data, "files") else []
+                        result["shape"] = [f"{k}: {list(data[k].shape) if hasattr(data[k], 'shape') else '?'}" for k in keys[:5]]
+                        result["n_samples"] = len(keys)
+                except ImportError:
+                    result["_numpy_warning"] = "NumPy 不可用"
+            elif ext == ".wav":
+                try:
+                    import wave
+                    with wave.open(file_path, "rb") as wf:
+                        result["n_channels"] = wf.getnchannels()
+                        result["sample_width"] = wf.getsampwidth()
+                        result["frame_rate"] = wf.getframerate()
+                        result["n_frames"] = wf.getnframes()
+                        result["n_samples"] = result["n_frames"]
+                        result["duration_estimate"] = f"{result['n_frames'] / max(result['frame_rate'], 1):.2f}s"
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"分析时间序列文件失败: {e}")
+            result["_error"] = str(e)
+        return result
+
+    def _analyze_json_file(self, file_path: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "file_size_bytes": 0,
+            "record_count": 0,
+            "is_array": False,
+            "top_level_keys": [],
+            "field_candidates": [],
+            "preview": [],
+        }
+        try:
+            result["file_size_bytes"] = os.path.getsize(file_path)
+            ext = os.path.splitext(file_path)[1].lower()
+            with open(file_path, "r", encoding="utf-8") as f:
+                if ext == ".jsonl":
+                    lines = []
+                    for i, line in enumerate(f):
+                        if i >= 10:
+                            break
+                        if line.strip():
+                            lines.append(json.loads(line))
+                    result["record_count"] = sum(1 for _ in open(file_path, "r", encoding="utf-8") if _.strip())
+                    if lines:
+                        result["is_array"] = False
+                        result["top_level_keys"] = sorted(list({k for r in lines for k in r.keys()}))
+                        result["field_candidates"] = result["top_level_keys"]
+                        result["preview"] = lines[:5]
+                else:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        result["is_array"] = True
+                        result["record_count"] = len(data)
+                        if data:
+                            result["top_level_keys"] = sorted(list({k for r in data[:50] if isinstance(r, dict) for k in r.keys()}))
+                            result["field_candidates"] = result["top_level_keys"]
+                            result["preview"] = data[:5]
+                    elif isinstance(data, dict):
+                        result["top_level_keys"] = sorted(list(data.keys()))
+                        result["field_candidates"] = result["top_level_keys"]
+                        result["preview"] = [{k: str(v)[:80] for k, v in list(data.items())[:10]}]
+        except Exception as e:
+            logger.warning(f"分析 JSON 文件失败: {e}")
+            result["_error"] = str(e)
+        return result
+
     def create_dataset(
         self,
         project_id: str,
@@ -125,17 +253,43 @@ class DatasetService:
             preprocessing_status="pending",
         )
 
-        if auto_analyze and data_type == "tabular":
-            analysis = self.analyze_tabular_preview(file_path)
-            ds.n_rows = analysis.get("n_rows") or 0
-            ds.n_columns = analysis.get("n_columns") or 0
-            ds.columns_json = json.dumps(analysis.get("columns", []), ensure_ascii=False)
-            ds.dtypes_json = json.dumps(analysis.get("dtypes", {}), ensure_ascii=False)
-            ds.missing_count = analysis.get("missing_count", 0)
-            ds.missing_rate = analysis.get("missing_rate", 0.0)
-            ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
-            ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
-            ds.preprocessing_status = "completed"
+        if auto_analyze:
+            try:
+                if data_type == "tabular":
+                    analysis = self.analyze_tabular_preview(file_path)
+                    ds.n_rows = analysis.get("n_rows") or 0
+                    ds.n_columns = analysis.get("n_columns") or 0
+                    ds.columns_json = json.dumps(analysis.get("columns", []), ensure_ascii=False)
+                    ds.dtypes_json = json.dumps(analysis.get("dtypes", {}), ensure_ascii=False)
+                    ds.missing_count = analysis.get("missing_count", 0)
+                    ds.missing_rate = analysis.get("missing_rate", 0.0)
+                    ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
+                    ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
+                    ds.preprocessing_status = "completed"
+                elif data_type == "image":
+                    analysis = self._analyze_image_file(file_path)
+                    ds.extra_metadata = json.dumps(analysis, ensure_ascii=False)
+                    ds.preprocessing_status = "completed"
+                elif data_type == "time_series":
+                    analysis = self._analyze_timeseries_file(file_path)
+                    ds.n_rows = analysis.get("n_samples", 0)
+                    ds.extra_metadata = json.dumps(analysis, ensure_ascii=False)
+                    ds.preprocessing_status = "completed"
+                elif data_type in ("json",):
+                    analysis = self._analyze_json_file(file_path)
+                    ds.n_rows = analysis.get("record_count", 0)
+                    ds.extra_metadata = json.dumps(analysis, ensure_ascii=False)
+                    ds.preprocessing_status = "completed"
+                else:
+                    ds.extra_metadata = json.dumps({
+                        "file_size_bytes": file_size or 0,
+                        "data_type": data_type,
+                    }, ensure_ascii=False)
+                    ds.preprocessing_status = "completed"
+            except Exception as e:
+                logger.error(f"创建数据集自动分析失败: {e}")
+                ds.extra_metadata = json.dumps({"auto_analyze_error": str(e)}, ensure_ascii=False)
+                ds.preprocessing_status = "failed"
 
         self.db.add(ds)
         self.db.commit()
@@ -149,6 +303,59 @@ class DatasetService:
 
     def get_dataset_by_id(self, dataset_id: str) -> Optional[Dataset]:
         return self.db.query(Dataset).filter(Dataset.id == dataset_id).first()
+
+    @staticmethod
+    def _identify_target_candidates(columns: List[str]) -> Dict[str, List[str]]:
+        want_keys_doc: Dict[str, str] = {
+            "binary_classification": "Binary classification target candidates",
+            "multi_classification": "Multiclass classification target candidates",
+            "regression": "Regression target candidates",
+            "generic_metric": "Generic metric / score candidates",
+            "generic_target": "Generic target candidates",
+        }
+        target_candidates: Dict[str, List[str]] = {k: [] for k in want_keys_doc}
+        numeric_candidates: List[str] = []
+        categorical_candidates: List[str] = []
+
+        for col in columns:
+            col_lower = col.lower().strip()
+            matches = []
+            for kw in TARGET_COLUMN_KEYWORDS:
+                if kw.lower() in col_lower or col_lower == kw.lower():
+                    matches.append(kw)
+            if not matches:
+                continue
+
+            if any(k in col_lower for k in ("label", "class", "category", "类别", "标签", "分类", "diagnosis")):
+                if "binary" in col_lower:
+                    target_candidates["binary_classification"].append(col)
+                else:
+                    target_candidates["multi_classification"].append(col)
+            elif any(k in col_lower for k in ("accuracy", "score", "result", "outcome", "评分", "准确率", "结果")):
+                target_candidates["regression"].append(col)
+            else:
+                target_candidates["generic_target"].append(col)
+
+        numeric_candidates_dedup = list(dict.fromkeys([
+            c for c in target_candidates["regression"]
+            + target_candidates["binary_classification"]
+            + target_candidates["multi_classification"]
+        ]))
+        categorical_candidates_dedup = list(dict.fromkeys([
+            c for c in target_candidates["binary_classification"]
+            + target_candidates["multi_classification"]
+        ]))
+        generic_metric = list(dict.fromkeys([
+            c for c in target_candidates["regression"]
+            + target_candidates["generic_target"]
+        ]))
+
+        return {
+            "target_candidates": {k: v for k, v in target_candidates.items() if v},
+            "numeric_field_candidates": numeric_candidates_dedup,
+            "categorical_field_candidates": categorical_candidates_dedup,
+            "generic_metric_candidates": generic_metric,
+        }
 
     def run_preprocessing(self, dataset_id: str) -> Optional[Dataset]:
         ds = self.get_dataset_by_id(dataset_id)
@@ -168,14 +375,130 @@ class DatasetService:
                 ds.missing_rate = analysis.get("missing_rate", 0.0)
                 ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
                 ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
+
+                columns = analysis.get("columns", [])
+                candidates = self._identify_target_candidates(columns)
+                existing_meta = {}
+                if ds.extra_metadata:
+                    try:
+                        existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                    except json.JSONDecodeError:
+                        pass
+                existing_meta.update(candidates)
+                ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
+
+            elif ds.data_type == "image":
+                analysis = self._analyze_image_file(ds.file_path)
+                existing_meta = {}
+                if ds.extra_metadata:
+                    try:
+                        existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                    except json.JSONDecodeError:
+                        pass
+                existing_meta.update(analysis)
+                ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
+            elif ds.data_type == "time_series":
+                analysis = self._analyze_timeseries_file(ds.file_path)
+                ds.n_rows = analysis.get("n_samples", ds.n_rows)
+                existing_meta = {}
+                if ds.extra_metadata:
+                    try:
+                        existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                    except json.JSONDecodeError:
+                        pass
+                existing_meta.update(analysis)
+                ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
+            elif ds.data_type in ("json",):
+                analysis = self._analyze_json_file(ds.file_path)
+                ds.n_rows = analysis.get("record_count", ds.n_rows)
+                existing_meta = {}
+                if ds.extra_metadata:
+                    try:
+                        existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                    except json.JSONDecodeError:
+                        pass
+                existing_meta.update(analysis)
+                ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
+
             ds.preprocessing_status = "completed"
         except Exception as e:
             logger.error(f"预处理数据集 {dataset_id} 失败: {e}")
             ds.preprocessing_status = "failed"
+            error_meta = {}
+            if ds.extra_metadata:
+                try:
+                    error_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                except json.JSONDecodeError:
+                    pass
+            error_meta["error_message"] = str(e)
+            ds.extra_metadata = json.dumps(error_meta, ensure_ascii=False)
 
         self.db.commit()
         self.db.refresh(ds)
         return ds
+
+    def run_single_quality_analysis(self, dataset_id: str) -> Dict[str, Any]:
+        ds = self.get_dataset_by_id(dataset_id)
+        if not ds:
+            return {
+                "success": False,
+                "error": f"数据集 {dataset_id} 不存在",
+                "data": None,
+            }
+
+        file_meta = {
+            "file_path": ds.file_path,
+            "filename": ds.filename,
+            "data_type": ds.data_type,
+            "n_rows": ds.n_rows or 0,
+            "n_columns": ds.n_columns or 0,
+            "columns": json.loads(ds.columns_json) if ds.columns_json else [],
+            "dtypes": json.loads(ds.dtypes_json) if ds.dtypes_json else {},
+            "missing_count": ds.missing_count or 0,
+            "statistics": json.loads(ds.statistics_json) if ds.statistics_json else {},
+            "preview": json.loads(ds.preview_json) if ds.preview_json else [],
+        }
+
+        async def _run():
+            try:
+                skill = DataJuicerLiteSkill()
+                result = await skill.run(
+                    input_data={
+                        "file_metas": [file_meta],
+                        "missing_strategy": "report",
+                        "outlier_method": "iqr",
+                    },
+                    context={"stage": "single_dataset_quality"},
+                )
+                return {
+                    "success": result.success,
+                    "data": result.data,
+                    "warnings": result.warnings,
+                    "errors": result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"DataJuicerLiteSkill 单文件失败: {e}")
+                return {"success": False, "error": str(e)}
+
+        try:
+            quality_result = asyncio.run(_run())
+        except Exception as e:
+            logger.warning(f"质量分析异常: {e}")
+            quality_result = {"success": False, "error": str(e)}
+
+        if quality_result.get("success") and quality_result.get("data"):
+            existing_meta = {}
+            if ds.extra_metadata:
+                try:
+                    existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                except json.JSONDecodeError:
+                    pass
+            existing_meta["quality_report"] = quality_result["data"].get("quality_report", {})
+            existing_meta["quality_recommendations"] = quality_result["data"].get("recommendations", [])
+            ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
+            self.db.commit()
+
+        return quality_result
 
     def run_quality_analysis(self, project_id: str) -> Dict[str, Any]:
         datasets = self.get_project_datasets(project_id)
@@ -234,6 +557,126 @@ class DatasetService:
         except Exception as e:
             logger.warning(f"质量分析异常: {e}")
             return {"success": False, "error": str(e)}
+
+    def get_project_data_context(self, project_id: str) -> Dict[str, Any]:
+        datasets = self.get_project_datasets(project_id)
+        context: Dict[str, Any] = {
+            "dataset_count": len(datasets),
+            "available_modalities": [],
+            "datasets": [],
+            "field_candidates": [],
+            "target_candidates": [],
+            "quality_summary": {},
+            "warnings": [],
+        }
+
+        if not datasets:
+            context["warnings"].append("当前项目缺少实测数据集，假设仅能基于文献和用户问题生成")
+            return context
+
+        modalities_set: set = set()
+        all_fields: List[str] = []
+        all_targets: List[str] = []
+        total_quality_scores: List[float] = []
+        total_rows = 0
+        total_missing = 0
+        all_numeric_candidates: List[str] = []
+        all_categorical_candidates: List[str] = []
+
+        for ds in datasets:
+            ds_entry: Dict[str, Any] = {
+                "dataset_id": ds.id,
+                "filename": ds.filename,
+                "data_type": ds.data_type or "unknown",
+                "source_type": getattr(ds, "source_type", "upload") or "upload",
+                "n_rows": ds.n_rows or 0,
+                "n_columns": ds.n_columns or 0,
+                "columns": [],
+                "dtypes": {},
+                "missing_count": ds.missing_count or 0,
+                "missing_rate": ds.missing_rate or 0.0,
+                "statistics": {},
+                "preview": [],
+                "use_for_hypothesis": bool(ds.use_for_hypothesis),
+                "preprocessing_status": ds.preprocessing_status or "pending",
+            }
+
+            if ds.columns_json:
+                try:
+                    cols = json.loads(ds.columns_json)
+                    ds_entry["columns"] = cols
+                    all_fields.extend(cols)
+                except json.JSONDecodeError:
+                    pass
+            if ds.dtypes_json:
+                try:
+                    ds_entry["dtypes"] = json.loads(ds.dtypes_json)
+                except json.JSONDecodeError:
+                    pass
+            if ds.statistics_json:
+                try:
+                    ds_entry["statistics"] = json.loads(ds.statistics_json)
+                except json.JSONDecodeError:
+                    pass
+            if ds.preview_json:
+                try:
+                    ds_entry["preview"] = json.loads(ds.preview_json)[:5]
+                except json.JSONDecodeError:
+                    pass
+
+            modalities_set.add(ds.data_type or "unknown")
+            total_rows += ds.n_rows or 0
+            total_missing += ds.missing_count or 0
+
+            if ds.extra_metadata:
+                try:
+                    extra = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
+                    if isinstance(extra, dict):
+                        if extra.get("target_candidates"):
+                            tc = extra["target_candidates"]
+                            if isinstance(tc, dict):
+                                for tc_list in tc.values():
+                                    if isinstance(tc_list, list):
+                                        all_targets.extend(tc_list)
+                            elif isinstance(tc, list):
+                                all_targets.extend(tc)
+                        if extra.get("numeric_field_candidates"):
+                            all_numeric_candidates.extend(extra["numeric_field_candidates"])
+                        if extra.get("categorical_field_candidates"):
+                            all_categorical_candidates.extend(extra["categorical_field_candidates"])
+                        if extra.get("quality_report"):
+                            qr = extra["quality_report"]
+                            if isinstance(qr, dict) and qr.get("overall_score") is not None:
+                                total_quality_scores.append(float(qr["overall_score"]))
+                        ds_entry["quality_score"] = extra.get("quality_report", {}).get("overall_score") if isinstance(extra.get("quality_report"), dict) else None
+                        ds_entry["quality_recommendations"] = extra.get("quality_recommendations", [])
+                        ds_entry["target_candidates"] = extra.get("target_candidates", {})
+                except json.JSONDecodeError:
+                    pass
+
+            context["datasets"].append(ds_entry)
+
+        context["available_modalities"] = sorted(list(modalities_set))
+        context["field_candidates"] = list(dict.fromkeys(all_fields))[:100]
+        context["target_candidates"] = list(dict.fromkeys(all_targets))[:30]
+
+        total_cells = total_rows * max(len(all_fields), 1)
+        overall_missing_rate = round(total_missing / max(total_cells, 1), 4)
+
+        context["quality_summary"] = {
+            "overall_score": round(sum(total_quality_scores) / max(len(total_quality_scores), 1), 3) if total_quality_scores else None,
+            "total_rows": total_rows,
+            "total_missing": total_missing,
+            "missing_rate": overall_missing_rate,
+            "dataset_count": len(datasets),
+            "numeric_candidates": list(dict.fromkeys(all_numeric_candidates))[:20],
+            "categorical_candidates": list(dict.fromkeys(all_categorical_candidates))[:20],
+        }
+
+        if not context["datasets"]:
+            context["warnings"].append("当前项目缺少可用于假设生成的数据集")
+
+        return context
 
     def toggle_hypothesis_use(self, dataset_id: str) -> Optional[Dataset]:
         ds = self.get_dataset_by_id(dataset_id)
