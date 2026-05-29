@@ -13,7 +13,6 @@ import { reportService } from '@/services/reportService';
 interface ReportPageProps {
   projectId: string;
   compact?: boolean;
-  /** 文献库中的真实文献总数（从父级 stats 传入） */
   literatureCount?: number;
   revalidateKey?: number;
   latestRunId?: string | null;
@@ -37,7 +36,6 @@ export function ReportPage({
     setTimeout(() => setAlertMsg(null), 2500);
   }, []);
 
-  // 非 Mock 模式下加载最新报告
   useEffect(() => {
     if (!projectId) return;
 
@@ -75,7 +73,6 @@ export function ReportPage({
       return;
     }
 
-    // 导出 Markdown / PDF
     if (!report?.id) {
       showAlert('暂无报告可导出');
       return;
@@ -98,7 +95,6 @@ export function ReportPage({
     }
   }, [report, showAlert]);
 
-  // 加载中状态
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -114,7 +110,6 @@ export function ReportPage({
     );
   }
 
-  // 错误状态
   if (errorMsg) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -143,7 +138,6 @@ export function ReportPage({
     );
   }
 
-  // 无报告状态
   if (!report) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -162,12 +156,17 @@ export function ReportPage({
 
   const sections = report.sections || [];
   const complianceCheck = report.complianceCheck;
-  const hasNoRefs = complianceCheck && complianceCheck.references_verified === 0;
+  const hasNoRefs = complianceCheck && !complianceCheck.has_references;
+  const hasOnlyExpected = complianceCheck?.result_type === 'expected_result' || complianceCheck?.result_type === 'none';
+  const hasNoDatasets = complianceCheck && !complianceCheck.has_datasets;
+  const hasNoSource = complianceCheck && !complianceCheck.has_source;
+  const hasNoTarget = complianceCheck && !complianceCheck.has_target;
   const pdfFailed = report.pdfSuccess === false;
+  const criticalIssues = complianceCheck?.critical_issues || [];
+  const warnings = complianceCheck?.warnings || [];
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 页面标题 */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
         <p className="text-gray-400 text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
@@ -181,7 +180,7 @@ export function ReportPage({
             <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-semibold text-red-300 mb-1">
-                当前报告缺少真实文献引用
+                参考论文缺失或未验证，不符合赛题要求
               </p>
               <p className="text-xs text-red-300/70 mb-2 leading-relaxed">
                 参考文献未能在文献库中找到匹配条目，存在虚构引用风险。请先上传 PDF、导入 arXiv 或 BibTeX 文献后再生成报告。
@@ -198,8 +197,83 @@ export function ReportPage({
           </div>
         )}
 
+        {/* 仅有预期结果 → 黄色 warning */}
+        {hasOnlyExpected && !hasNoRefs && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-300 mb-1">
+                当前仅有预期结果，建议补充公式推导、模拟验证或小样实验
+              </p>
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议补充小样验证或可行性模拟来增强报告可信度。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Dataset 没有真实来源 → 黄色 warning */}
+        {hasNoDatasets && !hasNoRefs && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-300 mb-1">
+                数据集来源不足，请补充真实或合规数据来源
+              </p>
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                Datasets 章节内容不足，需要说明真实来源或拟采集状态。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Source 缺失 → 黄色 warning */}
+        {hasNoSource && !hasNoRefs && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-300 mb-1">
+                缺少真实历史数据来源（Source）
+              </p>
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                请补充假设推演所依据的历史数据或文献来源。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Target 缺失 → 黄色 warning */}
+        {hasNoTarget && !hasNoRefs && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-300 mb-1">
+                缺少目标数据特征描述（Target）
+              </p>
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                请补充验证实验所需的拟采集数据特征描述。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 严重问题列表 */}
+        {criticalIssues.length > 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/25">
+            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-300 mb-1">赛题合规严重问题</p>
+              <ul className="list-disc list-inside text-xs text-red-300/70 leading-relaxed">
+                {criticalIssues.map((issue, i) => (
+                  <li key={i}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* PDF 导出失败 → 黄色 warning */}
-        {pdfFailed && !hasNoRefs && (
+        {pdfFailed && !hasNoRefs && criticalIssues.length === 0 && (
           <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
             <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
@@ -230,7 +304,6 @@ export function ReportPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* 跳转文献库 */}
             <button
               onClick={() => navigate('/documents')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
@@ -265,7 +338,11 @@ export function ReportPage({
         {/* 右侧：比赛规范检查 + 证据链质量 + 操作 */}
         <div className="lg:col-span-1">
           <div className="sticky top-6 space-y-4">
-            <ReportChecklist sections={sections} complianceCheck={complianceCheck} />
+            <ReportChecklist
+              sections={sections}
+              complianceCheck={complianceCheck}
+              warnings={warnings}
+            />
             <EvidenceChainQualityCard
               complianceCheck={complianceCheck}
               literatureCount={literatureCount}

@@ -1,6 +1,7 @@
 """
 报告生成智能体 (ReportGenerationAgent)
 ——面向挑战杯 XH-202619 赛题，生成《科学假设与研究计划》Markdown + PDF。
+严格按 12 个标准化字段输出。
 """
 import logging
 import json
@@ -16,43 +17,31 @@ from app.skills.literature.citation_grounding_skill import CitationGroundingSkil
 
 logger = logging.getLogger(__name__)
 
-# ── 15 章节结构 ──
 REPORT_CHAPTERS = [
-    "paper_title",           # 0
-    "paper_abstract",        # 1
-    "problem_statement",     # 2
-    "literature_facts",      # 3  ← Evidence-grounded
-    "knowledge_gaps",        # 4
-    "scientific_hypothesis", # 5
-    "rationale",             # 6
-    "technical_details",     # 7
-    "datasets",              # 8
-    "source",                # 9
-    "target",                # 10
-    "methods",               # 11
-    "experiments",           # 12
-    "results_feasibility",   # 13
-    "human_review",          # 14
-    "references",            # 15 (handled separately)
+    "problem_statement",
+    "rationale",
+    "technical_details",
+    "datasets",
+    "source",
+    "target",
+    "methods",
+    "experiments",
+    "results",
 ]
 
-CHALLENGE_CUP_FIELDS = [
-    ("paper_title", "0. Paper Title"),
-    ("paper_abstract", "1. Paper Abstract"),
-    ("problem_statement", "2. Problem Statement"),
-    ("literature_facts", "3. Evidence-grounded Literature Facts"),
-    ("knowledge_gaps", "4. Knowledge Gaps"),
-    ("scientific_hypothesis", "5. Generated Scientific Hypothesis"),
-    ("rationale", "6. Rationale"),
-    ("technical_details", "7. Technical Details"),
-    ("datasets", "8. Datasets"),
-    ("source", "9. Source"),
-    ("target", "10. Target"),
-    ("methods", "11. Methods"),
-    ("experiments", "12. Experiments"),
-    ("results_feasibility", "13. Results / Feasibility Verification"),
-    ("human_review", "14. Human-in-the-loop Review"),
-    ("references", "15. References"),
+CHALLENGE_CUP_12_FIELDS = [
+    ("paper_title", "1. Paper Title"),
+    ("paper_abstract", "2. Paper Abstract"),
+    ("problem_statement", "3. Problem Statement"),
+    ("rationale", "4. Rationale"),
+    ("technical_details", "5. Technical Details"),
+    ("datasets", "6. Datasets"),
+    ("source", "7. Source"),
+    ("target", "8. Target"),
+    ("methods", "9. Methods"),
+    ("experiments", "10. Experiments"),
+    ("results", "11. Results"),
+    ("references", "12. References"),
 ]
 
 
@@ -79,26 +68,12 @@ class ReportGenerationAgent:
         pipeline_run_info: Optional[Dict[str, Any]] = None,
         novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
         sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
+        evidence_facts: Optional[List[Dict[str, Any]]] = None,
+        verified_references: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """
-         Args:
-            project_info: 项目基本信息
-            problem_understanding: 问题理解结果
-            literature_facts: 文献事实列表（来自 LiteratureMiningAgent）
-            citation_map: 引用映射列表
-            knowledge_gaps: 知识缺口结果
-            all_hypotheses: 所有生成的假设列表（包含 supporting_fact_ids）
-            final_hypothesis: 评审后的最终假设
-            experiment_design: 实验设计
-            small_validation: 小样验证结果
-            pipeline_run_info: Pipeline 运行信息
-            novelty_review_skill_outputs: 假设新颖性审查 Skill 输出
-            sanity_check_skill_outputs: 实验真实性审查 Skill 输出
-        """
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
 
-            # ── 格式化输入 ──
             formatted_input = self._format_input(
                 project_info,
                 problem_understanding,
@@ -109,25 +84,22 @@ class ReportGenerationAgent:
                 final_hypothesis,
                 experiment_design,
                 small_validation,
+                evidence_facts or [],
+                verified_references or [],
             )
 
-            # ── 构建 Prompt ──
             prompt_loader = get_prompt_loader()
             prompt = prompt_loader.render_template(
                 "report_generation", formatted_input
             )
 
-            # ── Schema example ──
             schema_example = {
                 "title": "科学假设与研究计划",
                 "paper_title": "基于文献挖掘的科学假设与验证计划",
-                "paper_abstract": "本文围绕... 通过文献挖掘提取 X 条关键事实...",
-                "markdown_content": "# 科学假设与研究计划\n\n...",
+                "paper_abstract": "本文围绕... 通过文献挖掘提取关键事实...",
+                "markdown_content": "# 科学假设与研究计划\n\n## 1. Paper Title\n...",
                 "chapters": {
                     "problem_statement": "...",
-                    "literature_facts": "...",
-                    "knowledge_gaps": "...",
-                    "scientific_hypothesis": "...",
                     "rationale": "...",
                     "technical_details": "...",
                     "datasets": "...",
@@ -135,37 +107,26 @@ class ReportGenerationAgent:
                     "target": "...",
                     "methods": "...",
                     "experiments": "...",
-                    "results_feasibility": "...",
-                    "human_review": "...",
+                    "results": "...",
                     "references": [],
                 },
             }
 
-            # ── LLM ──
             result_dict = qwen_structured_chat(
                 prompt=prompt,
                 schema_example=schema_example,
                 prompt_version="report_generation",
             )
 
-            # ── 后校验 + 合规检查 ──
             result = self._validate_and_normalize_result(
                 result_dict, literature_facts, citation_map, all_hypotheses,
                 novelty_review_skill_outputs, sanity_check_skill_outputs,
+                evidence_facts or [], verified_references or [],
             )
 
-            # ── 附加运行摘要 ──
             if pipeline_run_info:
                 result = self._append_run_summary_to_report(result, pipeline_run_info)
 
-            # ── 标记是否引用自 fallback 文献 ──
-            has_fallback_ref = any(
-                cit.get("fallback", False) for cit in (citation_map or [])
-            )
-            if has_fallback_ref:
-                result["source_is_fallback"] = True
-
-            # ── 保存文件 ──
             file_info = self._save_report_files(result, project_info)
             result.update(file_info)
 
@@ -175,8 +136,6 @@ class ReportGenerationAgent:
         except Exception as e:
             logger.error(f"生成报告时出错: {e}", exc_info=True)
             raise
-
-    # ──────── 格式化 ────────
 
     def _format_input(
         self,
@@ -189,6 +148,8 @@ class ReportGenerationAgent:
         final_hypothesis: Dict[str, Any],
         experiment_design: Dict[str, Any],
         small_validation: Optional[Dict[str, Any]] = None,
+        evidence_facts: List[Dict[str, Any]] = None,
+        verified_references: List[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         return {
             "project_info": json.dumps(project_info, ensure_ascii=False, indent=2),
@@ -202,9 +163,9 @@ class ReportGenerationAgent:
             "small_validation": json.dumps(small_validation, ensure_ascii=False, indent=2)
             if small_validation
             else "null",
+            "evidence_facts": json.dumps(evidence_facts, ensure_ascii=False, indent=2),
+            "verified_references": json.dumps(verified_references, ensure_ascii=False, indent=2),
         }
-
-    # ──────── 校验 ────────
 
     def _validate_and_normalize_result(
         self,
@@ -214,14 +175,13 @@ class ReportGenerationAgent:
         all_hypotheses: List[Dict[str, Any]],
         novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
         sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
+        evidence_facts: List[Dict[str, Any]] = None,
+        verified_references: List[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """验证章节完整性、References 真实性、合规标记"""
-        # 顶层字段
         for field in ["title", "paper_title", "paper_abstract", "markdown_content"]:
             if field not in result_dict:
                 result_dict[field] = ""
 
-        # chapters 字典
         if "chapters" not in result_dict or not isinstance(result_dict["chapters"], dict):
             result_dict["chapters"] = {}
 
@@ -230,41 +190,39 @@ class ReportGenerationAgent:
             if ch not in chapters:
                 chapters[ch] = [] if ch == "references" else ""
 
-        # ── References 真实性校验 ──
         refs = chapters.get("references", [])
         if not isinstance(refs, list):
             refs = [refs] if refs else []
             chapters["references"] = refs
 
-        ref_check = self._validate_references(refs, literature_facts, citation_map)
+        ref_check = self._validate_references(refs, literature_facts, citation_map, verified_references or [])
 
-        # ── 运行 CitationGroundingSkill ──
-        skill_outputs = self._run_citation_grounding_sync(refs, citation_map, literature_facts)
+        skill_outputs = self._run_citation_grounding_sync(
+            refs, citation_map, literature_facts, verified_references
+        )
 
         if ref_check["suspicious_count"] > 0 and ref_check["verified_count"] == 0:
             logger.warning(f"参考文献全不可验证: {ref_check['suspicious_count']} 条可疑")
             chapters["references"] = []
             ref_check["references_replaced"] = True
 
-        # ── 合规检查 ──
         compliance = self._build_compliance_check(
             result_dict, ref_check, literature_facts, all_hypotheses,
             novelty_review_skill_outputs, sanity_check_skill_outputs,
+            evidence_facts or [], verified_references or [],
         )
         result_dict["compliance_check"] = compliance
         result_dict["skill_outputs"] = skill_outputs
 
         return result_dict
 
-    # ──────── References 校验 ────────
-
     def _validate_references(
         self,
         references: List[str],
         literature_facts: List[Dict[str, Any]],
         citation_map: List[Dict[str, Any]],
+        verified_references: List[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """验证每条引用是否可追溯到 citation_map 或 literature_facts"""
         if not references:
             return {
                 "verified_count": 0,
@@ -275,14 +233,12 @@ class ReportGenerationAgent:
                 "note": "暂无文献引用",
             }
 
-        # ── 从 citation_map 构建强验证关键词（标题、作者、DOI、external_id）──
         verified_keywords = set()
         for cit in (citation_map or []):
             for key in ("paper_title", "title", "authors", "doi", "external_id", "source_url"):
                 val = cit.get(key, "")
                 if isinstance(val, str) and len(val.strip()) >= 5:
                     verified_keywords.add(val.strip().lower())
-            # 也加入作者姓
             authors = cit.get("authors", "")
             if isinstance(authors, str) and "," in authors:
                 for a in authors.split(","):
@@ -290,7 +246,12 @@ class ReportGenerationAgent:
                     if len(a) >= 3:
                         verified_keywords.add(a.lower())
 
-        # ── 从 facts 补充 ──
+        for vr in (verified_references or []):
+            for key in ("title", "authors", "doi", "external_id"):
+                val = vr.get(key, "")
+                if isinstance(val, str) and len(val.strip()) >= 5:
+                    verified_keywords.add(val.strip().lower())
+
         for fact in (literature_facts or []):
             title = fact.get("source_paper_title", "")
             if isinstance(title, str) and len(title) >= 5:
@@ -327,13 +288,12 @@ class ReportGenerationAgent:
             "references_replaced": False,
         }
 
-    # ──────── 合规检查 ────────
-
     @staticmethod
     def _run_citation_grounding_sync(
         references: list,
         citation_map: list,
         literature_facts: list,
+        verified_references: list = None,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -345,6 +305,7 @@ class ReportGenerationAgent:
                         "references": references,
                         "citation_map": citation_map,
                         "literature_facts": literature_facts,
+                        "verified_references": verified_references or [],
                     },
                     context={"stage": "report_generation"},
                 )
@@ -374,12 +335,13 @@ class ReportGenerationAgent:
         all_hypotheses: List[Dict[str, Any]],
         novelty_review_skill_outputs: Optional[Dict[str, Any]] = None,
         sanity_check_skill_outputs: Optional[Dict[str, Any]] = None,
+        evidence_facts: List[Dict[str, Any]] = None,
+        verified_references: List[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """16 项合规检查（含 References / Evidence / Hypothesis / Result）"""
         chapters = result_dict.get("chapters", {})
 
         items = []
-        for key, label in CHALLENGE_CUP_FIELDS:
+        for key, label in CHALLENGE_CUP_12_FIELDS:
             if key in ("paper_title",):
                 value = result_dict.get("paper_title", "")
             elif key in ("paper_abstract",):
@@ -389,7 +351,6 @@ class ReportGenerationAgent:
             else:
                 value = chapters.get(key, "")
 
-            # ── References 专项 ──
             if key == "references":
                 refs = chapters.get("references", [])
                 has_real = any(
@@ -425,48 +386,110 @@ class ReportGenerationAgent:
         missing = sum(1 for i in items if i["status"] == "missing")
         needs_review = sum(1 for i in items if i["status"] == "human_review")
 
-        # ── 额外赛题指标 ──
-        evidence_fact_count = len(literature_facts) if literature_facts else 0
+        evidence_fact_count = len(evidence_facts or literature_facts or [])
         hypothesis_with_evidence = sum(
             1 for h in (all_hypotheses or [])
             if h.get("supporting_fact_ids") and len(h.get("supporting_fact_ids", [])) > 0
         )
+
         has_result = False
         result_type = "none"
-        rf = chapters.get("results_feasibility", "")
+        rf = chapters.get("results", "")
         if isinstance(rf, str):
             rf_lower = rf.lower()
             if "actual" in rf_lower or "实际" in rf_lower:
                 has_result = True
                 result_type = "actual_result"
-            elif "simulat" in rf_lower or "模拟" in rf_lower or "预期" in rf_lower:
+            elif "simulat" in rf_lower or "模拟" in rf_lower:
                 has_result = True
-                result_type = "simulated_or_expected"
+                result_type = "simulated_result"
+            elif "expect" in rf_lower or "预期" in rf_lower:
+                has_result = True
+                result_type = "expected_result"
 
-        # ── 汇总 Skill 指标 ──
+        has_datasets = bool(
+            chapters.get("datasets", "") and len(chapters.get("datasets", "").strip()) >= 10
+        )
+        has_source = bool(
+            chapters.get("source", "") and len(chapters.get("source", "").strip()) >= 10
+        )
+        has_target = bool(
+            chapters.get("target", "") and len(chapters.get("target", "").strip()) >= 10
+        )
+        has_paper_title = bool(
+            result_dict.get("paper_title", "") and len(result_dict["paper_title"].strip()) >= 5
+        )
+        has_paper_abstract = bool(
+            result_dict.get("paper_abstract", "") and len(result_dict["paper_abstract"].strip()) >= 20
+        )
+        has_methods = bool(
+            chapters.get("methods", "") and len(chapters.get("methods", "").strip()) >= 10
+        )
+        has_experiments = bool(
+            chapters.get("experiments", "") and len(chapters.get("experiments", "").strip()) >= 10
+        )
+        has_results = bool(
+            chapters.get("results", "") and len(chapters.get("results", "").strip()) >= 10
+        )
+        has_references = bool(
+            chapters.get("references", []) and len(chapters.get("references", [])) > 0
+        )
+        has_rationale = bool(
+            chapters.get("rationale", "") and len(chapters.get("rationale", "").strip()) >= 20
+        )
+        has_technical_details = bool(
+            chapters.get("technical_details", "") and len(chapters.get("technical_details", "").strip()) >= 10
+        )
+
+        warnings = []
+        critical_issues = []
+
+        if not has_references:
+            critical_issues.append("参考文献缺失或未验证，不符合赛题要求")
+        if not has_datasets:
+            warnings.append("数据集来源不足，请补充真实或合规数据来源")
+        if result_type in ("expected_result", "none") and not has_result:
+            warnings.append("当前仅有预期结果，建议补充公式推导、模拟验证或小样实验")
+        if not has_source:
+            warnings.append("缺少真实历史数据来源（Source），需补充数据源")
+        if not has_target:
+            warnings.append("缺少目标数据特征描述（Target），需补充")
+
         novelty_score = self._aggregate_novelty_score(novelty_review_skill_outputs)
         experiment_sanity = self._aggregate_sanity_check(sanity_check_skill_outputs)
 
         return {
-            "total_items": len(CHALLENGE_CUP_FIELDS),
+            "total_items": len(CHALLENGE_CUP_12_FIELDS),
             "completed": completed,
             "missing": missing,
             "human_review": needs_review,
             "references_verified": ref_check.get("verified_count", 0),
             "references_suspicious": ref_check.get("suspicious_count", 0),
             "references_replaced": ref_check.get("references_replaced", False),
-            # ── 赛题专属指标 ──
             "evidence_fact_count": evidence_fact_count,
             "hypothesis_with_evidence_count": hypothesis_with_evidence,
             "has_actual_or_simulated_result": has_result,
             "result_type": result_type,
-            # ── Skill 适配层指标 ──
             "novelty_score": novelty_score,
             "experiment_sanity_check": experiment_sanity,
+            "has_problem_statement": bool(
+                chapters.get("problem_statement", "") and len(chapters.get("problem_statement", "").strip()) >= 20
+            ),
+            "has_rationale": has_rationale,
+            "has_technical_details": has_technical_details,
+            "has_datasets": has_datasets,
+            "has_source": has_source,
+            "has_target": has_target,
+            "has_paper_title": has_paper_title,
+            "has_paper_abstract": has_paper_abstract,
+            "has_methods": has_methods,
+            "has_experiments": has_experiments,
+            "has_results": has_results,
+            "has_references": has_references,
+            "warnings": warnings,
+            "critical_issues": critical_issues,
             "items": items,
         }
-
-    # ──────── 运行摘要 ────────
 
     @staticmethod
     def _aggregate_novelty_score(
@@ -475,17 +498,9 @@ class ReportGenerationAgent:
         if not novelty_outputs:
             return None
         hr_data = novelty_outputs.get("hypothesis_novelty_review", {})
-        if isinstance(hr_data, dict) and "success" in hr_data:
-            first_key = next(iter(hr_data), None)
-            if first_key and isinstance(hr_data.get(first_key), dict):
-                return hr_data[first_key].get("data", {}).get("novelty_score")
-        scores = []
-        for __, val in hr_data.items():
-            if isinstance(val, dict):
-                s = val.get("data", {}).get("novelty_score")
-                if s is not None:
-                    scores.append(float(s))
-        return round(sum(scores) / len(scores), 1) if scores else None
+        if isinstance(hr_data, dict):
+            return hr_data.get("data", {}).get("novelty_score")
+        return None
 
     @staticmethod
     def _aggregate_sanity_check(
@@ -495,7 +510,10 @@ class ReportGenerationAgent:
             return None
         sc_data = sanity_outputs.get("experiment_sanity_check", {})
         if isinstance(sc_data, dict):
-            return sc_data.get("data") or {
+            data = sc_data.get("data")
+            if data:
+                return data
+            return {
                 "executable": sc_data.get("executable"),
                 "missing_items": sc_data.get("missing_items", []),
                 "weak_points": sc_data.get("weak_points", []),
@@ -545,8 +563,6 @@ class ReportGenerationAgent:
             f"| 总耗时 | {fmt_dur(run_info.get('total_duration_ms', 0))} |\n"
         )
         return summary
-
-    # ──────── 文件存储 ────────
 
     def _save_report_files(
         self, result: Dict[str, Any], project_info: Dict[str, Any]

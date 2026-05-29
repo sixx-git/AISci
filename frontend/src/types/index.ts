@@ -350,7 +350,7 @@ export interface ReportSection {
   note?: string;
 }
 
-/** 合规性检查结果（挑战杯 XH-202619 16 项字段） */
+/** 合规性检查结果（挑战杯 XH-202619 12 项字段） */
 export interface ComplianceCheck {
   total_items?: number;
   completed: number;
@@ -363,6 +363,20 @@ export interface ComplianceCheck {
   evidence_fact_count: number;
   hypothesis_with_evidence_count: number;
   has_actual_or_simulated_result: boolean;
+  result_type?: string;
+  /** ── 12 字段合规标记 ── */
+  has_problem_statement?: boolean;
+  has_rationale?: boolean;
+  has_technical_details?: boolean;
+  has_datasets?: boolean;
+  has_source?: boolean;
+  has_target?: boolean;
+  has_paper_title?: boolean;
+  has_paper_abstract?: boolean;
+  has_methods?: boolean;
+  has_experiments?: boolean;
+  has_results?: boolean;
+  has_references?: boolean;
   /** ── Skill 适配层指标 ── */
   novelty_score?: number;
   experiment_sanity_check?: {
@@ -371,6 +385,9 @@ export interface ComplianceCheck {
     weak_points: string[];
     recommendations: string[];
   };
+  /** ── 警告与严重问题 ── */
+  warnings?: string[];
+  critical_issues?: string[];
   items: ReportSection[];
 }
 

@@ -435,13 +435,17 @@ class PipelineService:
         hr = results.get("hypothesis_review", {})
         ed = results.get("experiment_design", {})
         sv = results.get("small_validation", {})
+
+        evidence_facts = lm.get("facts", []) if isinstance(lm.get("facts"), list) else []
+        citation_map = lm.get("citation_map", []) if isinstance(lm.get("citation_map"), list) else []
+        verified_references = lm.get("verified_references", []) if isinstance(lm.get("verified_references"), list) else citation_map
         
         project_info = {"title": "研究项目", "id": self.run_id}
         result = agent.generate_report(
             project_info=project_info,
             problem_understanding=pu,
-            literature_facts=lm.get("facts", []),
-            citation_map=lm.get("citation_map", []),
+            literature_facts=evidence_facts,
+            citation_map=citation_map,
             knowledge_gaps=kg,
             all_hypotheses=hg.get("hypotheses", []),
             final_hypothesis=hr,
@@ -450,6 +454,8 @@ class PipelineService:
             pipeline_run_info=pipeline_run_info,
             novelty_review_skill_outputs=hr.get("skill_outputs"),
             sanity_check_skill_outputs=ed.get("skill_outputs"),
+            evidence_facts=evidence_facts,
+            verified_references=verified_references,
         )
         return self._safe_model_dump(result)
     

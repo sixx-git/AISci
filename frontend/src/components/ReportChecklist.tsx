@@ -7,6 +7,7 @@ interface ReportChecklistProps {
   sections: ReportSection[];
   complianceCheck?: ComplianceCheck;
   className?: string;
+  warnings?: string[];
 }
 
 const statusConfig: Record<ReportSection['status'], { icon: typeof CheckCircle; label: string; className: string }> = {
@@ -15,7 +16,7 @@ const statusConfig: Record<ReportSection['status'], { icon: typeof CheckCircle; 
   human_review: { icon: AlertTriangle, label: '需人工确认', className: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
 };
 
-export function ReportChecklist({ sections, complianceCheck, className }: ReportChecklistProps) {
+export function ReportChecklist({ sections, complianceCheck, className, warnings }: ReportChecklistProps) {
   const completedCount = sections.filter(s => s.status === 'completed').length;
   const missingCount = sections.filter(s => s.status === 'missing').length;
   const reviewCount = sections.filter(s => s.status === 'human_review').length;
@@ -228,6 +229,27 @@ export function ReportChecklist({ sections, complianceCheck, className }: Report
           </div>
         </div>
       </Card>
+
+      {/* 12 字段合规警告 */}
+      {warnings && warnings.length > 0 && (
+        <Card className="bg-amber-500/[0.03] border border-amber-500/10">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-semibold text-amber-300 mb-1.5">
+                赛题合规提示
+              </h4>
+              <ul className="space-y-1">
+                {warnings.map((w, i) => (
+                  <li key={i} className="text-[10px] text-amber-300/70 leading-relaxed">
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
