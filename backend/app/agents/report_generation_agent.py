@@ -508,6 +508,7 @@ class ReportGenerationAgent:
         async def _run():
             try:
                 has_real_plots = False
+                charts = []
                 sp_output = chart_skill_outputs.get("scientific_plot", {})
                 if isinstance(sp_output, dict) and sp_output.get("data"):
                     charts = sp_output["data"].get("charts", [])
@@ -522,6 +523,7 @@ class ReportGenerationAgent:
                         "report_data": result_dict,
                         "references_verified": references_verified,
                         "has_real_data_plots": has_real_plots,
+                        "plots": charts,
                     },
                     context={"stage": "report_generation"},
                 )

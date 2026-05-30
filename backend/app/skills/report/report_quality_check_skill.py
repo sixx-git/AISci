@@ -86,6 +86,7 @@ class ReportQualityCheckSkill(BaseSkill):
       - report_data: dict                 报告数据
       - references_verified: int          已验证引用数
       - has_real_data_plots: bool         是否有真实数据图表
+      - plots: List[dict]                 图表列表（可选）
       - citation_grounding_output: dict   CitationGroundingSkill 输出
 
     输出 (SkillResult.data):
@@ -119,6 +120,7 @@ class ReportQualityCheckSkill(BaseSkill):
 
         references_verified = input_data.get("references_verified", 0)
         has_real_data_plots = input_data.get("has_real_data_plots", False)
+        plots = input_data.get("plots", [])
         citation_output = input_data.get("citation_grounding_output", {})
 
         if isinstance(citation_output, dict):
@@ -130,6 +132,30 @@ class ReportQualityCheckSkill(BaseSkill):
 
         chapters = report_data.get("chapters", {})
         has_actual_or_simulated = self._check_results_structure(chapters)
+
+        plots_with_source = 0
+        plots_generated_from_real = 0
+        plots_missing_source = []
+        if isinstance(plots, list):
+            for i, p in enumerate(plots):
+                if isinstance(p, dict):
+                    sid = p.get("source_dataset_id")
+                    if sid:
+                        plots_with_source += 1
+                    else:
+                        plots_missing_source.append(i)
+                    if p.get("is_generated_from_real_data"):
+                        plots_generated_from_real += 1
+            if plots_missing_source:
+                warnings.append(
+                    f"plots 中有 {len(plots_missing_source)} 个缺少 source_dataset_id "
+                    f"(索引: {plots_missing_source[:3]}{'...' if len(plots_missing_source) > 3 else ''})"
+                )
+            if plots_generated_from_real == 0 and len(plots) > 0:
+                warnings.append(
+                    "所有 plots 的 is_generated_from_real_data 均为 false，"
+                    "建议基于真实数据生成图表"
+                )
 
         missing_fields: List[str] = []
         warnings: List[str] = []
