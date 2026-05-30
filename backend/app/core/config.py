@@ -1,6 +1,33 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import List
+from pathlib import Path
+
+
+def _resolve_env_file() -> str:
+    """
+    按优先级查找 .env 文件:
+    1. backend/.env（推荐位置，与 uvicorn 启动目录一致）
+    2. 项目根目录 .env（兼容旧版）
+    3. 环境变量 AISCI_ENV_FILE 直接指定
+    """
+    import os
+
+    env_from_env = os.environ.get("AISCI_ENV_FILE")
+    if env_from_env and Path(env_from_env).exists():
+        return env_from_env
+
+    backend_root = Path(__file__).resolve().parent.parent.parent
+    backend_env = backend_root / ".env"
+    if backend_env.exists():
+        return str(backend_env)
+
+    project_root = backend_root.parent
+    project_env = project_root / ".env"
+    if project_env.exists():
+        return str(project_env)
+
+    return str(backend_env)
 
 
 class Settings(BaseSettings):
@@ -60,7 +87,7 @@ class Settings(BaseSettings):
         return [ext.strip().lower() for ext in self.ALLOWED_EXTENSIONS.split(",")]
     
     class Config:
-        env_file = ".env"
+        env_file = _resolve_env_file()
         case_sensitive = True
 
 

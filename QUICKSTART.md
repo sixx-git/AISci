@@ -254,7 +254,7 @@ npm run dev
 项目提供了自动化验收脚本 `scripts/check_e2e.py`，用于检查后端所有核心接口是否正常工作。
 
 ```bash
-# 确保后端已启动
+# 确保后端已启动（注意：必须在 backend/ 目录下启动，否则 .env 无法正确加载）
 cd backend
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 

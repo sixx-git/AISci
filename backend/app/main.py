@@ -60,6 +60,41 @@ async def health_check():
     )
 
 
+@app.get("/health/llm", tags=["基础"])
+async def health_llm():
+    """LLM 客户端健康检查 —— 不发起真实 API 调用"""
+    api_key_configured = bool(settings.QWEN_API_KEY and settings.QWEN_API_KEY.strip())
+    base_url_configured = bool(settings.QWEN_BASE_URL and settings.QWEN_BASE_URL.strip())
+
+    client_init_ok = False
+    init_error = None
+    model = settings.QWEN_MODEL
+
+    if settings.USE_MOCK_LLM:
+        client_init_ok = True
+        model = "mock-model"
+    elif api_key_configured and base_url_configured:
+        try:
+            from app.services.qwen_client import QwenClient
+            client = QwenClient()
+            client_init_ok = bool(client.client)
+            model = client.model
+        except Exception as e:
+            init_error = f"{type(e).__name__}: {str(e)[:200]}"
+
+    return success_response(
+        data={
+            "use_mock_llm": settings.USE_MOCK_LLM,
+            "qwen_api_key_configured": api_key_configured,
+            "base_url_configured": base_url_configured,
+            "model": model,
+            "client_init_ok": client_init_ok,
+            "error": init_error,
+        },
+        message="LLM health check completed"
+    )
+
+
 @app.on_event("startup")
 async def startup_event():
     """应用启动事件"""
@@ -89,6 +124,7 @@ async def startup_event():
     else:
         print(f"    ✓ 千问模型: {settings.QWEN_MODEL}")
         print(f"    ✓ API 地址: {settings.QWEN_BASE_URL}")
+        print(f"    ✓ API Key: 已配置 ({len(settings.QWEN_API_KEY)} 字符)")
     print()
     
     print(f"[3/3] 启动完成！")
