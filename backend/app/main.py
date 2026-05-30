@@ -114,23 +114,23 @@ async def startup_event():
     if settings.USE_MOCK_LLM:
         from app.services.mock_qwen_client import use_mock
         use_mock()
-        print("    ⚠ Mock LLM 模式已启用（model: mock-model）")
-        print("    ⚠ 不会发起真实 API 调用，所有 LLM 输出为模拟数据")
-        print("    ⚠ 此模式仅用于开发调试，不可用于生产环境")
+        print("    [WARN] Mock LLM 模式已启用（model: mock-model）")
+        print("    [WARN] 不会发起真实 API 调用，所有 LLM 输出为模拟数据")
+        print("    [WARN] 此模式仅用于开发调试，不可用于生产环境")
     elif not settings.QWEN_API_KEY:
-        print("    ⚠ QWEN_API_KEY 未设置")
-        print("    ⚠ Pipeline 运行时会因缺少 API Key 而失败")
-        print("    ⚠ 如需在无 API Key 时跑通 Pipeline，请在 .env 中设置 USE_MOCK_LLM=true")
+        print("    [WARN] QWEN_API_KEY 未设置")
+        print("    [WARN] Pipeline 运行时会因缺少 API Key 而失败")
+        print("    [WARN] 如需在无 API Key 时跑通 Pipeline，请在 .env 中设置 USE_MOCK_LLM=true")
     else:
-        print(f"    ✓ 千问模型: {settings.QWEN_MODEL}")
-        print(f"    ✓ API 地址: {settings.QWEN_BASE_URL}")
-        print(f"    ✓ API Key: 已配置 ({len(settings.QWEN_API_KEY)} 字符)")
+        print(f"    [OK] 千问模型: {settings.QWEN_MODEL}")
+        print(f"    [OK] API 地址: {settings.QWEN_BASE_URL}")
+        print(f"    [OK] API Key: 已配置 ({len(settings.QWEN_API_KEY)} 字符)")
     print()
     
     print(f"[3/3] 启动完成！")
     print()
-    print(f"📚 API 文档: http://localhost:{settings.BACKEND_PORT}/docs")
-    print(f"🔧 服务地址: http://localhost:{settings.BACKEND_PORT}")
+    print(f"API 文档: http://localhost:{settings.BACKEND_PORT}/docs")
+    print(f"服务地址: http://localhost:{settings.BACKEND_PORT}")
     print()
     print(f"{'='*60}")
 

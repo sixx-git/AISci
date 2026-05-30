@@ -15,7 +15,7 @@ from functools import wraps
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 import openai
 from openai import APIError, APIConnectionError, APIStatusError, APITimeoutError
 
@@ -275,31 +275,67 @@ class QwenClient:
     # ==================== 内部工具 ====================
 
     def _with_retry(func):
-        """重试装饰器"""
+        """重试装饰器 —— 使用 ThreadPoolExecutor 实现硬超时 + 重试"""
+        import concurrent.futures
+
         @wraps(func)
-        @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
-            retry=retry_if_exception_type((APIConnectionError, APITimeoutError))
-        )
         def wrapper(self, *args, **kwargs):
-            try:
-                return func(self, *args, **kwargs)
-            except APIStatusError as e:
-                logger.error(f"Qwen API Status Error: {e.status_code} - {e.message}")
-                raise QwenAPIError(f"API Error: {e.status_code} - {e.message}") from e
-            except APIConnectionError as e:
-                logger.error(f"Qwen API Connection Error: {str(e)}")
-                raise QwenAPIError(f"Connection Error: {str(e)}") from e
-            except APITimeoutError as e:
-                logger.error(f"Qwen API Timeout Error: {str(e)}")
-                raise QwenTimeoutError(f"Timeout: {str(e)}") from e
-            except APIError as e:
-                logger.error(f"Qwen API Error: {str(e)}")
-                raise QwenAPIError(f"API Error: {str(e)}") from e
-            except Exception as e:
-                logger.error(f"Unexpected Qwen API Error: {str(e)}")
-                raise QwenAPIError(f"Unexpected Error: {str(e)}") from e
+            timeout = getattr(self, 'timeout', 180)
+            max_attempts = 3
+            last_error = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(func, self, *args, **kwargs)
+                        return future.result(timeout=timeout)
+                except concurrent.futures.TimeoutError:
+                    last_error = QwenTimeoutError(
+                        f"LLM call exceeded {timeout}s total (attempt {attempt}/{max_attempts})"
+                    )
+                    logger.warning(
+                        f"[LLM超时] {func.__name__} 超过 {timeout}s 总时限 "
+                        f"(attempt {attempt}/{max_attempts})"
+                    )
+                    if attempt < max_attempts:
+                        wait_s = min(2 ** attempt, 10)
+                        logger.info(f"[LLM重试] 等待 {wait_s}s 后重试...")
+                        time.sleep(wait_s)
+                    continue
+                except APIStatusError as e:
+                    logger.error(f"Qwen API Status Error: {e.status_code} - {e.message}")
+                    raise QwenAPIError(f"API Error: {e.status_code} - {e.message}") from e
+                except APIConnectionError as e:
+                    last_error = QwenAPIError(f"Connection Error: {str(e)}")
+                    logger.warning(
+                        f"Qwen API Connection Error: {str(e)} "
+                        f"(attempt {attempt}/{max_attempts})"
+                    )
+                    if attempt < max_attempts:
+                        wait_s = min(2 ** attempt, 10)
+                        logger.info(f"[LLM重试] 等待 {wait_s}s 后重试...")
+                        time.sleep(wait_s)
+                    continue
+                except APITimeoutError as e:
+                    last_error = QwenTimeoutError(f"Timeout: {str(e)}")
+                    logger.warning(
+                        f"Qwen API Timeout Error: {str(e)} "
+                        f"(attempt {attempt}/{max_attempts})"
+                    )
+                    if attempt < max_attempts:
+                        wait_s = min(2 ** attempt, 10)
+                        logger.info(f"[LLM重试] 等待 {wait_s}s 后重试...")
+                        time.sleep(wait_s)
+                    continue
+                except APIError as e:
+                    logger.error(f"Qwen API Error: {str(e)}")
+                    raise QwenAPIError(f"API Error: {str(e)}") from e
+                except Exception as e:
+                    logger.error(f"Unexpected Qwen API Error: {str(e)}")
+                    raise QwenAPIError(f"Unexpected Error: {str(e)}") from e
+
+            raise last_error or QwenTimeoutError("LLM call failed after all retries")
+
         return wrapper
 
     def _log_call(
@@ -466,11 +502,13 @@ class QwenClient:
 
         # 调用 API
         try:
+            logger.info(f"[LLM] structured_chat 开始调用 model={self.model} prompt_len={len(prompt)} max_tokens={max_tokens}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens or 8192,
+                timeout=self.timeout,
             )
 
             raw_content = response.choices[0].message.content
@@ -540,11 +578,13 @@ class QwenClient:
         t0 = time.time()
 
         try:
+            logger.info(f"[LLM] chat_with_messages 开始调用 model={self.model} msgs={len(messages)}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens or 8192,
+                timeout=self.timeout,
             )
             content = response.choices[0].message.content
             if content is None:
@@ -596,6 +636,7 @@ def qwen_structured_chat(
     schema_example: Optional[Union[Dict[str, Any], str]] = None,
     system_prompt: Optional[str] = None,
     temperature: float = 0.2,
+    max_tokens: Optional[int] = None,
     prompt_version: str = ""
 ) -> Dict[str, Any]:
     """
@@ -606,6 +647,7 @@ def qwen_structured_chat(
         schema_example: JSON 格式示例
         system_prompt: 系统提示词
         temperature: 温度参数
+        max_tokens: 最大生成 token 数
         prompt_version: Prompt 模板版本标识
 
     Returns:
@@ -620,5 +662,6 @@ def qwen_structured_chat(
         schema_example=schema_example,
         system_prompt=system_prompt,
         temperature=temperature,
+        max_tokens=max_tokens,
         prompt_version=prompt_version
     )

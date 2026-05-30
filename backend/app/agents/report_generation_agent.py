@@ -137,25 +137,31 @@ class ReportGenerationAgent:
                 },
             }
 
+            logger.info(f"[报告生成] 步骤1: 调用 LLM 生成报告正文 (prompt_len={len(prompt)})")
             result_dict = qwen_structured_chat(
                 prompt=prompt,
                 schema_example=schema_example,
                 prompt_version="report_generation",
+                max_tokens=8192,
             )
+            logger.info(f"[报告生成] 步骤1完成: LLM 已返回 (chapters_keys={list(result_dict.get('chapters', {}).keys())})")
 
             result = self._validate_and_normalize_result(
                 result_dict, literature_facts, citation_map, all_hypotheses,
                 novelty_review_skill_outputs, sanity_check_skill_outputs,
                 evidence_facts or [], verified_references or [],
             )
+            logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
             if pipeline_run_info:
                 result = self._append_run_summary_to_report(result, pipeline_run_info)
 
             file_info = self._save_report_files(result, project_info)
             result.update(file_info)
+            logger.info(f"[报告生成] 步骤3完成: 报告文件保存 (pdf_success={file_info.get('pdf_success')})")
 
             # ── 生成报告图表 ──
+            logger.info(f"[报告生成] 步骤4: 开始生成图表 (has_data={bool(multimodal_datasets or preliminary_analysis_skill_outputs)})")
             charts_data = self._run_chart_generation_sync(
                 preliminary_analysis_skill_outputs,
                 multimodal_datasets,
@@ -163,6 +169,7 @@ class ReportGenerationAgent:
             )
             result["plots"] = charts_data.get("charts", [])
             result["chart_skill_outputs"] = charts_data.get("skill_outputs", {})
+            logger.info(f"[报告生成] 步骤4完成: 图表生成 (charts_count={len(result['plots'])})")
 
             # ── 嵌入图表到 markdown ──
             result["markdown_content"] = self._embed_charts_in_markdown(
@@ -176,6 +183,7 @@ class ReportGenerationAgent:
             )
 
             # ── 报告质量检查 ──
+            logger.info(f"[报告生成] 步骤5: 开始质量检查")
             quality_check_output = self._run_quality_check_sync(
                 result,
                 verified_references,
@@ -187,6 +195,8 @@ class ReportGenerationAgent:
                 result["compliance_check"] = compliance
             if result.get("skill_outputs") and isinstance(result["skill_outputs"], dict):
                 result["skill_outputs"]["report_quality_check"] = quality_check_output
+
+            logger.info(f"[报告生成] 步骤5完成: 质量检查 (qc_success={quality_check_output.get('success') if isinstance(quality_check_output, dict) else False})")
 
             qc_data = quality_check_output.get("data", {})
             refs_verified_val = qc_data.get("references_verified", 0) if isinstance(qc_data, dict) else 0
@@ -554,7 +564,10 @@ class ReportGenerationAgent:
                 return {"success": False, "error": str(e)}
 
         try:
-            return asyncio.run(_run())
+            return asyncio.run(asyncio.wait_for(_run(), timeout=180))
+        except asyncio.TimeoutError:
+            logger.warning("ReportQualityCheckSkill 超时 (180s)")
+            return {"success": False, "error": "timeout after 180s"}
         except Exception as e:
             logger.warning(f"ReportQualityCheckSkill 异常: {e}")
             return {}
@@ -868,7 +881,10 @@ class ReportGenerationAgent:
             return outputs
 
         try:
-            return asyncio.run(_run())
+            return asyncio.run(asyncio.wait_for(_run(), timeout=180))
+        except asyncio.TimeoutError:
+            logger.warning("ChartGeneration 超时 (180s)")
+            return {"charts": [], "skill_outputs": {}}
         except Exception as e:
             logger.warning(f"ChartGeneration 异常: {e}")
             return {"charts": [], "skill_outputs": {}}
