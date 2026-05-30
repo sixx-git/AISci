@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText } from 'lucide-react';
+import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
@@ -14,8 +14,6 @@ import type {
   PipelineStageLog,
 } from '@/types';
 
-// // ============ 接口 ============
-
 interface WorkflowPageProps {
   projectId?: string;
   researchQuestion?: string;
@@ -25,12 +23,10 @@ interface WorkflowPageProps {
 
 type RunState = 'idle' | 'submitting' | 'running' | 'polling';
 
-/** 轮询连续失败上限 */
-const MAX_CONSECUTIVE_POLL_FAILURES = 3;
-/** 轮询间隔 ms */
+const MAX_CONSECUTIVE_POLL_FAILURES = 5;
 const POLL_INTERVAL_MS = 2000;
+const MAX_ALL_PENDING_POLLS = 5;
 
-/** 阶段名称 → 节点 ID 映射 */
 const STAGE_TO_NODE_ID: Record<string, string> = {
   problem_understanding: 'problem',
   literature_mining: 'literature',
@@ -42,9 +38,32 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
   report_generation: 'report',
 };
 
+// ============ localStorage 工具 ============
+
+function getActiveRunId(projectId: string): string | null {
+  try {
+    return localStorage.getItem(`aisci_active_run_${projectId}`) || null;
+  } catch {
+    return null;
+  }
+}
+
+function setActiveRunId(projectId: string, runId: string): void {
+  try {
+    localStorage.setItem(`aisci_active_run_${projectId}`, runId);
+    localStorage.setItem(`aisci_active_run_status_${projectId}`, 'running');
+  } catch { /* ignore */ }
+}
+
+function clearActiveRun(projectId: string): void {
+  try {
+    localStorage.removeItem(`aisci_active_run_${projectId}`);
+    localStorage.removeItem(`aisci_active_run_status_${projectId}`);
+  } catch { /* ignore */ }
+}
+
 // ============ 工具函数 ============
 
-/** 为 hypothesis_generation 阶段生成可读摘要 */
 function summarizeStageData(stageName: string, data: unknown): string {
   if (typeof data !== 'object' || data === null) {
     return JSON.stringify(data).slice(0, 200);
@@ -155,17 +174,8 @@ function summarizeStageData(stageName: string, data: unknown): string {
         if (paData.summary_statistics && typeof paData.summary_statistics === 'object') {
           parts.push(`分析 ${Object.keys(paData.summary_statistics as Record<string, unknown>).length} 个数据源`);
         }
-        if (Array.isArray(paData.feature_vectors)) {
-          parts.push(`${paData.feature_vectors.length} 组特征向量`);
-        }
-        if (Array.isArray(paData.plots)) {
-          parts.push(`${paData.plots.length} 个图表规格`);
-        }
         if (Array.isArray(paData.correlations) && paData.correlations.length > 0) {
           parts.push(`${paData.correlations.length} 对相关性`);
-        }
-        if (Array.isArray(paData.anomalies) && paData.anomalies.length > 0) {
-          parts.push(`${paData.anomalies.length} 个异常点`);
         }
         if (paData.data_source_flag && typeof paData.data_source_flag === 'string') {
           const flagMap: Record<string, string> = { real_data: '真实数据', simulated: '模拟', no_data: '无数据' };
@@ -185,20 +195,6 @@ function summarizeStageData(stageName: string, data: unknown): string {
     }
     const so = d.skill_outputs as Record<string, unknown> | undefined;
     if (so) {
-      const sp = so.scientific_plot as Record<string, unknown> | undefined;
-      if (sp && sp.success) {
-        const spData = sp.data as Record<string, unknown> | undefined;
-        if (spData && spData.total_charts != null) {
-          parts.push(`ScientificPlot: ${spData.total_charts} 张`);
-        }
-      }
-      const cg = so.report_chart_generation as Record<string, unknown> | undefined;
-      if (cg && cg.data) {
-        const cgData = cg.data as Record<string, unknown>;
-        if (cgData.total_charts != null) {
-          parts.push(`ChartGeneration: ${cgData.total_charts} 张`);
-        }
-      }
       const qc = so.report_quality_check as Record<string, unknown> | undefined;
       if (qc && qc.data) {
         const qcData = qc.data as Record<string, unknown>;
@@ -219,7 +215,6 @@ function summarizeStageData(stageName: string, data: unknown): string {
   return JSON.stringify(data).slice(0, 200);
 }
 
-/** 固定的 Pipeline 节点拓扑定义 —— 系统的8个真实智能体 */
 const BASE_AGENT_NODES: AgentNodeData[] = [
   {
     id: 'problem', name: '问题理解智能体',
@@ -288,10 +283,10 @@ function normalizeStageName(stage?: string): string {
   return stage
     .toLowerCase()
     .replace(/[\s-]+/g, '_')
+    .replace(/^pipelinestage\./i, '')
     .trim();
 }
 
-/** 归一化状态名：统一处理大写、小写、短横线、空格等变体 */
 function normalizeStatus(status?: string): string {
   if (!status) return 'pending';
   return status
@@ -300,7 +295,6 @@ function normalizeStatus(status?: string): string {
     .trim();
 }
 
-/** 后端状态 → 前端 AgentStatus */
 function mapStatus(status: string): AgentStatus {
   const normalized = normalizeStatus(status);
   switch (normalized) {
@@ -326,7 +320,6 @@ function mapStatus(status: string): AgentStatus {
   }
 }
 
-/** 将 API 阶段数据合并到前端节点上 */
 function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNodeData {
   const newStatus = mapStatus(stage.status);
   const durationMs =
@@ -360,6 +353,36 @@ function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNode
   };
 }
 
+function extractStagesFromResponse(response: unknown): PipelineStageLog[] {
+  if (!response || typeof response !== 'object') return [];
+
+  const r = response as Record<string, unknown>;
+
+  let data: unknown = null;
+  if (r.code != null && r.data != null) {
+    data = r.data;
+  } else {
+    data = response;
+  }
+
+  if (!data || typeof data !== 'object') return [];
+
+  const d = data as Record<string, unknown>;
+
+  if (Array.isArray(d.stages)) return d.stages as PipelineStageLog[];
+  if (Array.isArray(d.stage_executions)) return d.stage_executions as PipelineStageLog[];
+  if (Array.isArray(d)) return d as PipelineStageLog[];
+
+  return [];
+}
+
+function matchStageToNode(stage: PipelineStageLog, node: AgentNodeData): boolean {
+  const ns = normalizeStageName(stage.stage);
+  return ns === node.id
+    || STAGE_TO_NODE_ID[ns] === node.id
+    || stage.stage?.toLowerCase() === node.name?.toLowerCase();
+}
+
 // ============ 组件 ============
 
 export function WorkflowPage({
@@ -368,27 +391,86 @@ export function WorkflowPage({
   compact: _compact = false,
   onPipelineCompleted,
 }: WorkflowPageProps) {
-  // ────── 节点与选中状态 ──────
   const [nodes, setNodes] = useState<AgentNodeData[]>(() => createInitialNodes());
   const [selectedId, setSelectedId] = useState<string>('');
 
-  // ────── 运行状态 ──────
   const [runState, setRunState] = useState<RunState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [hasExistingRuns, setHasExistingRuns] = useState<boolean | null>(null);
+  const [staleWarning, setStaleWarning] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
+  const allPendingCountRef = useRef(0);
+  const currentRunIdRef = useRef<string | null>(null);
 
-  // ────── 研究问题兜底输入（当 props 为空时显示） ──────
   const [localResearchQuestion, setLocalResearchQuestion] = useState('');
   const finalResearchQuestion = (researchQuestion ?? '').trim() || localResearchQuestion.trim();
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
 
-  // ══════════════════════════════════════════════
-  //  生命周期：清理轮询
-  // ══════════════════════════════════════════════
+  // ========== 生命周期：挂载时恢复 active run ==========
+  useEffect(() => {
+    if (!projectId) return;
+
+    const savedRunId = getActiveRunId(projectId);
+    if (savedRunId) {
+      setCurrentRunId(savedRunId);
+      currentRunIdRef.current = savedRunId;
+      setRunState('running');
+      setErrorMessage(null);
+      setStaleWarning(false);
+
+      const checkAndResume = async () => {
+        try {
+          const res = await pipelineService.getStatus(savedRunId);
+          updateNodesFromStages(res);
+          const resAny = res as unknown as Record<string, unknown>;
+          const resultData = resAny.data as Record<string, unknown> | undefined;
+          const status = resultData && typeof resultData === 'object'
+            ? (resultData as Record<string, unknown>).status
+            : null;
+
+          if (status === 'completed' || status === 'failed') {
+            setRunState('idle');
+            clearActiveRun(projectId);
+            currentRunIdRef.current = null;
+            setCurrentRunId(null);
+
+            if (status === 'completed') {
+              setErrorMessage(null);
+              setStaleWarning(false);
+              setHasExistingRuns(true);
+              await refreshFromRunDetail(savedRunId);
+            }
+            if (status === 'failed') {
+              const errMsg = (resultData as Record<string, unknown>).error_message as string | undefined;
+              setErrorMessage(errMsg || 'Pipeline 执行失败');
+              setHasExistingRuns(true);
+            }
+          } else if (status === 'running') {
+            startPolling(savedRunId);
+          } else {
+            setRunState('idle');
+            clearActiveRun(projectId);
+            currentRunIdRef.current = null;
+            setCurrentRunId(null);
+          }
+        } catch {
+          startPolling(savedRunId);
+        }
+      };
+
+      checkAndResume();
+    } else {
+      loadLatestRun();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // ========== 清理轮询 ==========
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -407,6 +489,12 @@ export function WorkflowPage({
         return;
       }
       const latestRun = runsRes.data[0];
+
+      const savedRunId = getActiveRunId(projectId);
+      if (savedRunId && savedRunId === latestRun.run_id) {
+        return;
+      }
+
       const detailRes = await pipelineService.getRunDetail(latestRun.run_id);
       if (detailRes.code !== 200 || !detailRes.data) {
         setHasExistingRuns(false);
@@ -417,152 +505,155 @@ export function WorkflowPage({
       setNodes(() => {
         const base = createInitialNodes();
         return base.map((node) => {
-          const matchedStage = runDetail.stages?.find(
-            (s) => normalizeStageName(s.stage) === node.id ||
-              STAGE_TO_NODE_ID[normalizeStageName(s.stage)] === node.id,
-          );
+          const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
           return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
         });
       });
-    } catch (err: unknown) {
-      console.error('加载最新运行记录失败:', err);
+    } catch {
       setHasExistingRuns(false);
     }
   }, [projectId]);
-
-  useEffect(() => {
-    loadLatestRun();
-  }, [loadLatestRun]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
   }, []);
 
-  // ══════════════════════════════════════════════
-  //  用数据库中的真实 stages 刷新节点
-  // ══════════════════════════════════════════════
+  // ========== 用真实 stages 刷新节点（最终刷新） ==========
   const refreshFromRunDetail = useCallback(async (runId: string) => {
     try {
       const detailRes = await pipelineService.getRunDetail(runId);
       if (detailRes.code !== 200 || !detailRes.data) return;
       const runDetail = detailRes.data;
       setNodes(createInitialNodes().map((node) => {
-        const matchedStage = runDetail.stages?.find(
-          (s) => normalizeStageName(s.stage) === node.id ||
-            STAGE_TO_NODE_ID[normalizeStageName(s.stage)] === node.id,
-        );
+        const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
         return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
       }));
-    } catch (err: unknown) {
-      console.error('刷新运行详情失败:', err);
+    } catch {
+      /* ignore */
     }
   }, []);
 
-  // ══════════════════════════════════════════════
-  //  将 API stages 合并到节点
-  // ══════════════════════════════════════════════
-  const applyStageResults = useCallback((result: PipelineRunResult) => {
+  // ========== 兼容多种响应格式更新节点 ==========
+  const updateNodesFromStages = useCallback((response: unknown) => {
+    const stages = extractStagesFromResponse(response);
+
     setNodes((prev) => {
       const base = prev.length > 0 ? prev : createInitialNodes();
 
       const updated = base.map((node) => {
-        const matchedStage = result.stages?.find(
-          (s) => normalizeStageName(s.stage) === node.id ||
-            STAGE_TO_NODE_ID[normalizeStageName(s.stage)] === node.id,
-        );
+        const matchedStage = stages.find((s) => matchStageToNode(s, node));
         return matchedStage ? mergeStageData(node, matchedStage) : node;
       });
 
-      if (import.meta.env.DEV) {
-        result.stages?.forEach((s) => {
-          const ns = normalizeStageName(s.stage);
-          const nodeId = STAGE_TO_NODE_ID[ns] ?? ns;
-          if (!BASE_AGENT_NODES.some((n) => n.id === nodeId)) {
-            console.warn(`[WorkflowPage] 未知阶段: "${s.stage}"，不在8个节点定义中`);
-          }
-        });
-      }
-
-      if (result.failed_stage) {
-        const normalized = normalizeStageName(result.failed_stage);
-        const failedNodeId = STAGE_TO_NODE_ID[normalized] ?? normalized;
-        if (failedNodeId) setSelectedId(failedNodeId);
-      }
-
       return updated;
     });
+
+    if (import.meta.env.DEV && stages.length > 0) {
+      stages.forEach((s) => {
+        const ns = normalizeStageName(s.stage);
+        const nodeId = STAGE_TO_NODE_ID[ns] ?? ns;
+        if (!BASE_AGENT_NODES.some((n) => n.id === nodeId)) {
+          console.warn(`[WorkflowPage] 未知阶段: "${s.stage}"，不在8个节点定义中`);
+        }
+      });
+    }
   }, []);
 
-  // ══════════════════════════════════════════════
-  //  轮询 Pipeline 状态
-  // ══════════════════════════════════════════════
+  // ========== 检测是否全部 pending ==========
+  const isAllPending = useCallback((response: unknown): boolean => {
+    const stages = extractStagesFromResponse(response);
+    if (stages.length === 0) return true;
+    return stages.every((s) => normalizeStatus(s.status) === 'pending');
+  }, []);
+
+  // ========== 轮询 Pipeline 状态 ==========
   const startPolling = useCallback(
     (runId: string) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       consecutiveFailuresRef.current = 0;
+      allPendingCountRef.current = 0;
       setRunState('polling');
+      setStaleWarning(false);
+      setStatusMessage('正在同步阶段状态…');
 
       pollingRef.current = setInterval(async () => {
         try {
           const response = await pipelineService.getStatus(runId);
-          const result: PipelineRunResult = response.data;
-
-          if (!result) return;
 
           consecutiveFailuresRef.current = 0;
-          applyStageResults(result);
+          updateNodesFromStages(response);
 
-          if (result.status === 'completed' || result.status === 'failed') {
+          const resAny = response as unknown as Record<string, unknown>;
+          const resultData = resAny.data as Record<string, unknown> | undefined;
+          const status = resultData?.status as string | undefined;
+
+          if (status === 'completed' || status === 'failed') {
             if (pollingRef.current) clearInterval(pollingRef.current);
             pollingRef.current = null;
             setRunState('idle');
+            setStaleWarning(false);
+            setStatusMessage(null);
+            currentRunIdRef.current = null;
             setCurrentRunId(null);
+            if (projectId) clearActiveRun(projectId);
 
             await refreshFromRunDetail(runId);
             setHasExistingRuns(true);
 
-            if (result.status === 'completed') {
+            if (status === 'completed') {
               setErrorMessage(null);
-              onPipelineCompleted?.(result);
+              onPipelineCompleted?.(response as unknown as PipelineRunResult);
             }
 
-            if (result.status === 'failed') {
-              setErrorMessage(
-                result.error_message ||
-                (result.failed_stage
-                  ? `执行失败在阶段: ${result.failed_stage}`
-                  : 'Pipeline 执行失败'),
-              );
+            if (status === 'failed') {
+              const errMsg = (resultData?.error_message as string)
+                || (resultData?.failed_stage
+                  ? `执行失败在阶段: ${resultData.failed_stage}`
+                  : 'Pipeline 执行失败');
+              setErrorMessage(errMsg);
             }
+            return;
+          }
+
+          if (isAllPending(response)) {
+            allPendingCountRef.current += 1;
+            if (allPendingCountRef.current >= MAX_ALL_PENDING_POLLS) {
+              setStaleWarning(true);
+              setStatusMessage(
+                'Pipeline 已创建，但后台任务尚未开始，可能是后端任务丢失。请检查后端日志或重新运行。'
+              );
+            } else if (allPendingCountRef.current >= 3) {
+              setStatusMessage('Pipeline 已创建，但后台任务尚未开始，请检查后端日志。');
+            }
+          } else {
+            allPendingCountRef.current = 0;
+            setStaleWarning(false);
+            setStatusMessage('运行中');
           }
         } catch (err: unknown) {
           consecutiveFailuresRef.current += 1;
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`轮询状态失败 (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_POLL_FAILURES}):`, msg);
 
+          setStatusMessage(`正在重试同步状态 (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_POLL_FAILURES})`);
+
           if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_POLL_FAILURES) {
             if (pollingRef.current) clearInterval(pollingRef.current);
             pollingRef.current = null;
             setRunState('idle');
+            setStatusMessage(null);
             setCurrentRunId(null);
+            currentRunIdRef.current = null;
+            if (projectId) clearActiveRun(projectId);
             setErrorMessage('无法获取 Pipeline 状态，请检查后端服务是否仍在运行。');
           }
         }
       }, POLL_INTERVAL_MS);
     },
-    [applyStageResults, refreshFromRunDetail, onPipelineCompleted],
+    [updateNodesFromStages, refreshFromRunDetail, onPipelineCompleted, projectId, isAllPending],
   );
 
-  // ══════════════════════════════════════════════
-  //  重置所有节点到初始状态
-  // ══════════════════════════════════════════════
-  const resetNodes = useCallback(() => {
-    setNodes(createInitialNodes());
-  }, []);
-
-  // ══════════════════════════════════════════════
-  //  运行全部
-  // ══════════════════════════════════════════════
+  // ========== handleRunAll ==========
   const handleRunAll = useCallback(async () => {
     if (!projectId) {
       setErrorMessage('缺少项目 ID，无法运行真实 Pipeline。');
@@ -574,9 +665,19 @@ export function WorkflowPage({
       return;
     }
 
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (projectId) clearActiveRun(projectId);
+
     setRunState('submitting');
     setErrorMessage(null);
-    resetNodes();
+    setStaleWarning(false);
+    setStatusMessage(null);
+    allPendingCountRef.current = 0;
+    consecutiveFailuresRef.current = 0;
+    setNodes(createInitialNodes());
 
     try {
       const response = await pipelineService.run(projectId, finalResearchQuestion);
@@ -588,7 +689,9 @@ export function WorkflowPage({
         return;
       }
 
+      setActiveRunId(projectId, result.run_id);
       setCurrentRunId(result.run_id);
+      currentRunIdRef.current = result.run_id;
       setRunState('running');
 
       startPolling(result.run_id);
@@ -601,13 +704,10 @@ export function WorkflowPage({
   }, [
     projectId,
     finalResearchQuestion,
-    resetNodes,
     startPolling,
   ]);
 
-  // ══════════════════════════════════════════════
-  //  暂停
-  // ══════════════════════════════════════════════
+  // ========== 暂停 ==========
   const handlePause = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -616,48 +716,56 @@ export function WorkflowPage({
     setRunState('idle');
   }, []);
 
-  // ══════════════════════════════════════════════
-  //  重置
-  // ══════════════════════════════════════════════
+  // ========== 重置 ==========
   const handleReset = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
+    if (projectId) clearActiveRun(projectId);
     setRunState('idle');
     setErrorMessage(null);
+    setStaleWarning(false);
+    setStatusMessage(null);
     setCurrentRunId(null);
+    currentRunIdRef.current = null;
+    allPendingCountRef.current = 0;
+    consecutiveFailuresRef.current = 0;
     setLocalResearchQuestion('');
     setNodes(createInitialNodes());
     setSelectedId('');
     setHasExistingRuns(null);
     loadLatestRun();
-  }, [loadLatestRun]);
+  }, [loadLatestRun, projectId]);
 
-  // ══════════════════════════════════════════════
-  //  重新运行
-  // ══════════════════════════════════════════════
+  // ========== 重新运行 ==========
   const handleRerun = useCallback(
-    async (_id: string) => {
-      if (!projectId) {
-        setErrorMessage('缺少项目 ID，无法重新运行。');
-        return;
-      }
-      if (!finalResearchQuestion) {
-        setErrorMessage('缺少研究问题，无法重新运行。');
-        return;
+    async () => {
+      if (projectId) clearActiveRun(projectId);
+      setStaleWarning(false);
+      setStatusMessage(null);
+      allPendingCountRef.current = 0;
+      consecutiveFailuresRef.current = 0;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
       await handleRunAll();
     },
-    [projectId, finalResearchQuestion, handleRunAll],
+    [projectId, handleRunAll],
   );
 
-  // ══════════════════════════════════════════════
-  //  JSX
-  // ══════════════════════════════════════════════
+  // ========== 计算状态摘要 ==========
+  const completedCount = nodes.filter((n) => n.status === 'completed').length;
+  const failedCount = nodes.filter((n) => n.status === 'failed').length;
+
+  const runningStageName = nodes.find((n) => n.status === 'running')?.name ?? null;
+  const failedStageName = nodes.find((n) => n.status === 'failed')?.name ?? null;
+
+  // ========== JSX ==========
   return (
     <div className="max-w-7xl mx-auto">
-      {/* ========== 头部 ========== */}
+      {/* 头部 */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">智能体工作流</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -669,14 +777,12 @@ export function WorkflowPage({
           )}
         </div>
 
-        {/* 研究问题展示 */}
         {(researchQuestion || localResearchQuestion) && (
           <p className="text-sm text-gray-500 mt-1 truncate">
             研究问题：{finalResearchQuestion}
           </p>
         )}
 
-        {/* 运行 ID */}
         {currentRunId && (
           <p className="text-sm text-gray-500 mt-1 truncate font-mono text-xs">
             run_id: {currentRunId}
@@ -684,7 +790,7 @@ export function WorkflowPage({
         )}
       </div>
 
-      {/* ========== 研究问题缺失时的兜底输入 ========== */}
+      {/* 研究问题缺失时的兜底输入 */}
       {!researchQuestion && (
         <div className="mb-5 p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
           <p className="text-sm text-yellow-300 font-medium mb-2 flex items-center gap-2">
@@ -718,7 +824,7 @@ export function WorkflowPage({
         </div>
       )}
 
-      {/* ========== 错误提示 ========== */}
+      {/* 错误提示 */}
       {errorMessage && (
         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
           <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -737,7 +843,7 @@ export function WorkflowPage({
         </div>
       )}
 
-      {/* ========== Loading 提示 ========== */}
+      {/* 状态栏 */}
       {runState === 'submitting' && (
         <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
           <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -752,15 +858,54 @@ export function WorkflowPage({
         </div>
       )}
 
-      {runState === 'polling' && (
-        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-blue-300">正在同步阶段状态…</p>
+      {(runState === 'polling' || runState === 'running') && pollingRef.current && (
+        <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${
+          staleWarning
+            ? 'bg-yellow-500/10 border border-yellow-500/30'
+            : 'bg-blue-500/10 border border-blue-500/30'
+        }`}>
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className={`text-sm ${staleWarning ? 'text-yellow-300' : 'text-blue-300'} font-medium`}>
+              {staleWarning ? (
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  后台任务可能丢失
+                </span>
+              ) : statusMessage || '运行中'}
+            </p>
+            {runningStageName && !staleWarning && (
+              <p className="text-xs text-blue-400/70 mt-1">正在运行：{runningStageName}</p>
+            )}
+            {completedCount > 0 && (
+              <p className="text-xs text-blue-400/70 mt-1">已完成 {completedCount}/{nodes.length} 个阶段</p>
+            )}
+            {!staleWarning && allPendingCountRef.current >= 3 && !runningStageName && !completedCount && (
+              <p className="text-xs text-yellow-400/80 mt-1">
+                Pipeline 已创建，等待后台任务启动...
+              </p>
+            )}
+            {staleWarning && (
+              <div className="mt-3">
+                <p className="text-xs text-yellow-400/80 mb-2">
+                  {statusMessage}
+                </p>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<RefreshCw className="w-4 h-4" />}
+                  onClick={handleRerun}
+                >
+                  重新运行 Pipeline
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ========== 无运行记录提示 ========== */}
-      {hasExistingRuns === false && projectId && runState === 'idle' && (
+      {/* 无运行记录提示 — 只在真正没有历史记录且没有活动运行时显示 */}
+      {hasExistingRuns === false && projectId && runState === 'idle' && !currentRunId && (
         <div className="mb-6 p-4 bg-gray-800/50 border border-gray-700 rounded-lg flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
             <span className="text-gray-400 text-sm">—</span>
@@ -772,7 +917,32 @@ export function WorkflowPage({
         </div>
       )}
 
-      {/* ========== 操作栏 ========== */}
+      {/* 失败时显示 failed stage 信息 */}
+      {failedCount > 0 && runState === 'idle' && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+          <div>
+            <p className="text-sm text-red-300 font-medium">
+              执行失败{failedStageName ? `于: ${failedStageName}` : ''}
+            </p>
+            {errorMessage && (
+              <p className="text-xs text-red-400/80 mt-1">{errorMessage}</p>
+            )}
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<RefreshCw className="w-4 h-4" />}
+                onClick={handleRerun}
+              >
+                重新运行 Pipeline
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 操作栏 */}
       <div className="mb-6">
         <WorkflowActionBar
           nodes={nodes}
@@ -783,13 +953,13 @@ export function WorkflowPage({
         />
       </div>
 
-      {/* ========== 主布局 ========== */}
+      {/* 主布局 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 左侧：节点列表 */}
         <div className="lg:col-span-1">
           <Card
             title="Pipeline 节点"
-            subtitle={`共 ${nodes.length} 个智能体`}
+            subtitle={`共 ${nodes.length} 个智能体` + (completedCount > 0 ? ` · 已完成 ${completedCount}/${nodes.length}` : '')}
             className="max-h-[calc(100vh-300px)] overflow-y-auto"
           >
             <div className="space-y-0">
@@ -807,9 +977,9 @@ export function WorkflowPage({
           </Card>
         </div>
 
-        {/* 右侧：详情 + 人在回路 */}
+        {/* 右侧：详情 */}
         <div className="lg:col-span-2 space-y-4">
-          <AgentDetailPanel node={selectedNode} onRerun={handleRerun} />
+          <AgentDetailPanel node={selectedNode} onRerun={() => handleRerun()} />
 
           {selectedNode && selectedNode.status === 'human_review_required' && (
             <HumanInLoopCard />)}

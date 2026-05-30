@@ -104,13 +104,12 @@ class PipelineService:
 
         return self.run_id
 
-    def execute_pipeline_run(self, run_id: str, request: PipelineRunRequest):
+    def execute_pipeline_run(self, run_id: str):
         """
-        在后台线程中执行完整 Pipeline（供 start_pipeline_async 调用）。
+        在后台线程中执行完整 Pipeline（独立 DB Session）。
 
         Args:
             run_id: 已创建的 Pipeline 运行 ID
-            request: Pipeline 运行请求
         """
         self.run_id = run_id
 
@@ -121,6 +120,9 @@ class PipelineService:
             logger.error(f"Pipeline run not found: {run_id}")
             return
 
+        research_question = self.db_pipeline_run.research_question or ""
+        project_id = self.db_pipeline_run.project_id or ""
+
         existing_stages = (
             self.db.query(DB_PipelineStageExecution)
             .filter(DB_PipelineStageExecution.pipeline_run_id == self.db_pipeline_run.id)
@@ -130,32 +132,15 @@ class PipelineService:
         for s in existing_stages:
             self.db_stage_executions[s.stage_order] = s
 
-        self._run_pipeline_stages(request)
+        self._run_pipeline_stages(research_question, project_id)
 
     def run_pipeline(self, request: PipelineRunRequest) -> PipelineRunResult:
-        """
-        同步运行完整的 Pipeline（兼容旧调用方式）。
-
-        Args:
-            request: Pipeline 运行请求
-
-        Returns:
-            PipelineRunResult: Pipeline 运行结果
-        """
         self.start_pipeline_async(request)
-        return self._run_pipeline_stages(request)
+        return self._run_pipeline_stages(request.research_question, request.project_id)
 
-    def _run_pipeline_stages(self, request: PipelineRunRequest) -> PipelineRunResult:
-        """
-        执行 Pipeline 所有阶段（内部方法，供 start_pipeline_async 和 run_pipeline 共用）。
-
-        Args:
-            request: Pipeline 运行请求
-
-        Returns:
-            PipelineRunResult: Pipeline 运行结果
-        """
-        logger.info(f"开始执行 Pipeline 阶段: {self.run_id}, 项目: {request.project_id}")
+    def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
+        """执行 Pipeline 所有阶段。"""
+        logger.info(f"开始执行 Pipeline 阶段: {self.run_id}, 项目: {project_id}")
 
         # 初始化阶段日志
         stages: List[PipelineStageLog] = [
@@ -176,17 +161,19 @@ class PipelineService:
             self.db.commit()
             
             # ── 阶段 1: ProblemUnderstandingAgent ──
-            self._run_stage(stages, 0, results, request, lambda: self._exec_problem_understanding(request.research_question))
+            self._run_stage(stages, 0, results, research_question, project_id,
+                lambda: self._exec_problem_understanding(research_question))
             
             # ── 阶段 2: LiteratureMiningAgent ──
-            self._run_stage(stages, 1, results, request, lambda: self._exec_literature_mining(request.project_id, request.research_question))
+            self._run_stage(stages, 1, results, research_question, project_id,
+                lambda: self._exec_literature_mining(project_id, research_question))
             
             # ── 阶段 3: KnowledgeGapAgent ──
-            self._run_stage(stages, 2, results, request,
+            self._run_stage(stages, 2, results, research_question, project_id,
                 lambda: self._exec_knowledge_gap(results.get("literature_mining")))
             
             # ── 阶段 4: HypothesisGenerationAgent ──
-            self._run_stage(stages, 3, results, request,
+            self._run_stage(stages, 3, results, research_question, project_id,
                 lambda: self._exec_hypothesis_generation(
                     results.get("problem_understanding"),
                     results.get("literature_mining"),
@@ -195,21 +182,20 @@ class PipelineService:
             
             # 保存假设到数据库
             try:
-                self._save_hypotheses(request.project_id, request.research_question, results)
+                self._save_hypotheses(project_id, research_question, results)
             except Exception as save_err:
                 logger.warning(f"保存假设/证据链失败: {save_err}")
             
             # ── 阶段 5: HypothesisReviewAgent ──
-            self._run_stage(stages, 4, results, request,
+            self._run_stage(stages, 4, results, research_question, project_id,
                 lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
             
             # ── 阶段 6: ExperimentDesignAgent ──
-            self._run_stage(stages, 5, results, request,
+            self._run_stage(stages, 5, results, research_question, project_id,
                 lambda: self._exec_experiment_design(results.get("hypothesis_review")))
             
             # ── 阶段 7: SmallValidationAgent ──
-            # experiment_design 不含 hypothesis 字段，需要从 hypothesis_review 补充
-            self._run_stage(stages, 6, results, request,
+            self._run_stage(stages, 6, results, research_question, project_id,
                 lambda: self._exec_small_validation(
                     results.get("experiment_design"),
                     results.get("hypothesis_review")
@@ -221,10 +207,10 @@ class PipelineService:
                 return self._exec_report_generation(
                     results, pipeline_run_info
                 )
-            self._run_stage(stages, 7, results, request, _exec_report)
+            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
             
             # 创建报告记录
-            final_report_id = self._create_report(request.project_id, results.get("report_generation", {}))
+            final_report_id = self._create_report(project_id, results.get("report_generation", {}))
             
             # Pipeline 完成
             pipeline_end = datetime.now(CHINA_TZ)
@@ -236,8 +222,8 @@ class PipelineService:
             
             return PipelineRunResult(
                 pipeline_id=self.run_id,
-                project_id=request.project_id,
-                research_question=request.research_question,
+                project_id=project_id,
+                research_question=research_question,
                 status=PipelineStatus.COMPLETED,
                 stages=stages,
                 total_duration=total_duration_ms / 1000.0,
@@ -272,8 +258,8 @@ class PipelineService:
             
             return PipelineRunResult(
                 pipeline_id=self.run_id,
-                project_id=request.project_id,
-                research_question=request.research_question,
+                project_id=project_id,
+                research_question=research_question,
                 status=PipelineStatus.FAILED,
                 stages=stages,
                 total_duration=total_duration_ms / 1000.0,
@@ -300,24 +286,30 @@ class PipelineService:
         stages: List[PipelineStageLog],
         idx: int,
         results: Dict[str, Any],
-        request: PipelineRunRequest,
+        research_question: str,
+        project_id: str,
         executor
     ):
         """统一阶段执行器：记录日志、执行、捕获异常"""
         stage_def = STAGE_DEFS[idx]
         stage_log = stages[idx]
         stage_key = stage_def["key"]
-        
+        stage_label = stage_def["label"]
+
         stage_log.status = PipelineStageStatus.RUNNING
         stage_log.start_time = datetime.now(CHINA_TZ)
-        
-        input_data = self._build_stage_input(idx, results, request)
-        
-        # 清空之前的 call logs 以便捕获本阶段新产生的调用日志
+
+        logger.info(f"[{stage_label}] 开始执行 run_id={self.run_id}")
+
+        input_data = self._build_stage_input(idx, results, research_question, project_id)
+
         clear_call_logs()
-        
+
         db_stage = self._create_stage_execution(idx + 1, stage_def["db_stage_enum"], input_data)
-        
+
+        self.db_pipeline_run.current_stage = stage_key
+        self.db.commit()
+
         output = None
         try:
             output = executor()
@@ -325,17 +317,24 @@ class PipelineService:
             stage_log.output_data = output if isinstance(output, dict) else self._safe_model_dump(output)
             results[stage_key] = stage_log.output_data
             self._stage_results[stage_key] = stage_log.output_data
-            
-            # 捕获模型调用参数
+
             self._capture_model_params(db_stage)
             self._update_stage_execution(db_stage, "completed", output=stage_log.output_data)
-            
+            logger.info(f"[{stage_label}] 完成 run_id={self.run_id}")
+
         except Exception as e:
             stage_log.status = PipelineStageStatus.FAILED
             stage_log.error_message = str(e)
             self._capture_model_params(db_stage)
             self._update_stage_execution(db_stage, "failed", error=str(e))
-            logger.error(f"{stage_def['label']}阶段失败: {e}", exc_info=True)
+
+            self.db_pipeline_run.status = DB_PipelineStatus.FAILED
+            self.db_pipeline_run.failed_stage = stage_def["db_stage_enum"]
+            self.db_pipeline_run.error_message = str(e)
+            self.db_pipeline_run.completed_at = datetime.now(CHINA_TZ)
+            self.db.commit()
+
+            logger.exception(f"[{stage_label}] 失败 run_id={self.run_id}: {e}")
             raise
         finally:
             stage_log.end_time = datetime.now(CHINA_TZ)
@@ -361,18 +360,17 @@ class PipelineService:
         db_stage.duration_ms = last_call.duration_ms
         self.db.commit()
     
-    def _build_stage_input(self, idx: int, results: Dict[str, Any], request: PipelineRunRequest) -> Dict[str, Any]:
+    def _build_stage_input(self, idx: int, results: Dict[str, Any], research_question: str, project_id: str) -> Dict[str, Any]:
         """构建阶段输入数据"""
-        base = {"project_id": request.project_id, "research_question": request.research_question}
-        # 根据阶段补充上游输出
+        base = {"project_id": project_id, "research_question": research_question}
         if idx >= 1:
             base["literature_mining"] = results.get("literature_mining", {})
         if idx >= 2:
             base["knowledge_gap"] = results.get("knowledge_gap", {})
         if idx >= 3:
             base["problem_understanding"] = results.get("problem_understanding", {})
-            project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else request.project_id
-            data_context = self._build_data_context(project_id)
+            pid = self.db_pipeline_run.project_id if self.db_pipeline_run else project_id
+            data_context = self._build_data_context(pid)
             base["data_context"] = data_context
         if idx >= 4:
             base["hypothesis_generation"] = results.get("hypothesis_generation", {})
@@ -740,21 +738,21 @@ class PipelineService:
         self.db.commit()
     
     def _complete_pipeline_run(self, completed_at: datetime, total_duration_ms: int, results: Dict[str, Any], final_report_id: Optional[str]):
-        """完成 Pipeline 运行"""
         self.db_pipeline_run.status = DB_PipelineStatus.COMPLETED
         self.db_pipeline_run.completed_at = completed_at
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.output_data = results
+        self.db_pipeline_run.current_stage = None
         if final_report_id:
             self.db_pipeline_run.final_report_id = final_report_id
         self.db.commit()
     
     def _fail_pipeline_run(self, completed_at: datetime, total_duration_ms: int, failed_stage_name: Optional[str], error: str):
-        """失败 Pipeline 运行"""
         self.db_pipeline_run.status = DB_PipelineStatus.FAILED
         self.db_pipeline_run.completed_at = completed_at
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.error_message = error
+        self.db_pipeline_run.current_stage = None
         if failed_stage_name:
             try:
                 self.db_pipeline_run.failed_stage = DB_PipelineStage(failed_stage_name)

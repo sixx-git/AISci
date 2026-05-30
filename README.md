@@ -17,19 +17,18 @@
 研究问题 → 文献挖掘 → 知识缺口分析 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
 ```
 
-### 9 条设计原则
+### 8 条设计原则
 
 | # | 原则 |
 |---|------|
-| 1 | 单人可开发，优先 MVP，不引入不必要复杂度 |
-| 2 | 后端 Python + FastAPI，前端 React + Vite + TailwindCSS |
-| 3 | 向量检索 FAISS，本地数据库 SQLite |
-| 4 | 模型调用通过 Qwen API 封装，API Key 仅从 `.env` 读取 |
-| 5 | 每个 Agent 独立类 + Prompt 模板 + 输入/输出 JSON Schema |
-| 6 | 所有科学事实和参考文献必须绑定来源，禁止虚构引用 |
-| 7 | Pipeline 一键运行，保存每步输入、输出、日志、模型参数 |
-| 8 | 最终报告 12 字段：Paper Title、Abstract、Problem Statement、Rationale、Technical Details、Datasets、Source、Target、Methods、Experiments、Results、References |
-| 9 | 端到端验收脚本可一键验证所有接口 |
+| 1 | 后端 Python + FastAPI，前端 React + Vite + TailwindCSS |
+| 2 | 向量检索 FAISS，本地数据库 SQLite |
+| 3 | 模型调用通过 Qwen API 封装，API Key 仅从 `.env` 读取 |
+| 4 | 每个 Agent 独立类 + Prompt 模板 + 输入/输出 JSON Schema |
+| 5 | 所有科学事实和参考文献必须绑定来源，禁止虚构引用 |
+| 6 | Pipeline 一键运行，保存每步输入、输出、日志、模型参数 |
+| 7 | 最终报告 12 字段：Paper Title、Abstract、Problem Statement、Rationale、Technical Details、Datasets、Source、Target、Methods、Experiments、Results、References |
+| 8 | 端到端验收脚本可一键验证所有接口 |
 
 ---
 

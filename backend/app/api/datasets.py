@@ -58,22 +58,6 @@ async def list_datasets(
     }
 
 
-@router.get("/{dataset_id}")
-async def get_dataset(
-    dataset_id: str = Path(..., description="数据集 ID"),
-    db: Session = Depends(get_db),
-):
-    service = DatasetService(db)
-    ds = service.get_dataset_by_id(dataset_id)
-    if not ds:
-        raise HTTPException(status_code=404, detail="数据集不存在")
-    return {
-        "code": 200,
-        "data": service.to_response(ds),
-        "message": "success",
-    }
-
-
 @router.get("/context")
 async def get_data_context(
     project_id: str = Query(..., description="项目 ID"),
@@ -90,6 +74,22 @@ async def get_data_context(
     return {
         "code": 200,
         "data": data_context,
+        "message": "success",
+    }
+
+
+@router.get("/{dataset_id}")
+async def get_dataset(
+    dataset_id: str = Path(..., description="数据集 ID"),
+    db: Session = Depends(get_db),
+):
+    service = DatasetService(db)
+    ds = service.get_dataset_by_id(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    return {
+        "code": 200,
+        "data": service.to_response(ds),
         "message": "success",
     }
 

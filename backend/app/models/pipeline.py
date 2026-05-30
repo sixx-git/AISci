@@ -67,6 +67,7 @@ class PipelineRun(Base):
     error_message = Column(Text, nullable=True, comment="错误信息")
     error_stacktrace = Column(Text, nullable=True, comment="错误堆栈")
     failed_stage = Column(SQLEnum(PipelineStage), nullable=True, comment="失败的阶段")
+    current_stage = Column(String(50), nullable=True, comment="当前执行阶段")
     
     # 版本信息
     version = Column(Integer, default=1, comment="运行版本号")
