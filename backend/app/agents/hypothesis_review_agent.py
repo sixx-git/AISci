@@ -81,6 +81,7 @@ class HypothesisReviewAgent:
         retrieved_papers: Optional[List[Dict[str, Any]]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
         alignments: Optional[List[Dict[str, Any]]] = None,
+        original_hypotheses: Optional[List[HypothesisCandidate]] = None,
     ) -> HypothesisReviewResult:
         """
         评审假设列表

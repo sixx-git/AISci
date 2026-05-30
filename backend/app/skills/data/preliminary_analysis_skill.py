@@ -286,18 +286,12 @@ class PreliminaryAnalysisSkill(BaseSkill):
                                 df[c2].dropna().tolist()[:1000],
                             )
                             if corr is not None:
-                                correlations.append({
+                                result.setdefault("correlations", []).append({
                                     "dataset_id": ds_id,
                                     "column_x": c1,
                                     "column_y": c2,
                                     "pearson_r": corr,
                                 })
-                            result.setdefault("correlations", []).append({
-                                "dataset_id": ds_id,
-                                "column_x": c1,
-                                "column_y": c2,
-                                "pearson_r": corr,
-                            }) if corr is not None else None
 
                 for col in numeric_cols[:6]:
                     vals = df[col].dropna().tolist()
@@ -356,19 +350,14 @@ class PreliminaryAnalysisSkill(BaseSkill):
             pass
 
         if not has_pil:
-            try:
-                import cv2
-                has_cv2 = True
-            except ImportError:
-                has_cv2 = False
-                result["summary"] = {
-                    "total_files": len(image_files),
-                    "note": "PIL/cv2 未安装，无法解析图像尺寸和通道",
-                    "file_paths": image_files[:20],
-                }
-                result["has_real_data"] = True
-                result["total_images"] = len(image_files)
-                return result
+            result["summary"] = {
+                "total_files": len(image_files),
+                "note": "PIL 未安装，无法解析图像尺寸和通道。请安装: pip install Pillow",
+                "file_paths": image_files[:20],
+            }
+            result["has_real_data"] = True
+            result["total_images"] = len(image_files)
+            return result
 
         sizes: List[Tuple[int, int]] = []
         channels: List[int] = []
