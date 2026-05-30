@@ -354,7 +354,7 @@ class HypothesisReviewAgent:
             evidence_level = "medium"
             has_supporting_facts = False
             has_data_fields = False
-            if i < len(original_hypotheses):
+            if original_hypotheses and i < len(original_hypotheses):
                 h = original_hypotheses[i]
                 if hasattr(h, 'evidence_level'):
                     evidence_level = getattr(h, 'evidence_level', 'medium')

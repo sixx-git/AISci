@@ -111,14 +111,17 @@ class PipelineService:
         Args:
             run_id: 已创建的 Pipeline 运行 ID
         """
+        logger.info(f"[Pipeline] execute_pipeline_run 入口 run_id={run_id}")
         self.run_id = run_id
 
         self.db_pipeline_run = self.db.query(DB_PipelineRun).filter(
             DB_PipelineRun.run_id == run_id
         ).first()
         if not self.db_pipeline_run:
-            logger.error(f"Pipeline run not found: {run_id}")
+            logger.error(f"[Pipeline] 未找到 PipelineRun 记录 run_id={run_id}")
             return
+
+        logger.info(f"[Pipeline] 找到 DB 记录 run_id={run_id} id={self.db_pipeline_run.id} status={self.db_pipeline_run.status}")
 
         research_question = self.db_pipeline_run.research_question or ""
         project_id = self.db_pipeline_run.project_id or ""
@@ -140,7 +143,7 @@ class PipelineService:
 
     def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
         """执行 Pipeline 所有阶段。"""
-        logger.info(f"开始执行 Pipeline 阶段: {self.run_id}, 项目: {project_id}")
+        logger.info(f"[Pipeline] ====== 开始执行全部 8 个阶段 run_id={self.run_id} project_id={project_id} ======")
 
         # 初始化阶段日志
         stages: List[PipelineStageLog] = [
@@ -299,7 +302,7 @@ class PipelineService:
         stage_log.status = PipelineStageStatus.RUNNING
         stage_log.start_time = datetime.now(CHINA_TZ)
 
-        logger.info(f"[{stage_label}] 开始执行 run_id={self.run_id}")
+        logger.info(f"[Pipeline] 开始阶段 {idx+1}/8 [{stage_label}] key={stage_key} run_id={self.run_id}")
 
         input_data = self._build_stage_input(idx, results, research_question, project_id)
 
@@ -320,7 +323,7 @@ class PipelineService:
 
             self._capture_model_params(db_stage)
             self._update_stage_execution(db_stage, "completed", output=stage_log.output_data)
-            logger.info(f"[{stage_label}] 完成 run_id={self.run_id}")
+            logger.info(f"[Pipeline] 阶段完成 {idx+1}/8 [{stage_label}] key={stage_key} run_id={self.run_id}")
 
         except Exception as e:
             stage_log.status = PipelineStageStatus.FAILED
@@ -334,7 +337,7 @@ class PipelineService:
             self.db_pipeline_run.completed_at = datetime.now(CHINA_TZ)
             self.db.commit()
 
-            logger.exception(f"[{stage_label}] 失败 run_id={self.run_id}: {e}")
+            logger.error(f"[Pipeline] 阶段失败 {idx+1}/8 [{stage_label}] key={stage_key} run_id={self.run_id} error={str(e)[:200]}", exc_info=True)
             raise
         finally:
             stage_log.end_time = datetime.now(CHINA_TZ)
@@ -674,6 +677,7 @@ class PipelineService:
     
     def _create_pipeline_run(self, request: PipelineRunRequest):
         """创建 Pipeline 运行记录"""
+        logger.info(f"创建 PipelineRun 记录 run_id={self.run_id} project_id={request.project_id}")
         self.db_pipeline_run = DB_PipelineRun(
             id=str(uuid.uuid4()),
             run_id=self.run_id,
@@ -745,9 +749,17 @@ class PipelineService:
         self.db_pipeline_run.current_stage = None
         if final_report_id:
             self.db_pipeline_run.final_report_id = final_report_id
-        self.db.commit()
+        try:
+            self.db.commit()
+            logger.info(f"[Pipeline] pipeline run {self.run_id} 已标记为 COMPLETED")
+        except Exception:
+            logger.exception("_complete_pipeline_run: commit 失败")
     
     def _fail_pipeline_run(self, completed_at: datetime, total_duration_ms: int, failed_stage_name: Optional[str], error: str):
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
         self.db_pipeline_run.status = DB_PipelineStatus.FAILED
         self.db_pipeline_run.completed_at = completed_at
         self.db_pipeline_run.total_duration_ms = total_duration_ms
@@ -758,7 +770,10 @@ class PipelineService:
                 self.db_pipeline_run.failed_stage = DB_PipelineStage(failed_stage_name)
             except ValueError:
                 self.db_pipeline_run.failed_stage = DB_PipelineStage.PROBLEM_UNDERSTANDING
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            logger.exception("_fail_pipeline_run: commit 失败")
     
     @staticmethod
     def _build_retrieved_papers(lit_mining: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -782,6 +797,15 @@ class PipelineService:
         title = report_data.get("paper_title", report_data.get("title", "研究报告"))
         chapters = report_data.get("chapters", {})
 
+        def _to_text(val):
+            if val is None:
+                return ""
+            if isinstance(val, str):
+                return val
+            if isinstance(val, (list, dict)):
+                return json.dumps(val, ensure_ascii=False)
+            return str(val)
+
         extra_meta = report_data.get("compliance_check") or {}
         if report_data.get("plots"):
             extra_meta["plots"] = report_data["plots"]
@@ -791,18 +815,18 @@ class PipelineService:
             project_id=project_id,
             title=title,
             paper_title=title,
-            paper_abstract=report_data.get("paper_abstract", ""),
-            markdown_content=report_data.get("markdown_content", ""),
-            problem_statement=chapters.get("problem_statement", ""),
-            rationale=chapters.get("rationale", ""),
-            technical_details=chapters.get("technical_details", ""),
-            datasets=chapters.get("datasets", ""),
-            source=chapters.get("source", ""),
-            target=chapters.get("target", ""),
-            methods=chapters.get("methods", ""),
-            experiments=chapters.get("experiments", ""),
-            results=chapters.get("results", ""),
-            references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else chapters.get("references", ""),
+            paper_abstract=_to_text(report_data.get("paper_abstract", "")),
+            markdown_content=_to_text(report_data.get("markdown_content", "")),
+            problem_statement=_to_text(chapters.get("problem_statement", "")),
+            rationale=_to_text(chapters.get("rationale", "")),
+            technical_details=_to_text(chapters.get("technical_details", "")),
+            datasets=_to_text(chapters.get("datasets", "")),
+            source=_to_text(chapters.get("source", "")),
+            target=_to_text(chapters.get("target", "")),
+            methods=_to_text(chapters.get("methods", "")),
+            experiments=_to_text(chapters.get("experiments", "")),
+            results=_to_text(chapters.get("results", "")),
+            references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else _to_text(chapters.get("references", "")),
             created_at=datetime.now(CHINA_TZ),
             pdf_path=report_data.get("report_id"),
             status="ready",

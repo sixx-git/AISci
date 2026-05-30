@@ -50,6 +50,10 @@ def _now() -> datetime:
     return datetime.now(CHINA_TZ)
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _safe_enum_value(enum_cls: Type[Enum], value: Any, default: Any = None) -> Any:
     if value is None:
         return default
@@ -82,8 +86,18 @@ def _check_and_fail_stale_run(db: Session, run: PipelineRun) -> bool:
     if run.created_at is None:
         return False
 
-    age = _now() - run.created_at.replace(tzinfo=CHINA_TZ) if run.created_at.tzinfo is None else _now() - run.created_at
-    if age.total_seconds() < STALE_TIMEOUT_MINUTES * 60:
+    now_utc = _utc_now()
+    if run.created_at.tzinfo is not None:
+        db_time_utc = run.created_at.astimezone(timezone.utc)
+    else:
+        db_time_utc = run.created_at.replace(tzinfo=timezone.utc)
+
+    age_seconds = (now_utc - db_time_utc).total_seconds()
+    if age_seconds < 0:
+        age_seconds = abs(age_seconds)
+
+    logger.debug(f"Stale check run_id={run.run_id} age={age_seconds:.0f}s threshold={STALE_TIMEOUT_MINUTES*60}s")
+    if age_seconds < STALE_TIMEOUT_MINUTES * 60:
         return False
 
     stages = db.query(PipelineStageExecution).filter(
@@ -102,7 +116,7 @@ def _check_and_fail_stale_run(db: Session, run: PipelineRun) -> bool:
         stages[0].error_message = "后台任务未启动或已丢失"
         stages[0].completed_at = _now()
     db.commit()
-    logger.warning(f"Stale run {run.run_id} 已自动标记为 FAILED (age={age.total_seconds():.0f}s)")
+    logger.warning(f"Stale run {run.run_id} 已自动标记为 FAILED (age={age_seconds:.0f}s)")
     return True
 
 
@@ -119,35 +133,39 @@ def _fail_project_stale_runs(db: Session, project_id: str):
 def _execute_pipeline_background(run_id: str):
     """后台执行 Pipeline（独立线程，独立 DB Session）。"""
     logger.info(f"开始执行 Pipeline run_id={run_id}")
-    init_db()
-    db = SessionLocal()
-    service: Optional[PipelineService] = None
+    import app.core.database as _db
+    db = None
     try:
+        _db.init_db()
+        db = _db.SessionLocal()
+        logger.info(f"后台任务 DB Session 已创建 run_id={run_id}")
         service = PipelineService(db)
         service.execute_pipeline_run(run_id)
     except Exception as exc:
         logger.exception(f"Pipeline 后台任务失败 run_id={run_id}: {exc}")
-        try:
-            run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
-            if run:
-                run.status = DB_PipelineStatus.FAILED
-                run.error_message = str(exc)
-                run.error_stacktrace = traceback.format_exc()
-                run.completed_at = _now()
+        if db is not None:
+            try:
+                run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+                if run:
+                    run.status = DB_PipelineStatus.FAILED
+                    run.error_message = str(exc)
+                    run.error_stacktrace = traceback.format_exc()
+                    run.completed_at = _now()
 
-                stages = db.query(PipelineStageExecution).filter(
-                    PipelineStageExecution.pipeline_run_id == run.id
-                ).order_by(PipelineStageExecution.stage_order).all()
-                for s in stages:
-                    if s.status == DB_PipelineStatus.RUNNING:
-                        s.status = DB_PipelineStatus.FAILED
-                        s.error_message = str(exc)
-                        s.completed_at = _now()
-                db.commit()
-        except Exception as db_exc:
-            logger.exception(f"写入失败状态异常 run_id={run_id}: {db_exc}")
+                    stages = db.query(PipelineStageExecution).filter(
+                        PipelineStageExecution.pipeline_run_id == run.id
+                    ).order_by(PipelineStageExecution.stage_order).all()
+                    for s in stages:
+                        if s.status == DB_PipelineStatus.RUNNING:
+                            s.status = DB_PipelineStatus.FAILED
+                            s.error_message = str(exc)
+                            s.completed_at = _now()
+                    db.commit()
+            except Exception as db_exc:
+                logger.exception(f"写入失败状态异常 run_id={run_id}: {db_exc}")
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 @router.post("/run", response_model=ResponseModel[PipelineRunResult])
@@ -156,17 +174,21 @@ async def run_pipeline(
     db: Session = Depends(get_db)
 ):
     """异步运行完整的 Pipeline（立即返回，后台执行）。"""
+    logger.info(f"收到 Pipeline 运行请求 project_id={request.project_id} research_question={request.research_question[:80] if request.research_question else '(空)'}")
     try:
         _fail_project_stale_runs(db, request.project_id)
 
         pipeline_service = get_pipeline_service(db)
         run_id = pipeline_service.start_pipeline_async(request)
+        logger.info(f"已创建 PipelineRun run_id={run_id}")
 
-        threading.Thread(
+        thread = threading.Thread(
             target=_execute_pipeline_background,
             args=(run_id,),
             daemon=True
-        ).start()
+        )
+        thread.start()
+        logger.info(f"后台线程已启动 run_id={run_id} thread={thread.name}")
 
         stages = [
             PipelineStageLog(

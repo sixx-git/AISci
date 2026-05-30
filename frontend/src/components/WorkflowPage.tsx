@@ -680,15 +680,18 @@ export function WorkflowPage({
     setNodes(createInitialNodes());
 
     try {
+      console.log('[Pipeline] submitting POST /pipeline/run projectId=', projectId, 'question=', finalResearchQuestion?.slice(0, 50));
       const response = await pipelineService.run(projectId, finalResearchQuestion);
       const result: PipelineRunResult = response.data;
 
       if (!result || !result.run_id) {
+        console.error('[Pipeline] POST response invalid: no run_id', result);
         setErrorMessage('后端返回数据无效，请检查服务状态');
         setRunState('idle');
         return;
       }
 
+      console.log('[Pipeline] start new run', result.run_id, 'status=', result.status);
       setActiveRunId(projectId, result.run_id);
       setCurrentRunId(result.run_id);
       currentRunIdRef.current = result.run_id;
@@ -697,7 +700,7 @@ export function WorkflowPage({
       startPolling(result.run_id);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('Pipeline 提交失败:', message);
+      console.error('[Pipeline] POST /pipeline/run 失败:', message);
       setErrorMessage(`Pipeline 提交失败: ${message}`);
       setRunState('idle');
     }
@@ -741,6 +744,7 @@ export function WorkflowPage({
   // ========== 重新运行 ==========
   const handleRerun = useCallback(
     async () => {
+      console.log('[Pipeline] rerun clicked, projectId=', projectId);
       if (projectId) clearActiveRun(projectId);
       setStaleWarning(false);
       setStatusMessage(null);

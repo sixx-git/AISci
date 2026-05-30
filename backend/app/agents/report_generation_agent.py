@@ -59,6 +59,22 @@ class ReportGenerationAgent:
         )
         os.makedirs(self.reports_dir, exist_ok=True)
 
+    @staticmethod
+    def _str_len(value) -> int:
+        """安全获取内容的字符串长度，兼容 str / list / dict 类型"""
+        if isinstance(value, str):
+            return len(value.strip())
+        if isinstance(value, (list, dict)):
+            return len(value)
+        if value is None:
+            return 0
+        return len(str(value).strip())
+
+    @staticmethod
+    def _has_text(value, min_len: int = 1) -> bool:
+        """安全判断内容是否有足够长度的非空文本"""
+        return ReportGenerationAgent._str_len(value) >= min_len
+
     def generate_report(
         self,
         project_info: Dict[str, Any],
@@ -630,37 +646,37 @@ class ReportGenerationAgent:
                     result_type = "expected_result"
 
         has_datasets = bool(
-            chapters.get("datasets", "") and len(chapters.get("datasets", "").strip()) >= 10
+            self._has_text(chapters.get("datasets"), min_len=10)
         )
         has_source = bool(
-            chapters.get("source", "") and len(chapters.get("source", "").strip()) >= 10
+            self._has_text(chapters.get("source"), min_len=10)
         )
         has_target = bool(
-            chapters.get("target", "") and len(chapters.get("target", "").strip()) >= 10
+            self._has_text(chapters.get("target"), min_len=10)
         )
         has_paper_title = bool(
-            result_dict.get("paper_title", "") and len(result_dict["paper_title"].strip()) >= 5
+            self._has_text(result_dict.get("paper_title"), min_len=5)
         )
         has_paper_abstract = bool(
-            result_dict.get("paper_abstract", "") and len(result_dict["paper_abstract"].strip()) >= 20
+            self._has_text(result_dict.get("paper_abstract"), min_len=20)
         )
         has_methods = bool(
-            chapters.get("methods", "") and len(chapters.get("methods", "").strip()) >= 10
+            self._has_text(chapters.get("methods"), min_len=10)
         )
         has_experiments = bool(
-            chapters.get("experiments", "") and len(chapters.get("experiments", "").strip()) >= 10
+            self._has_text(chapters.get("experiments"), min_len=10)
         )
         has_results = bool(
-            chapters.get("results", "") and len(chapters.get("results", "").strip()) >= 10
+            self._has_text(chapters.get("results"), min_len=10)
         )
         has_references = bool(
             chapters.get("references", []) and len(chapters.get("references", [])) > 0
         )
         has_rationale = bool(
-            chapters.get("rationale", "") and len(chapters.get("rationale", "").strip()) >= 20
+            self._has_text(chapters.get("rationale"), min_len=20)
         )
         has_technical_details = bool(
-            chapters.get("technical_details", "") and len(chapters.get("technical_details", "").strip()) >= 10
+            self._has_text(chapters.get("technical_details"), min_len=10)
         )
 
         warnings = []
@@ -695,7 +711,7 @@ class ReportGenerationAgent:
             "novelty_score": novelty_score,
             "experiment_sanity_check": experiment_sanity,
             "has_problem_statement": bool(
-                chapters.get("problem_statement", "") and len(chapters.get("problem_statement", "").strip()) >= 20
+                self._has_text(chapters.get("problem_statement"), min_len=20)
             ),
             "has_rationale": has_rationale,
             "has_technical_details": has_technical_details,

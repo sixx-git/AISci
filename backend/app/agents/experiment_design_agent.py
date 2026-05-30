@@ -135,7 +135,7 @@ class ExperimentDesignAgent:
             md_output = result.get("skill_outputs", {}).get("multimodal_data_ingest", {})
             if md_output.get("success") and md_output.get("data"):
                 result["project_datasets"] = md_output["data"].get("datasets", [])
-            if not result["project_datasets"] and not result["recommended_public_datasets"]:
+            if not result.get("project_datasets") and not result.get("recommended_public_datasets"):
                 result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
 
             logger.info("实验设计完成")
