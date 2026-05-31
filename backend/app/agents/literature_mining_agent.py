@@ -4,13 +4,17 @@
 """
 import json
 import logging
-from typing import Optional, List, Dict, Any
+import asyncio
+from typing import Optional, List, Dict, Any, Set
 from pydantic import BaseModel, Field
+
+from sqlalchemy.orm import Session
 
 from app.services.vector_store import (
     search_vector_store,
     SearchResult,
     get_vector_store,
+    build_vector_index,
 )
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
@@ -108,24 +112,37 @@ class LiteratureMiningAgent:
         project_id: str,
         research_question: str,
         top_k: int = 10,
+        db: Optional[Session] = None,
     ) -> LiteratureMiningResponse:
         """
         从项目文献库挖掘相关科学事实
+
+        当项目缺少文献时，自动从 arXiv 检索并导入。
 
         Args:
             project_id: 项目 ID
             research_question: 研究问题
             top_k: 检索的文献片段数量
+            db: 数据库会话（用于 arXiv 自动导入）
 
         Returns:
             LiteratureMiningResponse
         """
         try:
-            # ── 0. 检查项目是否有可检索文献 ──
             vs = get_vector_store()
-            if not vs.has_index(project_id):
+            has_index = vs.has_index(project_id)
+
+            if not has_index and db is not None:
+                logger.info(
+                    f"[文献挖掘] 项目 {project_id} 缺少文献，启动 arXiv 自动检索，"
+                    f"research_question='{research_question[:80]}...'"
+                )
+                self._auto_import_arxiv(project_id, research_question, db)
+                has_index = vs.has_index(project_id)
+
+            if not has_index:
                 return self._empty_response(
-                    warning="当前项目缺少可引用文献，请先上传 PDF 或导入 arXiv/BibTeX 文献。"
+                    warning="当前项目缺少可引用文献，已尝试 arXiv 自动检索但未获取到有效文献。请手动上传 PDF 或导入 BibTeX 文献。"
                 )
 
             # ── 1. FAISS 检索 ──
@@ -138,7 +155,7 @@ class LiteratureMiningAgent:
 
             if not search_results:
                 return self._empty_response(
-                    warning="当前项目缺少可引用文献，请先上传 PDF 或导入 arXiv/BibTeX 文献。"
+                    warning="已导入文献但未能检索到相关片段，请检查研究问题关键词是否匹配。"
                 )
 
             # ── 2. 格式化，（含完整元数据）→ 送入 Prompt ──
@@ -181,6 +198,125 @@ class LiteratureMiningAgent:
         except Exception as e:
             logger.error(f"文献挖掘异常: {e}", exc_info=True)
             raise
+
+    def _auto_import_arxiv(
+        self,
+        project_id: str,
+        research_question: str,
+        db: Session,
+    ) -> None:
+        """当项目缺少文献时，自动从 arXiv 检索并导入"""
+        from app.services.literature_ingestion_service import LiteratureIngestionService
+        from app.services.literature_sources.arxiv_source import ArxivSource
+        from app.models import SourceType
+
+        service = LiteratureIngestionService(db)
+        imported_count = 0
+        auto_results = []
+
+        # 尝试提取关键词
+        keywords: List[str] = []
+        try:
+            from app.agents.problem_understanding_agent import get_problem_understanding_agent
+            agent = get_problem_understanding_agent()
+            analysis = agent.analyze(research_question=research_question)
+            if analysis.keywords and len(analysis.keywords) > 0:
+                keywords = analysis.keywords
+        except Exception as ex:
+            logger.warning(f"[arXiv 自动检索] 关键词提取失败: {ex}")
+
+        # 生成搜索查询
+        if keywords:
+            query_terms = [f"all:{kw}" for kw in keywords[:5]]
+            arxiv_query = " AND ".join(query_terms)
+        else:
+            arxiv_query = research_question.strip()
+
+        logger.info(f"[arXiv 自动检索] 查询关键词: {keywords}")
+        logger.info(f"[arXiv 自动检索] arXiv Query: {arxiv_query}")
+
+        try:
+            source = ArxivSource()
+            auto_papers, fallback, warning_msg = source.search_with_fallback(
+                query=arxiv_query,
+                max_results=15,
+            )
+        except Exception as e:
+            logger.error(f"[arXiv 自动检索] arXiv 搜索失败: {e}")
+            return
+
+        if not auto_papers:
+            logger.warning("[arXiv 自动检索] arXiv 返回 0 篇论文")
+            return
+
+        logger.info(
+            f"[arXiv 自动检索] arXiv 返回 {len(auto_papers)} 篇论文: "
+            f"{[p.title[:60] for p in auto_papers if hasattr(p, 'title')]}"
+        )
+
+        results_for_import = []
+        for p in auto_papers:
+            d = p.to_dict() if hasattr(p, 'to_dict') else p
+            if not d.get('title'):
+                continue
+            results_for_import.append(d)
+
+        if not results_for_import:
+            logger.warning("[arXiv 自动检索] 无可导入的论文（标题为空）")
+            return
+
+        try:
+            import_result = service.import_arxiv_papers(
+                project_id=project_id,
+                papers=results_for_import,
+                source_type=SourceType.ARXIV,
+                fallback=fallback,
+            )
+            imported_count = import_result.get("imported", 0)
+            logger.info(
+                f"[arXiv 自动检索] 导入完成: "
+                f"total={import_result.get('total', 0)}, "
+                f"imported={imported_count}, "
+                f"duplicates={import_result.get('duplicates', 0)}, "
+                f"failed={import_result.get('failed', 0)}"
+            )
+
+            # 为导入的 arXiv 论文构建向量索引
+            if imported_count > 0:
+                logger.info("[arXiv 自动检索] 开始为导入的 arXiv 论文构建向量索引")
+                from app.models import Document
+                docs = (
+                    db.query(Document)
+                    .filter(Document.project_id == project_id)
+                    .all()
+                )
+                chunk_ids: Set[str] = set()
+                for doc in docs:
+                    try:
+                        service.parse_document(
+                            project_id=project_id,
+                            document_id=doc.id,
+                        )
+                    except Exception as parse_err:
+                        logger.warning(f"[arXiv 自动检索] 解析文档 {doc.id} 失败: {parse_err}")
+                        continue
+
+                logger.info("[arXiv 自动检索] 构建联合向量索引...")
+                chunk_count = build_vector_index(project_id=project_id)
+                logger.info(
+                    f"[arXiv 自动检索] 向量索引构建完成: {chunk_count} chunks"
+                )
+        except Exception as e:
+            logger.error(f"[arXiv 自动检索] 导入 arXiv 论文失败: {e}", exc_info=True)
+
+        if warning_msg:
+            logger.warning(f"[arXiv 自动检索] arXiv 警告: {warning_msg}")
+
+        if imported_count == 0:
+            logger.warning(
+                "[arXiv 自动检索] 未能导入任何新论文（可能全部重复），"
+                "文献事实将基于现有文献提取。"
+            )
 
     # ────────── 格式化 ──────────
 

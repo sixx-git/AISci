@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Shield, BarChart3, BookOpen, AlertCircle, FlaskConical } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Shield, BarChart3, BookOpen, AlertCircle, FlaskConical, Loader2 } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
 import type { ComplianceCheck } from '@/types';
@@ -15,8 +15,62 @@ export function QualityCheckCard({
   const cc = complianceCheck;
   const qc = (cc as Record<string, unknown> | undefined)?.report_quality_check as Record<string, unknown> | undefined;
 
-  if (!qc || !qc.data) {
-    return null;
+  if (!qc) {
+    return (
+      <Card className={cn(className)}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
+            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-8 text-gray-500">
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          <span className="text-xs">报告生成完成后将显示质量检查结果</span>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!qc.data && !qc.error) {
+    return (
+      <Card className={cn(className)}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
+            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-8 text-gray-500">
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          <span className="text-xs">暂无检测结果，等待数据...</span>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!qc.data) {
+    return (
+      <Card className={cn(className)}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
+            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+          </div>
+        </div>
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-300">质量检查未完成</p>
+              <p className="text-[11px] text-amber-300/70 mt-0.5">
+                {String(qc.error || '未知错误')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
   }
 
   const qcData = qc.data as Record<string, unknown>;

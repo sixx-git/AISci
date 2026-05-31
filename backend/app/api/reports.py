@@ -127,18 +127,25 @@ async def generate_report(
 
 
 @router.get("/download/{report_id}/{file_type}")
-async def download_report_file(report_id: str, file_type: str):
+async def download_report_file(report_id: str, file_type: str, db: Session = Depends(get_db)):
     """
     下载报告文件
     
     Args:
-        report_id: 报告文件 ID
+        report_id: 报告文件 ID（支持 DB UUID 或文件目录名）
         file_type: 文件类型 (pdf 或 md)
     """
     try:
-        # 构建文件路径
+        # 如果传入的是 DB UUID，查找对应的 pdf_path
+        resolved_report_id = report_id
+        if '-' in report_id and len(report_id) > 20:
+            from app.models.project import Report as ReportModel
+            db_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+            if db_report and db_report.pdf_path:
+                resolved_report_id = db_report.pdf_path
+
         reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage", "reports")
-        report_dir = os.path.join(reports_dir, report_id)
+        report_dir = os.path.join(reports_dir, resolved_report_id)
         
         if file_type == "pdf":
             file_path = os.path.join(report_dir, "report.pdf")

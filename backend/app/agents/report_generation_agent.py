@@ -561,16 +561,16 @@ class ReportGenerationAgent:
                 }
             except Exception as e:
                 logger.warning(f"ReportQualityCheckSkill 失败: {e}")
-                return {"success": False, "error": str(e)}
+                return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
 
         try:
             return asyncio.run(asyncio.wait_for(_run(), timeout=180))
         except asyncio.TimeoutError:
             logger.warning("ReportQualityCheckSkill 超时 (180s)")
-            return {"success": False, "error": "timeout after 180s"}
+            return {"success": False, "data": {}, "error": "timeout after 180s", "warnings": [], "errors": ["timeout after 180s"]}
         except Exception as e:
             logger.warning(f"ReportQualityCheckSkill 异常: {e}")
-            return {}
+            return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
 
     def _build_compliance_check(
         self,

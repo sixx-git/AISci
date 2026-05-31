@@ -26,7 +26,7 @@ from app.models.pipeline import (
     PipelineStatus as DB_PipelineStatus,
     PipelineStage as DB_PipelineStage
 )
-from app.models.project import Report
+from app.models.project import Report, Project, ProjectStatus
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
 
@@ -162,6 +162,16 @@ class PipelineService:
             self.db_pipeline_run.status = DB_PipelineStatus.RUNNING
             self.db_pipeline_run.started_at = pipeline_start
             self.db.commit()
+
+            # 同步更新项目状态为 in_progress
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                project.status = ProjectStatus.IN_PROGRESS
+                project.updated_at = pipeline_start
+                self.db.commit()
+                logger.info(f"[Pipeline] 项目 {project_id} 状态已更新为 IN_PROGRESS")
+            else:
+                logger.warning(f"[Pipeline] 项目 {project_id} 未找到，无法更新状态")
             
             # ── 阶段 1: ProblemUnderstandingAgent ──
             self._run_stage(stages, 0, results, research_question, project_id,
@@ -418,7 +428,7 @@ class PipelineService:
     
     def _exec_literature_mining(self, project_id: str, research_question: str):
         agent = get_literature_mining_agent()
-        result = agent.mine(project_id=project_id, research_question=research_question)
+        result = agent.mine(project_id=project_id, research_question=research_question, db=self.db)
         return self._safe_model_dump(result)
     
     def _exec_knowledge_gap(self, literature_mining: Optional[Dict]) -> dict:
@@ -754,6 +764,18 @@ class PipelineService:
             logger.info(f"[Pipeline] pipeline run {self.run_id} 已标记为 COMPLETED")
         except Exception:
             logger.exception("_complete_pipeline_run: commit 失败")
+
+        try:
+            project = self.db.query(Project).filter(Project.id == self.db_pipeline_run.project_id).first()
+            if project:
+                project.status = ProjectStatus.COMPLETED
+                project.updated_at = completed_at
+                self.db.commit()
+                logger.info(f"[Pipeline] 项目 {project.id} 状态已更新为 COMPLETED")
+            else:
+                logger.warning(f"[Pipeline] 项目 {self.db_pipeline_run.project_id} 未找到，无法更新状态")
+        except Exception:
+            logger.exception("_complete_pipeline_run: 更新项目状态失败")
     
     def _fail_pipeline_run(self, completed_at: datetime, total_duration_ms: int, failed_stage_name: Optional[str], error: str):
         try:

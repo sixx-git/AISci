@@ -30,12 +30,11 @@ interface ReportDbRaw {
 
 function mapDbToReportData(db: ReportDbRaw): ReportData {
   const extraMeta = (db.extra_metadata || {}) as Record<string, unknown>;
-  const complianceCheckRaw =
-    extraMeta.compliance_check || extraMeta.complianceCheck || undefined;
-  const complianceCheck = complianceCheckRaw
-    ? (complianceCheckRaw as unknown as ReportData['complianceCheck'])
-    : undefined;
   const plots = (extraMeta.plots as ReportData['plots']) || [];
+
+  const complianceCheck = Object.keys(extraMeta).length > 0
+    ? (extraMeta as unknown as ReportData['complianceCheck'])
+    : undefined;
 
   return {
     id: db.id,

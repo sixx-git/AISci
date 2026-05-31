@@ -434,7 +434,7 @@ export function ReportPage({
 
         {/* 右侧：比赛规范检查 + 证据链质量 + 操作 */}
         <div className="lg:col-span-1">
-          <div className="sticky top-6 space-y-4">
+          <div className="overflow-y-auto max-h-[calc(100vh-320px)] space-y-4 pr-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
             <ReportChecklist
               sections={sections}
               complianceCheck={complianceCheck}

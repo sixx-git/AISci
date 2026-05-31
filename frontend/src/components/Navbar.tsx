@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { FlaskConical, Home, FileText, Settings, GitBranch, ClipboardList } from 'lucide-react';
+import { FlaskConical, Home, FileText, GitBranch, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
@@ -12,7 +12,6 @@ export function Navbar() {
     { path: '/documents', label: '文档', icon: FileText },
     { path: '/workflow', label: '工作流', icon: GitBranch },
     { path: '/reports', label: '报告', icon: ClipboardList },
-    { path: '/settings', label: '设置', icon: Settings },
   ];
 
   return (
@@ -41,10 +40,10 @@ export function Navbar() {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-transparent',
                     isActive
-                      ? 'bg-primary-600/20 text-primary-400 border border-primary-600/30'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+                      ? 'bg-primary-600/20 text-primary-400 border-primary-600/30'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-dark-700 hover:border-gray-600'
                   )}
                 >
                   <Icon className="w-4 h-4" />

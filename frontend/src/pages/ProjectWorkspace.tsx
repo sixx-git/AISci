@@ -106,7 +106,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
                 key={idx}
                 className="p-4 rounded-lg bg-dark-800/50 border border-dark-700 text-center"
               >
-                <div className="text-2xl font-bold text-primary-400">{stat.value}</div>
+                <div className="max-w-full truncate text-2xl font-bold text-primary-400" title={stat.value}>{stat.value}</div>
                 <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
               </div>
             ))}
@@ -126,28 +126,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
         </div>
       </Card>
 
-      <Card title="快捷操作">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: '上传文献', icon: BookOpen },
-            { label: '添加问题', icon: HelpCircle },
-            { label: '生成假设', icon: Lightbulb },
-            { label: '查看报告', icon: FileText },
-          ].map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.label}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-dark-700 bg-dark-800/50 hover:border-primary-500/50 hover:bg-dark-800 transition-all"
-              >
-                <Icon className="w-6 h-6 text-primary-400" />
-                <span className="text-sm text-[#F8FAFC]">{action.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-    </div>
+      </div>
   );
 }
 
@@ -341,6 +320,82 @@ export function ProjectWorkspace() {
     return 'localStorage';
   }, [resolvedResearchQuestion, project?.research_question]);
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  // --- 概览统计 ---
+  const overviewStats = useMemo(() => {
+    const latestRun = pipelineRuns[0];
+    return [
+      { label: 'Pipeline 运行次数', value: String(pipelineRuns.length) },
+      {
+        label: '最新运行状态',
+        value: latestRun
+          ? latestRun.status === 'completed' ? '已完成'
+          : latestRun.status === 'failed' ? '失败'
+          : latestRun.status === 'running' ? '运行中'
+          : latestRun.status
+          : '无记录',
+      },
+      { label: '研究领域', value: resolvedResearchField },
+      { label: '当前阶段', value: resolvedCurrentStage },
+      {
+        label: '项目状态',
+        value: project?.status === 'completed' ? '已完成'
+          : project?.status === 'running' || project?.status === 'in_progress' ? '运行中'
+          : '草稿',
+      },
+      { label: '创建日期', value: formatDate(project?.created_at) },
+    ];
+  }, [pipelineRuns, resolvedResearchField, resolvedCurrentStage, project?.status, project?.created_at]);
+
+  // --- Pipeline 节点 ---
+  const overviewPipelineNodes = useMemo(() => {
+    const latestRun = pipelineRuns[0];
+    const stages = [
+      { id: 'problem_understanding', label: '问题理解', icon: HelpCircle },
+      { id: 'literature_mining', label: '文献挖掘', icon: BookOpen },
+      { id: 'knowledge_gap', label: '知识缺口', icon: AlertTriangle },
+      { id: 'hypothesis_generation', label: '假设生成', icon: Lightbulb },
+      { id: 'hypothesis_review', label: '假设评估', icon: CheckCircle2 },
+      { id: 'experiment_design', label: '实验设计', icon: FlaskConical },
+      { id: 'small_validation', label: '小样验证', icon: TrendingUp },
+      { id: 'report_generation', label: '报告生成', icon: FileText },
+    ];
+
+    const runStatus = latestRun?.status;
+    const failedStageId = latestRun?.failed_stage;
+
+    return stages.map((stage, idx) => {
+      let status: 'pending' | 'running' | 'completed' | 'error';
+      if (!runStatus || runStatus === 'pending') {
+        status = 'pending';
+      } else if (runStatus === 'completed') {
+        status = 'completed';
+      } else if (runStatus === 'failed') {
+        if (failedStageId && stage.id === failedStageId) {
+          status = 'error';
+        } else if (failedStageId) {
+          const failedIdx = stages.findIndex(s => s.id === failedStageId);
+          status = failedIdx >= 0 && idx < failedIdx ? 'completed' : 'pending';
+        } else {
+          status = 'pending';
+        }
+      } else if (runStatus === 'running') {
+        status = 'pending';
+      } else {
+        status = 'pending';
+      }
+      return { ...stage, status };
+    });
+  }, [pipelineRuns]);
+
   // --- 保存研究问题后刷新项目数据 ---
   const handleResearchSaved = () => {
     if (!id) return;
@@ -348,15 +403,6 @@ export function ProjectWorkspace() {
       if (res.code === 200 && res.data) {
         setProject(res.data);
       }
-    });
-  };
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
     });
   };
 
@@ -422,7 +468,7 @@ export function ProjectWorkspace() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <ProjectOverview project={project} stats={[]} pipelineNodes={[]} />;
+        return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
       case 'questions':
         return <QuestionsTab projectId={id} onSaved={handleResearchSaved} />;
       case 'literature':
@@ -447,7 +493,7 @@ export function ProjectWorkspace() {
       case 'logs':
         return <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       default:
-        return <ProjectOverview project={project} stats={[]} pipelineNodes={[]} />;
+        return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
     }
   };
 

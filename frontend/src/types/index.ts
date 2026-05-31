@@ -444,6 +444,24 @@ export interface ComplianceCheck {
   warnings?: string[];
   critical_issues?: string[];
   items: ReportSection[];
+  /** ── 报告质量检查（ReportQualityCheckSkill 输出）── */
+  report_quality_check?: {
+    success: boolean;
+    data?: {
+      score?: number;
+      passed?: boolean;
+      references_verified?: number;
+      has_real_data_plots?: boolean;
+      has_actual_or_simulated_results?: boolean;
+      missing_fields?: string[];
+      warnings?: string[];
+      critical_issues?: string[];
+      recommendations?: string[];
+    };
+    warnings?: string[];
+    errors?: string[];
+    error?: string;
+  };
 }
 
 export interface ReportData {
