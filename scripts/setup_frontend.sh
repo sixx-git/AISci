@@ -28,8 +28,8 @@ fi
 NODE_VERSION=$(node -v)
 echo "  Node.js 版本: $NODE_VERSION"
 
-NPM_VERSION=$(npm -v)
-echo "  npm 版本: $NPM_VERSION"
+PNPM_VERSION=$(pnpm -v)
+echo "  pnpm 版本: $PNPM_VERSION"
 echo ""
 
 # 2. 检查 package.json
@@ -63,5 +63,5 @@ echo ""
 echo "  下一步操作:"
 echo "  1. 确保后端服务正在运行 (http://localhost:8000)"
 echo "  2. 运行: scripts/run_dev.sh (同时启动前后端)"
-echo "  3. 或仅启动前端: cd frontend && npm run dev"
+echo "  3. 或仅启动前端: cd frontend && pnpm dev"
 echo ""

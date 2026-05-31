@@ -40,12 +40,12 @@
 
 ```batch
 scripts\setup_backend.bat          # 创建 venv + 安装依赖
-scripts\setup_frontend.bat          # npm install
+scripts\setup_frontend.bat         # pnpm install
 
 # 复制 .env.example → backend\.env 并填入你的 QWEN_API_KEY
 # 如果暂时没有 Key，设置 USE_MOCK_LLM=true 可跑通完整流程
 
-scripts\run_dev.bat                 # 一键启动前后端
+scripts\run_dev.bat                # 一键启动前后端
 ```
 
 ### Linux / Mac
@@ -95,6 +95,7 @@ python scripts\check_e2e.py
 | 嵌入模型 | Sentence-Transformers |
 | 大模型 | Qwen（阿里云百炼 / DashScope） |
 | PDF 解析 | PyMuPDF |
+| 包管理器 | pnpm |
 
 ---
 
@@ -113,7 +114,7 @@ AISci/
 │   │   │   ├── experiment_design_agent.py
 │   │   │   ├── small_validation_agent.py
 │   │   │   └── report_generation_agent.py
-│   │   ├── api/                  # 11 个 API 路由模块
+│   │   ├── api/                  # API 路由模块
 │   │   │   ├── projects.py, research.py, literature.py, datasets.py
 │   │   │   ├── agents.py, pipeline.py, reports.py, documents.py
 │   │   │   ├── chat.py, vector_search.py, diagnose.py, v1.py
@@ -129,23 +130,23 @@ AISci/
 │   │   │   └── experiment/       # 实验合理性检查
 │   │   └── main.py               # FastAPI 入口 + /health + /health/llm
 │   ├── prompts/                  # 8 个 Markdown Prompt 模板
-│   ├── tests/                    # pytest 测试（19 个测试文件）
+│   ├── tests/                    # pytest 测试
 │   ├── data/                     # arXiv fallback 数据
 │   └── storage/                  # 运行时数据（FAISS 索引、向量索引、报告、上传文件）
 ├── frontend/
 │   └── src/
-│       ├── components/           # 30+ 组件（QualityCheckCard、HypothesisCard、PipelineProgress 等）
-│       ├── pages/                # 页面（Projects、Workflow、Reports、Documents、Settings 等）
-│       ├── services/             # API 封装（projectService、pipelineService、hypothesisService 等）
+│       ├── components/           # 32 个组件（QualityCheckCard、HypothesisCard、PipelineProgress 等）
+│       ├── pages/                # 8 个页面（Projects、Workflow、Reports、Documents 等）
+│       ├── services/             # 10 个 API 模块（projectService、pipelineService、hypothesisService 等）
 │       ├── types/                # TypeScript 类型定义
 │       ├── lib/                  # 工具函数（api.ts、utils.ts）
 │       └── config/               # 环境配置
 ├── scripts/
 │   ├── setup_backend.bat/sh      # 后端环境搭建（venv + pip install）
-│   ├── setup_frontend.bat/sh     # 前端环境搭建（npm install）
+│   ├── setup_frontend.bat/sh     # 前端环境搭建（pnpm install）
 │   ├── run_dev.bat/sh            # 一键启动前后端
 │   ├── start_backend.bat/sh      # 仅启动后端
-│   ├── init_db.py                # 独立数据库建表脚本
+│   ├── init_db.py                # 数据库建表脚本
 │   └── check_e2e.py              # 端到端验收脚本
 ├── .env.example                  # 环境变量模板
 ├── QUICKSTART.md                 # 详细快速入门
@@ -231,7 +232,7 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 | | multimodal_linking_skill | 跨模态数据对齐与关联 |
 | **推理** | hypothesis_novelty_review_skill | 新颖性自动审查 |
 | | question_alignment_skill | 研究问题-假设对齐度评分 |
-| **报告** | scientific_plot_skill | 基于真实数据的科学图表（无数据不生成伪图） |
+| **报告** | scientific_plot_skill | 基于真实数据的科学图表 |
 | | report_chart_generation_skill | 统计图表生成 |
 | | report_quality_check_skill | 12 字段合规检查 + 虚构引用检测 |
 | **实验** | experiment_sanity_check_skill | 实验方案合理性检查 |
@@ -250,7 +251,7 @@ POST /api/v1/pipeline/run
   StageExecution
   ├── input_data        # 该阶段输入
   ├── output_data       # 该阶段输出
-  ├── prompt_used       # Prompt 原文（前 2000 字符）
+  ├── prompt_used       # Prompt 原文
   ├── model_parameters  # temperature / model / version
   ├── token_count       # Token 用量
   ├── duration_ms       # 耗时
@@ -323,7 +324,7 @@ cd backend
 pytest tests/ -v
 ```
 
-覆盖：Agent 单元测试、Pipeline 端到端、向量存储、JSON 修复、数据库、文档解析等。
+覆盖：Agent 单元测试、Pipeline 端到端、向量存储、数据库、文档解析等。
 
 ---
 
@@ -333,5 +334,6 @@ pytest tests/ -v
 |------|------|
 | Python | 3.10 / 3.11 / 3.12（推荐） |
 | Node.js | ≥ 18 |
+| pnpm | ≥ 9 |
 
 > ⚠️ 暂不建议 Python 3.13——FAISS、sentence-transformers 等依赖可能存在兼容问题。

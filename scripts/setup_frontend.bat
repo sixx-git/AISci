@@ -40,11 +40,11 @@ echo   package.json 已存在
 echo.
 
 REM 3. 安装依赖
-echo [3/4] 安装 npm 依赖...
+echo [3/4] 安装 pnpm 依赖...
 if exist "node_modules" (
     echo   node_modules 已存在，跳过安装
 ) else (
-    call npm install
+    call pnpm install
     echo   依赖安装完成
 )
 echo.

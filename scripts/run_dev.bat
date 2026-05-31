@@ -58,7 +58,7 @@ echo   启动前端服务...
 echo =============================================
 
 cd frontend
-start "AI Scientist Frontend" cmd /k "npm run dev"
+start "AI Scientist Frontend" cmd /k "pnpm dev"
 cd ..
 
 echo.

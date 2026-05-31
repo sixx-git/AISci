@@ -77,7 +77,7 @@ echo -e "${GREEN}  启动前端服务...${NC}"
 echo -e "${GREEN}=============================================${NC}"
 
 cd frontend
-npm run dev &
+pnpm dev &
 FRONTEND_PID=$!
 cd ..
 

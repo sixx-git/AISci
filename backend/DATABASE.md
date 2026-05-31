@@ -9,317 +9,333 @@
 ### ER 图概览
 
 ```
-┌─────────────┐         ┌─────────────┐
-│   Project   │1───────*│  Document   │
-└─────────────┘         └─────────────┘
+┌──────────────┐       ┌──────────────┐       ┌──────────────────┐
+│   Project    │1─────*│   Document   │1─────*│      Chunk       │
+└──────────────┘       └──────────────┘       └──────────────────┘
       1│
-       │                       ┌──────────────┐
-       ├──────────────────────*│  Hypothesis  │
-       │                       └──────────────┘
-       │                              │
-       │                              │ 1
-       │                              *
-       │                       ┌───────────────────┐
-       ├──────────────────────*│ ExperimentDesign  │
-       │                       └───────────────────┘
+       │              ┌──────────────┐
+       ├─────────────*│  Hypothesis  │
+       │              └──────────────┘
+       │                    1│
+       │                     *│
+       │              ┌──────────────┐
+       │              │   Evidence   │
+       │              └──────────────┘
        │
-       │                       ┌──────────┐
-       ├──────────────────────*│  Report  │
-       │                       └──────────┘
+       │              ┌───────────────────┐
+       ├─────────────*│ ExperimentDesign  │
+       │              └───────────────────┘
        │
-       │                       ┌───────────┐
-       └──────────────────────*│  RunLog   │
-                               └───────────┘
-    *
-┌─────────────┐
-│    Chunk    │
-└─────────────┘
+       │              ┌──────────────┐
+       ├─────────────*│    Report    │
+       │              └──────────────┘
+       │
+       │              ┌──────────────┐
+       ├─────────────*│  PipelineRun │
+       │              └──────────────┘
+       │                    1│
+       │                     *│
+       │              ┌───────────────────────┐
+       │              │ PipelineStageExecution│
+       │              └───────────────────────┘
+       │
+       ├──────────────┐
+       │              *
+       │       ┌──────────────┐
+       ├──────*│    RunLog    │
+       │       └──────────────┘
+       │
+       └──────*┌──────────────┐
+               │   Dataset    │
+               └──────────────┘
 ```
 
 ## 数据表设计
 
 ### 1. projects（项目表）
 
-存储研究项目的基本信息。
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| name | VARCHAR(200) | 项目名称 |
+| description | TEXT | 项目描述 |
+| research_topic | TEXT | 研究主题 |
+| keywords | TEXT | 关键词，逗号分隔 |
+| research_question | TEXT | 研究问题 |
+| research_domain | VARCHAR(200) | 研究领域 |
+| research_goal | TEXT | 研究目标 |
+| research_background | TEXT | 已知背景 |
+| data_source | TEXT | 数据来源 |
+| constraints | TEXT | 限制条件 |
+| expected_output | TEXT | 期望输出 |
+| status | VARCHAR(50) | 项目状态 |
+| created_by | VARCHAR(100) | 创建者 |
+| priority | INTEGER | 优先级（1-10） |
+| config | JSON | 项目配置 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| name | VARCHAR(200) | NO | - | 项目名称 |
-| description | TEXT | YES | NULL | 项目描述 |
-| research_topic | TEXT | YES | NULL | 研究主题 |
-| keywords | TEXT | YES | NULL | 关键词，逗号分隔 |
-| status | VARCHAR(50) | NO | draft | 项目状态 |
-| created_by | VARCHAR(100) | YES | NULL | 创建者 |
-| priority | INTEGER | YES | 5 | 优先级（1-10） |
-| config | JSON | YES | NULL | 项目配置 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**状态枚举 (ProjectStatus)**:
-- draft - 草稿
-- in_progress - 进行中
-- documents_processed - 文档已处理
-- hypothesis_generated - 假设已生成
-- experiment_designed - 实验已设计
-- completed - 已完成
-- archived - 已归档
+**ProjectStatus 枚举**：draft / in_progress / documents_processed / hypothesis_generated / experiment_designed / completed / archived
 
 ---
 
 ### 2. documents（文档表）
 
-存储论文和其他文献的元数据。
-
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | NO | - | 所属项目 ID，外键 |
-| filename | VARCHAR(255) | NO | - | 原始文件名 |
-| file_path | VARCHAR(512) | NO | - | 文件存储路径 |
-| file_type | VARCHAR(50) | NO | - | 文件类型（扩展名） |
-| file_size | INTEGER | YES | 0 | 文件大小（字节） |
-| mime_type | VARCHAR(100) | YES | NULL | MIME 类型 |
-| title | VARCHAR(500) | YES | NULL | 论文标题 |
-| authors | TEXT | YES | NULL | 作者列表 |
-| abstract | TEXT | YES | NULL | 摘要 |
-| keywords | TEXT | YES | NULL | 关键词 |
-| publication_date | DATETIME | YES | NULL | 发布日期 |
-| journal | VARCHAR(200) | YES | NULL | 期刊/会议名称 |
-| volume | VARCHAR(50) | YES | NULL | 卷 |
-| issue | VARCHAR(50) | YES | NULL | 期 |
-| pages | VARCHAR(50) | YES | NULL | 页码 |
-| doi | VARCHAR(200) | YES | NULL | DOI 编号 |
-| source_url | VARCHAR(500) | YES | NULL | 来源 URL |
-| doc_type | VARCHAR(50) | YES | research_paper | 文档类型 |
-| status | VARCHAR(50) | NO | uploaded | 处理状态 |
-| error_message | TEXT | YES | NULL | 错误信息 |
-| raw_text | TEXT | YES | NULL | 原始提取文本 |
-| summary | TEXT | YES | NULL | 文档摘要 |
-| extra_metadata | JSON | YES | NULL | 额外元数据 |
-| custom_fields | JSON | YES | NULL | 自定义字段 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**文档类型枚举 (DocumentType)**:
-- research_paper - 研究论文
-- review - 综述
-- thesis - 学位论文
-- report - 报告
-- preprint - 预印本
-- other - 其他
-
-**处理状态枚举 (DocumentStatus)**:
-- uploaded - 已上传
-- processing - 处理中
-- processed - 已处理
-- failed - 处理失败
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| filename | VARCHAR(255) | 原始文件名 |
+| file_path | VARCHAR(512) | 文件存储路径 |
+| file_type | VARCHAR(50) | 文件类型（扩展名） |
+| file_size | INTEGER | 文件大小（字节） |
+| mime_type | VARCHAR(100) | MIME 类型 |
+| title | VARCHAR(500) | 论文标题 |
+| authors | TEXT | 作者列表 |
+| abstract | TEXT | 摘要 |
+| keywords | TEXT | 关键词 |
+| publication_date | DATETIME | 发布日期 |
+| journal | VARCHAR(200) | 期刊/会议名称 |
+| doi | VARCHAR(200) | DOI 编号 |
+| source_url | VARCHAR(500) | 来源 URL |
+| doc_type | VARCHAR(50) | 文档类型 |
+| status | VARCHAR(50) | 处理状态 |
+| error_message | TEXT | 错误信息 |
+| raw_text | TEXT | 原始提取文本 |
+| summary | TEXT | 文档摘要 |
+| extra_metadata | JSON | 额外元数据 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
 ### 3. chunks（文献切片表）
 
-存储向量化后的文献切片。
-
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | NO | - | 所属项目 ID，外键 |
-| document_id | VARCHAR(36) | NO | - | 所属文档 ID，外键 |
-| chunk_index | INTEGER | NO | - | 在文档中的序号 |
-| content | TEXT | NO | - | 切片文本内容 |
-| content_preview | VARCHAR(500) | YES | NULL | 内容预览 |
-| start_offset | INTEGER | YES | NULL | 在原文档中的起始位置 |
-| end_offset | INTEGER | YES | NULL | 在原文档中的结束位置 |
-| start_page | INTEGER | YES | NULL | 起始页码 |
-| end_page | INTEGER | YES | NULL | 结束页码 |
-| embedding_model | VARCHAR(100) | YES | NULL | 向量化模型名称 |
-| vector | JSON | YES | NULL | 向量数据 |
-| dimension | INTEGER | YES | NULL | 向量维度 |
-| chunk_type | VARCHAR(50) | YES | text | 切片类型 |
-| status | VARCHAR(50) | NO | pending | 处理状态 |
-| tokens_count | INTEGER | YES | NULL | Token 数量 |
-| extra_metadata | JSON | YES | NULL | 额外元数据 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**切片状态枚举 (ChunkStatus)**:
-- pending - 待处理
-- embedding - 向量化中
-- ready - 已就绪
-- failed - 处理失败
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| document_id | VARCHAR(36) | 外键 → documents.id |
+| chunk_index | INTEGER | 在文档中的序号 |
+| content | TEXT | 切片文本内容 |
+| content_preview | VARCHAR(500) | 内容预览 |
+| start_offset | INTEGER | 在原文档中的起始位置 |
+| end_offset | INTEGER | 在原文档中的结束位置 |
+| start_page | INTEGER | 起始页码 |
+| end_page | INTEGER | 结束页码 |
+| embedding_model | VARCHAR(100) | 向量化模型名称 |
+| vector | JSON | 向量数据 |
+| dimension | INTEGER | 向量维度 |
+| chunk_type | VARCHAR(50) | 切片类型 |
+| status | VARCHAR(50) | 处理状态 |
+| tokens_count | INTEGER | Token 数量 |
+| extra_metadata | JSON | 额外元数据 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
 ### 4. hypotheses（科学假设表）
 
-存储由 AI 生成的科学假设。
-
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | NO | - | 所属项目 ID，外键 |
-| title | VARCHAR(500) | NO | - | 假设标题 |
-| description | TEXT | NO | - | 假设详细描述 |
-| summary | TEXT | YES | NULL | 假设摘要 |
-| category | VARCHAR(100) | YES | NULL | 假设分类 |
-| tags | TEXT | YES | NULL | 标签列表，逗号分隔 |
-| confidence_score | FLOAT | YES | 0.5 | 置信度评分（0-1） |
-| novelty_score | FLOAT | YES | NULL | 创新性评分（0-1） |
-| feasibility_score | FLOAT | YES | NULL | 可行性评分（0-1） |
-| source_documents | TEXT | YES | NULL | 来源文献 ID 列表 |
-| source_chunks | TEXT | YES | NULL | 来源切片 ID 列表 |
-| version | INTEGER | YES | 1 | 版本号 |
-| parent_id | VARCHAR(36) | YES | NULL | 父假设 ID |
-| status | VARCHAR(50) | NO | draft | 状态 |
-| reasoning | TEXT | YES | NULL | 推理和论证过程 |
-| evidence | TEXT | YES | NULL | 支持证据 |
-| counterarguments | TEXT | YES | NULL | 反驳意见 |
-| experiment_suggestions | TEXT | YES | NULL | 实验建议 |
-| generated_by | VARCHAR(100) | YES | NULL | 生成者 |
-| model_used | VARCHAR(100) | YES | NULL | 使用的模型 |
-| extra_metadata | JSON | YES | NULL | 额外元数据 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**假设状态枚举 (HypothesisStatus)**:
-- draft - 草稿
-- pending_review - 待审核
-- accepted - 已接受
-- rejected - 已拒绝
-- modified - 已修改
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| research_question | TEXT | 研究问题 |
+| hypothesis | TEXT | 假设内容 |
+| rationale | TEXT | 推理依据 |
+| novelty | TEXT | 创新性说明 |
+| testability | TEXT | 可测试性 |
+| required_data | TEXT | 所需数据 |
+| possible_method | TEXT | 可行方法 |
+| risk | TEXT | 风险评估 |
+| supporting_fact_ids | TEXT | 关联的文献事实 ID 列表（JSON） |
+| evidence_level | VARCHAR(20) | 证据级别：high / medium / low |
+| status | VARCHAR(50) | 状态：draft / testing / accepted / rejected |
+| priority | INTEGER | 优先级（1-5） |
+| confidence | FLOAT | 置信度（0-1） |
+| alignment_score | INTEGER | 问题对齐度（0-100） |
+| off_topic | BOOLEAN | 是否偏题 |
+| off_topic_reason | TEXT | 偏题原因 |
+| matched_keywords | TEXT | 匹配到的关键词（JSON） |
+| missing_keywords | TEXT | 缺失的关键词（JSON） |
+| question_alignment | TEXT | 假设与研究问题的对齐说明 |
+| dataset_field_refs | TEXT | 引用的数据集字段（JSON） |
+| data_evidence_ids | TEXT | 引用的数据证据 ID（JSON） |
+| validation_target | TEXT | 验证目标指标 |
+| expected_measurable_effect | TEXT | 预期的可量化效果 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
 ### 5. experiment_designs（实验设计表）
 
-存储由 AI 生成的实验设计方案。
-
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | NO | - | 所属项目 ID，外键 |
-| hypothesis_id | VARCHAR(36) | YES | NULL | 关联的假设 ID，外键 |
-| title | VARCHAR(500) | NO | - | 实验设计标题 |
-| description | TEXT | NO | - | 实验描述 |
-| purpose | TEXT | YES | NULL | 实验目的 |
-| design_type | VARCHAR(100) | YES | NULL | 实验类型 |
-| variables | JSON | YES | NULL | 变量配置 |
-| procedure | TEXT | YES | NULL | 实验步骤 |
-| materials | TEXT | YES | NULL | 所需材料 |
-| equipment | TEXT | YES | NULL | 所需设备 |
-| data_collection | TEXT | YES | NULL | 数据收集方法 |
-| measurement_methods | TEXT | YES | NULL | 测量方法 |
-| statistical_methods | TEXT | YES | NULL | 统计分析方法 |
-| expected_results | TEXT | YES | NULL | 预期结果 |
-| success_criteria | TEXT | YES | NULL | 成功判定标准 |
-| time_estimate | VARCHAR(100) | YES | NULL | 时间估计 |
-| budget_estimate | TEXT | YES | NULL | 预算估计 |
-| resources_needed | TEXT | YES | NULL | 所需资源 |
-| potential_pitfalls | TEXT | YES | NULL | 潜在问题 |
-| contingency_plans | TEXT | YES | NULL | 应急预案 |
-| version | INTEGER | YES | 1 | 版本号 |
-| status | VARCHAR(50) | NO | draft | 状态 |
-| generated_by | VARCHAR(100) | YES | NULL | 生成者 |
-| model_used | VARCHAR(100) | YES | NULL | 使用的模型 |
-| extra_metadata | JSON | YES | NULL | 额外元数据 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**实验设计状态枚举 (ExperimentDesignStatus)**:
-- draft - 草稿
-- ready_for_review - 待审核
-- approved - 已批准
-- modified - 已修改
-- deprecated - 已弃用
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| hypothesis_id | VARCHAR(36) | 外键 → hypotheses.id |
+| hypothesis | TEXT | 关联假设内容 |
+| methods | TEXT | 研究方法 |
+| datasets | TEXT | 数据集说明 |
+| source_data | TEXT | 源数据说明 |
+| target_data | TEXT | 目标数据说明 |
+| baselines | TEXT | 基线方法 |
+| metrics | TEXT | 评估指标 |
+| experimental_steps | TEXT | 实验步骤 |
+| expected_results | TEXT | 预期结果 |
+| limitations | TEXT | 局限性 |
+| status | VARCHAR(50) | 状态：draft / ready / running / completed |
+| priority | INTEGER | 优先级（1-5） |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
 ### 6. reports（报告表）
 
-存储 AI 生成的最终研究报告。
-
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | NO | - | 所属项目 ID，外键 |
-| title | VARCHAR(500) | NO | - | 报告标题 |
-| summary | TEXT | YES | NULL | 报告摘要 |
-| authors | TEXT | YES | NULL | 作者列表 |
-| introduction | TEXT | YES | NULL | 引言 |
-| literature_review | TEXT | YES | NULL | 文献综述 |
-| methodology | TEXT | YES | NULL | 研究方法 |
-| results | TEXT | YES | NULL | 研究结果 |
-| discussion | TEXT | YES | NULL | 讨论 |
-| conclusion | TEXT | YES | NULL | 结论 |
-| future_work | TEXT | YES | NULL | 未来工作 |
-| references | TEXT | YES | NULL | 参考文献 |
-| full_content | TEXT | YES | NULL | 完整报告内容 |
-| attachments | JSON | YES | NULL | 附件列表 |
-| version | INTEGER | YES | 1 | 版本号 |
-| status | VARCHAR(50) | NO | draft | 状态 |
-| language | VARCHAR(20) | YES | zh-CN | 语言 |
-| generated_by | VARCHAR(100) | YES | NULL | 生成者 |
-| model_used | VARCHAR(100) | YES | NULL | 使用的模型 |
-| extra_metadata | JSON | YES | NULL | 额外元数据 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
-
-**报告状态枚举 (ReportStatus)**:
-- draft - 草稿
-- generating - 生成中
-- ready - 已就绪
-- published - 已发布
-- archived - 已归档
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| hypothesis_id | VARCHAR(36) | 关联假设 ID |
+| experiment_design_id | VARCHAR(36) | 关联实验设计 ID |
+| small_validation_id | VARCHAR(36) | 关联小样验证 ID |
+| title | VARCHAR(500) | 报告标题 |
+| paper_title | VARCHAR(500) | 论文标题 |
+| paper_abstract | TEXT | 论文摘要 |
+| problem_statement | TEXT | 问题陈述 |
+| rationale | TEXT | 原理依据 |
+| technical_details | TEXT | 技术细节 |
+| datasets | TEXT | 数据集说明 |
+| source | TEXT | 源数据说明 |
+| target | TEXT | 目标说明 |
+| methods | TEXT | 研究方法 |
+| experiments | TEXT | 实验设计 |
+| results | TEXT | 预期结果 |
+| references | TEXT | 参考文献 |
+| markdown_content | TEXT | Markdown 格式完整报告 |
+| attachments | JSON | 附件列表 |
+| pdf_path | VARCHAR(500) | PDF 文件路径 |
+| version | INTEGER | 版本号 |
+| status | VARCHAR(50) | 状态：draft / generating / generated / ready / published / archived |
+| language | VARCHAR(20) | 语言 |
+| generated_by | VARCHAR(100) | 生成者 |
+| model_used | VARCHAR(100) | 使用的模型 |
+| authors | TEXT | 作者列表 |
+| summary | TEXT | 报告摘要 |
+| extra_metadata | JSON | 额外元数据（含合规检查结果） |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
-### 7. run_logs（运行日志表）
+### 7. pipeline_runs（Pipeline 运行表）
 
-存储系统运行日志。
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| run_id | VARCHAR(36) | 运行 ID（唯一标识） |
+| research_question | TEXT | 研究问题 |
+| status | VARCHAR(50) | 运行状态：pending / running / completed / failed / cancelled / human_review_required |
+| started_at | DATETIME | 开始时间 |
+| completed_at | DATETIME | 完成时间 |
+| total_duration_ms | INTEGER | 总耗时（毫秒） |
+| input_data | JSON | 输入数据 |
+| config | JSON | 运行配置 |
+| output_data | JSON | 输出数据 |
+| final_report_id | VARCHAR(36) | 关联报告 ID |
+| error_message | TEXT | 错误信息 |
+| failed_stage | VARCHAR(50) | 失败的阶段 |
+| current_stage | VARCHAR(50) | 当前执行阶段 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
-| 列名 | 类型 | 是否为空 | 默认值 | 说明 |
-|------|------|----------|--------|------|
-| id | VARCHAR(36) | NO | UUID | 主键 |
-| project_id | VARCHAR(36) | YES | NULL | 所属项目 ID，外键 |
-| level | VARCHAR(20) | NO | info | 日志级别 |
-| category | VARCHAR(50) | NO | system | 日志类别 |
-| message | TEXT | NO | - | 日志消息 |
-| document_id | VARCHAR(36) | YES | NULL | 关联文档 ID |
-| hypothesis_id | VARCHAR(36) | YES | NULL | 关联假设 ID |
-| experiment_design_id | VARCHAR(36) | YES | NULL | 关联实验设计 ID |
-| report_id | VARCHAR(36) | YES | NULL | 关联报告 ID |
-| details | JSON | YES | NULL | 详细数据 |
-| extra_metadata | JSON | YES | NULL | 元数据 |
-| execution_time_ms | INTEGER | YES | NULL | 执行时间（毫秒） |
-| success | BOOLEAN | YES | TRUE | 是否成功 |
-| error_message | TEXT | YES | NULL | 错误信息 |
-| error_stacktrace | TEXT | YES | NULL | 错误堆栈 |
-| user_id | VARCHAR(100) | YES | NULL | 用户 ID |
-| user_action | VARCHAR(100) | YES | NULL | 用户操作 |
-| component | VARCHAR(100) | YES | NULL | 组件名称 |
-| module | VARCHAR(100) | YES | NULL | 模块名称 |
-| function | VARCHAR(100) | YES | NULL | 函数名称 |
-| line_number | INTEGER | YES | NULL | 行号 |
-| created_at | DATETIME | NO | CURRENT_TIMESTAMP | 创建时间 |
-| updated_at | DATETIME | YES | NULL | 更新时间 |
+---
 
-**日志级别枚举 (LogLevel)**:
-- debug - 调试
-- info - 信息
-- warning - 警告
-- error - 错误
-- critical - 严重
+### 8. pipeline_stage_executions（Pipeline 阶段执行表）
 
-**日志类别枚举 (LogCategory)**:
-- system - 系统
-- document_processing - 文档处理
-- vectorization - 向量化
-- hypothesis_generation - 假设生成
-- experiment_design - 实验设计
-- report_generation - 报告生成
-- user_action - 用户操作
-- api_call - API 调用
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| pipeline_run_id | VARCHAR(36) | 外键 → pipeline_runs.id |
+| stage | VARCHAR(50) | 阶段名称（8 个阶段之一） |
+| stage_order | INTEGER | 阶段序号（1-8） |
+| status | VARCHAR(50) | 执行状态 |
+| started_at | DATETIME | 开始时间 |
+| completed_at | DATETIME | 完成时间 |
+| duration_ms | INTEGER | 耗时（毫秒） |
+| input_data | JSON | 输入数据 |
+| output_data | JSON | 输出数据 |
+| model_used | VARCHAR(100) | 使用的模型 |
+| model_parameters | JSON | 模型参数 |
+| prompt_used | TEXT | 使用的 Prompt |
+| token_count | INTEGER | Token 用量 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 9. evidences（证据链表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| hypothesis_id | VARCHAR(36) | 外键 → hypotheses.id |
+| document_id | VARCHAR(36) | 来源文档 ID |
+| chunk_id | VARCHAR(36) | 来源 Chunk ID |
+| fact_text | TEXT | 事实陈述 |
+| quote_text | TEXT | 原文引用片段 |
+| page_number | INTEGER | 页码 |
+| relevance_score | FLOAT | 相关度分数（0-1） |
+| source_title | VARCHAR(500) | 来源论文/文档标题 |
+| extra_metadata | TEXT | 额外元数据（JSON） |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 10. datasets（数据集表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| name | VARCHAR(500) | 数据集名称 |
+| source | VARCHAR(500) | 数据来源 |
+| description | TEXT | 描述 |
+| file_path | VARCHAR(500) | 文件路径 |
+| preprocessing_status | VARCHAR(50) | 预处理状态：pending / processing / completed / failed |
+| use_for_hypothesis | BOOLEAN | 是否用于假设生成 |
+| extra_metadata | TEXT | 额外元数据（JSON） |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 11. run_logs（运行日志表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| level | VARCHAR(20) | 日志级别：debug / info / warning / error / critical |
+| category | VARCHAR(50) | 日志类别：system / document_processing / vectorization / hypothesis_generation / experiment_design / report_generation / user_action / api_call |
+| message | TEXT | 日志消息 |
+| details | JSON | 详细数据 |
+| execution_time_ms | INTEGER | 执行时间（毫秒） |
+| success | BOOLEAN | 是否成功 |
+| error_message | TEXT | 错误信息 |
+| user_id | VARCHAR(100) | 用户 ID |
+| user_action | VARCHAR(100) | 用户操作 |
+| component | VARCHAR(100) | 组件名称 |
+| module | VARCHAR(100) | 模块名称 |
+| function | VARCHAR(100) | 函数名称 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 ---
 
@@ -328,28 +344,10 @@
 ### 初始化数据库
 
 ```bash
-# 使用简化脚本初始化
-python scripts/init_db_simple.py
+python scripts/init_db.py
 ```
 
-### 数据库迁移
-
-项目使用 Alembic 进行数据库迁移管理：
-
-```bash
-# 初始化迁移（仅首次）
-cd backend
-alembic init alembic
-
-# 创建新的迁移
-alembic revision --autogenerate -m "your message"
-
-# 执行迁移
-alembic upgrade head
-
-# 回滚迁移
-alembic downgrade -1
-```
+数据库文件会自动创建在 `backend/data/aiscientist.db`。
 
 ### 访问数据库
 
@@ -364,24 +362,11 @@ alembic downgrade -1
 ### 2. 时间戳列
 - 所有表都包含 `created_at` 和 `updated_at` 列
 - `created_at` 使用数据库自动生成的时间戳
-- `updated_at` 应用程序在更新时维护
+- `updated_at` 由应用程序在更新时维护
 
 ### 3. JSON 字段
 - 使用 JSON 类型存储灵活的元数据和配置
 - 允许在不修改数据库结构的情况下扩展功能
 
-### 4. 软删除
-- 目前未实现软删除
+### 4. 外键级联删除
 - 使用外键级联删除，确保数据一致性
-
-### 5. 索引策略
-- 为所有主键、外键和常用查询字段创建索引
-- 优化查询性能
-
-## 未来改进
-
-- 添加软删除功能
-- 添加审计日志表
-- 优化索引策略
-- 添加数据库备份脚本
-- 添加性能监控
