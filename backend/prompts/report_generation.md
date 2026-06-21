@@ -82,6 +82,12 @@
   - 使用的评价指标
 - 如果涉及 CNN、Transformer、分类模型等，写清楚具体用途。
 - 禁止提及 GPT-4、Llama-3、Claude 等非 Qwen/千问模型名称。
+- **若 project_mode 为 federated_learning 且 fl_setting 为 vertical_fl**，Technical Details 还必须明确写出：
+  - PSI / 样本对齐（entity_id、aligned_id）
+  - Secure Aggregation
+  - Differential Privacy（privacy_budget）
+  - Split Learning / VFL（SplitNN、VFL-LR、VFL-NN）
+  - Qwen / 通义千问 / 阿里云百炼 在任务规划与报告生成中的作用
 
 ## 6. Datasets
 - 必须使用来源合规真实的数据集，或明确说明"拟采集数据"。
@@ -110,9 +116,12 @@
   5. 结果评估
   6. 人在回路审查
 - 不能只写概念描述。
+- **方法论章节下可追加 `\subsection` 级个性化小节**（如「可验证科学假设表述」），但不得新增与模板并列的主 `\section`。
 
 ## 10. Experiments
 - 必须包含 Baselines 和 Metrics。
+- **VFL 场景** Baselines 应包含：Centralized Training、Local Only、SplitNN、VFL-LR、VFL-NN、FedBCD、SecureBoost。
+- **VFL Metrics** 应包含：Accuracy、F1、AUC、Communication Cost、Inference Latency、Privacy Leakage Risk、Alignment Success Rate。
 - 结构必须包括：
   - Baselines（合理可对比方法）
   - Metrics（可计算、可验证）
@@ -129,6 +138,7 @@
 - 如果没有真实实验结果，不能写成已经完成真实实验。
 - 必须说明当前结果的局限性。
 - 可包含：初步统计结果 / 小样验证结果 / 公式推导 / 预期提升范围 / 风险与限制。
+- **实验结果章节下可追加 `\subsection`**（如「Pilot 实测反馈」「Campaign 迭代快照」），不得改变 8 个主章节顺序。
 
 ## 12. References
 - 只能来自真实文献列表（Document 表、Evidence、citation_map、arXiv 元数据、BibTeX 或上传 PDF）。

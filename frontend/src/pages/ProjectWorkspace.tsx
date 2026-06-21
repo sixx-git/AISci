@@ -540,7 +540,7 @@ export function ProjectWorkspace() {
           />
         );
       case 'datasets':
-        return <DatasetPage projectId={id} projectMode={resolvedProjectMode} />;
+        return <DatasetPage projectId={id} projectMode={resolvedProjectMode} researchQuestion={resolvedResearchQuestion} />;
       case 'workflow':
         return (
           <WorkflowTab

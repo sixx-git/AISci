@@ -156,6 +156,8 @@ class ReportGenerationAgent:
             result = self._apply_evidence_chain_references(result, all_hypotheses)
             if data_context and data_context.get("data_finder_results"):
                 result = self._enrich_report_with_data_finder(result, data_context["data_finder_results"])
+            if data_context and data_context.get("multimodal_evidence"):
+                result = self._enrich_report_with_multimodal_evidence(result, data_context["multimodal_evidence"])
             logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
             if pipeline_run_info:
@@ -721,6 +723,58 @@ class ReportGenerationAgent:
             "tables_count": len(tables),
             "merged_rows": merged.get("row_count", 0),
             "provenance_count": len(provenance),
+        }
+        return result
+
+    @staticmethod
+    def _enrich_report_with_multimodal_evidence(
+        result: Dict[str, Any],
+        multimodal_evidence: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {}) if isinstance(result.get("chapters"), dict) else {}
+        if not multimodal_evidence:
+            return result
+
+        by_modality: Dict[str, List[Dict[str, Any]]] = {}
+        for ev in multimodal_evidence:
+            mod = ev.get("modality") or "unknown"
+            by_modality.setdefault(mod, []).append(ev)
+
+        rationale = chapters.get("rationale") or ""
+        rationale += "\n\n### 多模态证据（上传资产）\n"
+        for mod, items in by_modality.items():
+            rationale += f"\n**{mod}** ({len(items)} 条):\n"
+            for ev in items[:4]:
+                rationale += (
+                    f"- [{ev.get('fact_id', '?')}] { (ev.get('fact_text') or '')[:200]}"
+                    f" (来源: {ev.get('source_file', '?')}, confidence={ev.get('confidence', '?')})\n"
+                )
+        chapters["rationale"] = rationale
+
+        refs = chapters.get("references") or ""
+        refs += "\n\n【多模态来源标注】\n"
+        seen = set()
+        for ev in multimodal_evidence[:10]:
+            src = ev.get("source_file") or ev.get("source_paper_title")
+            mod = ev.get("modality", "?")
+            key = f"{src}:{mod}"
+            if key in seen:
+                continue
+            seen.add(key)
+            refs += f"- [{mod}] {src}\n"
+        chapters["references"] = refs
+
+        results = chapters.get("results") or ""
+        if any(ev.get("modality") == "image" for ev in multimodal_evidence):
+            results += (
+                "\n\n【图表数据说明】部分结论引用上传图像/VLM 解析结果；"
+                "图像识别方式：Qwen-VL 或规则降级（见 multimodal metadata）。"
+            )
+        chapters["results"] = results
+        result["chapters"] = chapters
+        result["multimodal_evidence_summary"] = {
+            "total": len(multimodal_evidence),
+            "by_modality": {k: len(v) for k, v in by_modality.items()},
         }
         return result
 

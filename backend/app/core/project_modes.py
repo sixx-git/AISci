@@ -59,19 +59,43 @@ HETEROGENEOUS_FL_FIELDS = [
 ]
 VERTICAL_FL_FIELDS = [
     "party_id", "entity_id", "aligned_id", "feature_owner", "label_owner",
+    "feature_group", "label", "vertical_feature_type",
     "aligned_sample_rate", "privacy_method", "privacy_budget",
+    "communication_round", "communication_rounds",
+    "inference_latency", "prediction_accuracy",
 ]
+VERTICAL_FL_ALIGNMENT_KEYS = ["entity_id", "aligned_id", "party_id"]
+VERTICAL_FL_PRIVACY_FIELDS = ["privacy_budget", "privacy_method", "privacy_risk_score"]
+VERTICAL_FL_FEATURE_OWNER_FIELDS = ["feature_owner", "party_id", "feature_group"]
+VERTICAL_FL_LABEL_OWNER_FIELDS = ["label_owner", "label"]
 FL_METRICS_FIELDS = [
     "accuracy", "f1_score", "auc", "global_accuracy", "communication_rounds",
-    "communication_cost_mb", "client_drift", "convergence_round",
-    "fairness_gap", "privacy_risk_score",
+    "communication_round", "communication_cost", "communication_cost_mb",
+    "client_drift", "convergence_round", "fairness_gap", "privacy_risk_score",
+    "inference_latency", "prediction_accuracy", "alignment_success_rate",
+    "privacy_leakage_risk",
+]
+
+VFL_METRICS = [
+    "accuracy", "f1_score", "auc", "prediction_accuracy",
+    "communication_cost", "communication_rounds", "communication_round",
+    "inference_latency", "privacy_leakage_risk", "privacy_risk_score",
+    "alignment_success_rate", "aligned_sample_rate",
+]
+
+VFL_VARIABLES = [
+    "num_feature_parties", "aligned_sample_rate", "privacy_budget",
+    "feature_missing_rate", "communication_rounds", "communication_round",
 ]
 
 FL_BASELINES = {
-    "horizontal_fl": ["Centralized", "LocalOnly", "FedAvg", "FedProx", "SCAFFOLD", "FedNova"],
+    "horizontal_fl": ["Centralized Training", "Local Only", "FedAvg", "FedProx", "SCAFFOLD", "FedNova"],
     "heterogeneous_fl": ["FedMD", "FedDF", "FedGKT", "HeteroFL"],
     "personalized_fl": ["FedPer", "pFedMe", "Ditto", "FedRep", "FedBN"],
-    "vertical_fl": ["VFL-LR", "VFL-NN", "SplitNN", "SecureBoost", "FedBCD"],
+    "vertical_fl": [
+        "Centralized Training", "Local Only", "SplitNN",
+        "VFL-LR", "VFL-NN", "FedBCD", "SecureBoost",
+    ],
 }
 
 FL_METRICS = [
@@ -97,8 +121,12 @@ FL_KNOWN_REFERENCES = [
 ]
 
 
-def get_research_question_template(mode: str) -> Dict[str, str]:
+def get_research_question_template(mode: str, scenario: str | None = None) -> Dict[str, str]:
     if normalize_project_mode(mode) == ProjectMode.FEDERATED_LEARNING.value:
+        if scenario == "vertical_fl":
+            from app.templates.research_questions import get_vfl_research_template
+
+            return get_vfl_research_template()
         return {
             "research_domain": FL_RESEARCH_DOMAIN,
             "research_question": FL_RESEARCH_QUESTION_TEMPLATE,
@@ -119,9 +147,31 @@ def empty_fl_context() -> Dict[str, Any]:
     return {
         "project_mode": ProjectMode.FEDERATED_LEARNING.value,
         "fl_setting": "unknown",
+        "federated_setting": "unknown",
         "detected_fields": [],
         "client_fields": [],
         "party_fields": [],
         "metrics_fields": [],
         "target_candidates": [],
+        "metrics_candidates": [],
+        "parties": [],
+        "feature_parties": [],
+        "label_party": "",
+        "alignment_keys": [],
+        "privacy_fields": [],
     }
+
+
+def empty_vfl_context() -> Dict[str, Any]:
+    ctx = empty_fl_context()
+    ctx.update(
+        {
+            "fl_setting": "vertical_fl",
+            "federated_setting": "vertical_fl",
+            "alignment_keys": [],
+            "privacy_fields": [],
+            "feature_parties": [],
+            "label_party": "",
+        }
+    )
+    return ctx

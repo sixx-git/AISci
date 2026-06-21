@@ -7,6 +7,7 @@ import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
+import { FederatedCampaignPanel } from '@/components/FederatedCampaignPanel';
 import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
@@ -26,7 +27,9 @@ import type {
   PipelineStageLog,
   DiscoveryLoopData,
   TeachingAutoRefinementData,
+  FederatedCampaignRefinementData,
   QualityAcceptance,
+  ReplanAction,
 } from '@/types';
 
 interface WorkflowPageProps {
@@ -501,9 +504,33 @@ export function WorkflowPage({
     return aux?.reran ? aux : null;
   }, [runExtraMetadata]);
 
+  const federatedCampaignRefinement = useMemo((): FederatedCampaignRefinementData | null => {
+    const aux = runExtraMetadata?.auxiliary_results?.federated_campaign_refinement as
+      | FederatedCampaignRefinementData
+      | undefined;
+    return aux?.reran ? aux : null;
+  }, [runExtraMetadata]);
+
   const qualityAcceptance = useMemo((): QualityAcceptance | null => {
     return runExtraMetadata?.quality_acceptance ?? null;
   }, [runExtraMetadata]);
+
+  const federatedCampaignData = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    const pilot = (validationOut?.federated_pilot || validationOut?.results) as Record<string, unknown> | undefined;
+    const replanActions = (validationOut?.replan_actions || pilot?.replan_actions) as ReplanAction[] | undefined;
+    const hasPilot = pilot && Object.keys(pilot).length > 0;
+    const hasEvents = (runExtraMetadata?.closed_loop_events || []).some((e) => e.type === 'federated_campaign');
+    const hasSnapshots = (runExtraMetadata?.version_snapshots || []).some(
+      (s) => s.federated_best_method || s.federated_execution_mode
+    );
+    if (!hasPilot && !hasEvents && !hasSnapshots) return null;
+    return {
+      pilot: hasPilot ? pilot : null,
+      replanActions: replanActions || [],
+      snapshots: runExtraMetadata?.version_snapshots || [],
+    };
+  }, [nodes, runExtraMetadata]);
 
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
@@ -1137,6 +1164,20 @@ export function WorkflowPage({
           qualityTrend={runExtraMetadata?.quality_trend}
         />
       ) : null}
+
+      {federatedCampaignData && (
+        <FederatedCampaignPanel
+          federatedPilot={federatedCampaignData.pilot}
+          replanActions={federatedCampaignData.replanActions}
+          events={runExtraMetadata?.closed_loop_events}
+          snapshots={
+            federatedCampaignRefinement?.version_snapshots ||
+            runExtraMetadata?.version_snapshots ||
+            federatedCampaignData.snapshots
+          }
+          campaignRefinement={federatedCampaignRefinement}
+        />
+      )}
 
       <DiscoveryLoopPanel
         discoveryLoop={discoveryLoopData}

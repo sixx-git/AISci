@@ -367,3 +367,24 @@ class DatasetResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MultimodalAssetResponse(BaseModel):
+    id: str
+    project_id: str
+    dataset_id: Optional[str] = None
+    file_name: str
+    file_path: str
+    modality: str
+    mime_type: Optional[str] = None
+    extracted_text: Optional[str] = None
+    extracted_summary: Optional[str] = None
+    evidence_facts: Optional[List[Dict[str, Any]]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    parse_status: str = "pending"
+    use_for_hypothesis: bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

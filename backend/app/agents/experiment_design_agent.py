@@ -70,6 +70,7 @@ class ExperimentDesignAgent:
         project_mode: str = "general",
         validation_feedback: Optional[List[str]] = None,
         pilot_results: Optional[Dict[str, Any]] = None,
+        fl_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         设计实验
@@ -115,10 +116,29 @@ class ExperimentDesignAgent:
                     + "\n"
                 )
             if project_mode == "federated_learning":
+                fl_setting = (fl_context or {}).get("fl_setting", "horizontal_fl")
+                if fl_setting == "vertical_fl":
+                    prompt += (
+                        "\n\n[垂直联邦学习 VFL 模式] 实验设计必须包含 Baselines："
+                        "Centralized Training、Local Only、SplitNN、VFL-LR、VFL-NN、FedBCD、SecureBoost。"
+                        "Metrics：Accuracy、F1、AUC、Communication Cost、Inference Latency、"
+                        "Privacy Leakage Risk、Alignment Success Rate。"
+                        "必须说明 PSI/样本对齐（entity_id/aligned_id）、Secure Aggregation、"
+                        "Differential Privacy、Split Learning；"
+                        "变量含 num_feature_parties、aligned_sample_rate、privacy_budget、"
+                        "feature_missing_rate、communication_rounds。"
+                        "Source 含历史多方特征与标注报告；Target 含多方特征表与对齐/隐私参数。"
+                    )
+                else:
+                    prompt += (
+                        "\n\n[联邦学习模式] 实验设计必须包含 FedAvg/FedProx/SCAFFOLD、"
+                        "FedMD/FedDF/SplitNN/VFL baseline，以及 accuracy、f1_score、"
+                        "communication_rounds、client_drift、privacy_budget 等指标。"
+                    )
+            elif fl_context and fl_context.get("fl_setting") == "vertical_fl":
                 prompt += (
-                    "\n\n[联邦学习模式] 实验设计必须包含 FedAvg/FedProx/SCAFFOLD、"
-                    "FedMD/FedDF/SplitNN/VFL baseline，以及 accuracy、f1_score、"
-                    "communication_rounds、client_drift、privacy_budget 等指标。"
+                    "\n\n[检测到 vertical_fl 数据上下文] 请按 VFL 场景设计实验，"
+                    "包含 SplitNN/VFL-LR/VFL-NN 等 baseline 与样本对齐、隐私保护说明。"
                 )
             
             # 定义 schema 示例

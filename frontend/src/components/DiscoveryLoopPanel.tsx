@@ -1,4 +1,4 @@
-import { RefreshCw, BookOpen, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react';
+import { RefreshCw, BookOpen, TrendingUp, CheckCircle2, AlertCircle, FlaskConical, Shield } from 'lucide-react';
 import type { DiscoveryLoopData, TeachingAutoRefinementData, QualityAcceptance } from '@/types';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
 
@@ -46,6 +46,12 @@ export function DiscoveryLoopPanel({
             />
             <Stat label="Discovery 轮次" value={String(qualityAcceptance.discovery_rounds ?? '—')} />
             <Stat label="文献刷新" value={String(qualityAcceptance.literature_refresh_count ?? 0)} />
+            {qualityAcceptance.federated_discovery_accept != null && (
+              <Stat
+                label="联邦双门槛"
+                value={qualityAcceptance.federated_discovery_accept ? '通过' : '未通过'}
+              />
+            )}
             {qualityAcceptance.weak_stages && qualityAcceptance.weak_stages.length > 0 && (
               <Stat label="薄弱阶段" value={qualityAcceptance.weak_stages.join(', ')} />
             )}
@@ -78,6 +84,8 @@ export function DiscoveryLoopPanel({
             {history.map((entry) => {
               const rollback = entry.rollback as Record<string, unknown> | undefined;
               const litRefresh = rollback?.literature_refresh as Record<string, unknown> | undefined;
+              const fedAccept = entry.federated_acceptance;
+              const fedCampaign = entry.federated_campaign;
               return (
                 <div
                   key={`discovery-r${entry.round}`}
@@ -92,7 +100,43 @@ export function DiscoveryLoopPanel({
                     {entry.decision && (
                       <span className="text-gray-400">· {entry.decision}</span>
                     )}
+                    {fedAccept && (
+                      <span
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
+                          fedAccept.accepted
+                            ? 'bg-green-500/10 text-green-400'
+                            : 'bg-amber-500/10 text-amber-400'
+                        }`}
+                      >
+                        {fedAccept.accepted ? (
+                          <CheckCircle2 className="w-3 h-3" />
+                        ) : (
+                          <Shield className="w-3 h-3" />
+                        )}
+                        联邦{fedAccept.accepted ? 'Accept' : '待改进'}
+                      </span>
+                    )}
                   </div>
+
+                  {fedAccept && !fedAccept.accepted && (fedAccept.blockers || []).length > 0 && (
+                    <ul className="text-[10px] text-amber-400/90 list-disc list-inside mb-1">
+                      {(fedAccept.blockers || []).slice(0, 3).map((b) => (
+                        <li key={b}>{b}</li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {fedCampaign && (
+                    <p className="text-[10px] text-violet-400/90 flex items-center gap-1 mb-1">
+                      <FlaskConical className="w-3 h-3" />
+                      Campaign R{fedCampaign.round ?? '—'}
+                      {fedCampaign.reran ? ' · 已自动 R2' : ''}
+                      {fedCampaign.improved ? ' · 指标改善' : ''}
+                      {fedCampaign.pilot_before_mode && fedCampaign.pilot_after_mode
+                        ? ` · ${fedCampaign.pilot_before_mode}→${fedCampaign.pilot_after_mode}`
+                        : ''}
+                    </p>
+                  )}
 
                   {litRefresh && (
                     <p className="text-[10px] text-gray-500 flex items-center gap-1 mb-1">

@@ -23,6 +23,7 @@ from app.models.research import (
     ExperimentDesign,
     Evidence,
     Dataset,
+    MultimodalAsset,
 )
 from app.models.pipeline import (
     PipelineRun,
@@ -42,6 +43,7 @@ __all__ = [
     'ExperimentDesign',
     'Evidence',
     'Dataset',
+    'MultimodalAsset',
     'Report',
     'RunLog',
     'ProjectStatus',

@@ -1,4 +1,4 @@
-import { TrendingUp, GitBranch, FlaskConical, ShieldCheck, Sparkles, Image, BookOpen } from 'lucide-react';
+import { TrendingUp, GitBranch, FlaskConical, ShieldCheck, Sparkles, Image, BookOpen, RefreshCw } from 'lucide-react';
 import type { ClosedLoopEvent, QualityTrendEntry } from '@/types';
 
 interface ClosedLoopTimelineProps {
@@ -17,6 +17,9 @@ const EVENT_LABELS: Record<string, string> = {
   discovery_literature_refresh: '文献刷新回退',
   teaching_auto_refinement: 'Teaching 自动闭环',
   quality_acceptance: '质量验收',
+  federated_campaign: '联邦 Campaign Pilot',
+  federated_campaign_refine: '联邦 Campaign 自动 R2',
+  discovery_federated: 'Discovery 联邦双门槛',
 };
 
 const EVENT_ICONS: Record<string, typeof GitBranch> = {
@@ -27,6 +30,8 @@ const EVENT_ICONS: Record<string, typeof GitBranch> = {
   plot_vlm_critique: Image,
   discovery_refine: TrendingUp,
   discovery_literature_refresh: BookOpen,
+  federated_campaign: FlaskConical,
+  federated_campaign_refine: RefreshCw,
 };
 
 function formatScore(score?: number): string {

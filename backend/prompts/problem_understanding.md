@@ -19,6 +19,13 @@
 研究问题：{{research_question}}
 领域描述：{{domain_description}}
 
+## 垂直联邦学习（VFL）识别指引
+若研究问题或领域描述涉及以下概念，请在 keywords 与 constraints 中明确标注：
+- 垂直联邦学习 / VFL / SplitNN / 特征方 / 标签方
+- 样本对齐（entity_id、aligned_id、PSI）
+- 隐私保护（privacy_budget、差分隐私、Secure Aggregation）
+- 纵向特征融合、通信开销、对齐成功率
+
 ## 输出格式要求
 请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
 {

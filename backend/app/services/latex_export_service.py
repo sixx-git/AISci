@@ -129,9 +129,67 @@ def _format_paragraph(value: Any) -> str:
     lines = _normalize_lines(value)
     if not lines:
         return ""
-    if len(lines) == 1:
+    if len(lines) == 1 and "###" not in lines[0]:
         return f"{escape_latex(lines[0])}\n\n"
-    return _format_itemize(lines)
+    return _format_chapter_body(value)
+
+
+def _format_chapter_body(value: Any) -> str:
+    """章节正文：支持 ### 小节标题 → LaTeX \\subsection（不改变主 section 结构）。"""
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        parts: List[str] = []
+        body = value.get("body") or value.get("content") or ""
+        if body:
+            parts.append(_format_chapter_body(body))
+        for sub in value.get("subsections") or []:
+            if isinstance(sub, dict):
+                title = sub.get("title") or sub.get("name") or "小节"
+                content = sub.get("content") or sub.get("body") or ""
+                parts.append(f"\\subsection{{{escape_latex(title)}}}\n\n")
+                parts.append(_format_chapter_body(content))
+        return "".join(parts) if parts else _format_itemize(_normalize_lines(value))
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    if "###" not in text:
+        lines = _normalize_lines(text)
+        if len(lines) == 1:
+            return f"{escape_latex(lines[0])}\n\n"
+        return _format_itemize(lines)
+
+    parts: List[str] = []
+    blocks = re.split(r"(?m)^###\s+", text)
+    if blocks and blocks[0].strip():
+        intro = blocks[0].strip()
+        if intro:
+            parts.append(f"{escape_latex(intro)}\n\n")
+    for block in blocks[1:]:
+        if not block.strip():
+            continue
+        lines = block.split("\n", 1)
+        title = lines[0].strip()
+        body = lines[1].strip() if len(lines) > 1 else ""
+        parts.append(f"\\subsection{{{escape_latex(title)}}}\n\n")
+        if body:
+            body_lines = [ln.strip() for ln in body.split("\n") if ln.strip()]
+            if len(body_lines) == 1 and not body_lines[0].startswith("- "):
+                parts.append(f"{escape_latex(body_lines[0])}\n\n")
+            else:
+                items = []
+                for ln in body_lines:
+                    if ln.startswith("- "):
+                        items.append(ln[2:].strip())
+                    else:
+                        items.append(ln)
+                if all(ln.startswith("**") or ":" in ln for ln in items):
+                    parts.append(_format_itemize(items))
+                else:
+                    parts.append(_format_itemize(items))
+    return "".join(parts)
 
 
 def _format_experiments(value: Any) -> str:

@@ -9,12 +9,14 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { DataFinderPanel } from '@/components/DataFinderPanel';
+import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
 import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
 import type { BackendDataset, DatasetSummary } from '@/types';
 
 interface DatasetPageProps {
   projectId: string;
   projectMode?: string;
+  researchQuestion?: string;
 }
 
 const DATA_TYPE_CONFIG: Record<string, { icon: typeof Database; label: string; color: string }> = {
@@ -43,7 +45,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; label: string; 
 };
 
 const SUPPORTED_FORMATS =
-  'CSV (.csv)、Excel (.xlsx, .xls)、JSON (.json, .jsonl)、文本 (.txt)、图像 (.png, .jpg, .tiff)、时间序列 (.npy, .npz, .wav)';
+  'CSV/Excel/JSON/文本、图像 (.png/.jpg/.webp)、音频 (.wav/.mp3/.m4a)；多模态解析见「多模态证据」Tab';
 const BYTES_KB = 1024;
 const BYTES_MB = 1024 * 1024;
 
@@ -89,8 +91,8 @@ function formatQualityScore(score: number | null | undefined): { label: string; 
   return { label: score.toFixed(2), cls: 'text-red-400' };
 }
 
-export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
-  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder'>('datasets');
+export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: DatasetPageProps) {
+  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder' | 'multimodal'>('datasets');
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [dataContext, setDataContext] = useState<DataContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,9 +310,22 @@ export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
         >
           多源数据查找与整合
         </button>
+        <button
+          type="button"
+          onClick={() => setPageTab('multimodal')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            pageTab === 'multimodal'
+              ? 'border-primary-500 text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          多模态证据
+        </button>
       </div>
 
-      {pageTab === 'data-finder' ? (
+      {pageTab === 'multimodal' ? (
+        <MultimodalEvidencePanel projectId={projectId} researchQuestion={researchQuestion} />
+      ) : pageTab === 'data-finder' ? (
         <DataFinderPanel
           projectId={projectId}
           projectMode={projectMode}
@@ -375,9 +390,42 @@ export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
           {dataContext?.fl_context ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
               <div>
-                <span className="text-gray-500">FL 类型</span>
-                <p className="text-white font-mono mt-0.5">{dataContext.fl_context.fl_setting || 'unknown'}</p>
+                <span className="text-gray-500">FL / VFL 类型</span>
+                <p className="text-white font-mono mt-0.5">
+                  {dataContext.fl_context.federated_setting || dataContext.fl_context.fl_setting || 'unknown'}
+                  {dataContext.fl_context.fl_setting === 'vertical_fl' && (
+                    <span className="ml-2 text-violet-400">vertical_fl</span>
+                  )}
+                </p>
               </div>
+              {dataContext.fl_context.fl_setting === 'vertical_fl' && (
+                <>
+                  <div>
+                    <span className="text-gray-500">特征方 (feature parties)</span>
+                    <p className="text-gray-300 mt-0.5">
+                      {(dataContext.fl_context.feature_parties || []).join(', ') || '暂无'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">标签方 (label party)</span>
+                    <p className="text-gray-300 mt-0.5">
+                      {dataContext.fl_context.label_party || '暂无'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">对齐键 (alignment keys)</span>
+                    <p className="text-gray-300 mt-0.5">
+                      {(dataContext.fl_context.alignment_keys || []).join(', ') || '暂无'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">隐私字段 (privacy)</span>
+                    <p className="text-gray-300 mt-0.5">
+                      {(dataContext.fl_context.privacy_fields || []).join(', ') || '暂无'}
+                    </p>
+                  </div>
+                </>
+              )}
               <div>
                 <span className="text-gray-500">检测字段</span>
                 <p className="text-gray-300 mt-0.5">
@@ -403,6 +451,12 @@ export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
                 </p>
               </div>
               <div>
+                <span className="text-gray-500">指标候选</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.metrics_candidates || dataContext.fl_context.metrics_fields || []).join(', ') || '暂无'}
+                </p>
+              </div>
+              <div>
                 <span className="text-gray-500">目标候选</span>
                 <p className="text-gray-300 mt-0.5">
                   {(dataContext.fl_context.target_candidates || dataContext.target_candidates || []).join(', ') || '暂无'}
@@ -411,7 +465,8 @@ export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
             </div>
           ) : (
             <p className="text-xs text-gray-500">
-              请上传含 method、non_iid_degree、global_accuracy、f1_score、communication_cost_mb、client_drift 等列的 CSV
+              请上传含 party_id/entity_id/feature_owner/label_owner（VFL）或
+              method、non_iid_degree、global_accuracy 等列（横向联邦）的 CSV
             </p>
           )}
         </Card>

@@ -220,6 +220,19 @@ const FL_FORM_TEMPLATE: ResearchQuestionForm = {
   expectedOutput: '联邦 baseline 对比报告、通信-精度权衡分析、隐私机制建议',
 };
 
+const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
+  researchDomain: '垂直联邦学习 / 隐私计算 / 多方协同建模',
+  researchQuestion:
+    '在垂直联邦学习场景中，如何在样本对齐和隐私保护约束下，利用多方异构特征提升大模型微调任务的预测性能与通信效率？',
+  researchGoal:
+    '设计 PSI/样本对齐、Secure Aggregation、差分隐私与 Split Learning 实验，对比 VFL baselines 并形成闭环迭代计划。',
+  background:
+    '特征分布在不同参与方，标签方与特征方分离；需在 entity_id 对齐与 privacy_budget 约束下纵向融合特征。',
+  dataSource: '历史多方特征 CSV、人工标注报告、VFL 实验日志、aligned_id 对齐表',
+  constraints: '样本 ID 对齐、特征方/标签方不可 Raw 共享、privacy_budget、通信轮次、对齐成功率',
+  expectedOutput: 'VFL baseline 对比、通信-精度-隐私权衡、下一轮 replan 建议',
+};
+
 export function ResearchQuestionPage({ projectId, projectMode, onSaved }: ResearchQuestionPageProps) {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
@@ -358,16 +371,26 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
           {projectMode === 'federated_learning' && (
             <div className="mb-4 p-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5">
               <p className="text-xs text-cyan-300 mb-2">
-                当前为<strong className="text-cyan-200">联邦学习科研模式</strong>，已提供 Non-IID / FedAvg / VFL 研究模板。
+                当前为<strong className="text-cyan-200">联邦学习科研模式</strong>，提供横向联邦与<strong className="text-violet-300">垂直联邦（VFL）</strong>模板。
               </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
-                onClick={() => setForm({ ...FL_FORM_TEMPLATE })}
-              >
-                应用联邦学习模板
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setForm({ ...FL_FORM_TEMPLATE })}
+                >
+                  横向联邦模板
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setForm({ ...VFL_FORM_TEMPLATE })}
+                >
+                  垂直联邦（VFL）模板
+                </Button>
+              </div>
             </div>
           )}
           {/* 状态提示 */}

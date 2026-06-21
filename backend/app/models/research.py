@@ -168,3 +168,26 @@ class Dataset(BaseModel):
     extra_metadata = Column(Text, nullable=True, comment="额外元数据（JSON）")
 
     project = relationship("Project", back_populates="datasets")
+
+
+class MultimodalAsset(BaseModel):
+    """
+    多模态科研资产 — 文本/图像/音频及其解析结果与 evidence facts
+    """
+    __tablename__ = "multimodal_assets"
+
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    dataset_id = Column(String(36), ForeignKey("datasets.id"), nullable=True, index=True, comment="关联 Dataset 记录")
+    file_name = Column(String(500), nullable=False, comment="文件名")
+    file_path = Column(String(1000), nullable=False, comment="存储路径")
+    modality = Column(String(20), nullable=False, comment="text/image/audio")
+    mime_type = Column(String(100), nullable=True, comment="MIME 类型")
+    extracted_text = Column(Text, nullable=True, comment="文本提取/转写全文")
+    extracted_summary = Column(Text, nullable=True, comment="摘要")
+    evidence_facts_json = Column(Text, nullable=True, comment="Evidence Facts JSON 数组")
+    metadata_json = Column(Text, nullable=True, comment="解析元数据 JSON")
+    parse_status = Column(String(50), default="pending", nullable=False, comment="pending/completed/failed/warning")
+    use_for_hypothesis = Column(Boolean, default=True, nullable=False, comment="是否用于假设生成")
+
+    project = relationship("Project", backref="multimodal_assets")
+    dataset = relationship("Dataset", backref="multimodal_assets")

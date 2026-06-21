@@ -5,6 +5,7 @@ from fastapi import APIRouter, UploadFile, File, Path, Query, Depends, HTTPExcep
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.models.project import Project
 from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
 from app.services.modeling_service import ModelingService
 
@@ -49,6 +50,13 @@ async def upload_dataset(
             file_size=len(content),
             auto_analyze=True,
         )
+        from app.services.multimodal_service import get_multimodal_service, detect_modality
+
+        if detect_modality(file.filename or "", dataset.data_type) in ("text", "image", "audio"):
+            project = db.query(Project).filter(Project.id == project_id).first()
+            rq = (project.research_question if project else "") or ""
+            get_multimodal_service(db).sync_from_dataset(dataset, rq)
+
         return {"code": 200, "data": service.to_response(dataset), "message": "上传成功，已完成初步分析"}
     except Exception as e:
         logger.error(f"创建数据集记录失败: {e}")

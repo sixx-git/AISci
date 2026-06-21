@@ -37,3 +37,28 @@ def safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def unique_values_from_preview(
+    preview: List[Dict[str, Any]],
+    column: str,
+    limit: int = 20,
+) -> List[str]:
+    if not preview or not column:
+        return []
+    values: List[str] = []
+    seen: Set[str] = set()
+    for row in preview:
+        if not isinstance(row, dict):
+            continue
+        val = row.get(column)
+        if val is None or val == "":
+            continue
+        s = str(val).strip()
+        if s in seen:
+            continue
+        seen.add(s)
+        values.append(s)
+        if len(values) >= limit:
+            break
+    return values

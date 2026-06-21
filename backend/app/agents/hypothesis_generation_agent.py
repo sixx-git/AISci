@@ -131,6 +131,7 @@ class HypothesisGenerationAgent:
         num_ideas: int = 3,
         ideation_context: Optional[Dict[str, Any]] = None,
         extra_constraints: Optional[List[str]] = None,
+        multimodal_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> HypothesisGenerationResult:
         """
         生成科学假设
@@ -153,11 +154,17 @@ class HypothesisGenerationAgent:
             multimodal_datasets = multimodal_datasets or []
             data_linking_evidence = data_linking_evidence or []
 
+            multimodal_evidence = multimodal_evidence or []
+            if not multimodal_evidence and data_context.get("multimodal_evidence"):
+                multimodal_evidence = data_context["multimodal_evidence"]
+
             logger.info(f"开始生成假设，研究问题：{research_question[:100]}..., facts 数量：{len(facts)}, "
+                        f"multimodal_evidence: {len(multimodal_evidence)}, "
                         f"datasets: {len(multimodal_datasets)}, linking_evidence: {len(data_linking_evidence)}")
 
             # ── 构建可用 fact_id 白名单 ──
             available_fact_ids = self._collect_fact_ids(facts)
+            available_data_evidence_ids = self._collect_data_evidence_ids(multimodal_evidence, facts)
 
             # ── 格式化输入 ──
             formatted_facts = self._format_facts(facts)
@@ -191,7 +198,7 @@ class HypothesisGenerationAgent:
                     "FedMD/FedDF、SplitNN/VFL、client drift、communication cost、privacy budget 展开。"
                 )
             formatted_data_context = self._format_data_context(
-                data_context, multimodal_datasets, data_linking_evidence
+                data_context, multimodal_datasets, data_linking_evidence, multimodal_evidence
             )
 
             # ── 构建 Prompt ──
@@ -246,6 +253,7 @@ class HypothesisGenerationAgent:
                 result_dict, available_fact_ids, facts,
                 research_question=research_question,
                 num_ideas=num_ideas,
+                available_data_evidence_ids=available_data_evidence_ids,
             )
 
             logger.info(f"成功生成 {len(result.hypotheses)} 条假设 (target num_ideas={num_ideas})")
@@ -267,6 +275,20 @@ class HypothesisGenerationAgent:
                 ids.append(fid)
         return ids
 
+    @staticmethod
+    def _collect_data_evidence_ids(
+        multimodal_evidence: List[Dict[str, Any]],
+        facts: List[Dict[str, Any]],
+    ) -> List[str]:
+        ids: List[str] = []
+        for fact in multimodal_evidence + facts:
+            fid = fact.get("fact_id")
+            if fid and str(fid).startswith("mm_"):
+                ids.append(fid)
+            if fact.get("source_type") == "multimodal_asset" and fid:
+                ids.append(fid)
+        return list(dict.fromkeys(ids))
+
     def _format_facts(self, facts: List[Dict[str, Any]]) -> str:
         """格式化事实列表（含 fact_id、source、quote），方便 LLM 引用"""
         if not facts:
@@ -280,7 +302,10 @@ class HypothesisGenerationAgent:
             quote = fact.get("quote_text", "")
             page = fact.get("page_number", "")
 
+            modality = fact.get("modality") or fact.get("source_type", "")
             lines = [f"### Fact {idx} (ID: {fid})"]
+            if modality:
+                lines.append(f"模态: {modality}")
             lines.append(f"陈述: {content}")
             if source:
                 lines.append(f"来源: {source}")
@@ -322,6 +347,7 @@ class HypothesisGenerationAgent:
         data_context: Dict[str, Any],
         multimodal_datasets: List[Dict[str, Any]],
         data_linking_evidence: List[Dict[str, Any]],
+        multimodal_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """格式化数据上下文"""
         parts = []
@@ -394,6 +420,15 @@ class HypothesisGenerationAgent:
                 relation = ev.get("relation", "")
                 parts.append(f"- fact:{fact_id} → field:{field_ref}: {relation}")
 
+        if multimodal_evidence:
+            parts.append("## 多模态 Evidence Facts（图像/音频/文本上传）")
+            for ev in multimodal_evidence[:8]:
+                parts.append(
+                    f"- [{ev.get('modality', '?')}] {ev.get('fact_id', '?')}: "
+                    f"{(ev.get('fact_text') or ev.get('content') or '')[:180]} "
+                    f"(来源: {ev.get('source_file', ev.get('source_paper_title', '?'))})"
+                )
+
         if not parts:
             return "（无项目数据上下文 — 假设必须基于文献事实或理论推测，evidence_level 强制为 low）"
 
@@ -408,6 +443,7 @@ class HypothesisGenerationAgent:
         facts: List[Dict[str, Any]],
         research_question: str = "",
         num_ideas: int = 3,
+        available_data_evidence_ids: Optional[List[str]] = None,
     ) -> HypothesisGenerationResult:
         """
         验证并标准化 LLM 输出：
@@ -420,6 +456,7 @@ class HypothesisGenerationAgent:
             result_dict["hypotheses"] = []
 
         fact_id_set = set(available_fact_ids)
+        data_evidence_set = set(available_data_evidence_ids or [])
         validated_hypotheses = []
 
         # 从研究问题中提取关键词用于偏题检测
@@ -458,6 +495,14 @@ class HypothesisGenerationAgent:
                 )
 
             hypo["supporting_fact_ids"] = validated_ids
+
+            raw_data_ids = hypo.get("data_evidence_ids") or []
+            if not isinstance(raw_data_ids, list):
+                raw_data_ids = [raw_data_ids] if raw_data_ids else []
+            if data_evidence_set:
+                hypo["data_evidence_ids"] = [eid for eid in raw_data_ids if eid in data_evidence_set]
+            else:
+                hypo["data_evidence_ids"] = []
 
             # ── 偏题检测 ──
             hypo_text = hypo.get("hypothesis", "")

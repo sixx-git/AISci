@@ -15,6 +15,7 @@ VALID_PIPELINE_MODES = {PipelineMode.TEACHING.value, PipelineMode.DISCOVERY.valu
 DEFAULT_NUM_IDEAS = 3
 DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
+DEFAULT_FEDERATED_CAMPAIGN_MAX = 2
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
 
@@ -47,6 +48,11 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     teaching_auto = opts.get("enable_teaching_auto_refinement")
     if teaching_auto is None:
         teaching_auto = mode == PipelineMode.TEACHING.value
+    try:
+        fed_max = int(opts.get("federated_campaign_max", DEFAULT_FEDERATED_CAMPAIGN_MAX))
+        fed_max = max(1, min(fed_max, 3))
+    except (TypeError, ValueError):
+        fed_max = DEFAULT_FEDERATED_CAMPAIGN_MAX
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -55,5 +61,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_plot_vlm_critique": opts.get("enable_plot_vlm_critique", True),
         "enable_teaching_auto_refinement": bool(teaching_auto),
         "teaching_auto_refinement_max": DEFAULT_TEACHING_AUTO_REFINEMENT_MAX,
+        "enable_federated_campaign_loop": bool(opts.get("enable_federated_campaign_loop", True)),
+        "federated_campaign_max": fed_max,
         "sandbox_use_docker": bool(opts.get("sandbox_use_docker")),
     }

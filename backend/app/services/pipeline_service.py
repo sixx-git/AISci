@@ -90,6 +90,8 @@ class PipelineService:
         self._validation_feedback_constraints: List[str] = []
         self._last_pilot_results: Dict[str, Any] = {}
         self._teaching_refinement_count: int = 0
+        self._federated_campaign_count: int = 0
+        self._fed_campaign_discovery_done: set = set()
         self._iteration_snapshots: List[Dict[str, Any]] = []
 
     def start_pipeline_async(self, request: PipelineRunRequest) -> str:
@@ -396,6 +398,27 @@ class PipelineService:
         for w in (sv.get("warnings") or [])[:3]:
             constraints.append(f"验证警告: {w}")
 
+        fp = sv.get("federated_pilot") or {}
+        if fp:
+            mode = fp.get("execution_mode", "")
+            gate = fp.get("alignment_gate") or {}
+            if gate and not gate.get("skipped") and not gate.get("passed"):
+                constraints.append(
+                    f"VFL 对齐 gate 未通过: {gate.get('reason', '')}；"
+                    "下一轮须先满足 alignment_success_rate 阈值再设计训练实验。"
+                )
+            if fp.get("best_method"):
+                constraints.append(
+                    f"联邦 pilot 最佳方法={fp.get('best_method')}（mode={mode}）；"
+                    "实验设计须围绕该结果做对照/ablation。"
+                )
+            from app.core.iterative_science import actions_to_feedback_constraints
+
+            actions = fp.get("replan_actions") or (
+                (fp.get("skill_outputs") or {}).get("federated_replanning") or {}
+            ).get("replan_actions") or []
+            constraints.extend(actions_to_feedback_constraints(actions))
+
         ed = experiment_design or {}
         sc = ((ed.get("skill_outputs") or {}).get("experiment_sanity_check") or {}).get("data") or {}
         if sc and sc.get("executable") is False:
@@ -434,6 +457,7 @@ class PipelineService:
         ed = results.get("experiment_design") or {}
         sv = results.get("small_validation") or {}
         sb = sv.get("sandbox_execution") or {}
+        fp = sv.get("federated_pilot") or {}
 
         snapshot = {
             "round": round_num,
@@ -446,6 +470,10 @@ class PipelineService:
             "ensemble_decision": ensemble.get("decision") or hr.get("ensemble_decision"),
             "sandbox_success": sb.get("success"),
             "sandbox_metrics": sb.get("metrics"),
+            "federated_best_method": fp.get("best_method"),
+            "federated_execution_mode": fp.get("execution_mode"),
+            "federated_gate_passed": (fp.get("alignment_gate") or {}).get("passed"),
+            "replan_action_count": len(fp.get("replan_actions") or []),
         }
         self._iteration_snapshots.append(snapshot)
         return snapshot
@@ -457,6 +485,27 @@ class PipelineService:
             validation_result, ed
         )
         self._last_pilot_results = self._build_pilot_results_payload(validation_result)
+
+        sv = validation_result or {}
+        fp = sv.get("federated_pilot") or {}
+        if fp:
+            gate = fp.get("alignment_gate") or {}
+            self._record_closed_loop_event(
+                "federated_campaign",
+                {
+                    "execution_mode": fp.get("execution_mode"),
+                    "best_method": fp.get("best_method"),
+                    "gate_passed": gate.get("passed") if gate else None,
+                    "replan_actions": (fp.get("replan_actions") or [])[:4],
+                    "summary": fp.get("analysis", {}).get("summary") or fp.get("result_source", ""),
+                    "quality_trend_entry": {
+                        "stage": "federated_pilot",
+                        "score": 8.5 if fp.get("execution_mode") == "uploaded_csv"
+                        else (5.0 if fp.get("execution_mode") == "gate_blocked" else 6.5),
+                        "label": "联邦 Pilot",
+                    },
+                },
+            )
 
         hg = results.get("hypothesis_generation") or {}
         tree = hg.get("hypothesis_tree")
@@ -702,6 +751,120 @@ class PipelineService:
             "version_snapshots": list(self._iteration_snapshots),
         }
 
+    def _run_federated_campaign_refinement(
+        self,
+        stages: List[PipelineStageLog],
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+        discovery_round: int = 0,
+    ) -> Optional[Dict[str, Any]]:
+        """联邦 Campaign 自动第二轮：pilot 反馈 → 修订实验设计 → 重跑 pilot。"""
+        if project_mode != ProjectMode.FEDERATED_LEARNING.value:
+            return None
+        if not self._run_options.get("enable_federated_campaign_loop", True):
+            return None
+
+        if discovery_round:
+            dedup_key = f"discovery_r{discovery_round}"
+            if dedup_key in self._fed_campaign_discovery_done:
+                return None
+        else:
+            max_rounds = int(self._run_options.get("federated_campaign_max", 2))
+            if self._federated_campaign_count >= max_rounds - 1:
+                return None
+
+        from app.core.iterative_science import (
+            evaluate_pilot_improvement,
+            needs_federated_campaign_refinement,
+        )
+
+        sv = results.get("small_validation") or {}
+        needs, reasons = needs_federated_campaign_refinement(sv)
+        if not needs:
+            return None
+
+        if discovery_round:
+            self._fed_campaign_discovery_done.add(f"discovery_r{discovery_round}")
+            round_num = discovery_round
+        else:
+            self._federated_campaign_count += 1
+            round_num = self._federated_campaign_count + 1
+
+        pilot_before = dict(sv.get("federated_pilot") or {})
+
+        logger.info(f"[Federated Campaign] 自动 R{round_num}: {reasons}")
+
+        pre_snapshot = self._capture_iteration_snapshot(
+            round_num, results, label=f"FL_Campaign_R{round_num}_before"
+        )
+        self._validation_feedback_constraints = self._build_validation_feedback_constraints(
+            sv, results.get("experiment_design")
+        )
+        self._last_pilot_results = self._build_pilot_results_payload(sv)
+
+        self._record_closed_loop_event(
+            "federated_campaign_refine",
+            {
+                "round": round_num,
+                "reasons": reasons,
+                "pilot_mode_before": pilot_before.get("execution_mode"),
+                "quality_trend_entry": {"stage": f"federated_r{round_num}", "score": 5.5},
+            },
+        )
+
+        self._run_stage(stages, 5, results, research_question, project_id,
+            lambda: self._exec_experiment_design(
+                results.get("hypothesis_review"), project_id, project_mode,
+            ))
+        self._run_stage(stages, 6, results, research_question, project_id,
+            lambda: self._exec_small_validation(
+                results.get("experiment_design"),
+                results.get("hypothesis_review"),
+                project_id,
+                project_mode,
+            ))
+        sv_after = results.get("small_validation")
+        if isinstance(sv_after, dict):
+            self._apply_post_validation_updates(results, sv_after)
+
+        pilot_after = (sv_after or {}).get("federated_pilot") or {}
+        improvement = evaluate_pilot_improvement(pilot_before, pilot_after)
+        post_snapshot = self._capture_iteration_snapshot(
+            round_num, results, label=f"FL_Campaign_R{round_num}_after"
+        )
+
+        self._record_closed_loop_event(
+            "federated_campaign",
+            {
+                "round": round_num,
+                "execution_mode": pilot_after.get("execution_mode"),
+                "best_method": pilot_after.get("best_method"),
+                "gate_passed": (pilot_after.get("alignment_gate") or {}).get("passed"),
+                "replan_actions": (pilot_after.get("replan_actions") or [])[:4],
+                "summary": improvement.get("summary"),
+                "improved": improvement.get("improved"),
+                "quality_trend_entry": {
+                    "stage": f"federated_pilot_r{round_num}",
+                    "score": 8.0 if improvement.get("improved") else 5.5,
+                    "label": f"FL R{round_num}",
+                },
+            },
+        )
+
+        return {
+            "round": round_num,
+            "reasons": reasons,
+            "reran": True,
+            "improvement": improvement,
+            "snapshot_before": pre_snapshot,
+            "snapshot_after": post_snapshot,
+            "pilot_before_mode": pilot_before.get("execution_mode"),
+            "pilot_after_mode": pilot_after.get("execution_mode"),
+            "version_snapshots": list(self._iteration_snapshots),
+        }
+
     def _run_discovery_loop(
         self,
         stages: List[PipelineStageLog],
@@ -722,13 +885,32 @@ class PipelineService:
             ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
             decision = ensemble.get("decision") or hr.get("ensemble_decision")
             overall = ensemble.get("overall") or hr.get("ensemble_overall")
-            if decision == "Accept" or (overall is not None and float(overall) >= ENSEMBLE_ACCEPT_SCORE):
+
+            from app.core.iterative_science import evaluate_discovery_federated_acceptance
+
+            fed_accept = evaluate_discovery_federated_acceptance(
+                hr, results.get("small_validation") or {}
+            )
+            if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+                if fed_accept.get("accepted"):
+                    history.append({
+                        "round": round_num - 1,
+                        "status": "accepted",
+                        "overall": overall,
+                        "federated_acceptance": fed_accept,
+                    })
+                    break
+            elif decision == "Accept" or (
+                overall is not None and float(overall) >= ENSEMBLE_ACCEPT_SCORE
+            ):
                 history.append({"round": round_num - 1, "status": "accepted", "overall": overall})
                 break
 
             weaknesses = list(ensemble.get("weaknesses") or [])[:4]
             suggestions = list(ensemble.get("revision_suggestions") or [])[:4]
             self._discovery_refinement = weaknesses + suggestions
+            if project_mode == ProjectMode.FEDERATED_LEARNING.value and fed_accept.get("blockers"):
+                self._discovery_refinement.extend(fed_accept["blockers"][:3])
             pre_snapshot = self._capture_iteration_snapshot(round_num - 1, results, label=f"R{round_num - 1}_before_refine")
             history.append({
                 "round": round_num,
@@ -807,6 +989,22 @@ class PipelineService:
             sv_result = results.get("small_validation")
             if isinstance(sv_result, dict):
                 self._apply_post_validation_updates(results, sv_result)
+
+            if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+                fed_ref = self._run_federated_campaign_refinement(
+                    stages,
+                    results,
+                    research_question,
+                    project_id,
+                    project_mode,
+                    discovery_round=round_num,
+                )
+                if fed_ref:
+                    history[-1]["federated_campaign"] = fed_ref
+                    fed_accept = evaluate_discovery_federated_acceptance(
+                        results.get("hypothesis_review") or {}, results.get("small_validation") or {}
+                    )
+                    history[-1]["federated_acceptance"] = fed_accept
 
             def _exec_report():
                 return self._exec_report_generation(
@@ -937,6 +1135,11 @@ class PipelineService:
                 self._run_stage(stages, 1, results, research_question, project_id,
                     lambda: self._exec_literature_mining(project_id, research_question))
 
+                try:
+                    self._exec_multimodal_sync(project_id, research_question, results)
+                except Exception as mm_err:
+                    logger.warning(f"多模态 evidence 同步失败: {mm_err}")
+
             if start_idx <= 1:
                 try:
                     self._exec_data_finder(project_id, research_question, results, project_mode)
@@ -1056,8 +1259,18 @@ class PipelineService:
                 sv_first = results.get("small_validation")
                 if isinstance(sv_first, dict):
                     self._apply_post_validation_updates(results, sv_first)
+                if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+                    self._capture_iteration_snapshot(1, results, label="FL_Campaign_R1")
                 if self._run_options.get("pipeline_mode") == PipelineMode.TEACHING.value:
                     self._capture_iteration_snapshot(0, results, label="teaching_R0_initial")
+
+            # ── 联邦 Campaign 自动第二轮（实验设计→pilot 迭代）──
+            if start_idx <= 6 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
+                fed_campaign_meta = self._run_federated_campaign_refinement(
+                    stages, results, research_question, project_id, project_mode
+                )
+                if fed_campaign_meta:
+                    results["federated_campaign_refinement"] = fed_campaign_meta
 
             # ── P2-6: Teaching 轻量自动闭环 ──
             if start_idx <= 6:
@@ -1305,6 +1518,38 @@ class PipelineService:
         result = agent.mine(project_id=project_id, research_question=research_question, db=self.db)
         return self._safe_model_dump(result)
 
+    def _exec_multimodal_sync(self, project_id: str, research_question: str, results: Dict[str, Any]) -> Dict[str, Any]:
+        """同步项目多模态资产，并将 evidence facts 并入 literature_mining。"""
+        from app.services.multimodal_service import get_multimodal_service, detect_modality
+        from app.services.dataset_service import DatasetService
+
+        mm = get_multimodal_service(self.db)
+        ds_service = DatasetService(self.db)
+        for ds in ds_service.get_project_datasets(project_id):
+            if detect_modality(ds.filename, ds.data_type) in ("text", "image", "audio"):
+                try:
+                    mm.sync_from_dataset(ds, research_question)
+                except Exception as exc:
+                    logger.warning(f"同步多模态资产失败 {ds.filename}: {exc}")
+
+        ctx = mm.get_multimodal_context(project_id)
+        results["multimodal"] = ctx
+        mm_facts = ctx.get("multimodal_evidence") or []
+        if mm_facts:
+            lm = results.get("literature_mining") or {}
+            if isinstance(lm, dict):
+                lm = dict(lm)
+                existing = list(lm.get("facts") or [])
+                existing_ids = {f.get("fact_id") for f in existing if f.get("fact_id")}
+                for f in mm_facts:
+                    if f.get("fact_id") not in existing_ids:
+                        existing.append(f)
+                lm["facts"] = existing
+                lm["multimodal_evidence"] = mm_facts
+                lm["multimodal_evidence_count"] = len(mm_facts)
+                results["literature_mining"] = lm
+        return ctx
+
     def _exec_data_finder(
         self,
         project_id: str,
@@ -1468,9 +1713,13 @@ class PipelineService:
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id)
 
+        literature_facts = list(lm.get("facts") or [])
+        multimodal_facts = list(data_context.get("multimodal_evidence") or [])
+        merged_facts = literature_facts + multimodal_facts
+
         result = agent.generate(
             research_question=research_question,
-            facts=lm.get("facts", []),
+            facts=merged_facts,
             knowledge_gaps=kg.get("knowledge_gaps", []),
             constraints=[],
             project_id=project_id,
@@ -1479,8 +1728,14 @@ class PipelineService:
             num_ideas=num_ideas,
             ideation_context=ideation_novelty,
             extra_constraints=extra_constraints,
+            multimodal_evidence=multimodal_facts,
         )
         result_dict = self._safe_model_dump(result)
+        if multimodal_facts:
+            result_dict["multimodal_evidence"] = multimodal_facts
+            result_dict["input_data"] = result_dict.get("input_data") or {}
+            if isinstance(result_dict["input_data"], dict):
+                result_dict["input_data"]["multimodal_evidence"] = multimodal_facts
 
         # ── 问题对齐检查 ──
         if research_question and result_dict.get("hypotheses"):
@@ -1496,7 +1751,7 @@ class PipelineService:
                     )
                     retry = agent.generate(
                         research_question=research_question,
-                        facts=lm.get("facts", []),
+                        facts=merged_facts,
                         knowledge_gaps=kg.get("knowledge_gaps", []),
                         constraints=[
                             alignment["off_topic_summary"]
@@ -1506,6 +1761,7 @@ class PipelineService:
                         num_ideas=num_ideas,
                         ideation_context=ideation_novelty,
                         extra_constraints=extra_constraints,
+                        multimodal_evidence=multimodal_facts,
                     )
                     result_dict = self._safe_model_dump(retry)
                     # 重试后再做一次对齐检查
@@ -1731,6 +1987,15 @@ class PipelineService:
                     fl_context=fl_context,
                 )
             )
+            if self._validation_feedback_constraints or self._federated_campaign_count > 0:
+                sv = self._stage_results.get("small_validation") or {}
+                fp = sv.get("federated_pilot") or {}
+                plan = fl_service.apply_campaign_feedback(
+                    plan,
+                    validation_feedback=self._validation_feedback_constraints,
+                    replan_actions=fp.get("replan_actions"),
+                    campaign_round=self._federated_campaign_count + 2,
+                )
             return fl_service.build_experiment_design_result(
                 hypothesis=best_review.get("hypothesis", ""),
                 fl_context=fl_context,
@@ -1834,9 +2099,14 @@ class PipelineService:
                     "simulated_results": pilot if pilot.get("execution_mode") == "simulation" else [],
                     "expected_results": pilot.get("next_round_suggestions", []),
                     "result_source": pilot.get("result_source", pilot.get("execution_mode")),
+                    "gate_blocked": pilot.get("execution_mode") == "gate_blocked",
                 },
                 "skill_outputs": pilot.get("skill_outputs", {}),
                 "analysis_summary": pilot.get("analysis", {}).get("summary", ""),
+                "replan_actions": pilot.get("replan_actions", []),
+                "verifiable_checks": [
+                    a.get("expected_check") for a in (pilot.get("replan_actions") or []) if a.get("expected_check")
+                ],
             }
 
         result = agent.generate_validation(
@@ -1975,6 +2245,7 @@ class PipelineService:
                     data_context.get("fl_context") or ed.get("fl_context") or {},
                     ed,
                     sv.get("federated_pilot") or {},
+                    iteration_snapshots=self._iteration_snapshots,
                 )
                 result_dict["report_mode"] = ProjectMode.FEDERATED_LEARNING.value
 
@@ -2232,12 +2503,14 @@ class PipelineService:
             for k in (
                 "data_finder", "knowledge_graph", "evidence_reasoning",
                 "ideation_novelty", "discovery_loop", "teaching_auto_refinement",
+                "federated_campaign_refinement",
             )
             if k in results
         }
         meta["run_options"] = self._run_options
         meta["version_snapshots"] = self._iteration_snapshots or (
-            (results.get("discovery_loop") or {}).get("version_snapshots")
+            (results.get("federated_campaign_refinement") or {}).get("version_snapshots")
+            or (results.get("discovery_loop") or {}).get("version_snapshots")
             or (results.get("teaching_auto_refinement") or {}).get("version_snapshots")
             or []
         )

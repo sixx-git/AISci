@@ -305,6 +305,7 @@ export interface QualityAcceptance {
   discovery_rounds?: number;
   literature_refresh_count?: number;
   refining_rounds?: number;
+  federated_discovery_accept?: boolean;
   summary?: string;
 }
 
@@ -319,6 +320,29 @@ export interface IterationSnapshot {
   ensemble_decision?: string;
   sandbox_success?: boolean;
   sandbox_metrics?: Record<string, unknown>;
+  federated_best_method?: string;
+  federated_execution_mode?: string;
+  federated_gate_passed?: boolean;
+  replan_action_count?: number;
+}
+
+export interface ReplanAction {
+  action_id?: string;
+  action_type?: string;
+  parameter?: string;
+  to_value?: string | number;
+  expected_check?: string;
+  priority?: string;
+  rationale?: string;
+  verifiable?: boolean;
+}
+
+export interface DiscoveryFederatedAcceptance {
+  accepted?: boolean;
+  ensemble_ok?: boolean;
+  federated_ok?: boolean;
+  blockers?: string[];
+  summary?: string;
 }
 
 export interface DiscoveryLoopHistoryEntry {
@@ -330,6 +354,8 @@ export interface DiscoveryLoopHistoryEntry {
   rollback?: Record<string, unknown>;
   snapshot_before?: IterationSnapshot;
   snapshot_after?: IterationSnapshot;
+  federated_acceptance?: DiscoveryFederatedAcceptance;
+  federated_campaign?: FederatedCampaignRefinementData;
 }
 
 export interface DiscoveryLoopData {
@@ -347,6 +373,23 @@ export interface TeachingAutoRefinementData {
   reran?: boolean;
   snapshot_before?: IterationSnapshot;
   snapshot_after?: IterationSnapshot;
+  version_snapshots?: IterationSnapshot[];
+}
+
+export interface FederatedCampaignRefinementData {
+  round?: number;
+  reasons?: string[];
+  reran?: boolean;
+  improved?: boolean;
+  improvement?: {
+    improved?: boolean;
+    summary?: string;
+    accuracy_delta?: number;
+    mode_before?: string;
+    mode_after?: string;
+  };
+  pilot_before_mode?: string;
+  pilot_after_mode?: string;
   version_snapshots?: IterationSnapshot[];
 }
 
@@ -433,6 +476,8 @@ export interface PipelineRunOptions {
   force_sandbox?: boolean;
   enable_plot_vlm_critique?: boolean;
   enable_teaching_auto_refinement?: boolean;
+  enable_federated_campaign_loop?: boolean;
+  federated_campaign_max?: number;
   sandbox_use_docker?: boolean;
 }
 

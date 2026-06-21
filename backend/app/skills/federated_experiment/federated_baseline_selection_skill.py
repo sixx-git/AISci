@@ -21,9 +21,14 @@ class FederatedBaselineSelectionSkill(BaseSkill):
         else:
             baselines.extend(FL_BASELINES["horizontal_fl"])
 
+        if fl_setting == "vertical_fl":
+            dedup = list(dict.fromkeys(baselines))
+            result.data = {"baselines": dedup, "fl_setting": fl_setting}
+            return result
+
         if fl_setting != "personalized_fl":
             baselines.extend(FL_BASELINES["personalized_fl"][:3])
-        if fl_setting != "vertical_fl" and fl_setting != "heterogeneous_fl":
+        if fl_setting not in ("vertical_fl", "heterogeneous_fl"):
             baselines.extend(FL_BASELINES["heterogeneous_fl"][:2])
 
         dedup: List[str] = []

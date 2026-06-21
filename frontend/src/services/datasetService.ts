@@ -72,11 +72,19 @@ export interface DataContext {
 export interface FlDataContext {
   project_mode?: string;
   fl_setting?: string;
+  federated_setting?: string;
+  vfl_detected?: boolean;
   detected_fields?: string[];
   client_fields?: string[];
   party_fields?: string[];
   metrics_fields?: string[];
+  metrics_candidates?: string[];
   target_candidates?: string[];
+  parties?: string[];
+  feature_parties?: string[];
+  label_party?: string;
+  alignment_keys?: string[];
+  privacy_fields?: string[];
 }
 
 interface DataContextEntry {

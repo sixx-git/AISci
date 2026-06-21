@@ -51,6 +51,9 @@ def compute_quality_acceptance(
 
     discovery_rounds = (discovery_loop or {}).get("rounds_executed") or 0
     discovery_history = (discovery_loop or {}).get("history") or []
+    fed_discovery_accept = any(
+        h.get("federated_acceptance", {}).get("accepted") for h in discovery_history if isinstance(h, dict)
+    )
     literature_refreshes = sum(
         1 for e in events if e.get("type") == "discovery_literature_refresh"
     )
@@ -72,6 +75,8 @@ def compute_quality_acceptance(
         summary_parts.append(f"质量趋势 {'↑' if improved else '→/↓'} {delta:+.1f}")
     if discovery_rounds > 1:
         summary_parts.append(f"Discovery 执行 {discovery_rounds} 轮")
+    if fed_discovery_accept:
+        summary_parts.append("Discovery 联邦双门槛已通过")
     if literature_refreshes:
         summary_parts.append(f"文献刷新 {literature_refreshes} 次")
     if weak_stages:
@@ -91,6 +96,7 @@ def compute_quality_acceptance(
         "discovery_rounds": discovery_rounds,
         "literature_refresh_count": literature_refreshes,
         "refining_rounds": len([h for h in discovery_history if h.get("status") == "refining"]),
+        "federated_discovery_accept": fed_discovery_accept,
         "summary": "；".join(summary_parts),
     }
 

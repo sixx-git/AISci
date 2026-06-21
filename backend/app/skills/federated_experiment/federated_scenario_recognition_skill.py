@@ -27,12 +27,16 @@ class FederatedScenarioRecognitionSkill(BaseSkill):
         scores = {
             "horizontal_fl": len(h),
             "heterogeneous_fl": len(het),
-            "vertical_fl": len(v),
+            "vertical_fl": len(v) + (2 if match_fields(columns, ["entity_id", "label_owner"]) else 0),
             "personalized_fl": len(h) + (1 if "method" in [c.lower() for c in h] else 0),
         }
         fl_setting = max(scores, key=scores.get)
         if scores[fl_setting] == 0:
             fl_setting = "unknown"
+
+        v_core = match_fields(columns, ["party_id", "entity_id", "feature_owner", "label_owner"])
+        if len(v_core) >= 2 and scores["vertical_fl"] >= scores.get("horizontal_fl", 0):
+            fl_setting = "vertical_fl"
 
         if fl_setting == "personalized_fl" and scores["horizontal_fl"] >= 3:
             fl_setting = "horizontal_fl" if scores["heterogeneous_fl"] < 2 else "heterogeneous_fl"

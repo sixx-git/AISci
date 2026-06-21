@@ -15,6 +15,7 @@ class FederatedResultAnalysisSkill(BaseSkill):
         pilot = input_data.get("pilot_result", {}) or {}
         mode = pilot.get("execution_mode", "skipped")
         comparison: List[Dict[str, Any]] = pilot.get("metric_comparison", []) or []
+        pareto = input_data.get("pareto_frontier") or pilot.get("pareto_frontier") or {}
 
         summary_lines: List[str] = []
         if mode == "uploaded_csv":
@@ -34,6 +35,11 @@ class FederatedResultAnalysisSkill(BaseSkill):
                     f"f1={item.get('f1_score', 'N/A')}, comm={item.get('communication_cost_mb', 'N/A')}"
                 )
 
+        if pareto.get("frontier"):
+            summary_lines.append(
+                f"Pareto 前沿: {', '.join(p['method'] for p in pareto['frontier'][:3])}"
+            )
+
         analysis = {
             "execution_mode": mode,
             "best_method": pilot.get("best_method", ""),
@@ -43,6 +49,7 @@ class FederatedResultAnalysisSkill(BaseSkill):
             "communication_efficiency": pilot.get("communication_efficiency", {}),
             "client_drift_analysis": pilot.get("client_drift_analysis", {}),
             "result_source": pilot.get("result_source", mode),
+            "pareto_frontier": pareto,
         }
         result.data = analysis
         return result

@@ -13,10 +13,14 @@ from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".wav", ".npy", ".npz"}
+SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".md",
+                        ".png", ".jpg", ".jpeg", ".tiff", ".webp", ".gif",
+                        ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac",
+                        ".npy", ".npz"}
 TABULAR_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff"}
 TIME_SERIES_EXTENSIONS = {".wav", ".npy", ".npz"}
+AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac"}
 JSON_EXTENSIONS = {".json", ".jsonl"}
 
 TARGET_COLUMN_KEYWORDS = [
@@ -38,6 +42,8 @@ class DatasetService:
         if ext in IMAGE_EXTENSIONS:
             return "image"
         if ext in TIME_SERIES_EXTENSIONS:
+            return "time_series"
+        if ext in AUDIO_EXTENSIONS:
             return "time_series"
         if ext in JSON_EXTENSIONS:
             return "json"
@@ -588,6 +594,7 @@ class DatasetService:
             ds_entry: Dict[str, Any] = {
                 "dataset_id": ds.id,
                 "filename": ds.filename,
+                "file_path": ds.file_path,
                 "data_type": ds.data_type or "unknown",
                 "source_type": getattr(ds, "source_type", "upload") or "upload",
                 "n_rows": ds.n_rows or 0,
@@ -693,9 +700,15 @@ class DatasetService:
 
             fl_service = get_federated_experiment_service(self.db)
             context["fl_context"] = fl_service.build_fl_context_from_data_context(context)
-            if not context["fl_context"].get("detected_fields"):
+            fl_ctx = context["fl_context"] or {}
+            if fl_ctx.get("fl_setting") == "vertical_fl":
                 context["warnings"].append(
-                    "联邦学习模式：尚未检测到 method/non_iid_degree/global_accuracy 等联邦字段，请上传 FL 实验 CSV"
+                    "已识别为 vertical_fl：检测到 party_id/entity_id/feature_owner/label_owner 等 VFL 字段"
+                )
+            elif not fl_ctx.get("detected_fields"):
+                context["warnings"].append(
+                    "联邦学习模式：请上传含 party_id/entity_id/feature_owner/label_owner 或 "
+                    "method/global_accuracy 等字段的 CSV"
                 )
 
         try:
@@ -718,6 +731,26 @@ class DatasetService:
                 context["knowledge_graph"] = kg_ctx
         except Exception:
             pass
+
+        try:
+            from app.services.multimodal_service import get_multimodal_service
+
+            mm_ctx = get_multimodal_service(self.db).get_multimodal_context(project_id)
+            context["multimodal_evidence"] = mm_ctx.get("multimodal_evidence") or []
+            context["multimodal_assets"] = mm_ctx.get("multimodal_assets") or []
+            context["multimodal_evidence_count"] = mm_ctx.get("multimodal_evidence_count") or 0
+            if mm_ctx.get("modalities_present"):
+                context["available_modalities"] = sorted(
+                    set(context.get("available_modalities") or []) | set(mm_ctx["modalities_present"])
+                )
+            if context["multimodal_evidence_count"] == 0 and any(
+                a.get("modality") in ("image", "audio") for a in (mm_ctx.get("multimodal_assets") or [])
+            ):
+                context["warnings"].append(
+                    "已上传图像/音频但尚未生成多模态 evidence facts（需配置 VLM 或音频转写）"
+                )
+        except Exception as mm_err:
+            logger.warning(f"加载多模态上下文失败: {mm_err}")
 
         return context
 

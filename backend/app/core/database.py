@@ -67,6 +67,15 @@ def create_tables():
     migrate_projects_table()
     migrate_pipeline_runs_table()
     migrate_pipeline_stage_executions_table()
+    migrate_multimodal_assets_table()
+
+
+def migrate_multimodal_assets_table():
+    """SQLite 兼容：创建 multimodal_assets 表（若不存在）。"""
+    if engine is None:
+        init_db()
+    from app.models.research import MultimodalAsset  # noqa: F401
+    Base.metadata.create_all(bind=engine, tables=[MultimodalAsset.__table__])
 
 
 def migrate_projects_table():
