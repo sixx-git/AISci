@@ -9,7 +9,9 @@ import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import hypothesisService, { type BackendHypothesis, type BackendEvidence } from '@/services/hypothesisService';
-import type { DetailedHypothesis, EvidenceItem, EvidenceChain } from '@/types';
+import { pipelineService } from '@/services/pipelineService';
+import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
+import type { DetailedHypothesis, EvidenceItem, EvidenceChain, HypothesisTreeData } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
@@ -109,6 +111,7 @@ export function HypothesesPage({
   const [currentEvidence, setCurrentEvidence] = useState<EvidenceItem[]>([]);
   const [currentEvidenceChain, setCurrentEvidenceChain] = useState<EvidenceChain | null>(null);
   const [iteratingId, setIteratingId] = useState<string | null>(null);
+  const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
@@ -152,6 +155,44 @@ export function HypothesesPage({
       })
       .finally(() => setLoading(false));
   }, [_projectId, _revalidateKey, _latestRunId]);
+
+  useEffect(() => {
+    if (!_projectId) {
+      setHypothesisTree(null);
+      return;
+    }
+
+    const loadTree = async () => {
+      try {
+        let runId = _latestRunId;
+        if (!runId) {
+          const runsRes = await pipelineService.getRuns(_projectId);
+          if (runsRes.code === 200 && runsRes.data?.length) {
+            runId = runsRes.data[0].run_id;
+          }
+        }
+        if (!runId) {
+          setHypothesisTree(null);
+          return;
+        }
+        const detailRes = await pipelineService.getRunDetail(runId);
+        if (detailRes.code !== 200 || !detailRes.data?.stages) {
+          setHypothesisTree(null);
+          return;
+        }
+        const hgStage = detailRes.data.stages.find(
+          (s) => String(s.stage).includes('hypothesis_generation'),
+        );
+        const out = hgStage?.output_data as Record<string, unknown> | undefined;
+        const tree = out?.hypothesis_tree as HypothesisTreeData | undefined;
+        setHypothesisTree(tree?.branches?.length ? tree : null);
+      } catch {
+        setHypothesisTree(null);
+      }
+    };
+
+    loadTree();
+  }, [_projectId, _latestRunId, _revalidateKey]);
 
   const handleViewEvidence = useCallback((id: string) => {
     const hypo = hypotheses.find(h => h.id === id);
@@ -399,6 +440,8 @@ export function HypothesesPage({
               <DecisionStat label="偏题/低证据" value={atRiskCount} icon={ShieldAlert} color="text-red-400" />
             </div>
           </div>
+
+          {hypothesisTree && <HypothesisTreePanel tree={hypothesisTree} />}
 
           {/* ===== 当前主假设（置顶高亮） ===== */}
           {primaryHypothesis && (

@@ -128,6 +128,9 @@ class HypothesisGenerationAgent:
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
         data_linking_evidence: Optional[List[Dict[str, Any]]] = None,
         project_mode: str = "general",
+        num_ideas: int = 3,
+        ideation_context: Optional[Dict[str, Any]] = None,
+        extra_constraints: Optional[List[str]] = None,
     ) -> HypothesisGenerationResult:
         """
         生成科学假设
@@ -159,7 +162,29 @@ class HypothesisGenerationAgent:
             # ── 格式化输入 ──
             formatted_facts = self._format_facts(facts)
             formatted_gaps = self._format_gaps(knowledge_gaps)
-            formatted_constraints = self._format_constraints(constraints)
+            constraint_list = list(constraints or [])
+            if extra_constraints:
+                constraint_list.extend(extra_constraints)
+            if ideation_context:
+                angles = ideation_context.get("suggested_angles") or []
+                if angles:
+                    constraint_list.append(
+                        f"[Ideation/OpenAlex+S2] 优先探索方向: {'; '.join(str(a) for a in angles[:num_ideas])}"
+                    )
+                avoid = ideation_context.get("avoid_topics") or []
+                if avoid:
+                    constraint_list.append(
+                        f"[Ideation] 避免重复已饱和主题: {'; '.join(str(a) for a in avoid[:5])}"
+                    )
+                if ideation_context.get("novelty_score") is not None:
+                    constraint_list.append(
+                        f"[Ideation] 外部新颖性评分 {ideation_context.get('novelty_score')} "
+                        f"(risk={ideation_context.get('novelty_risk', 'unknown')})"
+                    )
+            constraint_list.append(
+                f"[Ideation] 请生成 {num_ideas} 条互不重复、可独立验证的候选假设（research directions）。"
+            )
+            formatted_constraints = self._format_constraints(constraint_list)
             if project_mode == "federated_learning":
                 formatted_constraints += (
                     "\n[联邦学习模式] 假设应围绕 Non-IID、FedAvg/FedProx/SCAFFOLD、"
@@ -182,6 +207,7 @@ class HypothesisGenerationAgent:
                     "available_fact_ids": json.dumps(available_fact_ids, ensure_ascii=False),
                     "facts_empty": "true" if not facts else "false",
                     "data_context_empty": "true" if not data_context and not multimodal_datasets else "false",
+                    "num_ideas": str(num_ideas),
                 },
             )
 
@@ -219,9 +245,10 @@ class HypothesisGenerationAgent:
             result = self._validate_and_normalize_result(
                 result_dict, available_fact_ids, facts,
                 research_question=research_question,
+                num_ideas=num_ideas,
             )
 
-            logger.info(f"成功生成 {len(result.hypotheses)} 条假设")
+            logger.info(f"成功生成 {len(result.hypotheses)} 条假设 (target num_ideas={num_ideas})")
 
             return result
 
@@ -380,6 +407,7 @@ class HypothesisGenerationAgent:
         available_fact_ids: List[str],
         facts: List[Dict[str, Any]],
         research_question: str = "",
+        num_ideas: int = 3,
     ) -> HypothesisGenerationResult:
         """
         验证并标准化 LLM 输出：
@@ -502,12 +530,14 @@ class HypothesisGenerationAgent:
         # ── 排序：非 off_topic 优先 ──
         validated_hypotheses.sort(key=lambda h: h.off_topic if hasattr(h, 'off_topic') and h.off_topic else False)
 
-        # 限制 3-5 条
-        if len(validated_hypotheses) > 5:
-            logger.info(f"生成的假设数量超过 5 条，截断为 5 条")
-            validated_hypotheses = validated_hypotheses[:5]
+        # 按 num_ideas 截断（Ideation 模式）
+        cap = max(1, min(int(num_ideas or 3), 8))
+        if len(validated_hypotheses) > cap:
+            logger.info(f"生成的假设数量超过 {cap} 条，截断为 num_ideas={cap}")
+            validated_hypotheses = validated_hypotheses[:cap]
 
         result_dict["hypotheses"] = validated_hypotheses
+        result_dict["num_ideas"] = cap
 
         # 统计偏题
         off_topic_count = sum(1 for h in validated_hypotheses if hasattr(h, 'off_topic') and h.off_topic)

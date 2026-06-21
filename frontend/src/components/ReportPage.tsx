@@ -10,6 +10,7 @@ import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
 import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
+import humanLoopService from '@/services/humanLoopService';
 
 interface ReportPageProps {
   projectId: string;
@@ -33,6 +34,9 @@ export function ReportPage({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [reviseMessage, setReviseMessage] = useState('');
+  const [reviseBusy, setReviseBusy] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
@@ -57,6 +61,30 @@ export function ReportPage({
       }
     })();
   }, [projectId, _revalidateKey, _latestRunId]);
+
+  const revisionHistory = (report?.extraMetadata?.revision_history as Array<Record<string, unknown>> | undefined) || [];
+
+  const handleReviseReport = useCallback(async () => {
+    if (!report?.id || !reviseMessage.trim()) return;
+    setReviseBusy(true);
+    try {
+      const res = await humanLoopService.reviseReport({
+        project_id: projectId,
+        report_id: report.id,
+        message: reviseMessage.trim(),
+      });
+      if (res.code === 200) {
+        showAlert('报告已根据反馈更新');
+        setReviseMessage('');
+        const data = await reportService.getLatest(projectId);
+        if (data) setReport(data);
+      }
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : '修改失败');
+    } finally {
+      setReviseBusy(false);
+    }
+  }, [projectId, report?.id, reviseMessage, showAlert]);
 
   const handleExport = useCallback(async (action: ExportType) => {
     if (action === 'generate') {
@@ -476,6 +504,44 @@ export function ReportPage({
               complianceCheck={complianceCheck}
               literatureCount={literatureCount}
             />
+
+            <Card title="根据反馈修改报告" subtitle="多轮人在回路 · 保留修改历史">
+              <textarea
+                className="w-full min-h-[72px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2 mb-2"
+                placeholder="例如：加强数据集部分 / 加入 VFL 约束 / 结论更保守"
+                value={reviseMessage}
+                onChange={(e) => setReviseMessage(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={handleReviseReport}
+                disabled={reviseBusy || !reviseMessage.trim()}
+                className="w-full text-xs py-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-white disabled:opacity-50"
+              >
+                {reviseBusy ? '修改中…' : '根据反馈修改报告'}
+              </button>
+              {revisionHistory.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="text-[11px] text-gray-500 hover:text-gray-300"
+                  >
+                    {showHistory ? '隐藏' : '查看'}修改历史 ({revisionHistory.length})
+                  </button>
+                  {showHistory && (
+                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                      {revisionHistory.slice().reverse().map((h) => (
+                        <div key={String(h.id || h.at)} className="text-[10px] text-gray-500 border border-gray-800 rounded p-2">
+                          <div className="text-gray-400">{String(h.at || '')}</div>
+                          <div className="text-gray-300 mt-0.5">{String(h.user_message || '')}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       </div>

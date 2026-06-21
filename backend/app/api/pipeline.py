@@ -24,10 +24,24 @@ from app.schemas.pipeline import (
     PipelineStageStatus,
     PipelineStage,
 )
+from app.schemas.human_loop import RerunFromStageRequest, RerunFromStageResponse
 from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus as DB_PipelineStatus, PipelineStage as DB_PipelineStage
 from app.services.pipeline_service import get_pipeline_service, PipelineService
 
 logger = logging.getLogger(__name__)
+
+
+def _human_fields_from_stage(stage: PipelineStageExecution) -> dict:
+    meta = stage.extra_metadata if isinstance(stage.extra_metadata, dict) else {}
+    history = meta.get("revision_history") or []
+    return {
+        "extra_metadata": meta or None,
+        "human_modified_output": meta.get("human_modified_output"),
+        "human_reviewed": bool(meta.get("human_reviewed")),
+        "human_feedback": meta.get("human_feedback"),
+        "edited_at": meta.get("edited_at"),
+        "revision_history": history,
+    }
 
 CHINA_TZ = timezone(timedelta(hours=8))
 STALE_TIMEOUT_MINUTES = 5
@@ -318,7 +332,8 @@ async def get_run_detail(
                 token_count=stage.token_count,
                 model_used=stage.model_used,
                 prompt_used=stage.prompt_used,
-                model_parameters=stage.model_parameters
+                model_parameters=stage.model_parameters,
+                **_human_fields_from_stage(stage),
             )
             for stage in stages
         ]
@@ -337,6 +352,7 @@ async def get_run_detail(
             created_at=run.created_at,
             input_data=run.input_data,
             output_data=run.output_data,
+            extra_metadata=run.extra_metadata if isinstance(run.extra_metadata, dict) else None,
             stages=stage_summaries
         )
 
@@ -382,6 +398,7 @@ async def get_run_status(
                 token_count=s.token_count,
                 prompt_used=s.prompt_used,
                 model_parameters=s.model_parameters,
+                **_human_fields_from_stage(s),
             )
             for s in stages
         ]
@@ -402,12 +419,49 @@ async def get_run_status(
                 error_message=run.error_message,
                 failed_stage=run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
                 final_report_id=run.final_report_id,
+                extra_metadata=run.extra_metadata if isinstance(run.extra_metadata, dict) else None,
                 created_at=run.created_at or run.started_at,
                 completed_at=run.completed_at,
             )
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/rerun-from-stage", response_model=ResponseModel[RerunFromStageResponse])
+async def rerun_from_stage(
+    body: RerunFromStageRequest,
+    db: Session = Depends(get_db),
+):
+    """从指定阶段重新运行 Pipeline（保留之前阶段结果）。"""
+    try:
+        pipeline_service = get_pipeline_service(db)
+        new_run_id = pipeline_service.start_rerun_from_stage(
+            project_id=body.project_id,
+            parent_run_id=body.run_id,
+            from_stage=body.stage,
+            use_human_modified_output=body.use_human_modified_output,
+        )
+        thread = threading.Thread(
+            target=_execute_pipeline_background,
+            args=(new_run_id,),
+            daemon=True,
+        )
+        thread.start()
+        return ResponseModel(
+            code=200,
+            message=f"已从 {body.stage} 重新运行",
+            data=RerunFromStageResponse(
+                run_id=new_run_id,
+                parent_run_id=body.run_id,
+                rerun_from_stage=body.stage,
+                status="running",
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

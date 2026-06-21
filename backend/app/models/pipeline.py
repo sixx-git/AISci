@@ -128,6 +128,9 @@ class PipelineStageExecution(Base):
     # 资源使用
     token_count = Column(Integer, nullable=True, comment="Token 数量")
     cost_estimate = Column(Float, nullable=True, comment="预估成本（USD）")
+
+    # 人在回路 / 修订历史（human_modified_output 等存于此 JSON）
+    extra_metadata = Column(JSON, nullable=True, comment="阶段额外元数据（人工修改、审阅记录等）")
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
@@ -189,3 +192,22 @@ class PromptVersion(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     
     __table_args__ = {'comment': 'Prompt 版本表'}
+
+
+class ProjectPromptOverride(Base):
+    """项目级 Prompt 覆盖（人在回路 Prompt 编辑）"""
+    __tablename__ = "project_prompt_overrides"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    stage = Column(SQLEnum(PipelineStage), nullable=False, index=True)
+    prompt_template = Column(Text, nullable=False, comment="覆盖后的 Prompt 模板")
+    editor = Column(String(100), nullable=True, comment="最后编辑者")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+
+    project = relationship("Project")
+
+    __table_args__ = (
+        {'comment': '项目级 Prompt 覆盖表'},
+    )

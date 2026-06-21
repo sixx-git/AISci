@@ -82,6 +82,7 @@ class HypothesisReviewAgent:
         literature_facts: Optional[List[Dict[str, Any]]] = None,
         alignments: Optional[List[Dict[str, Any]]] = None,
         original_hypotheses: Optional[List[HypothesisCandidate]] = None,
+        research_question: str = "",
     ) -> HypothesisReviewResult:
         """
         评审假设列表
@@ -159,7 +160,28 @@ class HypothesisReviewAgent:
                 hypotheses, retrieved_papers, literature_facts
             )
 
-            logger.info(f"评审完成，最高综合得分: {result.reviews[0].overall_score if result.reviews else 0}")
+            # ── P2: 集成评审（多评审者聚合）──
+            from app.services.ensemble_review_service import get_ensemble_review_service
+            orig_list = original_hypotheses or hypotheses
+            orig_dicts = [
+                h if isinstance(h, dict) else h.model_dump() if hasattr(h, "model_dump") else {"hypothesis": str(h)}
+                for h in orig_list
+            ]
+            ensemble = get_ensemble_review_service().run_ensemble_sync(
+                reviews=[r.model_dump() for r in result.reviews],
+                hypotheses=orig_dicts,
+                research_question=research_question,
+                novelty_outputs=result.skill_outputs,
+                primary_index=result.primary_index,
+            )
+            result.skill_outputs["ensemble_review"] = ensemble
+            if ensemble.get("aggregated", {}).get("needs_human_review"):
+                result.summary = (result.summary or "") + " [集成评审建议人工复核]"
+
+            logger.info(
+                f"评审完成，最高综合得分: {result.reviews[0].overall_score if result.reviews else 0}, "
+                f"ensemble={ensemble.get('overall')}, decision={ensemble.get('decision')}"
+            )
             
             return result
             

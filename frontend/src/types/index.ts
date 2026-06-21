@@ -198,9 +198,12 @@ export interface AgentNodeData {
   model_used?: string | null;
   model_parameters?: Record<string, unknown> | null;
   token_count?: number | null;
+  human_modified_output?: Record<string, unknown> | null;
+  human_reviewed?: boolean;
+  human_feedback?: string | null;
+  edited_at?: string | null;
+  revision_history?: Array<Record<string, unknown>>;
 }
-
-// ==================== Pipeline 统计 ====================
 
 export interface PipelineNodeData {
   id: string;
@@ -232,6 +235,11 @@ export interface PipelineStageExecutionSummary {
   model_used?: string;
   prompt_used?: string;
   model_parameters?: Record<string, unknown>;
+  human_modified_output?: Record<string, unknown> | null;
+  human_reviewed?: boolean;
+  human_feedback?: string | null;
+  edited_at?: string | null;
+  revision_history?: Array<Record<string, unknown>>;
 }
 
 export interface PipelineRunSummary {
@@ -247,6 +255,116 @@ export interface PipelineRunSummary {
   failed_stage?: string;
   error_message?: string;
   created_at: string;
+  extra_metadata?: PipelineRunExtraMetadata;
+}
+
+export interface QualityTrendEntry {
+  stage?: string;
+  score?: number;
+  round?: number;
+  branch_id?: string;
+  label?: string;
+}
+
+export interface ClosedLoopEvent {
+  type: string;
+  at?: string;
+  round?: number;
+  overall?: number;
+  decision?: string;
+  summary?: string;
+  success?: boolean;
+  experiment_id?: string;
+  composite_score?: number;
+  selected_branch?: string;
+  [key: string]: unknown;
+}
+
+export interface PipelineRunExtraMetadata {
+  closed_loop_events?: ClosedLoopEvent[];
+  quality_trend?: QualityTrendEntry[];
+  auxiliary_results?: Record<string, unknown>;
+  parent_run_id?: string;
+  rerun_from?: string;
+  run_options?: PipelineRunOptions;
+}
+
+export interface HypothesisTreeBranch {
+  branch_id: string;
+  index: number;
+  label: string;
+  hypothesis?: string;
+  composite_score: number;
+  scores?: Record<string, number>;
+  supporting_fact_count?: number;
+  alignment_score?: number;
+  evidence_level?: string;
+  status?: string;
+}
+
+export interface HypothesisTreeData {
+  tree_id?: string;
+  branches: HypothesisTreeBranch[];
+  pruned_branches?: Array<{ branch_id: string; index: number; composite_score: number }>;
+  selected_branch_id?: string;
+  selected_hypothesis_index?: number;
+  iteration_summary?: string;
+  quality_trend?: QualityTrendEntry[];
+  evidence_coverage?: Record<string, unknown>;
+}
+
+export interface EnsembleReviewData {
+  overall?: number;
+  decision?: string;
+  weaknesses?: string[];
+  revision_suggestions?: string[];
+  ensemble_reviews?: Array<Record<string, unknown>>;
+  aggregated?: {
+    overall_score?: number;
+    decision?: string;
+    needs_human_review?: boolean;
+    disagreement_flags?: string[];
+  };
+  target_hypothesis_index?: number;
+}
+
+export interface IdeationNoveltyData {
+  research_question?: string;
+  novelty_score?: number;
+  novelty_risk?: string;
+  external_papers_count?: number;
+  num_ideas_requested?: number;
+  suggested_angles?: string[];
+  avoid_topics?: string[];
+  top_similar_works?: Array<{
+    title?: string;
+    year?: number;
+    overlap_ratio?: number;
+    source?: string;
+  }>;
+  assessment?: string;
+  sources_used?: string[];
+}
+
+export interface PlotQualityData {
+  critique?: {
+    average_score?: number;
+    critiques?: Array<Record<string, unknown>>;
+    needs_human_review?: boolean;
+    needs_redraw?: boolean;
+  };
+  redraw_count?: number;
+  needs_human_review?: boolean;
+}
+
+export type PipelineRunMode = 'teaching' | 'discovery';
+
+export interface PipelineRunOptions {
+  pipeline_mode?: PipelineRunMode;
+  num_ideas?: number;
+  discovery_max_rounds?: number;
+  force_sandbox?: boolean;
+  enable_plot_vlm_critique?: boolean;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {
@@ -272,6 +390,11 @@ export interface PipelineStageLog {
   model_used?: string | null;
   model_parameters?: Record<string, unknown> | null;
   token_count?: number | null;
+  human_modified_output?: Record<string, unknown> | null;
+  human_reviewed?: boolean;
+  human_feedback?: string | null;
+  edited_at?: string | null;
+  revision_history?: Array<Record<string, unknown>>;
 }
 
 export interface PipelineRunResult {
@@ -294,6 +417,7 @@ export interface PipelineRunResult {
   final_report_id?: string;
   failed_stage?: string;
   error_message?: string;
+  extra_metadata?: PipelineRunExtraMetadata;
   created_at: string;
   completed_at?: string;
 }
@@ -535,6 +659,7 @@ export interface ReportData {
   exportMethod?: string;
   /** 图表数据 */
   plots?: ReportPlot[];
+  extraMetadata?: Record<string, unknown>;
 }
 
 export interface ReportGenerationResult {

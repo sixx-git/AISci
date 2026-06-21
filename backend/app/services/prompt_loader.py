@@ -100,7 +100,7 @@ class PromptLoader:
             KeyError: 如果模板中的变量在变量字典中找不到
         """
         # 加载模板
-        template_content = self.load_template(template_name)
+        template_content = self._resolve_template_content(template_name, variables)
 
         # 渲染模板 - 使用双花括号格式 {{variable}}
         rendered_content = template_content
@@ -119,6 +119,24 @@ class PromptLoader:
             logger.warning(f"模板中仍有未替换的变量: {unprocessed_vars}")
 
         return rendered_content
+
+    def _resolve_template_content(self, template_name: str, variables: Dict[str, Any]) -> str:
+        """优先使用项目级 override，否则加载默认模板。"""
+        try:
+            from app.services.prompt_context import get_project_id
+            project_id = get_project_id()
+            if project_id:
+                from app.core.database import SessionLocal
+                from app.services.prompt_override_service import get_prompt_override_service
+                db = SessionLocal()
+                try:
+                    svc = get_prompt_override_service(db)
+                    return svc.get_effective_template(project_id, template_name.replace(".md", ""))
+                finally:
+                    db.close()
+        except Exception as exc:
+            logger.debug(f"Prompt override 解析失败，使用默认模板: {exc}")
+        return self.load_template(template_name)
 
     def clear_cache(self) -> None:
         """

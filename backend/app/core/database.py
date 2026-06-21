@@ -66,6 +66,7 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     migrate_projects_table()
     migrate_pipeline_runs_table()
+    migrate_pipeline_stage_executions_table()
 
 
 def migrate_projects_table():
@@ -134,6 +135,32 @@ def migrate_pipeline_runs_table():
                 except sqlite3.OperationalError as e:
                     print(f"    迁移警告: 添加 pipeline_runs.{col_name} 失败: {e}")
 
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def migrate_pipeline_stage_executions_table():
+    """SQLite 兼容迁移：为 pipeline_stage_executions 补加 extra_metadata。"""
+    if engine is None:
+        init_db()
+
+    import sqlite3
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(pipeline_stage_executions)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if "extra_metadata" not in existing_columns:
+            try:
+                cursor.execute(
+                    "ALTER TABLE pipeline_stage_executions ADD COLUMN extra_metadata JSON"
+                )
+                print("    迁移: 列 pipeline_stage_executions.extra_metadata 已添加")
+            except sqlite3.OperationalError as e:
+                print(f"    迁移警告: 添加 extra_metadata 失败: {e}")
         conn.commit()
     except Exception:
         pass

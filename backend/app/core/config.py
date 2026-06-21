@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     QWEN_API_KEY: str = ""
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-max"
+    QWEN_VL_MODEL: str = "qwen-vl-max"
     
     # Mock LLM 模式：无需真实 QWEN_API_KEY 即可跑通 Pipeline
     USE_MOCK_LLM: bool = False

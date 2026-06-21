@@ -199,6 +199,196 @@ class LiteratureMiningAgent:
             logger.error(f"文献挖掘异常: {e}", exc_info=True)
             raise
 
+    def mine_discovery_refresh(
+        self,
+        project_id: str,
+        research_question: str,
+        *,
+        refinement_queries: Optional[List[str]] = None,
+        keywords: Optional[List[str]] = None,
+        previous: Optional[Dict[str, Any]] = None,
+        discovery_round: int = 1,
+        top_k: int = 15,
+        db: Optional[Session] = None,
+    ) -> LiteratureMiningResponse:
+        """Discovery 低分回退：用精炼 query 补充 arXiv 导入、重检索并合并文献事实。"""
+        parts = [research_question.strip()]
+        for q in refinement_queries or []:
+            if q and str(q).strip():
+                parts.append(str(q).strip())
+        for kw in keywords or []:
+            if kw and str(kw).strip():
+                parts.append(str(kw).strip())
+        search_query = " ".join(dict.fromkeys(parts))[:500]
+
+        logger.info(
+            f"[Discovery R{discovery_round}] 文献刷新 search_query='{search_query[:100]}...'"
+        )
+
+        prev_fact_count = len((previous or {}).get("facts") or [])
+
+        if db is not None:
+            try:
+                self._auto_import_arxiv(project_id, search_query, db)
+            except Exception as exc:
+                logger.warning(f"[Discovery R{discovery_round}] 补充 arXiv 导入失败: {exc}")
+
+        vs = get_vector_store()
+        if not vs.has_index(project_id):
+            if previous:
+                merged_empty = self._merge_mining_dicts(
+                    previous,
+                    self._empty_response(
+                        warning="Discovery 刷新：向量索引仍为空，保留上一轮文献结果"
+                    ).model_dump(),
+                    discovery_round=discovery_round,
+                    search_query=search_query,
+                    supplementary_import=True,
+                )
+                return LiteratureMiningResponse(**merged_empty)
+            return self._empty_response(warning="Discovery 刷新：项目仍无可检索文献")
+
+        search_results = search_vector_store(
+            project_id=project_id,
+            query=search_query,
+            top_k=top_k,
+        )
+        if not search_results and search_query != research_question.strip():
+            search_results = search_vector_store(
+                project_id=project_id,
+                query=research_question.strip(),
+                top_k=top_k,
+            )
+
+        if not search_results:
+            if previous:
+                merged_empty = self._merge_mining_dicts(
+                    previous,
+                    self._empty_response(
+                        warning="Discovery 刷新未检索到新片段，保留上一轮文献"
+                    ).model_dump(),
+                    discovery_round=discovery_round,
+                    search_query=search_query,
+                    supplementary_import=True,
+                )
+                return LiteratureMiningResponse(**merged_empty)
+            return self._empty_response(warning="Discovery 刷新未检索到相关文献片段")
+
+        formatted_chunks = self._format_chunks(search_results)
+        result = self._extract_facts(search_query, formatted_chunks, search_results)
+        response = self._validate_and_normalize(result, search_results)
+        response.skill_outputs = self._run_skills_sync(
+            project_id,
+            search_query,
+            top_k,
+            search_results,
+            keywords=list(keywords or [])[:8],
+        )
+
+        search_output = response.skill_outputs.get("search_papers", {})
+        if search_output.get("success") and search_output.get("data"):
+            response.retrieved_papers = search_output["data"].get("papers", [])
+            response.candidate_references_count = len(response.retrieved_papers)
+
+        response.imported_documents = len(response.citation_map)
+        response.evidence_facts = len(response.facts)
+        response.verified_references_count = len(response.citation_map)
+
+        fresh_dict = response.model_dump()
+        merged_dict = self._merge_mining_dicts(
+            previous,
+            fresh_dict,
+            discovery_round=discovery_round,
+            search_query=search_query,
+            supplementary_import=True,
+        )
+        merged_dict["discovery_refresh"] = {
+            **(merged_dict.get("discovery_refresh") or {}),
+            "facts_before": prev_fact_count,
+            "facts_after": len(merged_dict.get("facts") or []),
+            "new_facts": max(0, len(merged_dict.get("facts") or []) - prev_fact_count),
+        }
+        return LiteratureMiningResponse(**merged_dict)
+
+    @staticmethod
+    def _merge_mining_dicts(
+        previous: Optional[Dict[str, Any]],
+        fresh: Dict[str, Any],
+        *,
+        discovery_round: int = 0,
+        search_query: str = "",
+        supplementary_import: bool = False,
+    ) -> Dict[str, Any]:
+        if not previous:
+            out = dict(fresh)
+            out["discovery_refresh"] = {
+                "round": discovery_round,
+                "search_query": search_query,
+                "supplementary_arxiv_import": supplementary_import,
+                "merged_from_previous": False,
+            }
+            return out
+
+        def _fact_key(f: dict) -> str:
+            return str(f.get("fact_id") or f.get("content") or "")[:120]
+
+        fact_map: Dict[str, dict] = {}
+        for f in previous.get("facts") or []:
+            if isinstance(f, dict) and _fact_key(f):
+                fact_map[_fact_key(f)] = f
+        for f in fresh.get("facts") or []:
+            if isinstance(f, dict) and _fact_key(f):
+                fact_map[_fact_key(f)] = f
+
+        cite_map: Dict[str, dict] = {}
+        for c in (previous.get("citation_map") or []) + (fresh.get("citation_map") or []):
+            if isinstance(c, dict):
+                key = str(c.get("document_id") or c.get("title") or c.get("paper_title") or "")
+                if key:
+                    cite_map[key] = c
+
+        papers_seen: set = set()
+        merged_papers: List[str] = []
+        for title in (previous.get("source_papers") or []) + (fresh.get("source_papers") or []):
+            t = str(title)
+            if t and t not in papers_seen:
+                papers_seen.add(t)
+                merged_papers.append(t)
+
+        retrieved: Dict[str, dict] = {}
+        for p in (previous.get("retrieved_papers") or []) + (fresh.get("retrieved_papers") or []):
+            if isinstance(p, dict):
+                key = str(p.get("title") or p.get("paper_id") or id(p))
+                retrieved[key] = p
+
+        out = dict(fresh)
+        out["facts"] = list(fact_map.values())
+        out["citation_map"] = list(cite_map.values())
+        out["source_papers"] = merged_papers
+        out["retrieved_papers"] = list(retrieved.values())
+        out["evidence"] = (previous.get("evidence") or []) + [
+            e for e in (fresh.get("evidence") or [])
+            if e not in (previous.get("evidence") or [])
+        ]
+        out["uncertain_points"] = list(dict.fromkeys(
+            (previous.get("uncertain_points") or []) + (fresh.get("uncertain_points") or [])
+        ))
+        prev_skills = previous.get("skill_outputs") or {}
+        fresh_skills = fresh.get("skill_outputs") or {}
+        out["skill_outputs"] = {**prev_skills, **fresh_skills}
+        out["discovery_refresh"] = {
+            "round": discovery_round,
+            "search_query": search_query,
+            "supplementary_arxiv_import": supplementary_import,
+            "merged_from_previous": True,
+            "facts_before": len(previous.get("facts") or []),
+            "facts_after": len(out["facts"]),
+            "new_facts": max(0, len(out["facts"]) - len(previous.get("facts") or [])),
+        }
+        if fresh.get("warning"):
+            out["warning"] = fresh["warning"]
+        return out
+
     def _auto_import_arxiv(
         self,
         project_id: str,
@@ -548,6 +738,7 @@ class LiteratureMiningAgent:
         research_question: str,
         top_k: int,
         search_results: list,
+        keywords: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -578,8 +769,9 @@ class LiteratureMiningAgent:
                 search_result = await search_skill.run(
                     input_data={
                         "research_question": research_question,
-                        "keywords": [],
-                        "max_results": min(top_k, 30),
+                        "keywords": list(keywords or [])[:8],
+                        "max_results": min(max(top_k, 10), 30),
+                        "sources": ["openalex", "semantic_scholar", "arxiv"],
                     },
                     context={"stage": "literature_mining"},
                 )

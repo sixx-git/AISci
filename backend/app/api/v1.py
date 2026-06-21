@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature, diagnose, datasets, data_finder, kg
+from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature, diagnose, datasets, data_finder, kg, prompts, human_loop
 
 router = APIRouter()
 
@@ -16,3 +16,5 @@ router.include_router(diagnose.router, prefix="/diagnose", tags=["diagnose"])
 router.include_router(datasets.router, prefix="/datasets", tags=["datasets"])
 router.include_router(data_finder.router, prefix="/data-finder", tags=["data-finder"])
 router.include_router(kg.router, prefix="/kg", tags=["knowledge-graph"])
+router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
+router.include_router(human_loop.router, prefix="/human-loop", tags=["human-loop"])

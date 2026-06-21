@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.data.preliminary_analysis_skill import PreliminaryAnalysisSkill
+from app.services.experiment_sandbox_service import get_experiment_sandbox_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ class SmallValidationAgent:
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
         modeling_results: Optional[List[Dict[str, Any]]] = None,
         project_mode: str = "general",
+        run_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         生成小样验证方案
@@ -61,6 +64,13 @@ class SmallValidationAgent:
             logger.info(f"开始为假设生成小样验证: {hypothesis[:100]}...")
             
             has_csv_data = 1 if csv_data_path and os.path.exists(csv_data_path) else 0
+            if not csv_data_path and multimodal_datasets:
+                for ds in multimodal_datasets:
+                    fp = ds.get("file_path")
+                    if fp and os.path.exists(fp) and ds.get("data_type", "tabular") == "tabular":
+                        csv_data_path = fp
+                        has_csv_data = 1
+                        break
             
             # 构建提示
             prompt_loader = get_prompt_loader()
@@ -107,8 +117,27 @@ class SmallValidationAgent:
                 result, skill_outputs, hypothesis, experiment_design, modeling_results
             )
 
-            # 保存验证文件
-            self._save_validation_files(result)
+            # ── P0: 沙箱执行 analysis_script，绑定 run artifacts ──
+            if run_id and result.get("analysis_script"):
+                sandbox = get_experiment_sandbox_service().execute_analysis_script(
+                    run_id=run_id,
+                    analysis_script=result["analysis_script"],
+                    csv_data_path=csv_data_path,
+                    extra_env={"AISCI_PROJECT_ID": project_id or ""},
+                )
+                result["sandbox_execution"] = sandbox
+                result["artifacts"] = {
+                    "experiment_id": sandbox.get("experiment_id"),
+                    "artifact_dir": sandbox.get("artifact_dir"),
+                    "manifest_path": sandbox.get("manifest_path"),
+                    "plots": sandbox.get("plots") or [],
+                    "metrics": sandbox.get("metrics") or {},
+                }
+                result["results"] = self._merge_sandbox_into_results(result["results"], sandbox)
+
+            validation_id = self._save_validation_files(result, run_id=run_id)
+            if validation_id:
+                result["validation_id"] = validation_id
             
             logger.info("小样验证方案生成完成")
             
@@ -242,6 +271,38 @@ class SmallValidationAgent:
 
         return categorized
 
+    @staticmethod
+    def _merge_sandbox_into_results(
+        categorized: Dict[str, Any],
+        sandbox: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        actual = categorized.get("actual_results") or {}
+        if not isinstance(actual, dict):
+            actual = {}
+        actual["sandbox_execution"] = {
+            "success": sandbox.get("success"),
+            "duration_ms": sandbox.get("duration_ms"),
+            "metrics": sandbox.get("metrics"),
+            "artifact_dir": sandbox.get("artifact_dir"),
+            "experiment_id": sandbox.get("experiment_id"),
+            "provenance": "experiment_sandbox",
+        }
+        if sandbox.get("success"):
+            actual["data_source"] = "sandbox_execution"
+            categorized["result_type_summary"] = "has_actual_results"
+            if sandbox.get("metrics"):
+                actual["sandbox_metrics"] = sandbox["metrics"]
+            if sandbox.get("plots"):
+                actual["sandbox_plots"] = sandbox["plots"]
+        else:
+            warnings = categorized.get("warnings") or []
+            if not isinstance(warnings, list):
+                warnings = []
+            warnings.append(f"沙箱执行失败: {(sandbox.get('stderr') or '')[:200]}")
+            categorized["warnings"] = warnings
+        categorized["actual_results"] = actual
+        return categorized
+
     def _validate_and_normalize_result(
         self,
         result_dict: Dict[str, Any],
@@ -334,37 +395,42 @@ print("="*50)
         ]
         return json.dumps(log_entries, ensure_ascii=False)
     
-    def _save_validation_files(self, result: Dict[str, Any]) -> None:
-        """保存验证文件"""
+    def _save_validation_files(self, result: Dict[str, Any], run_id: Optional[str] = None) -> Optional[str]:
+        """保存验证文件，若提供 run_id 则同步写入 run artifacts 目录。"""
         try:
-            # 生成唯一 ID
             import uuid
             validation_id = str(uuid.uuid4())
-            
-            # 创建目录
+
             validation_path = os.path.join(self.validation_dir, validation_id)
             os.makedirs(validation_path, exist_ok=True)
-            
-            # 保存脚本
+
             script_path = os.path.join(validation_path, "analysis.py")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(result.get("analysis_script", ""))
-            
-            # 保存模拟数据
+
             if result.get("simulated_data"):
                 data_path = os.path.join(validation_path, "simulated_data.json")
                 with open(data_path, "w", encoding="utf-8") as f:
                     f.write(result["simulated_data"])
-            
-            # 保存结果
+
             result_path = os.path.join(validation_path, "result.json")
             with open(result_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
-            
+
+            if run_id and result.get("artifacts", {}).get("artifact_dir"):
+                link_path = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)), "..", "storage", "runs", run_id, "latest_validation.json"
+                )
+                os.makedirs(os.path.dirname(link_path), exist_ok=True)
+                with open(link_path, "w", encoding="utf-8") as f:
+                    json.dump({"validation_id": validation_id, "path": validation_path, "artifacts": result.get("artifacts")}, f)
+
             logger.info(f"验证文件已保存到: {validation_path}")
-            
+            return validation_id
+
         except Exception as e:
             logger.error(f"保存验证文件时出错: {e}", exc_info=True)
+            return None
 
 
 # 全局单例

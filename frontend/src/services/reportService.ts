@@ -47,6 +47,7 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     mdDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/md` : undefined,
     texDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/tex` : undefined,
     pdfDownloadUrl: db.report_id && db.pdf_generated ? `/api/v1/reports/download/${db.report_id}/pdf` : undefined,
+    extraMetadata: extraMeta,
   };
 }
 

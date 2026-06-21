@@ -29,8 +29,17 @@ from app.models.pipeline import (
 )
 from app.models.project import Report, Project, ProjectStatus
 from app.core.project_modes import ProjectMode, normalize_project_mode
+from app.core.pipeline_modes import (
+    PipelineMode,
+    normalize_pipeline_mode,
+    resolve_run_options,
+    ENSEMBLE_ACCEPT_SCORE,
+)
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
+from app.services.prompt_context import set_project_id as set_prompt_project_id
+from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService
+from app.services.prompt_override_service import get_prompt_override_service
 
 from app.schemas.pipeline import (
     PipelineStatus,
@@ -74,6 +83,10 @@ class PipelineService:
         self.db_stage_executions: Dict[int, DB_PipelineStageExecution] = {}
         self._stage_results: Dict[str, Any] = {}
         self._pipeline_start: Optional[datetime] = None
+        self._start_idx: int = 0
+        self._seeded_results: Optional[Dict[str, Any]] = None
+        self._run_options: Dict[str, Any] = {}
+        self._discovery_refinement: List[str] = []
 
     def start_pipeline_async(self, request: PipelineRunRequest) -> str:
         """
@@ -104,6 +117,108 @@ class PipelineService:
             self.db_stage_executions[idx + 1] = db_stage
         self.db.commit()
 
+        return self.run_id
+
+    def start_rerun_from_stage(
+        self,
+        project_id: str,
+        parent_run_id: str,
+        from_stage: str,
+        use_human_modified_output: bool = True,
+    ) -> str:
+        """从指定阶段重新运行，保留之前阶段结果（可优先使用人工修改输出）。"""
+        if from_stage not in STAGE_KEY_ORDER:
+            raise ValueError(f"无效 stage: {from_stage}")
+
+        parent = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == parent_run_id).first()
+        if not parent:
+            raise ValueError(f"父 run 未找到: {parent_run_id}")
+        if parent.project_id != project_id:
+            raise ValueError("project_id 与 run 不匹配")
+
+        start_idx = STAGE_KEY_ORDER.index(from_stage)
+        self.run_id = str(uuid.uuid4())
+        human_loop = StageHumanLoopService(self.db)
+        seeded = human_loop.seed_results_from_run(parent, from_stage, use_human_modified_output)
+
+        parent_stages = (
+            self.db.query(DB_PipelineStageExecution)
+            .filter(DB_PipelineStageExecution.pipeline_run_id == parent.id)
+            .order_by(DB_PipelineStageExecution.stage_order)
+            .all()
+        )
+        parent_stage_map = {
+            (s.stage.value if hasattr(s.stage, "value") else str(s.stage)): s for s in parent_stages
+        }
+
+        version = (parent.version or 1) + 1
+        self.db_pipeline_run = DB_PipelineRun(
+            id=str(uuid.uuid4()),
+            run_id=self.run_id,
+            project_id=project_id,
+            research_question=parent.research_question,
+            status=DB_PipelineStatus.PENDING,
+            input_data={"rerun_from": from_stage, "parent_run_id": parent_run_id},
+            version=version,
+            extra_metadata={
+                "parent_run_id": parent_run_id,
+                "rerun_from_stage": from_stage,
+                "use_human_modified_output": use_human_modified_output,
+                "auxiliary_results": {
+                    k: v for k, v in seeded.items()
+                    if k not in STAGE_KEY_ORDER
+                },
+            },
+        )
+        self.db.add(self.db_pipeline_run)
+        self.db.flush()
+
+        for idx, d in enumerate(STAGE_DEFS):
+            order = idx + 1
+            parent_exec = parent_stage_map.get(d["key"])
+            if idx < start_idx and parent_exec:
+                copied = DB_PipelineStageExecution(
+                    id=str(uuid.uuid4()),
+                    pipeline_run_id=self.db_pipeline_run.id,
+                    stage=d["db_stage_enum"],
+                    stage_order=order,
+                    status=parent_exec.status,
+                    started_at=parent_exec.started_at,
+                    completed_at=parent_exec.completed_at,
+                    duration_ms=parent_exec.duration_ms,
+                    input_data=parent_exec.input_data,
+                    output_data=parent_exec.output_data,
+                    model_used=parent_exec.model_used,
+                    model_parameters=parent_exec.model_parameters,
+                    prompt_used=parent_exec.prompt_used,
+                    token_count=parent_exec.token_count,
+                    extra_metadata=parent_exec.extra_metadata,
+                )
+            else:
+                copied = DB_PipelineStageExecution(
+                    id=str(uuid.uuid4()),
+                    pipeline_run_id=self.db_pipeline_run.id,
+                    stage=d["db_stage_enum"],
+                    stage_order=order,
+                    status=DB_PipelineStatus.PENDING,
+                )
+            self.db.add(copied)
+            self.db_stage_executions[order] = copied
+
+        prompt_svc = get_prompt_override_service(self.db)
+        overrides_used = {}
+        for stage_key in STAGE_KEY_ORDER[start_idx:]:
+            info = prompt_svc.get_prompt_info(project_id, stage_key)
+            if info.get("has_override"):
+                overrides_used[stage_key] = True
+        self.db_pipeline_run.prompt_versions_used = {
+            "overrides": overrides_used,
+            "rerun_from_stage": from_stage,
+            "parent_run_id": parent_run_id,
+        }
+        self.db.commit()
+        self._start_idx = start_idx
+        self._seeded_results = seeded
         return self.run_id
 
     def execute_pipeline_run(self, run_id: str):
@@ -137,6 +252,22 @@ class PipelineService:
         for s in existing_stages:
             self.db_stage_executions[s.stage_order] = s
 
+        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        if meta.get("rerun_from_stage"):
+            self._start_idx = STAGE_KEY_ORDER.index(meta["rerun_from_stage"])
+            parent_id = meta.get("parent_run_id")
+            parent = (
+                self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == parent_id).first()
+                if parent_id else None
+            )
+            if parent:
+                self._seeded_results = StageHumanLoopService(self.db).seed_results_from_run(
+                    parent,
+                    meta["rerun_from_stage"],
+                    meta.get("use_human_modified_output", True),
+                )
+
+        set_prompt_project_id(project_id)
         self._run_pipeline_stages(research_question, project_id)
 
     def run_pipeline(self, request: PipelineRunRequest) -> PipelineRunResult:
@@ -149,22 +280,371 @@ class PipelineService:
             return normalize_project_mode(getattr(project, "project_mode", None))
         return ProjectMode.GENERAL.value
 
-    def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
-        """执行 Pipeline 所有阶段。"""
-        project_mode = self._get_project_mode(project_id)
-        logger.info(
-            f"[Pipeline] ====== 开始执行全部 8 个阶段 run_id={self.run_id} "
-            f"project_id={project_id} mode={project_mode} ======"
+    def _get_run_options(self) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {}
+        if self.db_pipeline_run and isinstance(self.db_pipeline_run.input_data, dict):
+            input_data = self.db_pipeline_run.input_data
+        return resolve_run_options(input_data.get("options"))
+
+    def _exec_ideation_novelty(
+        self,
+        problem_understanding: Optional[Dict],
+        knowledge_gap: Optional[Dict],
+    ) -> Dict[str, Any]:
+        """P3: 假设生成前的 OpenAlex/S2 新颖性 ideation 预检。"""
+        import asyncio
+        from app.skills.reasoning.ideation_novelty_skill import IdeationNoveltySkill
+
+        pu = problem_understanding or {}
+        kg = knowledge_gap or {}
+        rq = pu.get("research_question") or (
+            self.db_pipeline_run.research_question if self.db_pipeline_run else ""
+        )
+        keywords = pu.get("keywords") or []
+        if isinstance(keywords, str):
+            keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+
+        skill = IdeationNoveltySkill()
+        skill_result = asyncio.run(
+            skill.run(
+                input_data={
+                    "research_question": rq,
+                    "knowledge_gaps": kg.get("knowledge_gaps") or kg.get("gaps") or [],
+                    "keywords": keywords,
+                    "num_ideas": self._run_options.get("num_ideas", 3),
+                },
+                context={"stage": "ideation_novelty"},
+            )
+        )
+        return skill_result.data if skill_result.success else {}
+
+    def _build_discovery_refined_context(
+        self,
+        results: Dict[str, Any],
+        refinement_notes: List[str],
+    ) -> Dict[str, Any]:
+        """从评审弱点 + ideation 方向构建文献刷新 query。"""
+        ideation = results.get("ideation_novelty") or {}
+        angles = list(ideation.get("suggested_angles") or [])[:3]
+        avoid = list(ideation.get("avoid_topics") or [])[:2]
+        gaps = results.get("knowledge_gap") or {}
+        gap_texts = []
+        for g in (gaps.get("knowledge_gaps") or gaps.get("gaps") or [])[:3]:
+            if isinstance(g, dict):
+                gap_texts.append(str(g.get("gap") or g.get("description") or "")[:80])
+            elif g:
+                gap_texts.append(str(g)[:80])
+
+        refinement_queries = list(refinement_notes or [])[:6]
+        refinement_queries.extend(gap_texts)
+        keywords = angles + [f"NOT {a}" for a in avoid if a]
+        pu = results.get("problem_understanding") or {}
+        if pu.get("keywords"):
+            kw = pu["keywords"]
+            if isinstance(kw, list):
+                keywords.extend(kw[:5])
+            elif isinstance(kw, str):
+                keywords.extend(k.strip() for k in kw.split(",") if k.strip())
+
+        return {
+            "refinement_queries": refinement_queries,
+            "keywords": list(dict.fromkeys(k for k in keywords if k))[:10],
+            "suggested_angles": angles,
+        }
+
+    def _exec_literature_mining_refresh(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+        discovery_round: int,
+        refinement_notes: List[str],
+    ) -> dict:
+        """Discovery 回退：刷新文献库检索与外部论文搜索。"""
+        ctx = self._build_discovery_refined_context(results, refinement_notes)
+        agent = get_literature_mining_agent()
+        previous = results.get("literature_mining") or {}
+        response = agent.mine_discovery_refresh(
+            project_id=project_id,
+            research_question=research_question,
+            refinement_queries=ctx["refinement_queries"],
+            keywords=ctx["keywords"],
+            previous=previous if isinstance(previous, dict) else None,
+            discovery_round=discovery_round,
+            top_k=15,
+            db=self.db,
+        )
+        return self._safe_model_dump(response)
+
+    def _discovery_rollback_to_ideation(
+        self,
+        stages: List[PipelineStageLog],
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+        round_num: int,
+        refinement_notes: List[str],
+    ) -> Dict[str, Any]:
+        """低分 Discovery 回退：刷新文献 → 知识缺口 → ideation → 再进入假设生成。"""
+        logger.info(f"[Discovery R{round_num}] 回退到 ideation 并刷新文献")
+
+        self._run_stage(
+            stages, 1, results, research_question, project_id,
+            lambda: self._exec_literature_mining_refresh(
+                project_id, research_question, results, round_num, refinement_notes,
+            ),
+        )
+        lm = results.get("literature_mining") or {}
+        refresh_meta = lm.get("discovery_refresh") if isinstance(lm, dict) else {}
+
+        self._run_stage(
+            stages, 2, results, research_question, project_id,
+            lambda: self._exec_knowledge_gap(lm, project_id),
         )
 
-        # 初始化阶段日志
+        try:
+            self._exec_knowledge_graph(
+                project_id, research_question, results, project_mode, stage="post_gap",
+            )
+        except Exception as kg_err:
+            logger.warning(f"Discovery R{round_num} 知识图谱更新失败: {kg_err}")
+
+        ideation = {}
+        try:
+            ideation = self._exec_ideation_novelty(
+                results.get("problem_understanding"),
+                results.get("knowledge_gap"),
+            )
+            if ideation:
+                results["ideation_novelty"] = ideation
+                self._record_closed_loop_event(
+                    "ideation_novelty",
+                    {
+                        "round": round_num,
+                        "novelty_score": ideation.get("novelty_score"),
+                        "external_papers": ideation.get("external_papers_count"),
+                        "summary": (ideation.get("assessment") or "")[:200],
+                        "quality_trend_entry": {
+                            "stage": f"ideation_r{round_num}",
+                            "score": ideation.get("novelty_score"),
+                        },
+                    },
+                )
+        except Exception as exc:
+            logger.warning(f"Discovery R{round_num} ideation 失败: {exc}")
+
+        self._record_closed_loop_event(
+            "discovery_literature_refresh",
+            {
+                "round": round_num,
+                "facts_before": (refresh_meta or {}).get("facts_before"),
+                "facts_after": (refresh_meta or {}).get("facts_after"),
+                "new_facts": (refresh_meta or {}).get("new_facts"),
+                "search_query": ((refresh_meta or {}).get("search_query") or "")[:120],
+                "quality_trend_entry": {
+                    "stage": f"literature_r{round_num}",
+                    "score": min(10.0, 5.0 + float((refresh_meta or {}).get("new_facts") or 0)),
+                },
+            },
+        )
+
+        return {
+            "round": round_num,
+            "literature_refresh": refresh_meta,
+            "ideation_novelty_score": ideation.get("novelty_score") if ideation else None,
+            "refinement_count": len(refinement_notes),
+        }
+
+    def _run_discovery_loop(
+        self,
+        stages: List[PipelineStageLog],
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+    ) -> Dict[str, Any]:
+        """P5: Discovery 模式 — while not accept: ideate → experiment → write → review → refine。"""
+        max_rounds = int(self._run_options.get("discovery_max_rounds", 3))
+        history: List[Dict[str, Any]] = []
+        final_report_id = None
+
+        for round_num in range(2, max_rounds + 1):
+            hr = results.get("hypothesis_review") or {}
+            ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
+            decision = ensemble.get("decision") or hr.get("ensemble_decision")
+            overall = ensemble.get("overall") or hr.get("ensemble_overall")
+            if decision == "Accept" or (overall is not None and float(overall) >= ENSEMBLE_ACCEPT_SCORE):
+                history.append({"round": round_num - 1, "status": "accepted", "overall": overall})
+                break
+
+            weaknesses = list(ensemble.get("weaknesses") or [])[:4]
+            suggestions = list(ensemble.get("revision_suggestions") or [])[:4]
+            self._discovery_refinement = weaknesses + suggestions
+            history.append({
+                "round": round_num,
+                "status": "refining",
+                "decision": decision,
+                "overall": overall,
+                "refinement_notes": self._discovery_refinement,
+            })
+            self._record_closed_loop_event(
+                "discovery_refine",
+                {
+                    "round": round_num,
+                    "decision": decision,
+                    "overall": overall,
+                    "quality_trend_entry": {"stage": f"discovery_r{round_num}", "score": overall},
+                },
+            )
+
+            rollback_meta = self._discovery_rollback_to_ideation(
+                stages,
+                results,
+                research_question,
+                project_id,
+                project_mode,
+                round_num,
+                self._discovery_refinement,
+            )
+            history[-1]["rollback"] = rollback_meta
+
+            self._run_stage(stages, 3, results, research_question, project_id,
+                lambda: self._exec_hypothesis_generation(
+                    results.get("problem_understanding"),
+                    results.get("literature_mining"),
+                    results.get("knowledge_gap"),
+                    results.get("ideation_novelty"),
+                ))
+            if results.get("ideation_novelty") and results.get("hypothesis_generation"):
+                hg = results["hypothesis_generation"]
+                if isinstance(hg, dict):
+                    hg["ideation_novelty"] = results["ideation_novelty"]
+                    results["hypothesis_generation"] = hg
+
+            try:
+                self._exec_evidence_reasoning(project_id, research_question, results)
+            except Exception:
+                pass
+            try:
+                self._exec_hypothesis_tree(results, research_question)
+            except Exception:
+                pass
+            try:
+                self._save_hypotheses(project_id, research_question, results)
+            except Exception:
+                pass
+
+            self._run_stage(stages, 4, results, research_question, project_id,
+                lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
+            self._run_stage(stages, 5, results, research_question, project_id,
+                lambda: self._exec_experiment_design(
+                    results.get("hypothesis_review"), project_id, project_mode,
+                ))
+            self._run_stage(stages, 6, results, research_question, project_id,
+                lambda: self._exec_small_validation(
+                    results.get("experiment_design"),
+                    results.get("hypothesis_review"),
+                    project_id,
+                    project_mode,
+                ))
+
+            def _exec_report():
+                return self._exec_report_generation(
+                    results, self._build_pipeline_run_info(), project_mode,
+                )
+
+            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+            final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+
+        return {
+            "pipeline_mode": PipelineMode.DISCOVERY.value,
+            "max_rounds": max_rounds,
+            "rounds_executed": len(history) + 1,
+            "history": history,
+            "final_report_id": final_report_id,
+        }
+
+    def _apply_plot_quality_loop(
+        self,
+        result: Dict[str, Any],
+        *,
+        hypothesis: str = "",
+        data_rows: Optional[List[Dict]] = None,
+    ) -> Dict[str, Any]:
+        """P4: VLM/规则图表质量环。"""
+        if not self._run_options.get("enable_plot_vlm_critique", True):
+            return result
+        plots = result.get("plots") or []
+        artifacts = result.get("artifacts") or {}
+        if not plots:
+            sandbox_plots = artifacts.get("plots") or []
+            actual = (result.get("results") or {}).get("actual_results") or {}
+            plots = sandbox_plots or actual.get("sandbox_plots") or []
+        if not plots:
+            return result
+
+        from app.services.plot_quality_loop_service import get_plot_quality_loop_service
+        from app.services.experiment_sandbox_service import RUNS_ROOT
+
+        output_dir = str(RUNS_ROOT / self.run_id / "plot_critique")
+        loop = get_plot_quality_loop_service().run_quality_loop_sync(
+            plots=plots,
+            hypothesis=hypothesis,
+            output_dir=output_dir,
+            data_rows=data_rows,
+        )
+        result["plots"] = loop.get("plots") or plots
+        result["plot_quality"] = {
+            "critique": loop.get("critique"),
+            "redraw_count": loop.get("redraw_count"),
+            "needs_human_review": loop.get("needs_human_review"),
+        }
+        if loop.get("needs_human_review"):
+            result["human_review_required"] = True
+        avg = (loop.get("critique") or {}).get("average_score")
+        if avg is not None:
+            self._record_closed_loop_event(
+                "plot_vlm_critique",
+                {
+                    "round": results.get("discovery_loop", {}).get("rounds_executed", 1),
+                    "average_score": avg,
+                    "needs_human_review": loop.get("needs_human_review"),
+                    "quality_trend_entry": {"stage": "plot_critique", "score": avg},
+                },
+            )
+        return result
+
+    def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
+        """执行 Pipeline 所有阶段（支持从中间阶段 rerun）。"""
+        project_mode = self._get_project_mode(project_id)
+        self._run_options = self._get_run_options()
+        start_idx = getattr(self, "_start_idx", 0) or 0
+        logger.info(
+            f"[Pipeline] ====== 开始执行 Pipeline run_id={self.run_id} "
+            f"project_id={project_id} mode={project_mode} pipeline_mode={self._run_options.get('pipeline_mode')} "
+            f"num_ideas={self._run_options.get('num_ideas')} start_idx={start_idx} ======"
+        )
+
         stages: List[PipelineStageLog] = [
             PipelineStageLog(stage=d["stage_enum"], status=PipelineStageStatus.PENDING)
             for d in STAGE_DEFS
         ]
-        
-        # 存储各阶段结果
-        results: Dict[str, Any] = {}
+
+        results: Dict[str, Any] = dict(self._seeded_results or {})
+        for idx, d in enumerate(STAGE_DEFS):
+            if idx < start_idx:
+                key = d["key"]
+                if key in results:
+                    stages[idx].status = PipelineStageStatus.COMPLETED
+                    stages[idx].output_data = results[key]
+                else:
+                    exec_row = self.db_stage_executions.get(idx + 1)
+                    if exec_row and exec_row.output_data:
+                        stages[idx].status = PipelineStageStatus.COMPLETED
+                        stages[idx].output_data = exec_row.output_data
+                        results[key] = exec_row.output_data
+
         final_report_id: Optional[str] = None
         pipeline_start = datetime.now(CHINA_TZ)
         self._pipeline_start = pipeline_start  # 供 _build_pipeline_run_info 实时计算耗时
@@ -186,99 +666,151 @@ class PipelineService:
                 logger.warning(f"[Pipeline] 项目 {project_id} 未找到，无法更新状态")
             
             # ── 阶段 1: ProblemUnderstandingAgent ──
-            self._run_stage(stages, 0, results, research_question, project_id,
-                lambda: self._exec_problem_understanding(research_question))
+            if start_idx <= 0:
+                self._run_stage(stages, 0, results, research_question, project_id,
+                    lambda: self._exec_problem_understanding(research_question))
             
             # ── 阶段 2: LiteratureMiningAgent ──
-            self._run_stage(stages, 1, results, research_question, project_id,
-                lambda: self._exec_literature_mining(project_id, research_question))
+            if start_idx <= 1:
+                self._run_stage(stages, 1, results, research_question, project_id,
+                    lambda: self._exec_literature_mining(project_id, research_question))
 
-            # ── 阶段 2.5: 多源数据查找与整合 ──
-            try:
-                self._exec_data_finder(project_id, research_question, results, project_mode)
-            except Exception as df_err:
-                logger.warning(f"多源数据查找失败: {df_err}")
+            if start_idx <= 1:
+                try:
+                    self._exec_data_finder(project_id, research_question, results, project_mode)
+                except Exception as df_err:
+                    logger.warning(f"多源数据查找失败: {df_err}")
 
-            # ── 阶段 2.6: 知识图谱初始构建 ──
-            try:
-                self._exec_knowledge_graph(
-                    project_id, research_question, results, project_mode, stage="initial"
-                )
-            except Exception as kg_err:
-                logger.warning(f"知识图谱初始构建失败: {kg_err}")
+                try:
+                    self._exec_knowledge_graph(
+                        project_id, research_question, results, project_mode, stage="initial"
+                    )
+                except Exception as kg_err:
+                    logger.warning(f"知识图谱初始构建失败: {kg_err}")
             
             # ── 阶段 3: KnowledgeGapAgent ──
-            self._run_stage(stages, 2, results, research_question, project_id,
-                lambda: self._exec_knowledge_gap(
-                    results.get("literature_mining"),
-                    project_id,
-                ))
+            if start_idx <= 2:
+                self._run_stage(stages, 2, results, research_question, project_id,
+                    lambda: self._exec_knowledge_gap(
+                        results.get("literature_mining"),
+                        project_id,
+                    ))
 
-            try:
-                self._exec_knowledge_graph(
-                    project_id, research_question, results, project_mode, stage="post_gap"
-                )
-            except Exception as kg_err:
-                logger.warning(f"知识图谱增量更新失败: {kg_err}")
+                try:
+                    self._exec_knowledge_graph(
+                        project_id, research_question, results, project_mode, stage="post_gap"
+                    )
+                except Exception as kg_err:
+                    logger.warning(f"知识图谱增量更新失败: {kg_err}")
             
             # ── 阶段 4: HypothesisGenerationAgent ──
-            self._run_stage(stages, 3, results, research_question, project_id,
-                lambda: self._exec_hypothesis_generation(
-                    results.get("problem_understanding"),
-                    results.get("literature_mining"),
-                    results.get("knowledge_gap")
-                ))
+            if start_idx <= 3:
+                # ── P3: Ideation 新颖性预检（OpenAlex + Semantic Scholar）──
+                try:
+                    ideation = self._exec_ideation_novelty(
+                        results.get("problem_understanding"),
+                        results.get("knowledge_gap"),
+                    )
+                    if ideation:
+                        results["ideation_novelty"] = ideation
+                        self._record_closed_loop_event(
+                            "ideation_novelty",
+                            {
+                                "round": 0,
+                                "novelty_score": ideation.get("novelty_score"),
+                                "external_papers": ideation.get("external_papers_count"),
+                                "num_ideas": ideation.get("num_ideas_requested"),
+                                "summary": (ideation.get("assessment") or "")[:200],
+                                "quality_trend_entry": {
+                                    "stage": "ideation_novelty",
+                                    "score": ideation.get("novelty_score"),
+                                },
+                            },
+                        )
+                except Exception as ide_err:
+                    logger.warning(f"Ideation 新颖性检查失败: {ide_err}")
 
-            # ── 阶段 4.5: 科学机制推理与证据链迭代验证 ──
-            try:
-                self._exec_evidence_reasoning(project_id, research_question, results)
-            except Exception as er_err:
-                logger.warning(f"证据链迭代验证失败: {er_err}")
+                self._run_stage(stages, 3, results, research_question, project_id,
+                    lambda: self._exec_hypothesis_generation(
+                        results.get("problem_understanding"),
+                        results.get("literature_mining"),
+                        results.get("knowledge_gap"),
+                        results.get("ideation_novelty"),
+                    ))
 
-            try:
-                self._exec_knowledge_graph(
-                    project_id, research_question, results, project_mode, stage="post_evidence"
-                )
-            except Exception as kg_err:
-                logger.warning(f"知识图谱证据链更新失败: {kg_err}")
+                if results.get("ideation_novelty") and results.get("hypothesis_generation"):
+                    hg = results["hypothesis_generation"]
+                    if isinstance(hg, dict):
+                        hg["ideation_novelty"] = results["ideation_novelty"]
+                        results["hypothesis_generation"] = hg
 
-            # 保存假设到数据库
-            try:
-                self._save_hypotheses(project_id, research_question, results)
-            except Exception as save_err:
-                logger.warning(f"保存假设/证据链失败: {save_err}")
+                try:
+                    self._exec_evidence_reasoning(project_id, research_question, results)
+                except Exception as er_err:
+                    logger.warning(f"证据链迭代验证失败: {er_err}")
+
+                # ── P1: 假设树评分与剪枝 ──
+                try:
+                    self._exec_hypothesis_tree(results, research_question)
+                except Exception as ht_err:
+                    logger.warning(f"假设树剪枝失败: {ht_err}")
+
+                try:
+                    self._exec_knowledge_graph(
+                        project_id, research_question, results, project_mode, stage="post_evidence"
+                    )
+                except Exception as kg_err:
+                    logger.warning(f"知识图谱证据链更新失败: {kg_err}")
+
+                try:
+                    self._save_hypotheses(project_id, research_question, results)
+                except Exception as save_err:
+                    logger.warning(f"保存假设/证据链失败: {save_err}")
             
             # ── 阶段 5: HypothesisReviewAgent ──
-            self._run_stage(stages, 4, results, research_question, project_id,
-                lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
+            if start_idx <= 4:
+                self._run_stage(stages, 4, results, research_question, project_id,
+                    lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
             
             # ── 阶段 6: ExperimentDesignAgent ──
-            self._run_stage(stages, 5, results, research_question, project_id,
-                lambda: self._exec_experiment_design(
-                    results.get("hypothesis_review"),
-                    project_id,
-                    project_mode,
-                ))
+            if start_idx <= 5:
+                self._run_stage(stages, 5, results, research_question, project_id,
+                    lambda: self._exec_experiment_design(
+                        results.get("hypothesis_review"),
+                        project_id,
+                        project_mode,
+                    ))
             
             # ── 阶段 7: SmallValidationAgent ──
-            self._run_stage(stages, 6, results, research_question, project_id,
-                lambda: self._exec_small_validation(
-                    results.get("experiment_design"),
-                    results.get("hypothesis_review"),
-                    project_id,
-                    project_mode,
-                ))
+            if start_idx <= 6:
+                self._run_stage(stages, 6, results, research_question, project_id,
+                    lambda: self._exec_small_validation(
+                        results.get("experiment_design"),
+                        results.get("hypothesis_review"),
+                        project_id,
+                        project_mode,
+                    ))
             
             # ── 阶段 8: ReportGenerationAgent ──
-            def _exec_report():
-                pipeline_run_info = self._build_pipeline_run_info()
-                return self._exec_report_generation(
-                    results, pipeline_run_info, project_mode
-                )
-            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+            if start_idx <= 7:
+                def _exec_report():
+                    pipeline_run_info = self._build_pipeline_run_info()
+                    return self._exec_report_generation(
+                        results, pipeline_run_info, project_mode
+                    )
+                self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
             
-            # 创建报告记录
-            final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+                final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+
+            # ── P5: Discovery 开放循环（Sakana-like）──
+            if start_idx <= 3 and self._run_options.get("pipeline_mode") == PipelineMode.DISCOVERY.value:
+                discovery_meta = self._run_discovery_loop(
+                    stages, results, research_question, project_id, project_mode
+                )
+                if discovery_meta:
+                    results["discovery_loop"] = discovery_meta
+                    if discovery_meta.get("final_report_id"):
+                        final_report_id = discovery_meta["final_report_id"]
             
             # Pipeline 完成
             pipeline_end = datetime.now(CHINA_TZ)
@@ -306,6 +838,7 @@ class PipelineService:
                 final_report=results.get('report_generation'),
                 final_report_id=final_report_id,
                 run_id=self.run_id,
+                extra_metadata=self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else None,
                 created_at=pipeline_start,
                 completed_at=pipeline_end,
                 failed_stage=None
@@ -620,14 +1153,21 @@ class PipelineService:
 
         return result_dict
     
-    def _exec_hypothesis_generation(self, problem_understanding: Optional[Dict], literature_mining: Optional[Dict], knowledge_gap: Optional[Dict]) -> dict:
+    def _exec_hypothesis_generation(
+        self,
+        problem_understanding: Optional[Dict],
+        literature_mining: Optional[Dict],
+        knowledge_gap: Optional[Dict],
+        ideation_novelty: Optional[Dict] = None,
+    ) -> dict:
         agent = get_hypothesis_generation_agent()
         pu = problem_understanding or {}
         lm = literature_mining or {}
         kg = knowledge_gap or {}
         research_question = pu.get("research_question", "")
+        num_ideas = int(self._run_options.get("num_ideas", 3))
+        extra_constraints = list(self._discovery_refinement or [])
 
-        # ── 构建数据上下文 ──
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id)
 
@@ -639,6 +1179,9 @@ class PipelineService:
             project_id=project_id,
             data_context=data_context,
             project_mode=self._get_project_mode(project_id),
+            num_ideas=num_ideas,
+            ideation_context=ideation_novelty,
+            extra_constraints=extra_constraints,
         )
         result_dict = self._safe_model_dump(result)
 
@@ -663,6 +1206,9 @@ class PipelineService:
                         ],
                         project_id=project_id,
                         data_context=data_context,
+                        num_ideas=num_ideas,
+                        ideation_context=ideation_novelty,
+                        extra_constraints=extra_constraints,
                     )
                     result_dict = self._safe_model_dump(retry)
                     # 重试后再做一次对齐检查
@@ -674,6 +1220,44 @@ class PipelineService:
                 logger.warning(f"问题对齐检查失败: {align_err}")
 
         return result_dict
+
+    def _exec_hypothesis_tree(self, results: Dict[str, Any], research_question: str) -> Dict[str, Any]:
+        from app.services.hypothesis_tree_service import get_hypothesis_tree_service
+
+        hg = results.get("hypothesis_generation") or {}
+        hypotheses = hg.get("hypotheses") or []
+        if not hypotheses:
+            return {}
+
+        alignment_data = hg.get("alignment") or {}
+        alignments = alignment_data.get("alignments") or []
+        lit = results.get("literature_mining") or {}
+        facts = lit.get("facts") or []
+
+        tree_svc = get_hypothesis_tree_service()
+        tree = tree_svc.build_and_prune(hypotheses, alignments, facts, max_branches=3)
+        hg["hypothesis_tree"] = tree
+
+        sel_idx = tree.get("selected_hypothesis_index", 0)
+        if sel_idx < len(hypotheses):
+            selected = hypotheses[sel_idx]
+            hg["primary_hypothesis"] = selected
+            hg["hypotheses"] = [selected] + [
+                h for i, h in enumerate(hypotheses) if i != sel_idx and not h.get("off_topic")
+            ][:2]
+
+        results["hypothesis_generation"] = hg
+        self._record_closed_loop_event(
+            "hypothesis_tree",
+            {
+                "round": 1,
+                "selected_branch": tree.get("selected_branch_id"),
+                "composite_score": (tree.get("branches") or [{}])[0].get("composite_score") if tree.get("branches") else None,
+                "summary": tree.get("iteration_summary"),
+                "quality_trend": tree.get("quality_trend"),
+            },
+        )
+        return tree
     
     def _exec_hypothesis_review(self, hypothesis_generation: Optional[Dict]) -> dict:
         from app.agents.hypothesis_review_agent import HypothesisCandidate
@@ -686,14 +1270,15 @@ class PipelineService:
             HypothesisCandidate(
                 hypothesis=h.get("hypothesis", ""),
                 rationale=h.get("rationale", ""),
-                novelty=h.get("novelty", 0),
-                testability=h.get("testability", 0),
+                novelty=h.get("novelty", ""),
+                testability=h.get("testability", ""),
                 required_data=h.get("required_data", ""),
                 possible_method=h.get("possible_method", ""),
-                risk=h.get("risk", 0)
+                risk=h.get("risk", ""),
             )
             for h in hypotheses
         ]
+        original_candidates = candidates
         lit_mining = self._stage_results.get("literature_mining", {})
         kg_evidence = {}
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
@@ -711,8 +1296,24 @@ class PipelineService:
             retrieved_papers=self._build_retrieved_papers(lit_mining),
             literature_facts=lit_mining.get("facts", []),
             alignments=alignments,
+            original_hypotheses=original_candidates,
+            research_question=self.db_pipeline_run.research_question if self.db_pipeline_run else "",
         )
         result_dict = self._safe_model_dump(result)
+        ensemble = (result_dict.get("skill_outputs") or {}).get("ensemble_review") or {}
+        if ensemble:
+            self._record_closed_loop_event(
+                "ensemble_review",
+                {
+                    "round": 2,
+                    "overall": ensemble.get("overall"),
+                    "decision": ensemble.get("decision"),
+                    "quality_trend": [
+                        {"stage": "hypothesis_tree", "score": (hg.get("hypothesis_tree") or {}).get("branches", [{}])[0].get("composite_score")},
+                        {"stage": "ensemble_review", "score": ensemble.get("overall")},
+                    ],
+                },
+            )
         if kg_evidence:
             result_dict["evidence_graph"] = kg_evidence
             support_edges = [
@@ -723,7 +1324,78 @@ class PipelineService:
                 "support_edge_count": len(support_edges),
                 "evidence_nodes": len(kg_evidence.get("nodes", [])),
             }
+        if ensemble:
+            result_dict["primary_index"] = ensemble.get("target_hypothesis_index", 0)
+            result_dict["ensemble_decision"] = ensemble.get("decision")
+            result_dict["ensemble_overall"] = ensemble.get("overall")
+        if project_id:
+            try:
+                self._apply_hypothesis_review_scores(project_id, hg, result_dict)
+            except Exception as exc:
+                logger.warning(f"回写假设评审分数失败: {exc}")
         return result_dict
+    
+    def _apply_hypothesis_review_scores(
+        self,
+        project_id: str,
+        hypothesis_generation: Dict[str, Any],
+        review_result: Dict[str, Any],
+    ) -> None:
+        """将集成评审结果回写至 DB 假设记录。"""
+        from app.services.hypothesis_service import HypothesisService
+
+        hypo_svc = HypothesisService(self.db)
+        db_hypos = hypo_svc.get_hypotheses_by_project(project_id, limit=50)
+        if not db_hypos:
+            return
+
+        reviews = review_result.get("reviews") or []
+        ensemble = (review_result.get("skill_outputs") or {}).get("ensemble_review") or {}
+        primary_idx = review_result.get("primary_index")
+        if primary_idx is None:
+            primary_idx = ensemble.get("target_hypothesis_index", 0)
+        try:
+            primary_idx = int(primary_idx)
+        except (TypeError, ValueError):
+            primary_idx = 0
+
+        decision = ensemble.get("decision") or review_result.get("ensemble_decision")
+        overall = ensemble.get("overall") or review_result.get("ensemble_overall")
+
+        hg_hypos = hypothesis_generation.get("hypotheses") or []
+        for i, review in enumerate(reviews):
+            review_text = (review.get("hypothesis") or "").strip()
+            db_hypo = None
+            if i < len(db_hypos):
+                db_hypo = db_hypos[i]
+            if review_text:
+                for h in db_hypos:
+                    if h.hypothesis.strip() == review_text or review_text in h.hypothesis:
+                        db_hypo = h
+                        break
+            if not db_hypo and i < len(hg_hypos):
+                hypo_text = (hg_hypos[i].get("hypothesis") or "").strip()
+                for h in db_hypos:
+                    if h.hypothesis.strip() == hypo_text:
+                        db_hypo = h
+                        break
+            if not db_hypo:
+                continue
+
+            score = review.get("overall_score")
+            if score is None and i == primary_idx:
+                score = overall
+            confidence = float(score or 5.0) / 10.0
+            status = db_hypo.status or "draft"
+            if i == primary_idx:
+                if decision == "Accept":
+                    status = "accepted"
+                elif decision == "Reject":
+                    status = "rejected"
+            hypo_svc.update_hypothesis(db_hypo.id, {"confidence": confidence, "status": status})
+
+        if 0 <= primary_idx < len(db_hypos):
+            hypo_svc.set_primary_hypothesis(project_id, db_hypos[primary_idx].id)
     
     def _exec_experiment_design(
         self,
@@ -737,7 +1409,16 @@ class PipelineService:
         if not reviews:
             return {}
 
-        best_review = reviews[0]
+        primary_idx = hr.get("primary_index")
+        if primary_idx is None:
+            ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
+            primary_idx = ensemble.get("target_hypothesis_index", 0)
+        try:
+            primary_idx = int(primary_idx)
+        except (TypeError, ValueError):
+            primary_idx = 0
+        primary_idx = min(max(0, primary_idx), len(reviews) - 1)
+        best_review = reviews[primary_idx]
         data_context = self._build_data_context(project_id) if project_id else {}
         lit_mining = self._stage_results.get("literature_mining", {})
 
@@ -868,9 +1549,58 @@ class PipelineService:
             multimodal_datasets=multimodal_datasets,
             modeling_results=modeling_results,
             project_mode=project_mode,
+            run_id=self.run_id,
+            project_id=project_id,
         )
+        if isinstance(result, dict) and result.get("sandbox_execution"):
+            self._record_closed_loop_event(
+                "sandbox_validation",
+                {
+                    "round": 3,
+                    "success": result["sandbox_execution"].get("success"),
+                    "metrics": result["sandbox_execution"].get("metrics"),
+                    "experiment_id": result["sandbox_execution"].get("experiment_id"),
+                    "quality_trend_entry": {
+                        "stage": "sandbox",
+                        "score": 8.0 if result["sandbox_execution"].get("success") else 3.0,
+                    },
+                },
+            )
+
+        if self._run_options.get("force_sandbox"):
+            sb = (result or {}).get("sandbox_execution") or {}
+            if not sb.get("success"):
+                result["human_review_required"] = True
+                result.setdefault("warnings", []).append(
+                    "Discovery 模式要求沙箱实测成功；当前执行未通过，需人工介入或补充数据。"
+                )
+
+        if isinstance(result, dict):
+            data_rows = []
+            for ds in multimodal_datasets:
+                data_rows.extend((ds.get("preview") or ds.get("sample_data") or [])[:100])
+            result = self._apply_plot_quality_loop(
+                result,
+                hypothesis=hypothesis,
+                data_rows=data_rows or None,
+            )
+
         return result if isinstance(result, dict) else self._safe_model_dump(result)
-    
+
+    def _mark_stage_human_review(self, stage_idx: int, reason: str) -> None:
+        """将阶段标记为需人工复核。"""
+        db_stage = self.db_stage_executions.get(stage_idx + 1)
+        if not db_stage:
+            return
+        db_stage.status = DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
+        meta = db_stage.extra_metadata if isinstance(db_stage.extra_metadata, dict) else {}
+        meta["human_review_reason"] = reason
+        db_stage.extra_metadata = meta
+        try:
+            self.db.commit()
+        except Exception:
+            pass
+
     def _exec_report_generation(
         self,
         results: Dict[str, Any],
@@ -957,6 +1687,21 @@ class PipelineService:
                 kg_graph = None
         if kg_graph:
             result_dict = agent._enrich_report_with_knowledge_graph(result_dict, kg_graph)
+
+        hypothesis = ed.get("hypothesis") or ""
+        reviews = hr.get("reviews") or []
+        if not hypothesis and reviews:
+            hypothesis = reviews[0].get("hypothesis", "")
+        data_rows = []
+        for ds in multimodal_datasets:
+            data_rows.extend((ds.get("preview") or [])[:100])
+        result_dict = self._apply_plot_quality_loop(
+            result_dict,
+            hypothesis=hypothesis,
+            data_rows=data_rows or None,
+        )
+        if result_dict.get("human_review_required"):
+            self._mark_stage_human_review(7, "图表 VLM 评审未达标，需人工复核")
 
         return result_dict
 
@@ -1103,6 +1848,13 @@ class PipelineService:
     def _create_pipeline_run(self, request: PipelineRunRequest):
         """创建 Pipeline 运行记录"""
         logger.info(f"创建 PipelineRun 记录 run_id={self.run_id} project_id={request.project_id}")
+        set_prompt_project_id(request.project_id)
+        prompt_svc = get_prompt_override_service(self.db)
+        overrides_used = {}
+        for d in STAGE_DEFS:
+            info = prompt_svc.get_prompt_info(request.project_id, d["key"])
+            if info.get("has_override"):
+                overrides_used[d["key"]] = True
         self.db_pipeline_run = DB_PipelineRun(
             id=str(uuid.uuid4()),
             run_id=self.run_id,
@@ -1111,7 +1863,9 @@ class PipelineService:
             status=DB_PipelineStatus.RUNNING,
             started_at=datetime.now(CHINA_TZ),
             input_data=request.model_dump(),
-            version=1
+            version=1,
+            prompt_versions_used={"overrides": overrides_used} if overrides_used else None,
+            extra_metadata={"run_options": resolve_run_options((request.options or {}))},
         )
         self.db.add(self.db_pipeline_run)
         self.db.commit()
@@ -1172,6 +1926,17 @@ class PipelineService:
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.output_data = results
         self.db_pipeline_run.current_stage = None
+        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        meta["auxiliary_results"] = {
+            k: results[k]
+            for k in (
+                "data_finder", "knowledge_graph", "evidence_reasoning",
+                "ideation_novelty", "discovery_loop",
+            )
+            if k in results
+        }
+        meta["run_options"] = self._run_options
+        self.db_pipeline_run.extra_metadata = meta
         if final_report_id:
             self.db_pipeline_run.final_report_id = final_report_id
         try:
@@ -1191,6 +1956,32 @@ class PipelineService:
                 logger.warning(f"[Pipeline] 项目 {self.db_pipeline_run.project_id} 未找到，无法更新状态")
         except Exception:
             logger.exception("_complete_pipeline_run: 更新项目状态失败")
+
+    def _record_closed_loop_event(self, event_type: str, payload: Dict[str, Any]) -> None:
+        """记录闭环迭代事件，供前端展示质量趋势。"""
+        if not self.db_pipeline_run:
+            return
+        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        events = list(meta.get("closed_loop_events") or [])
+        from datetime import datetime, timezone, timedelta
+        events.append({
+            "type": event_type,
+            "at": datetime.now(timezone(timedelta(hours=8))).isoformat(),
+            **payload,
+        })
+        meta["closed_loop_events"] = events[-20:]
+        trend = list(meta.get("quality_trend") or [])
+        qt = payload.get("quality_trend_entry") or payload.get("quality_trend")
+        if isinstance(qt, dict) and qt.get("stage"):
+            trend.append(qt)
+        elif isinstance(qt, list):
+            trend.extend(qt)
+        meta["quality_trend"] = trend[-15:]
+        self.db_pipeline_run.extra_metadata = meta
+        try:
+            self.db.commit()
+        except Exception:
+            pass
     
     def _fail_pipeline_run(self, completed_at: datetime, total_duration_ms: int, failed_stage_name: Optional[str], error: str):
         try:

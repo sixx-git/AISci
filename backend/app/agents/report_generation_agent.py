@@ -171,6 +171,7 @@ class ReportGenerationAgent:
                 preliminary_analysis_skill_outputs,
                 multimodal_datasets,
                 result.get("report_id", ""),
+                pipeline_run_info,
             )
             result["plots"] = charts_data.get("charts", [])
             result["chart_skill_outputs"] = charts_data.get("skill_outputs", {})
@@ -201,6 +202,25 @@ class ReportGenerationAgent:
                         existing.append(chart)
                         existing_ids.add(pid)
                 result["plots"] = existing
+
+            # ── P0: 绑定沙箱 experiment artifacts 图表 ──
+            if small_validation:
+                sandbox_plots = (small_validation.get("artifacts") or {}).get("plots") or []
+                actual_sv = (small_validation.get("results") or {}).get("actual_results") or {}
+                if not sandbox_plots:
+                    sandbox_plots = actual_sv.get("sandbox_plots") or []
+                existing = result.get("plots") or []
+                existing_ids = {p.get("plot_id") for p in existing}
+                for chart in sandbox_plots:
+                    pid = chart.get("plot_id") or chart.get("title")
+                    if pid and pid not in existing_ids:
+                        chart = dict(chart)
+                        chart.setdefault("is_generated_from_real_data", True)
+                        chart.setdefault("source", "sandbox_execution")
+                        existing.append(chart)
+                        existing_ids.add(pid)
+                result["plots"] = existing
+                result["experiment_artifacts"] = small_validation.get("artifacts") or {}
 
             # ── 报告质量检查 ──
             logger.info(f"[报告生成] 步骤5: 开始质量检查")
@@ -997,8 +1017,21 @@ class ReportGenerationAgent:
         preliminary_analysis_skill_outputs: Optional[Dict[str, Any]],
         multimodal_datasets: Optional[List[Dict[str, Any]]],
         report_id: str,
+        pipeline_run_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         import asyncio
+        from pathlib import Path
+        from app.services.experiment_sandbox_service import RUNS_ROOT
+
+        output_dir = ""
+        run_id = (pipeline_run_info or {}).get("run_id")
+        if run_id:
+            charts_dir = RUNS_ROOT / str(run_id) / "report_charts"
+            charts_dir.mkdir(parents=True, exist_ok=True)
+            output_dir = str(charts_dir)
+        elif report_id:
+            output_dir = str(Path(__file__).resolve().parent.parent / "storage" / "reports" / report_id / "charts")
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         async def _run():
             outputs: Dict[str, Any] = {"charts": [], "skill_outputs": {}}
@@ -1040,7 +1073,7 @@ class ReportGenerationAgent:
                     input_data={
                         "plot_specs": plot_specs,
                         "data": data_rows,
-                        "output_dir": "",
+                        "output_dir": output_dir,
                         "format": "both",
                         "dpi": 150,
                         "figure_size": (10, 6),
@@ -1072,7 +1105,7 @@ class ReportGenerationAgent:
                     input_data={
                         "plot_specs": plot_specs,
                         "data": data_rows,
-                        "output_dir": "",
+                        "output_dir": output_dir,
                         "format": "both",
                         "dpi": 150,
                         "figure_size": (10, 6),
@@ -1329,10 +1362,28 @@ class ReportGenerationAgent:
                 result_type = sv_results.get("result_type_summary", "none")
                 enriched = "## 11. Results\n\n"
                 modeling_result = None
+                sandbox_success = False
 
                 actual = sv_results.get("actual_results", {})
-                if isinstance(actual, dict):
-                    modeling_result = actual.get("modeling_result")
+                if not isinstance(actual, dict):
+                    actual = {}
+                sandbox_exec = actual.get("sandbox_execution") or {}
+                sandbox_success = bool(sandbox_exec.get("success"))
+                if sandbox_success:
+                    enriched += "### Experiment Run（沙箱实测）\n\n"
+                    enriched += "- 执行状态: 成功\n"
+                    enriched += f"- 耗时: {sandbox_exec.get('duration_ms', '-')} ms\n"
+                    enriched += f"- 产物目录: `{sandbox_exec.get('artifact_dir', '-')}`\n"
+                    metrics = sandbox_exec.get("metrics") or actual.get("sandbox_metrics") or {}
+                    if isinstance(metrics, dict) and metrics:
+                        enriched += "- 实测指标:\n"
+                        for k, v in list(metrics.items())[:8]:
+                            if k not in ("stdout_preview", "note"):
+                                enriched += f"  - {k}: {v}\n"
+                    enriched += "\n"
+                    enriched += "> 以下 Results 以沙箱实测为准；LLM 模拟/预期结果已降级展示。\n\n"
+
+                modeling_result = actual.get("modeling_result")
                 if modeling_result and isinstance(modeling_result, dict):
                     enriched += "### Modeling Results（数据建模评估）\n\n"
                     if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
@@ -1359,9 +1410,9 @@ class ReportGenerationAgent:
                                 enriched += f"  - {item.get('reason', '')} → {item.get('suggestion', '')}\n"
                     enriched += "\n"
 
-                if actual and isinstance(actual, dict) and actual.get("summary_statistics"):
+                if not sandbox_success and actual.get("summary_statistics"):
                     enriched += "### Actual Results（实际分析结果）\n\n"
-                    enriched += f"- 基于真实数据的统计分析已完成\n"
+                    enriched += "- 基于真实数据的统计分析已完成\n"
                     enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
                     if actual.get("correlations"):
                         enriched += f"- 检测到 {len(actual.get('correlations', []))} 对相关性\n"
@@ -1370,7 +1421,7 @@ class ReportGenerationAgent:
                     enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
 
                 simulated = sv_results.get("simulated_results", {})
-                if simulated and isinstance(simulated, dict) and simulated.get("data"):
+                if not sandbox_success and simulated and isinstance(simulated, dict) and simulated.get("data"):
                     enriched += "### Simulated Results（模拟结果）\n\n"
                     enriched += f"- 模拟数据已生成\n"
                     if simulated.get("assumptions"):

@@ -20,7 +20,9 @@ from app.schemas.research import (
     ReportCreate,
     ReportDBResponse
 )
+from app.schemas.human_loop import ReportReviseRequest
 from app.services.report_service import ReportService
+from app.services.stage_chat_service import get_stage_chat_service
 
 router = APIRouter(tags=["reports"])
 settings = get_settings()
@@ -252,6 +254,23 @@ async def get_project_reports(
             reports,
             message=f"获取研究报告列表成功，共 {len(reports)} 条"
         )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/revise", response_model=ApiResponse[dict])
+async def revise_report(body: ReportReviseRequest, db: Session = Depends(get_db)):
+    """根据用户反馈修改报告（多轮人在回路）。"""
+    try:
+        svc = get_stage_chat_service(db)
+        result = svc.revise_report(
+            project_id=body.project_id,
+            report_id=body.report_id,
+            user_message=body.message,
+        )
+        return success(result, message="报告已根据反馈更新")
+    except ValueError as e:
+        return error(str(e), code=400)
     except Exception as e:
         return error(str(e))
 

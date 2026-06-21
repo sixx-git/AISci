@@ -59,6 +59,11 @@ class PipelineStageLog(BaseModel):
     token_count: Optional[int] = Field(None, description="Token 消耗量")
     prompt_used: Optional[str] = Field(None, description="使用的提示词")
     model_parameters: Optional[Dict[str, Any]] = Field(None, description="模型参数")
+    human_modified_output: Optional[Dict[str, Any]] = Field(None, description="人工修改后的输出")
+    human_reviewed: bool = Field(False, description="是否已人工审阅")
+    human_feedback: Optional[str] = Field(None, description="人工反馈说明")
+    edited_at: Optional[str] = Field(None, description="人工编辑时间")
+    revision_history: Optional[List[Dict[str, Any]]] = Field(None, description="修订历史")
 
 
 class PipelineRunResponse(BaseModel):
@@ -89,6 +94,12 @@ class PipelineStageExecutionSummary(BaseModel):
     model_used: Optional[str] = None
     prompt_used: Optional[str] = None
     model_parameters: Optional[Dict[str, Any]] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
+    human_modified_output: Optional[Dict[str, Any]] = None
+    human_reviewed: bool = False
+    human_feedback: Optional[str] = None
+    edited_at: Optional[str] = None
+    revision_history: Optional[List[Dict[str, Any]]] = None
 
 
 class PipelineRunSummary(BaseModel):
@@ -104,6 +115,7 @@ class PipelineRunSummary(BaseModel):
     final_report_id: Optional[str]
     failed_stage: Optional[str]
     created_at: datetime
+    extra_metadata: Optional[Dict[str, Any]] = None
 
 
 class PipelineRunDetail(PipelineRunSummary):
@@ -134,5 +146,6 @@ class PipelineRunResult(BaseModel):
     final_report: Optional[Dict[str, Any]] = None
     final_report_id: Optional[str] = Field(None, description="生成的报告 ID")
     failed_stage: Optional[str] = Field(None, description="失败的阶段名称")
+    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="闭环事件与质量趋势")
     created_at: datetime
     completed_at: Optional[datetime] = None

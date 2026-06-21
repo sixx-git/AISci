@@ -1,15 +1,26 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
+import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
+import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
+import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
+import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
+import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
+import { humanLoopService } from '@/services/humanLoopService';
 import type {
   AgentNodeData,
   AgentStatus,
+  EnsembleReviewData,
+  IdeationNoveltyData,
+  PlotQualityData,
+  PipelineRunExtraMetadata,
+  PipelineRunMode,
   PipelineRunResult,
   PipelineStageLog,
 } from '@/types';
@@ -108,6 +119,11 @@ function summarizeStageData(stageName: string, data: unknown): string {
       const hyps = d.hypotheses as unknown[];
       parts.push(`生成了 ${hyps.length} 条假设`);
     }
+    const tree = d.hypothesis_tree as Record<string, unknown> | undefined;
+    if (tree?.branches && Array.isArray(tree.branches)) {
+      parts.push(`假设树保留 Top-${(tree.branches as unknown[]).length}`);
+      if (tree.selected_branch_id) parts.push(`选中: ${String(tree.selected_branch_id).slice(0, 12)}`);
+    }
     if (d.off_topic_count != null) {
       parts.push(`${d.off_topic_count} 条偏题`);
     }
@@ -124,6 +140,21 @@ function summarizeStageData(stageName: string, data: unknown): string {
         }
       }
     }
+    return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
+  }
+
+  if (stageName === 'hypothesis_review') {
+    const parts: string[] = [];
+    if (d.reviews && Array.isArray(d.reviews)) {
+      parts.push(`${(d.reviews as unknown[]).length} 条评审`);
+    }
+    const so = d.skill_outputs as Record<string, unknown> | undefined;
+    const ensemble = (so?.ensemble_review || d.ensemble_review) as Record<string, unknown> | undefined;
+    if (ensemble) {
+      if (ensemble.overall != null) parts.push(`集成 ${Number(ensemble.overall).toFixed(1)}`);
+      if (ensemble.decision) parts.push(String(ensemble.decision));
+    }
+    if (d.ensemble_overall != null) parts.push(`综合 ${Number(d.ensemble_overall).toFixed(1)}`);
     return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
   }
 
@@ -154,6 +185,10 @@ function summarizeStageData(stageName: string, data: unknown): string {
 
   if (stageName === 'small_validation') {
     const parts: string[] = [];
+    if (d.sandbox_execution && typeof d.sandbox_execution === 'object') {
+      const sb = d.sandbox_execution as Record<string, unknown>;
+      parts.push(sb.success ? '沙箱实测成功' : '沙箱执行失败');
+    }
     if (d.results && typeof d.results === 'object') {
       const r = d.results as Record<string, unknown>;
       if (r.result_type_summary && typeof r.result_type_summary === 'string') {
@@ -343,6 +378,11 @@ function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNode
     model_used: stage.model_used ?? node.model_used,
     model_parameters: stage.model_parameters ?? node.model_parameters,
     token_count: stage.token_count ?? node.token_count,
+    human_modified_output: stage.human_modified_output ?? node.human_modified_output,
+    human_reviewed: stage.human_reviewed ?? node.human_reviewed,
+    human_feedback: stage.human_feedback ?? node.human_feedback,
+    edited_at: stage.edited_at ?? node.edited_at,
+    revision_history: stage.revision_history ?? node.revision_history,
     model: stage.model_used || node.model,
     inputSummary: stage.input_data
       ? summarizeStageData(stage.stage ?? '', stage.input_data)
@@ -400,6 +440,9 @@ export function WorkflowPage({
   const [hasExistingRuns, setHasExistingRuns] = useState<boolean | null>(null);
   const [staleWarning, setStaleWarning] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
+  const [pipelineMode, setPipelineMode] = useState<PipelineRunMode>('teaching');
+  const [numIdeas, setNumIdeas] = useState(3);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
@@ -410,6 +453,37 @@ export function WorkflowPage({
   const finalResearchQuestion = (researchQuestion ?? '').trim() || localResearchQuestion.trim();
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+
+  const ensembleReview = useMemo((): EnsembleReviewData | null => {
+    if (selectedNode?.id !== 'evaluation' || !selectedNode.output_data) return null;
+    const out = selectedNode.output_data as Record<string, unknown>;
+    const so = out.skill_outputs as Record<string, unknown> | undefined;
+    const raw = (so?.ensemble_review || out.ensemble_review) as EnsembleReviewData | undefined;
+    if (!raw) return null;
+    return {
+      ...raw,
+      overall: raw.overall ?? (out.ensemble_overall as number | undefined),
+      decision: raw.decision ?? (out.ensemble_decision as string | undefined),
+    };
+  }, [selectedNode]);
+
+  const ideationData = useMemo((): IdeationNoveltyData | null => {
+    const aux = runExtraMetadata?.auxiliary_results?.ideation_novelty as IdeationNoveltyData | undefined;
+    if (aux?.suggested_angles?.length) return aux;
+    const hypoNode = nodes.find((n) => n.id === 'hypothesis');
+    const out = hypoNode?.output_data as Record<string, unknown> | undefined;
+    const embedded = out?.ideation_novelty as IdeationNoveltyData | undefined;
+    return embedded?.suggested_angles?.length ? embedded : aux ?? null;
+  }, [nodes, runExtraMetadata]);
+
+  const plotQualityData = useMemo((): PlotQualityData | null => {
+    for (const nodeId of ['validation', 'report'] as const) {
+      const out = nodes.find((n) => n.id === nodeId)?.output_data as Record<string, unknown> | undefined;
+      const pq = out?.plot_quality as PlotQualityData | undefined;
+      if (pq?.critique) return pq;
+    }
+    return null;
+  }, [nodes]);
 
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
@@ -502,6 +576,7 @@ export function WorkflowPage({
       }
       const runDetail = detailRes.data;
       setHasExistingRuns(true);
+      setRunExtraMetadata(runDetail.extra_metadata ?? null);
       setNodes(() => {
         const base = createInitialNodes();
         return base.map((node) => {
@@ -524,6 +599,7 @@ export function WorkflowPage({
       const detailRes = await pipelineService.getRunDetail(runId);
       if (detailRes.code !== 200 || !detailRes.data) return;
       const runDetail = detailRes.data;
+      setRunExtraMetadata(runDetail.extra_metadata ?? null);
       setNodes(createInitialNodes().map((node) => {
         const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
         return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
@@ -681,7 +757,12 @@ export function WorkflowPage({
 
     try {
       console.log('[Pipeline] submitting POST /pipeline/run projectId=', projectId, 'question=', finalResearchQuestion?.slice(0, 50));
-      const response = await pipelineService.run(projectId, finalResearchQuestion);
+      const response = await pipelineService.run(projectId, finalResearchQuestion, {
+        pipeline_mode: pipelineMode,
+        num_ideas: numIdeas,
+        discovery_max_rounds: 3,
+        enable_plot_vlm_critique: true,
+      });
       const result: PipelineRunResult = response.data;
 
       if (!result || !result.run_id) {
@@ -708,6 +789,8 @@ export function WorkflowPage({
     projectId,
     finalResearchQuestion,
     startPolling,
+    pipelineMode,
+    numIdeas,
   ]);
 
   // ========== 暂停 ==========
@@ -759,6 +842,28 @@ export function WorkflowPage({
     [projectId, handleRunAll],
   );
 
+  const handleRerunFromReview = useCallback(async () => {
+    if (!projectId || !currentRunId) return;
+    try {
+      const res = await humanLoopService.rerunFromStage({
+        project_id: projectId,
+        run_id: currentRunId,
+        stage: 'hypothesis_review',
+        use_human_modified_output: true,
+      });
+      if (res.code === 200 && res.data?.run_id) {
+        const newRunId = res.data.run_id;
+        setCurrentRunId(newRunId);
+        currentRunIdRef.current = newRunId;
+        setActiveRunId(projectId, newRunId);
+        setRunState('running');
+        startPolling(newRunId);
+      }
+    } catch (err) {
+      console.error('从假设评审重跑失败', err);
+    }
+  }, [projectId, currentRunId, startPolling]);
+
   // ========== 计算状态摘要 ==========
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
@@ -792,6 +897,39 @@ export function WorkflowPage({
             run_id: {currentRunId}
           </p>
         )}
+
+        {/* P5: Pipeline 运行模式 */}
+        <div className="mt-4 p-3 rounded-lg border border-dark-700 bg-dark-800/30 flex flex-wrap items-end gap-4">
+          <div>
+            <label className="text-[11px] text-gray-500 block mb-1">运行模式</label>
+            <select
+              value={pipelineMode}
+              onChange={(e) => setPipelineMode(e.target.value as PipelineRunMode)}
+              disabled={runState !== 'idle'}
+              className="bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+            >
+              <option value="teaching">Teaching — 强 HITL（研究生仿真）</option>
+              <option value="discovery">Discovery — Sakana-like 自动循环</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] text-gray-500 block mb-1">num_ideas</label>
+            <input
+              type="number"
+              min={1}
+              max={8}
+              value={numIdeas}
+              onChange={(e) => setNumIdeas(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
+              disabled={runState !== 'idle'}
+              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+            />
+          </div>
+          <p className="text-[11px] text-gray-500 flex-1 min-w-[200px]">
+            {pipelineMode === 'discovery'
+              ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献（arXiv+向量检索）并重跑假设→实验→报告。'
+              : 'Teaching：每阶段可 HITL 编辑/重跑；Ideation 新颖性 + num_ideas 方向供假设树选择。'}
+          </p>
+        </div>
       </div>
 
       {/* 研究问题缺失时的兜底输入 */}
@@ -946,6 +1084,18 @@ export function WorkflowPage({
         </div>
       )}
 
+      {/* 闭环质量趋势 */}
+      {(runExtraMetadata?.closed_loop_events?.length || runExtraMetadata?.quality_trend?.length) ? (
+        <ClosedLoopTimeline
+          events={runExtraMetadata?.closed_loop_events}
+          qualityTrend={runExtraMetadata?.quality_trend}
+        />
+      ) : null}
+
+      {ideationData && (
+        <IdeationNoveltyPanel ideation={ideationData} />
+      )}
+
       {/* 操作栏 */}
       <div className="mb-6">
         <WorkflowActionBar
@@ -985,8 +1135,43 @@ export function WorkflowPage({
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={() => handleRerun()} />
 
+          {ensembleReview && (
+            <EnsembleReviewPanel
+              review={ensembleReview}
+              onRerunFromReview={currentRunId ? handleRerunFromReview : undefined}
+            />
+          )}
+
+          {plotQualityData && selectedNode && (selectedNode.id === 'validation' || selectedNode.id === 'report') && (
+            <PlotCritiquePanel plotQuality={plotQualityData} />
+          )}
+
+          {projectId && currentRunId && selectedNode && (
+            <StageHumanLoopPanel
+              projectId={projectId}
+              runId={currentRunId}
+              nodeId={selectedNode.id}
+              researchQuestion={researchQuestion}
+              inputData={selectedNode.input_data}
+              outputData={selectedNode.output_data}
+              humanModifiedOutput={selectedNode.human_modified_output}
+              humanReviewed={selectedNode.human_reviewed}
+              humanFeedback={selectedNode.human_feedback}
+              editedAt={selectedNode.edited_at}
+              revisionHistory={selectedNode.revision_history}
+              onUpdated={() => refreshFromRunDetail(currentRunId)}
+              onRerunStarted={(newRunId) => {
+                setCurrentRunId(newRunId);
+                currentRunIdRef.current = newRunId;
+                if (projectId) setActiveRunId(projectId, newRunId);
+                startPolling(newRunId);
+              }}
+            />
+          )}
+
           {selectedNode && selectedNode.status === 'human_review_required' && (
-            <HumanInLoopCard />)}
+            <HumanInLoopCard />
+          )}
         </div>
       </div>
     </div>

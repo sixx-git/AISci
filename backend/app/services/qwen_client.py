@@ -561,6 +561,53 @@ class QwenClient:
             repair_attempted=True
         )
 
+    @_with_retry
+    def vision_structured_chat(
+        self,
+        prompt: str,
+        image_base64: str,
+        schema_example: Optional[Union[Dict[str, Any], str]] = None,
+        temperature: float = 0.1,
+        prompt_version: str = "vision",
+        vl_model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """多模态结构化输出（图表 critique 等）。"""
+        if not self.api_key:
+            raise QwenError("QWEN_API_KEY not set")
+
+        model = vl_model or settings.QWEN_VL_MODEL
+        schema_text = json.dumps(schema_example, ensure_ascii=False, indent=2) if isinstance(schema_example, dict) else str(schema_example or "{}")
+        system = (
+            "你是科学图表质量评审助手。仅输出合法 JSON，不要 markdown。"
+            f"\n\n输出格式示例：\n{schema_text}"
+        )
+        messages = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+                ],
+            },
+        ]
+        t0 = time.time()
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=2048,
+            timeout=self.timeout,
+        )
+        raw_content = response.choices[0].message.content or ""
+        duration_ms = int((time.time() - t0) * 1000)
+        try:
+            parsed = _safe_json_loads(raw_content)
+        except json.JSONDecodeError:
+            parsed = _repair_json(raw_content)
+        self._log_call(model, temperature, prompt_version, prompt[:200], json.dumps(parsed, ensure_ascii=False), duration_ms, True)
+        return parsed
+
     # ==================== 多轮对话 ====================
 
     @_with_retry
@@ -664,4 +711,20 @@ def qwen_structured_chat(
         temperature=temperature,
         max_tokens=max_tokens,
         prompt_version=prompt_version
+    )
+
+
+def qwen_vision_structured_chat(
+    prompt: str,
+    image_base64: str,
+    schema_example: Optional[Union[Dict[str, Any], str]] = None,
+    prompt_version: str = "vision",
+) -> Dict[str, Any]:
+    """便捷 VLM 结构化输出（图表 critique）。"""
+    client = get_qwen_client()
+    return client.vision_structured_chat(
+        prompt=prompt,
+        image_base64=image_base64,
+        schema_example=schema_example,
+        prompt_version=prompt_version,
     )
