@@ -7,6 +7,7 @@ import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
+import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
@@ -23,6 +24,9 @@ import type {
   PipelineRunMode,
   PipelineRunResult,
   PipelineStageLog,
+  DiscoveryLoopData,
+  TeachingAutoRefinementData,
+  QualityAcceptance,
 } from '@/types';
 
 interface WorkflowPageProps {
@@ -443,6 +447,8 @@ export function WorkflowPage({
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
   const [pipelineMode, setPipelineMode] = useState<PipelineRunMode>('teaching');
   const [numIdeas, setNumIdeas] = useState(3);
+  const [enableTeachingAutoRefinement, setEnableTeachingAutoRefinement] = useState(true);
+  const [sandboxUseDocker, setSandboxUseDocker] = useState(false);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
@@ -484,6 +490,20 @@ export function WorkflowPage({
     }
     return null;
   }, [nodes]);
+
+  const discoveryLoopData = useMemo((): DiscoveryLoopData | null => {
+    const aux = runExtraMetadata?.auxiliary_results?.discovery_loop as DiscoveryLoopData | undefined;
+    return aux?.history?.length || aux?.version_snapshots?.length ? aux : null;
+  }, [runExtraMetadata]);
+
+  const teachingRefinementData = useMemo((): TeachingAutoRefinementData | null => {
+    const aux = runExtraMetadata?.auxiliary_results?.teaching_auto_refinement as TeachingAutoRefinementData | undefined;
+    return aux?.reran ? aux : null;
+  }, [runExtraMetadata]);
+
+  const qualityAcceptance = useMemo((): QualityAcceptance | null => {
+    return runExtraMetadata?.quality_acceptance ?? null;
+  }, [runExtraMetadata]);
 
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
@@ -762,6 +782,8 @@ export function WorkflowPage({
         num_ideas: numIdeas,
         discovery_max_rounds: 3,
         enable_plot_vlm_critique: true,
+        enable_teaching_auto_refinement: enableTeachingAutoRefinement,
+        sandbox_use_docker: sandboxUseDocker,
       });
       const result: PipelineRunResult = response.data;
 
@@ -791,6 +813,8 @@ export function WorkflowPage({
     startPolling,
     pipelineMode,
     numIdeas,
+    enableTeachingAutoRefinement,
+    sandboxUseDocker,
   ]);
 
   // ========== 暂停 ==========
@@ -924,6 +948,28 @@ export function WorkflowPage({
               className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
             />
           </div>
+          {pipelineMode === 'teaching' && (
+            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enableTeachingAutoRefinement}
+                onChange={(e) => setEnableTeachingAutoRefinement(e.target.checked)}
+                disabled={runState !== 'idle'}
+                className="rounded border-dark-600"
+              />
+              验证失败时自动重跑实验设计
+            </label>
+          )}
+          <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sandboxUseDocker}
+              onChange={(e) => setSandboxUseDocker(e.target.checked)}
+              disabled={runState !== 'idle'}
+              className="rounded border-dark-600"
+            />
+            沙箱 Docker 隔离（需本地 Docker）
+          </label>
           <p className="text-[11px] text-gray-500 flex-1 min-w-[200px]">
             {pipelineMode === 'discovery'
               ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献（arXiv+向量检索）并重跑假设→实验→报告。'
@@ -1091,6 +1137,12 @@ export function WorkflowPage({
           qualityTrend={runExtraMetadata?.quality_trend}
         />
       ) : null}
+
+      <DiscoveryLoopPanel
+        discoveryLoop={discoveryLoopData}
+        teachingRefinement={teachingRefinementData}
+        qualityAcceptance={qualityAcceptance}
+      />
 
       {ideationData && (
         <IdeationNoveltyPanel ideation={ideationData} />

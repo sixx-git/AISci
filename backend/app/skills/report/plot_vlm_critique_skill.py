@@ -44,6 +44,8 @@ class PlotVlmCritiqueSkill(BaseSkill):
             "needs_human_review": needs_human,
             "needs_redraw": needs_redraw,
             "pass_threshold": float(input_data.get("pass_threshold", 6.5)),
+            "review_mode": self._resolve_review_mode(critiques),
+            "degradation_reason": self._degradation_reason(critiques),
         }
         if needs_redraw:
             result.add_warning("部分图表质量未达标，建议重绘或人工复核")
@@ -114,8 +116,13 @@ class PlotVlmCritiqueSkill(BaseSkill):
         title = (plot.get("title") or "").strip()
         has_path = bool(plot.get("path") or plot.get("file_path"))
         has_b64 = bool(plot.get("base64"))
-        score = 6.0
+        has_axes = bool(plot.get("x_label") or plot.get("y_label") or plot.get("axis_labels"))
+        has_legend = plot.get("has_legend") is True or bool(plot.get("legend"))
+        score = 6.5
         issues: List[str] = []
+        if not settings.QWEN_API_KEY or settings.USE_MOCK_LLM:
+            issues.append("未配置 VLM API Key，使用规则降级评审（精度低于真实 VLM）")
+            score -= 0.3
         if not title or title == plot_id:
             score -= 1.0
             issues.append("缺少描述性标题")
@@ -125,16 +132,47 @@ class PlotVlmCritiqueSkill(BaseSkill):
         if plot.get("is_generated_from_real_data") is False:
             score -= 0.5
             issues.append("非真实数据生成")
+        if not has_axes:
+            score -= 0.8
+            issues.append("缺少轴标签元数据")
+        if not has_legend and plot.get("plot_type") in ("line", "bar", "scatter"):
+            score -= 0.4
+            issues.append("建议补充图例")
         score = round(max(1.0, min(10.0, score)), 2)
+        suggestions = ["补充轴标签与图例", "使用更具描述性的标题", "配置 QWEN_API_KEY 启用 VLM 评审"]
+        if score >= 6.5:
+            suggestions = ["可启用 VLM 评审以获得更精确图表诊断"]
         return {
             "plot_id": plot_id,
             "overall_score": score,
             "clarity_score": score,
-            "axis_label_score": score,
+            "axis_label_score": score - (0.8 if not has_axes else 0),
             "misleading_risk": "medium" if score < 6.5 else "low",
             "issues": issues,
-            "suggestions": ["补充轴标签与图例", "使用更具描述性的标题"] if score < 6.5 else [],
+            "suggestions": suggestions if score < 6.5 else suggestions[:1],
             "reviewer": "rule_fallback",
             "needs_redraw": score < 6.5,
             "needs_human_review": score < 5.0,
+            "degradation_reason": "vlm_unavailable" if (not settings.QWEN_API_KEY or settings.USE_MOCK_LLM) else "rule_only",
         }
+
+    @staticmethod
+    def _resolve_review_mode(critiques: List[dict]) -> str:
+        reviewers = {c.get("reviewer") for c in critiques}
+        if reviewers == {"vlm"}:
+            return "vlm"
+        if "vlm" in reviewers:
+            return "mixed"
+        return "rule_fallback"
+
+    @staticmethod
+    def _degradation_reason(critiques: List[dict]) -> Optional[str]:
+        if not critiques:
+            return None
+        if all(c.get("reviewer") == "rule_fallback" for c in critiques):
+            if not settings.QWEN_API_KEY:
+                return "未配置 QWEN_API_KEY，图表评审已降级为规则模式"
+            if settings.USE_MOCK_LLM:
+                return "Mock LLM 模式，图表 VLM 评审已降级为规则模式"
+            return "VLM 调用失败，已降级为规则评审"
+        return None

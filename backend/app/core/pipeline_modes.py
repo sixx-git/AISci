@@ -14,6 +14,7 @@ VALID_PIPELINE_MODES = {PipelineMode.TEACHING.value, PipelineMode.DISCOVERY.valu
 
 DEFAULT_NUM_IDEAS = 3
 DEFAULT_DISCOVERY_MAX_ROUNDS = 3
+DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
 
@@ -43,10 +44,16 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         max_rounds = max(1, min(int(max_rounds), 5))
     except (TypeError, ValueError):
         max_rounds = DEFAULT_DISCOVERY_MAX_ROUNDS
+    teaching_auto = opts.get("enable_teaching_auto_refinement")
+    if teaching_auto is None:
+        teaching_auto = mode == PipelineMode.TEACHING.value
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
         "discovery_max_rounds": max_rounds,
         "force_sandbox": mode == PipelineMode.DISCOVERY.value or bool(opts.get("force_sandbox")),
         "enable_plot_vlm_critique": opts.get("enable_plot_vlm_critique", True),
+        "enable_teaching_auto_refinement": bool(teaching_auto),
+        "teaching_auto_refinement_max": DEFAULT_TEACHING_AUTO_REFINEMENT_MAX,
+        "sandbox_use_docker": bool(opts.get("sandbox_use_docker")),
     }

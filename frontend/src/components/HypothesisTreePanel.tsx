@@ -58,6 +58,9 @@ export function HypothesisTreePanel({ tree }: HypothesisTreePanelProps) {
                 {branch.alignment_score != null && (
                   <span>对齐 {branch.alignment_score}%</span>
                 )}
+                {branch.pilot_score != null && (
+                  <span className="text-cyan-400">pilot {branch.pilot_score.toFixed(1)}</span>
+                )}
               </div>
             </div>
           );

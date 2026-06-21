@@ -68,6 +68,8 @@ class ExperimentDesignAgent:
         data_files: Optional[List[str]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
         project_mode: str = "general",
+        validation_feedback: Optional[List[str]] = None,
+        pilot_results: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         设计实验
@@ -101,6 +103,17 @@ class ExperimentDesignAgent:
                 "experiment_design",
                 {"hypothesis_info": hypothesis_info},
             )
+            if validation_feedback:
+                prompt += "\n\n【上一轮小样验证/沙箱反馈 — 必须据此修订实验设计】\n"
+                for i, note in enumerate(validation_feedback[:8], 1):
+                    prompt += f"{i}. {note}\n"
+            if pilot_results:
+                import json
+                prompt += (
+                    "\n【Pilot 实测结果】\n"
+                    + json.dumps(pilot_results, ensure_ascii=False, indent=2)[:2000]
+                    + "\n"
+                )
             if project_mode == "federated_learning":
                 prompt += (
                     "\n\n[联邦学习模式] 实验设计必须包含 FedAvg/FedProx/SCAFFOLD、"

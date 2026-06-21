@@ -8,12 +8,15 @@ interface ClosedLoopTimelineProps {
 
 const EVENT_LABELS: Record<string, string> = {
   hypothesis_tree: '假设树剪枝',
+  hypothesis_tree_pilot: '假设树 Pilot 融合',
   ensemble_review: '集成评审',
   sandbox_validation: '沙箱验证',
   ideation_novelty: 'Ideation 新颖性',
   plot_vlm_critique: 'VLM 图表评审',
   discovery_refine: 'Discovery 迭代',
   discovery_literature_refresh: '文献刷新回退',
+  teaching_auto_refinement: 'Teaching 自动闭环',
+  quality_acceptance: '质量验收',
 };
 
 const EVENT_ICONS: Record<string, typeof GitBranch> = {
@@ -109,6 +112,14 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [] }: ClosedLoo
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       沙箱执行: {evt.success ? '成功' : '失败'}
                       {evt.experiment_id ? ` · ${evt.experiment_id}` : ''}
+                    </p>
+                  )}
+                  {evt.type === 'quality_acceptance' && evt.summary && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">{String(evt.summary)}</p>
+                  )}
+                  {evt.type === 'teaching_auto_refinement' && Array.isArray(evt.reasons) && (
+                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">
+                      {(evt.reasons as string[]).join('；')}
                     </p>
                   )}
                   {evt.type === 'discovery_literature_refresh' && evt.new_facts != null && (

@@ -7,7 +7,7 @@ import logging
 import os
 import threading
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 
 CHINA_TZ = timezone(timedelta(hours=8))
@@ -87,6 +87,10 @@ class PipelineService:
         self._seeded_results: Optional[Dict[str, Any]] = None
         self._run_options: Dict[str, Any] = {}
         self._discovery_refinement: List[str] = []
+        self._validation_feedback_constraints: List[str] = []
+        self._last_pilot_results: Dict[str, Any] = {}
+        self._teaching_refinement_count: int = 0
+        self._iteration_snapshots: List[Dict[str, Any]] = []
 
     def start_pipeline_async(self, request: PipelineRunRequest) -> str:
         """
@@ -352,6 +356,135 @@ class PipelineService:
             "suggested_angles": angles,
         }
 
+    def _build_validation_feedback_constraints(
+        self,
+        small_validation: Optional[Dict[str, Any]],
+        experiment_design: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
+        """P0-1: 从沙箱/小样验证提取可注入下一轮假设与实验设计的约束。"""
+        constraints: List[str] = []
+        sv = small_validation or {}
+        sb = sv.get("sandbox_execution") or {}
+        if sb:
+            if sb.get("success"):
+                metrics = sb.get("metrics") or {}
+                if metrics:
+                    try:
+                        metrics_text = json.dumps(metrics, ensure_ascii=False)[:400]
+                    except (TypeError, ValueError):
+                        metrics_text = str(metrics)[:400]
+                    constraints.append(
+                        f"上一轮沙箱实测成功，metrics={metrics_text}；请据此校准指标阈值与验证步骤。"
+                    )
+            else:
+                err = (sb.get("stderr") or sb.get("stdout") or "")[:200]
+                constraints.append(
+                    f"上一轮沙箱执行失败(return_code={sb.get('return_code')})；"
+                    f"错误摘要: {err}；请修订 analysis_script 与实验设计。"
+                )
+
+        actual = (sv.get("results") or {}).get("actual_results") or {}
+        modeling = actual.get("modeling_result") or {}
+        if isinstance(modeling, dict):
+            for sug in (modeling.get("self_correction_suggestions") or [])[:3]:
+                constraints.append(f"建模自校正建议: {sug}")
+
+        pa = ((sv.get("skill_outputs") or {}).get("preliminary_analysis") or {}).get("data") or {}
+        for anomaly in (pa.get("anomalies") or [])[:2]:
+            constraints.append(f"预分析异常: {anomaly}")
+
+        for w in (sv.get("warnings") or [])[:3]:
+            constraints.append(f"验证警告: {w}")
+
+        ed = experiment_design or {}
+        sc = ((ed.get("skill_outputs") or {}).get("experiment_sanity_check") or {}).get("data") or {}
+        if sc and sc.get("executable") is False:
+            for rec in (sc.get("recommendations") or sc.get("missing_items") or [])[:3]:
+                constraints.append(f"实验可执行性不足: {rec}")
+
+        return constraints
+
+    def _build_pilot_results_payload(self, small_validation: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        sv = small_validation or {}
+        sb = sv.get("sandbox_execution") or {}
+        actual = (sv.get("results") or {}).get("actual_results") or {}
+        return {
+            "sandbox_success": sb.get("success"),
+            "sandbox_metrics": sb.get("metrics"),
+            "sandbox_stderr_preview": (sb.get("stderr") or "")[:300],
+            "modeling_summary": (actual.get("modeling_result") or {}).get("summary"),
+            "preliminary_summary": (
+                ((sv.get("skill_outputs") or {}).get("preliminary_analysis") or {}).get("data") or {}
+            ).get("summary"),
+            "human_review_required": sv.get("human_review_required"),
+        }
+
+    def _capture_iteration_snapshot(self, round_num: int, results: Dict[str, Any], label: str = "") -> Dict[str, Any]:
+        """P1-4: 捕获假设/计划版本快照供跨轮对比。"""
+        hr = results.get("hypothesis_review") or {}
+        reviews = hr.get("reviews") or []
+        ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
+        primary_idx = ensemble.get("target_hypothesis_index", hr.get("primary_index", 0))
+        try:
+            primary_idx = int(primary_idx)
+        except (TypeError, ValueError):
+            primary_idx = 0
+        primary_idx = min(max(0, primary_idx), len(reviews) - 1) if reviews else 0
+
+        ed = results.get("experiment_design") or {}
+        sv = results.get("small_validation") or {}
+        sb = sv.get("sandbox_execution") or {}
+
+        snapshot = {
+            "round": round_num,
+            "label": label or f"R{round_num}",
+            "hypothesis": (reviews[primary_idx].get("hypothesis") if reviews else "") or "",
+            "rationale_preview": ((reviews[primary_idx].get("rationale") or "")[:300] if reviews else ""),
+            "experimental_steps_preview": (ed.get("experimental_steps") or "")[:500],
+            "methods_preview": (ed.get("methods") or "")[:300],
+            "ensemble_overall": ensemble.get("overall") or hr.get("ensemble_overall"),
+            "ensemble_decision": ensemble.get("decision") or hr.get("ensemble_decision"),
+            "sandbox_success": sb.get("success"),
+            "sandbox_metrics": sb.get("metrics"),
+        }
+        self._iteration_snapshots.append(snapshot)
+        return snapshot
+
+    def _apply_post_validation_updates(self, results: Dict[str, Any], validation_result: Dict[str, Any]) -> None:
+        """验证完成后：更新反馈约束、假设树 pilot 分。"""
+        ed = results.get("experiment_design") or {}
+        self._validation_feedback_constraints = self._build_validation_feedback_constraints(
+            validation_result, ed
+        )
+        self._last_pilot_results = self._build_pilot_results_payload(validation_result)
+
+        hg = results.get("hypothesis_generation") or {}
+        tree = hg.get("hypothesis_tree")
+        hypotheses = hg.get("hypotheses") or []
+        if tree and isinstance(tree, dict):
+            from app.services.hypothesis_tree_service import get_hypothesis_tree_service
+
+            updated = get_hypothesis_tree_service().apply_pilot_feedback(
+                tree, validation_result, hypotheses
+            )
+            hg["hypothesis_tree"] = updated
+            results["hypothesis_generation"] = hg
+            if updated.get("pilot_feedback_applied"):
+                self._record_closed_loop_event(
+                    "hypothesis_tree_pilot",
+                    {
+                        "round": len(self._iteration_snapshots),
+                        "pilot_success": (validation_result.get("sandbox_execution") or {}).get("success"),
+                        "selected_branch": updated.get("selected_branch_id"),
+                        "quality_trend_entry": {
+                            "stage": "pilot_feedback",
+                            "score": updated["branches"][0]["pilot_score"]
+                            if updated.get("branches") and updated["branches"][0].get("pilot_score") is not None
+                            else (8.0 if (validation_result.get("sandbox_execution") or {}).get("success") else 3.0),
+                        },
+                    },
+                )
+
     def _exec_literature_mining_refresh(
         self,
         project_id: str,
@@ -402,6 +535,22 @@ class PipelineService:
             stages, 2, results, research_question, project_id,
             lambda: self._exec_knowledge_gap(lm, project_id),
         )
+
+        try:
+            df_out = self._exec_data_finder(
+                project_id,
+                research_question,
+                results,
+                project_mode,
+                refinement_queries=refinement_notes,
+            )
+            refresh_meta = dict(refresh_meta or {})
+            refresh_meta["data_finder_rerun"] = True
+            refresh_meta["data_finder_tables"] = len(
+                (df_out.get("extract") or {}).get("extracted_tables") or []
+            )
+        except Exception as df_err:
+            logger.warning(f"Discovery R{round_num} Data Finder 重跑失败: {df_err}")
 
         try:
             self._exec_knowledge_graph(
@@ -456,6 +605,103 @@ class PipelineService:
             "refinement_count": len(refinement_notes),
         }
 
+    def _needs_teaching_auto_refinement(self, results: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """P2-6: 判断 Teaching 模式是否需从实验设计自动重跑。"""
+        sv = results.get("small_validation") or {}
+        ed = results.get("experiment_design") or {}
+        reasons: List[str] = []
+
+        sb = sv.get("sandbox_execution") or {}
+        if sb and not sb.get("success"):
+            reasons.append("沙箱验证失败")
+
+        sc = ((ed.get("skill_outputs") or {}).get("experiment_sanity_check") or {}).get("data") or {}
+        if sc and sc.get("executable") is False:
+            reasons.append("实验 sanity check 未通过")
+
+        if sv.get("human_review_required"):
+            reasons.append("验证阶段标记需人工复核")
+
+        pq = sv.get("plot_quality") or {}
+        if pq.get("needs_human_review"):
+            reasons.append("图表质量未达标")
+
+        return bool(reasons), reasons
+
+    def _run_teaching_auto_refinement(
+        self,
+        stages: List[PipelineStageLog],
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+    ) -> Optional[Dict[str, Any]]:
+        """P2-6: Teaching 轻量自动闭环 — 验证/sanity 失败时重跑实验设计→验证→报告。"""
+        if self._run_options.get("pipeline_mode") != PipelineMode.TEACHING.value:
+            return None
+        if not self._run_options.get("enable_teaching_auto_refinement", True):
+            return None
+        max_rounds = int(self._run_options.get("teaching_auto_refinement_max", 1))
+        if self._teaching_refinement_count >= max_rounds:
+            return None
+
+        needs, reasons = self._needs_teaching_auto_refinement(results)
+        if not needs:
+            return None
+
+        self._teaching_refinement_count += 1
+        round_num = self._teaching_refinement_count
+        logger.info(f"[Teaching] 自动闭环 R{round_num}: {reasons}")
+
+        pre_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_before")
+        self._validation_feedback_constraints = self._build_validation_feedback_constraints(
+            results.get("small_validation"),
+            results.get("experiment_design"),
+        )
+        self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
+
+        self._record_closed_loop_event(
+            "teaching_auto_refinement",
+            {
+                "round": round_num,
+                "reasons": reasons,
+                "quality_trend_entry": {"stage": f"teaching_refine_r{round_num}", "score": 5.0},
+            },
+        )
+
+        self._run_stage(stages, 5, results, research_question, project_id,
+            lambda: self._exec_experiment_design(
+                results.get("hypothesis_review"), project_id, project_mode,
+            ))
+        self._run_stage(stages, 6, results, research_question, project_id,
+            lambda: self._exec_small_validation(
+                results.get("experiment_design"),
+                results.get("hypothesis_review"),
+                project_id,
+                project_mode,
+            ))
+        sv_result = results.get("small_validation")
+        if isinstance(sv_result, dict):
+            self._apply_post_validation_updates(results, sv_result)
+
+        def _exec_report():
+            return self._exec_report_generation(results, self._build_pipeline_run_info(), project_mode)
+
+        self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+        final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+        post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_after")
+
+        return {
+            "round": round_num,
+            "reasons": reasons,
+            "reran": True,
+            "report_ran": True,
+            "final_report_id": final_report_id,
+            "snapshot_before": pre_snapshot,
+            "snapshot_after": post_snapshot,
+            "version_snapshots": list(self._iteration_snapshots),
+        }
+
     def _run_discovery_loop(
         self,
         stages: List[PipelineStageLog],
@@ -469,6 +715,8 @@ class PipelineService:
         history: List[Dict[str, Any]] = []
         final_report_id = None
 
+        self._capture_iteration_snapshot(1, results, label="R1_initial")
+
         for round_num in range(2, max_rounds + 1):
             hr = results.get("hypothesis_review") or {}
             ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
@@ -481,12 +729,14 @@ class PipelineService:
             weaknesses = list(ensemble.get("weaknesses") or [])[:4]
             suggestions = list(ensemble.get("revision_suggestions") or [])[:4]
             self._discovery_refinement = weaknesses + suggestions
+            pre_snapshot = self._capture_iteration_snapshot(round_num - 1, results, label=f"R{round_num - 1}_before_refine")
             history.append({
                 "round": round_num,
                 "status": "refining",
                 "decision": decision,
                 "overall": overall,
                 "refinement_notes": self._discovery_refinement,
+                "snapshot_before": pre_snapshot,
             })
             self._record_closed_loop_event(
                 "discovery_refine",
@@ -508,6 +758,12 @@ class PipelineService:
                 self._discovery_refinement,
             )
             history[-1]["rollback"] = rollback_meta
+
+            self._validation_feedback_constraints = self._build_validation_feedback_constraints(
+                results.get("small_validation"),
+                results.get("experiment_design"),
+            )
+            self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
 
             self._run_stage(stages, 3, results, research_question, project_id,
                 lambda: self._exec_hypothesis_generation(
@@ -548,6 +804,9 @@ class PipelineService:
                     project_id,
                     project_mode,
                 ))
+            sv_result = results.get("small_validation")
+            if isinstance(sv_result, dict):
+                self._apply_post_validation_updates(results, sv_result)
 
             def _exec_report():
                 return self._exec_report_generation(
@@ -556,6 +815,8 @@ class PipelineService:
 
             self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
             final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+            post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
+            history[-1]["snapshot_after"] = post_snapshot
 
         return {
             "pipeline_mode": PipelineMode.DISCOVERY.value,
@@ -563,6 +824,7 @@ class PipelineService:
             "rounds_executed": len(history) + 1,
             "history": history,
             "final_report_id": final_report_id,
+            "version_snapshots": self._iteration_snapshots,
         }
 
     def _apply_plot_quality_loop(
@@ -782,6 +1044,7 @@ class PipelineService:
                     ))
             
             # ── 阶段 7: SmallValidationAgent ──
+            teaching_report_ran = False
             if start_idx <= 6:
                 self._run_stage(stages, 6, results, research_question, project_id,
                     lambda: self._exec_small_validation(
@@ -790,9 +1053,25 @@ class PipelineService:
                         project_id,
                         project_mode,
                     ))
+                sv_first = results.get("small_validation")
+                if isinstance(sv_first, dict):
+                    self._apply_post_validation_updates(results, sv_first)
+                if self._run_options.get("pipeline_mode") == PipelineMode.TEACHING.value:
+                    self._capture_iteration_snapshot(0, results, label="teaching_R0_initial")
+
+            # ── P2-6: Teaching 轻量自动闭环 ──
+            if start_idx <= 6:
+                teaching_meta = self._run_teaching_auto_refinement(
+                    stages, results, research_question, project_id, project_mode
+                )
+                if teaching_meta:
+                    results["teaching_auto_refinement"] = teaching_meta
+                    if teaching_meta.get("final_report_id"):
+                        final_report_id = teaching_meta["final_report_id"]
+                        teaching_report_ran = True
             
             # ── 阶段 8: ReportGenerationAgent ──
-            if start_idx <= 7:
+            if start_idx <= 7 and not teaching_report_ran:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
@@ -1032,20 +1311,35 @@ class PipelineService:
         research_question: str,
         results: Dict[str, Any],
         project_mode: str,
+        refinement_queries: Optional[List[str]] = None,
+        selected_hypothesis: Optional[str] = None,
     ) -> Dict[str, Any]:
         from app.services.data_finder_service import get_data_finder_service
 
         hg = results.get("hypothesis_generation", {})
         hypotheses = hg.get("hypotheses", []) if hg else []
-        selected_hypothesis = ""
-        if hypotheses:
-            selected_hypothesis = hypotheses[0].get("hypothesis", "")
+        if not selected_hypothesis and hypotheses:
+            tree = hg.get("hypothesis_tree") or {}
+            sel_idx = tree.get("selected_hypothesis_index", 0)
+            if 0 <= sel_idx < len(hypotheses):
+                selected_hypothesis = hypotheses[sel_idx].get("hypothesis", "")
+            else:
+                selected_hypothesis = hypotheses[0].get("hypothesis", "")
+        if not selected_hypothesis:
+            ideation = results.get("ideation_novelty") or {}
+            angles = ideation.get("suggested_angles") or []
+            if angles:
+                selected_hypothesis = str(angles[0])[:200]
 
         service = get_data_finder_service(self.db)
+        search_query = research_question
+        if refinement_queries:
+            search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
+
         search_result = service.run_search_sync(
             project_id=project_id,
-            research_question=research_question,
-            selected_hypothesis=selected_hypothesis,
+            research_question=search_query,
+            selected_hypothesis=selected_hypothesis or "",
             project_mode=project_mode,
         )
         extract_result = service.run_extract_tables_sync(project_id)
@@ -1058,6 +1352,7 @@ class PipelineService:
             "search": search_result,
             "extract": extract_result,
             "paper_link_extractions": search_result.get("paper_extractions", []),
+            "refinement_queries": refinement_queries or [],
         }
         results["data_finder"] = output
         logger.info(
@@ -1166,7 +1461,9 @@ class PipelineService:
         kg = knowledge_gap or {}
         research_question = pu.get("research_question", "")
         num_ideas = int(self._run_options.get("num_ideas", 3))
-        extra_constraints = list(self._discovery_refinement or [])
+        extra_constraints = list(self._discovery_refinement or []) + list(
+            self._validation_feedback_constraints or []
+        )
 
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id)
@@ -1450,6 +1747,8 @@ class PipelineService:
             risk=str(best_review.get("risk", "")),
             literature_facts=lit_mining.get("facts", []),
             project_mode=project_mode,
+            validation_feedback=list(self._validation_feedback_constraints or []),
+            pilot_results=self._last_pilot_results or None,
         )
         return result if isinstance(result, dict) else self._safe_model_dump(result)
     
@@ -1551,6 +1850,7 @@ class PipelineService:
             project_mode=project_mode,
             run_id=self.run_id,
             project_id=project_id,
+            sandbox_use_docker=bool(self._run_options.get("sandbox_use_docker")),
         )
         if isinstance(result, dict) and result.get("sandbox_execution"):
             self._record_closed_loop_event(
@@ -1931,11 +2231,34 @@ class PipelineService:
             k: results[k]
             for k in (
                 "data_finder", "knowledge_graph", "evidence_reasoning",
-                "ideation_novelty", "discovery_loop",
+                "ideation_novelty", "discovery_loop", "teaching_auto_refinement",
             )
             if k in results
         }
         meta["run_options"] = self._run_options
+        meta["version_snapshots"] = self._iteration_snapshots or (
+            (results.get("discovery_loop") or {}).get("version_snapshots")
+            or (results.get("teaching_auto_refinement") or {}).get("version_snapshots")
+            or []
+        )
+
+        from app.services.closed_loop_quality_service import compute_quality_acceptance
+
+        meta["quality_acceptance"] = compute_quality_acceptance(
+            quality_trend=meta.get("quality_trend"),
+            closed_loop_events=meta.get("closed_loop_events"),
+            discovery_loop=results.get("discovery_loop"),
+            hypothesis_review=results.get("hypothesis_review"),
+        )
+        self._record_closed_loop_event(
+            "quality_acceptance",
+            {
+                "verdict": meta["quality_acceptance"].get("verdict"),
+                "summary": meta["quality_acceptance"].get("summary"),
+                "accepted": meta["quality_acceptance"].get("accepted"),
+                "score_improved": meta["quality_acceptance"].get("score_improved"),
+            },
+        )
         self.db_pipeline_run.extra_metadata = meta
         if final_report_id:
             self.db_pipeline_run.final_report_id = final_report_id

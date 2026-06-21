@@ -31,6 +31,12 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
             <AlertTriangle className="w-3 h-3" /> 需人工复核
           </span>
         )}
+        {critique?.degradation_reason && (
+          <span className="text-[10px] text-gray-500 block w-full mt-1">
+            {critique.degradation_reason}
+            {critique.review_mode ? ` · 模式: ${critique.review_mode}` : ''}
+          </span>
+        )}
       </div>
 
       {critiques.length > 0 && (

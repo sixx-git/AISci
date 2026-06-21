@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 CHINA_TZ = timezone(timedelta(hours=8))
 SANDBOX_TIMEOUT_SEC = 120
+SANDBOX_DOCKER_IMAGE = os.environ.get("AISCI_SANDBOX_DOCKER_IMAGE", "python:3.11-slim")
 BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 RUNS_ROOT = BACKEND_ROOT / "storage" / "runs"
 
@@ -73,15 +74,27 @@ class ExperimentSandboxService:
         if extra_env:
             env.update(extra_env)
 
+        use_docker = self._should_use_docker(extra_env)
         started = datetime.now(CHINA_TZ)
-        proc = subprocess.run(
-            [sys.executable, str(wrapper_path)],
-            cwd=str(exp_dir),
-            capture_output=True,
-            text=True,
-            timeout=SANDBOX_TIMEOUT_SEC,
-            env=env,
-        )
+        isolation_mode = "subprocess"
+        proc = None
+        docker_error = None
+
+        if use_docker:
+            proc, isolation_mode, docker_error = self._run_in_docker(
+                exp_dir, wrapper_path, env, linked_data
+            )
+        if proc is None:
+            proc = subprocess.run(
+                [sys.executable, str(wrapper_path)],
+                cwd=str(exp_dir),
+                capture_output=True,
+                text=True,
+                timeout=SANDBOX_TIMEOUT_SEC,
+                env=env,
+            )
+            if use_docker and docker_error:
+                isolation_mode = "subprocess_fallback"
         finished = datetime.now(CHINA_TZ)
         duration_ms = int((finished - started).total_seconds() * 1000)
 
@@ -108,6 +121,8 @@ class ExperimentSandboxService:
             "stderr_path": str(stderr_path),
             "metrics": metrics,
             "plots": plots,
+            "isolation_mode": isolation_mode,
+            "docker_error": docker_error,
         }
         manifest_path = exp_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -125,7 +140,75 @@ class ExperimentSandboxService:
             "plots": plots,
             "data_source": "sandbox_execution" if success else "sandbox_failed",
             "provenance": "experiment_sandbox",
+            "isolation_mode": isolation_mode,
+            "docker_error": docker_error,
         }
+
+    @staticmethod
+    def _should_use_docker(extra_env: Optional[Dict[str, str]] = None) -> bool:
+        flag = os.environ.get("AISCI_SANDBOX_USE_DOCKER", "").lower()
+        if flag in ("1", "true", "yes"):
+            return True
+        if extra_env and extra_env.get("AISCI_SANDBOX_USE_DOCKER", "").lower() in ("1", "true", "yes"):
+            return True
+        return False
+
+    @staticmethod
+    def _docker_available() -> bool:
+        try:
+            r = subprocess.run(
+                ["docker", "version", "--format", "{{.Server.Version}}"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return r.returncode == 0
+        except Exception:
+            return False
+
+    def _run_in_docker(
+        self,
+        exp_dir: Path,
+        wrapper_path: Path,
+        env: Dict[str, str],
+        linked_data: Optional[str],
+    ):
+        """P2-8: 可选 Docker 隔离执行，失败时由调用方降级 subprocess。"""
+        if not self._docker_available():
+            return None, "subprocess", "docker unavailable"
+
+        work_mount = f"{exp_dir.resolve()}:/work"
+        cmd = [
+            "docker", "run", "--rm",
+            "--network", "none",
+            "--memory", "512m",
+            "--cpus", "1",
+            "-v", work_mount,
+            "-w", "/work",
+            "-e", "PYTHONIOENCODING=utf-8",
+            "-e", "MPLBACKEND=Agg",
+            "-e", f"AISCI_RUN_DIR=/work",
+            "-e", f"AISCI_PLOTS_DIR=/work/plots",
+        ]
+        if linked_data:
+            cmd.extend(["-e", "AISCI_DATA_PATH=/work/data/input.csv", "-e", "CSV_DATA_PATH=/work/data/input.csv"])
+        for key in ("AISCI_DATA_PATH", "CSV_DATA_PATH", "AISCI_PLOTS_DIR", "AISCI_RUN_DIR"):
+            if env.get(key) and key not in ("AISCI_DATA_PATH", "CSV_DATA_PATH"):
+                cmd.extend(["-e", f"{key}={env[key]}"])
+        cmd.extend([SANDBOX_DOCKER_IMAGE, "python", "_sandbox_runner.py"])
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=SANDBOX_TIMEOUT_SEC + 30,
+            )
+            return proc, "docker", None
+        except subprocess.TimeoutExpired as exc:
+            return None, "subprocess", f"docker timeout: {exc}"
+        except Exception as exc:
+            return None, "subprocess", str(exc)
 
     @staticmethod
     def _build_wrapper(script_path: str, plots_dir: str) -> str:

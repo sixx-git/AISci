@@ -61,7 +61,72 @@ class HypothesisTreeService:
             "quality_trend": quality_trend,
             "iteration_summary": self._build_iteration_summary(kept, pruned, winner),
             "evidence_coverage": self._evidence_coverage(selected_hypothesis, fact_ids),
+            "pilot_feedback_applied": False,
         }
+
+    def apply_pilot_feedback(
+        self,
+        tree: Dict[str, Any],
+        small_validation: Optional[Dict[str, Any]],
+        hypotheses: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """P2-7: 将沙箱 pilot 实测分融合进假设树分支评分。"""
+        if not tree or not small_validation:
+            return tree
+
+        sb = small_validation.get("sandbox_execution") or {}
+        actual = (small_validation.get("results") or {}).get("actual_results") or {}
+        has_pilot = bool(sb) or bool(actual.get("modeling_result"))
+        if not has_pilot:
+            return tree
+
+        success = bool(sb.get("success")) if sb else bool(actual.get("modeling_result"))
+        metrics = sb.get("metrics") if sb else {}
+        if not metrics and actual.get("summary_statistics"):
+            metrics = {"summary": actual.get("summary_statistics")}
+
+        pilot_score = 8.5 if success else 3.5
+        if sb.get("return_code") not in (None, 0) and not success:
+            pilot_score = 2.5
+
+        selected_id = tree.get("selected_branch_id")
+        branches = list(tree.get("branches") or [])
+        for branch in branches:
+            is_selected = branch.get("branch_id") == selected_id
+            if is_selected:
+                branch["pilot_score"] = pilot_score
+                branch["pilot_metrics"] = metrics
+                branch["pilot_success"] = success
+                branch["composite_score"] = round(
+                    float(branch.get("composite_score", 5)) * 0.65 + pilot_score * 0.35,
+                    2,
+                )
+                branch["status"] = "pilot_validated" if success else "pilot_failed"
+            else:
+                branch["pilot_score"] = None
+                branch["pilot_status"] = "not_executed"
+                branch["composite_score"] = round(
+                    float(branch.get("composite_score", 5)) * 0.92,
+                    2,
+                )
+
+        branches.sort(key=lambda b: b.get("composite_score", 0), reverse=True)
+        tree["branches"] = branches
+        if branches:
+            tree["selected_branch_id"] = branches[0].get("branch_id")
+            tree["selected_hypothesis_index"] = branches[0].get("index", 0)
+            if hypotheses and 0 <= tree["selected_hypothesis_index"] < len(hypotheses):
+                tree["selected_hypothesis"] = hypotheses[tree["selected_hypothesis_index"]]
+
+        summary = tree.get("iteration_summary") or ""
+        tree["iteration_summary"] = (
+            f"{summary} 已融合 pilot 实测（success={success}, pilot_score={pilot_score}）。"
+        ).strip()
+        tree["pilot_feedback_applied"] = True
+        tree["quality_trend"] = list(tree.get("quality_trend") or []) + [
+            {"round": 1, "branch_id": selected_id, "score": pilot_score, "label": "pilot_sandbox"}
+        ]
+        return tree
 
     def _score_branch(
         self,

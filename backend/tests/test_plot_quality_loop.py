@@ -19,4 +19,5 @@ def test_rule_critique_low_score_without_image():
     data = result.data
     assert data["plot_count"] == 1
     assert data["critiques"][0]["reviewer"] == "rule_fallback"
+    assert data.get("degradation_reason") or data["critiques"][0].get("degradation_reason")
     assert data["needs_redraw"] or data["needs_human_review"] or (data["average_score"] or 0) < 7

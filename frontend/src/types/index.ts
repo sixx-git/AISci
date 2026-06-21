@@ -283,10 +283,71 @@ export interface ClosedLoopEvent {
 export interface PipelineRunExtraMetadata {
   closed_loop_events?: ClosedLoopEvent[];
   quality_trend?: QualityTrendEntry[];
+  quality_acceptance?: QualityAcceptance;
+  version_snapshots?: IterationSnapshot[];
   auxiliary_results?: Record<string, unknown>;
   parent_run_id?: string;
   rerun_from?: string;
   run_options?: PipelineRunOptions;
+}
+
+export interface QualityAcceptance {
+  verdict?: 'pass' | 'needs_review' | 'stagnant';
+  accepted?: boolean;
+  ensemble_decision?: string;
+  ensemble_overall?: number;
+  score_improved?: boolean;
+  score_delta?: number;
+  first_score?: number;
+  last_score?: number;
+  weak_stages?: string[];
+  sandbox_success?: boolean | null;
+  discovery_rounds?: number;
+  literature_refresh_count?: number;
+  refining_rounds?: number;
+  summary?: string;
+}
+
+export interface IterationSnapshot {
+  round?: number;
+  label?: string;
+  hypothesis?: string;
+  rationale_preview?: string;
+  experimental_steps_preview?: string;
+  methods_preview?: string;
+  ensemble_overall?: number;
+  ensemble_decision?: string;
+  sandbox_success?: boolean;
+  sandbox_metrics?: Record<string, unknown>;
+}
+
+export interface DiscoveryLoopHistoryEntry {
+  round?: number;
+  status?: string;
+  decision?: string;
+  overall?: number;
+  refinement_notes?: string[];
+  rollback?: Record<string, unknown>;
+  snapshot_before?: IterationSnapshot;
+  snapshot_after?: IterationSnapshot;
+}
+
+export interface DiscoveryLoopData {
+  pipeline_mode?: string;
+  max_rounds?: number;
+  rounds_executed?: number;
+  history?: DiscoveryLoopHistoryEntry[];
+  final_report_id?: string;
+  version_snapshots?: IterationSnapshot[];
+}
+
+export interface TeachingAutoRefinementData {
+  round?: number;
+  reasons?: string[];
+  reran?: boolean;
+  snapshot_before?: IterationSnapshot;
+  snapshot_after?: IterationSnapshot;
+  version_snapshots?: IterationSnapshot[];
 }
 
 export interface HypothesisTreeBranch {
@@ -300,6 +361,10 @@ export interface HypothesisTreeBranch {
   alignment_score?: number;
   evidence_level?: string;
   status?: string;
+  pilot_score?: number;
+  pilot_success?: boolean;
+  pilot_status?: string;
+  pilot_metrics?: Record<string, unknown>;
 }
 
 export interface HypothesisTreeData {
@@ -352,6 +417,8 @@ export interface PlotQualityData {
     critiques?: Array<Record<string, unknown>>;
     needs_human_review?: boolean;
     needs_redraw?: boolean;
+    review_mode?: string;
+    degradation_reason?: string;
   };
   redraw_count?: number;
   needs_human_review?: boolean;
@@ -365,6 +432,8 @@ export interface PipelineRunOptions {
   discovery_max_rounds?: number;
   force_sandbox?: boolean;
   enable_plot_vlm_critique?: boolean;
+  enable_teaching_auto_refinement?: boolean;
+  sandbox_use_docker?: boolean;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {

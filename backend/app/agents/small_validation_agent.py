@@ -44,6 +44,7 @@ class SmallValidationAgent:
         project_mode: str = "general",
         run_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        sandbox_use_docker: bool = False,
     ) -> Dict[str, Any]:
         """
         生成小样验证方案
@@ -119,11 +120,14 @@ class SmallValidationAgent:
 
             # ── P0: 沙箱执行 analysis_script，绑定 run artifacts ──
             if run_id and result.get("analysis_script"):
+                extra_env = {"AISCI_PROJECT_ID": project_id or ""}
+                if sandbox_use_docker:
+                    extra_env["AISCI_SANDBOX_USE_DOCKER"] = "1"
                 sandbox = get_experiment_sandbox_service().execute_analysis_script(
                     run_id=run_id,
                     analysis_script=result["analysis_script"],
                     csv_data_path=csv_data_path,
-                    extra_env={"AISCI_PROJECT_ID": project_id or ""},
+                    extra_env=extra_env,
                 )
                 result["sandbox_execution"] = sandbox
                 result["artifacts"] = {
