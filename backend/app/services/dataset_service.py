@@ -709,6 +709,15 @@ class DatasetService:
         except Exception:
             pass
 
+        try:
+            from app.services.knowledge_graph_service import get_knowledge_graph_service
+
+            kg_ctx = get_knowledge_graph_service(self.db).get_kg_context_for_agents(project_id)
+            if kg_ctx:
+                context["knowledge_graph"] = kg_ctx
+        except Exception:
+            pass
+
         return context
 
     def toggle_hypothesis_use(self, dataset_id: str) -> Optional[Dataset]:

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database } from 'lucide-react';
+import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network } from 'lucide-react';
 import { Card } from './Card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
@@ -191,6 +191,14 @@ export function ReportPage({
           }`}>
             {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
           </span>
+          <button
+            type="button"
+            onClick={() => navigate(`/projects/${projectId}?tab=knowledge_graph`)}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-[#00dc82]/40 bg-[#00dc82]/10 text-[#00dc82] hover:bg-[#00dc82]/20 transition-colors"
+          >
+            <Network className="w-3 h-3" />
+            查看知识图谱
+          </button>
         </div>
       </div>
 

@@ -198,10 +198,28 @@ class PipelineService:
                 self._exec_data_finder(project_id, research_question, results, project_mode)
             except Exception as df_err:
                 logger.warning(f"多源数据查找失败: {df_err}")
+
+            # ── 阶段 2.6: 知识图谱初始构建 ──
+            try:
+                self._exec_knowledge_graph(
+                    project_id, research_question, results, project_mode, stage="initial"
+                )
+            except Exception as kg_err:
+                logger.warning(f"知识图谱初始构建失败: {kg_err}")
             
             # ── 阶段 3: KnowledgeGapAgent ──
             self._run_stage(stages, 2, results, research_question, project_id,
-                lambda: self._exec_knowledge_gap(results.get("literature_mining")))
+                lambda: self._exec_knowledge_gap(
+                    results.get("literature_mining"),
+                    project_id,
+                ))
+
+            try:
+                self._exec_knowledge_graph(
+                    project_id, research_question, results, project_mode, stage="post_gap"
+                )
+            except Exception as kg_err:
+                logger.warning(f"知识图谱增量更新失败: {kg_err}")
             
             # ── 阶段 4: HypothesisGenerationAgent ──
             self._run_stage(stages, 3, results, research_question, project_id,
@@ -216,6 +234,13 @@ class PipelineService:
                 self._exec_evidence_reasoning(project_id, research_question, results)
             except Exception as er_err:
                 logger.warning(f"证据链迭代验证失败: {er_err}")
+
+            try:
+                self._exec_knowledge_graph(
+                    project_id, research_question, results, project_mode, stage="post_evidence"
+                )
+            except Exception as kg_err:
+                logger.warning(f"知识图谱证据链更新失败: {kg_err}")
 
             # 保存假设到数据库
             try:
@@ -414,6 +439,7 @@ class PipelineService:
         if idx >= 1:
             base["literature_mining"] = results.get("literature_mining", {})
             base["data_finder"] = results.get("data_finder", {})
+            base["knowledge_graph"] = results.get("knowledge_graph", {})
         if idx >= 2:
             base["knowledge_gap"] = results.get("knowledge_gap", {})
         if idx >= 3:
@@ -505,15 +531,94 @@ class PipelineService:
             f"[DataFinder] 完成 search + extract: tables={len(extract_result.get('extracted_tables', []))}"
         )
         return output
+
+    def _exec_knowledge_graph(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+        project_mode: str,
+        stage: str = "initial",
+    ) -> Dict[str, Any]:
+        from app.services.knowledge_graph_service import get_knowledge_graph_service
+
+        lm = results.get("literature_mining", {}) or {}
+        kg_gap = results.get("knowledge_gap", {}) or {}
+        hg = results.get("hypothesis_generation", {}) or {}
+        hypotheses = hg.get("hypotheses", []) if hg else []
+
+        service = get_knowledge_graph_service(self.db)
+        graph = service.build_graph_sync(
+            project_id=project_id,
+            literature_mining=lm,
+            knowledge_gap=kg_gap if stage != "initial" else None,
+            hypotheses=hypotheses if stage == "post_evidence" else None,
+            project_mode=project_mode,
+            research_question=research_question,
+        )
+        output = {
+            "stage": stage,
+            "node_count": len(graph.get("nodes", [])),
+            "edge_count": len(graph.get("edges", [])),
+            "quality_report": graph.get("quality_report", {}),
+            "schema": graph.get("schema", {}),
+            "evidence_graph": graph.get("evidence_graph", {}),
+        }
+        results["knowledge_graph"] = {**output, "graph": graph}
+        logger.info(
+            f"[KnowledgeGraph] {stage} 完成: nodes={output['node_count']} edges={output['edge_count']}"
+        )
+        return output
     
-    def _exec_knowledge_gap(self, literature_mining: Optional[Dict]) -> dict:
+    def _exec_knowledge_gap(
+        self,
+        literature_mining: Optional[Dict],
+        project_id: str = "",
+    ) -> dict:
         agent = get_knowledge_gap_agent()
         lm = literature_mining or {}
-        # 从 dict 重建事实和不确定点
         facts = lm.get("facts", [])
         uncertain_points = lm.get("uncertain_points", [])
         result = agent.analyze(facts=facts, uncertain_points=uncertain_points)
-        return self._safe_model_dump(result)
+        result_dict = self._safe_model_dump(result)
+
+        if project_id:
+            try:
+                from app.services.knowledge_graph_service import get_knowledge_graph_service
+
+                kg_ctx = get_knowledge_graph_service(self.db).get_kg_context_for_agents(project_id)
+                if kg_ctx:
+                    qr = kg_ctx.get("quality_report", {})
+                    graph_gaps = []
+                    for iso in qr.get("isolated_nodes", [])[:5]:
+                        graph_gaps.append({
+                            "gap_id": f"kg_iso_{iso.get('id', '')[:8]}",
+                            "description": f"图谱孤立节点需补充关系: {iso.get('label', '')}",
+                            "basis": [iso.get("id", "")],
+                            "potential_value": "完善证据链连接",
+                            "source": "knowledge_graph",
+                        })
+                    missing_query = get_knowledge_graph_service(self.db).query_graph_sync(
+                        project_id, "当前假设缺少哪些证据？"
+                    )
+                    for path in missing_query.get("graph_paths", [])[:5]:
+                        graph_gaps.append({
+                            "gap_id": f"kg_miss_{hash(str(path)) % 10000}",
+                            "description": f"缺少证据: {' → '.join(str(p) for p in path)}",
+                            "basis": [],
+                            "potential_value": "假设验证需补充文献支持",
+                            "source": "knowledge_graph",
+                        })
+                    if graph_gaps:
+                        result_dict.setdefault("knowledge_gaps", []).extend(graph_gaps)
+                        result_dict["kg_enrichment"] = {
+                            "isolated_count": qr.get("isolated_count", 0),
+                            "graph_gaps_added": len(graph_gaps),
+                        }
+            except Exception as kg_err:
+                logger.warning(f"KG 知识缺口增强失败: {kg_err}")
+
+        return result_dict
     
     def _exec_hypothesis_generation(self, problem_understanding: Optional[Dict], literature_mining: Optional[Dict], knowledge_gap: Optional[Dict]) -> dict:
         agent = get_hypothesis_generation_agent()
@@ -590,13 +695,35 @@ class PipelineService:
             for h in hypotheses
         ]
         lit_mining = self._stage_results.get("literature_mining", {})
+        kg_evidence = {}
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        if project_id:
+            try:
+                from app.services.knowledge_graph_service import get_knowledge_graph_service
+                kg_graph = get_knowledge_graph_service(self.db).load_graph(project_id)
+                if kg_graph:
+                    kg_evidence = kg_graph.get("evidence_graph", {})
+            except Exception:
+                pass
+
         result = agent.review(
             hypotheses=candidates,
             retrieved_papers=self._build_retrieved_papers(lit_mining),
             literature_facts=lit_mining.get("facts", []),
             alignments=alignments,
         )
-        return self._safe_model_dump(result)
+        result_dict = self._safe_model_dump(result)
+        if kg_evidence:
+            result_dict["evidence_graph"] = kg_evidence
+            support_edges = [
+                e for e in kg_evidence.get("edges", [])
+                if e.get("relation") == "supports"
+            ]
+            result_dict["kg_support_summary"] = {
+                "support_edge_count": len(support_edges),
+                "evidence_nodes": len(kg_evidence.get("nodes", [])),
+            }
+        return result_dict
     
     def _exec_experiment_design(
         self,
@@ -820,6 +947,16 @@ class PipelineService:
                     sv.get("federated_pilot") or {},
                 )
                 result_dict["report_mode"] = ProjectMode.FEDERATED_LEARNING.value
+
+        kg_graph = results.get("knowledge_graph", {}).get("graph")
+        if not kg_graph and project_id:
+            try:
+                from app.services.knowledge_graph_service import get_knowledge_graph_service
+                kg_graph = get_knowledge_graph_service(self.db).load_graph(project_id)
+            except Exception:
+                kg_graph = None
+        if kg_graph:
+            result_dict = agent._enrich_report_with_knowledge_graph(result_dict, kg_graph)
 
         return result_dict
 

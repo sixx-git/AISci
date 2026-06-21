@@ -705,6 +705,48 @@ class ReportGenerationAgent:
         return result
 
     @staticmethod
+    def _enrich_report_with_knowledge_graph(
+        result: Dict[str, Any],
+        kg_graph: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        nodes = kg_graph.get("nodes", [])
+        edges = kg_graph.get("edges", [])
+        rationale = chapters.get("rationale", "") or ""
+        rationale += "\n\n### 知识图谱推理路径\n"
+        sample_paths: List[str] = []
+        for e in edges[:8]:
+            src = next((n for n in nodes if n.get("id") == e.get("source")), {})
+            tgt = next((n for n in nodes if n.get("id") == e.get("target")), {})
+            path_str = (
+                f"{src.get('label', e.get('source'))} --[{e.get('relation')}]--> "
+                f"{tgt.get('label', e.get('target'))}"
+            )
+            sample_paths.append(path_str)
+            rationale += f"- {path_str} (来源: {e.get('source_title', '未知')})\n"
+
+        refs = list(result.get("references", []) or [])
+        seen = set(refs)
+        for e in edges[:5]:
+            title = e.get("source_title")
+            if title and title not in seen:
+                refs.append(title)
+                seen.add(title)
+        result["references"] = refs
+        chapters["rationale"] = rationale
+        result["chapters"] = chapters
+        result["knowledge_graph_summary"] = {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "sample_paths": sample_paths[:5],
+            "quality_score": kg_graph.get("quality_report", {}).get("overall_score"),
+        }
+        return result
+
+    @staticmethod
     def _apply_evidence_chain_references(
         result: Dict[str, Any],
         all_hypotheses: List[Dict[str, Any]],

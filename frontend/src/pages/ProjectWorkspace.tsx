@@ -4,7 +4,7 @@ import {
   ArrowLeft, Calendar, LayoutDashboard, HelpCircle,
   BookOpen, GitBranch, Lightbulb, FlaskConical,
   FileText, ScrollText, Tag, TrendingUp, Play,
-  Loader2, AlertTriangle, CheckCircle2, Database,
+  Loader2, AlertTriangle, CheckCircle2, Database, Network,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -18,6 +18,7 @@ import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
 import { DatasetPage } from '@/components/DatasetPage';
+import { KnowledgeGraphPage } from '@/components/KnowledgeGraphPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
@@ -34,6 +35,7 @@ const TABS: TabItem[] = [
   { id: 'overview', label: '项目概览', icon: LayoutDashboard },
   { id: 'questions', label: '研究问题', icon: HelpCircle },
   { id: 'literature', label: '文献库', icon: BookOpen },
+  { id: 'knowledge_graph', label: '知识图谱', icon: Network },
   { id: 'datasets', label: '数据集', icon: Database },
   { id: 'workflow', label: '智能体工作流', icon: GitBranch },
   { id: 'hypotheses', label: '候选假设', icon: Lightbulb },
@@ -75,6 +77,7 @@ function getStoredResearchDomain(projectId: string): string {
 const STAGE_CN_MAP: Record<string, string> = {
   problem_understanding: '问题理解',
   literature_mining: '文献挖掘',
+  knowledge_graph: '知识图谱',
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
@@ -145,6 +148,27 @@ function QuestionsTab({
 
 function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
+}
+
+function KnowledgeGraphTab({
+  projectId,
+  projectMode,
+  researchQuestion,
+  focusNodeId,
+}: {
+  projectId: string;
+  projectMode?: string;
+  researchQuestion?: string;
+  focusNodeId?: string | null;
+}) {
+  return (
+    <KnowledgeGraphPage
+      projectId={projectId}
+      projectMode={projectMode}
+      researchQuestion={researchQuestion}
+      focusNodeId={focusNodeId}
+    />
+  );
 }
 
 function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted }: {
@@ -506,6 +530,15 @@ export function ProjectWorkspace() {
         return <QuestionsTab projectId={id} projectMode={resolvedProjectMode} onSaved={handleResearchSaved} />;
       case 'literature':
         return <LiteratureTab projectId={id} />;
+      case 'knowledge_graph':
+        return (
+          <KnowledgeGraphTab
+            projectId={id}
+            projectMode={resolvedProjectMode}
+            researchQuestion={resolvedResearchQuestion}
+            focusNodeId={searchParams.get('node_id')}
+          />
+        );
       case 'datasets':
         return <DatasetPage projectId={id} projectMode={resolvedProjectMode} />;
       case 'workflow':
