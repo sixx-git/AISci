@@ -5,7 +5,7 @@ import uuid
 import asyncio
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from app.models.research import Dataset
+from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
@@ -675,6 +675,39 @@ class DatasetService:
 
         if not context["datasets"]:
             context["warnings"].append("当前项目缺少可用于假设生成的数据集")
+
+        project_mode = ProjectMode.GENERAL.value
+        try:
+            from app.models.project import Project
+
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                project_mode = normalize_project_mode(getattr(project, "project_mode", None))
+        except Exception:
+            pass
+
+        context["project_mode"] = project_mode
+        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            from app.services.federated_experiment_service import get_federated_experiment_service
+
+            fl_service = get_federated_experiment_service(self.db)
+            context["fl_context"] = fl_service.build_fl_context_from_data_context(context)
+            if not context["fl_context"].get("detected_fields"):
+                context["warnings"].append(
+                    "联邦学习模式：尚未检测到 method/non_iid_degree/global_accuracy 等联邦字段，请上传 FL 实验 CSV"
+                )
+
+        try:
+            from app.services.data_finder_service import get_data_finder_service
+
+            df_results = get_data_finder_service(self.db).load_results(project_id)
+            if df_results:
+                context["data_finder_results"] = df_results
+                merged = df_results.get("merged") or {}
+                if merged.get("merged_csv_path"):
+                    context["data_finder_merged_csv"] = merged.get("merged_csv_path")
+        except Exception:
+            pass
 
         return context
 

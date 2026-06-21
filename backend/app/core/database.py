@@ -88,6 +88,7 @@ def migrate_projects_table():
             ("data_source", "TEXT"),
             ("constraints", "TEXT"),
             ("expected_output", "TEXT"),
+            ("project_mode", "VARCHAR(50) DEFAULT 'general'"),
         ]
 
         for col_name, col_type in new_columns:

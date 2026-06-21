@@ -15,6 +15,8 @@ export interface ApiResponse<T = unknown> {
 
 // ==================== 项目 ====================
 
+export type ProjectMode = 'general' | 'federated_learning';
+
 export interface Project {
   id: string;
   name: string;
@@ -22,6 +24,7 @@ export interface Project {
   created_at: string;
   updated_at: string;
   status?: string;
+  project_mode?: ProjectMode;
   // 研究问题字段
   research_question?: string;
   research_domain?: string;
@@ -35,6 +38,7 @@ export interface Project {
 export interface ProjectCreate {
   name: string;
   description?: string;
+  project_mode?: ProjectMode;
   // 研究问题字段（可选）
   research_question?: string;
   research_domain?: string;
@@ -52,6 +56,7 @@ export interface ProjectOverview {
   description: string;
   current_stage: string;
   research_question?: string;
+  project_mode?: ProjectMode;
   created_at: string;
   updated_at: string;
   status: string;
@@ -113,6 +118,49 @@ export interface EvidenceItem {
   relevance_score: number;
   source_title?: string;
   created_at?: string;
+  stance?: 'support' | 'refute' | 'neutral';
+  stance_reason?: string;
+  reliability_score?: number;
+}
+
+export interface EvidenceChainItem {
+  evidence_id: string;
+  claim: string;
+  stance: 'support' | 'refute' | 'neutral';
+  source_title: string;
+  source_type?: string;
+  year?: number | null;
+  doi?: string;
+  arxiv_id?: string;
+  paper_id?: string;
+  quote_or_summary?: string;
+  relevance_score?: number;
+  reliability_score?: number;
+  used_in_revision?: boolean;
+  stance_reason?: string;
+}
+
+export interface HypothesisRevisionRecord {
+  original_hypothesis?: string;
+  revision_reason?: string;
+  revised_hypothesis?: string;
+  what_changed?: string[];
+  remaining_risks?: string[];
+  round?: number;
+}
+
+export interface EvidenceChain {
+  hypothesis?: string;
+  supporting_evidence: EvidenceChainItem[];
+  counter_evidence: EvidenceChainItem[];
+  evidence_balance_score?: number;
+  revision_history?: HypothesisRevisionRecord[];
+  final_version?: string;
+  chain_completeness?: number;
+  citation_reliability?: number;
+  support_count?: number;
+  counter_count?: number;
+  counter_evidence_empty_reason?: string;
 }
 
 // ==================== 研究问题 ====================
@@ -303,6 +351,11 @@ export interface DetailedHypothesis {
   data_evidence_ids?: string[];
   validation_target?: string;
   expected_measurable_effect?: string;
+  evidenceChain?: EvidenceChain | null;
+  chainCompleteness?: number;
+  supportEvidenceCount?: number;
+  counterEvidenceCount?: number;
+  citationReliability?: number;
 }
 
 /** 后端返回的数据集记录 */
@@ -474,9 +527,12 @@ export interface ReportData {
   complianceCheck?: ComplianceCheck;
   /** 下载链接 */
   mdDownloadUrl?: string;
+  texDownloadUrl?: string;
   pdfDownloadUrl?: string;
   /** PDF 导出是否成功（后端返回） */
   pdfSuccess?: boolean;
+  /** PDF 导出方式：latex / markdown_fallback */
+  exportMethod?: string;
   /** 图表数据 */
   plots?: ReportPlot[];
 }

@@ -23,6 +23,12 @@ class ProjectStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class ProjectMode(str, Enum):
+    """项目运行模式"""
+    GENERAL = "general"
+    FEDERATED_LEARNING = "federated_learning"
+
+
 class Project(Base):
     """
     项目表
@@ -43,6 +49,7 @@ class Project(Base):
     data_source = Column(Text, nullable=True, comment="数据来源")
     constraints = Column(Text, nullable=True, comment="限制条件")
     expected_output = Column(Text, nullable=True, comment="期望输出")
+    project_mode = Column(String(50), default="general", nullable=False, index=True, comment="项目模式: general/federated_learning")
     # ==========
     status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.DRAFT, nullable=False, index=True, comment="项目状态")
     created_by = Column(String(100), nullable=True, comment="创建者")

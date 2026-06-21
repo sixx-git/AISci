@@ -205,7 +205,8 @@ class HypothesisService:
                     quote_text=fact.get("quote_text"),
                     page_number=fact.get("page_number") or fact.get("source_page"),
                     relevance_score=fact.get("relevance_score", 0.5),
-                    source_title=fact.get("source_paper_title"),
+                    source_title=fact.get("source_paper_title") or fact.get("source_title"),
+                    extra_metadata=fact.get("extra_metadata"),
                 )
                 self.db.add(evidence)
                 created.append(evidence)

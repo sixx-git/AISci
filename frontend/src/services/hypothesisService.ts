@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { ApiResponse } from '@/types';
+import type { ApiResponse, EvidenceChain } from '@/types';
 
 export interface BackendHypothesis {
   id: string;
@@ -44,6 +44,7 @@ export interface BackendEvidence {
   page_number?: number;
   relevance_score: number;
   source_title?: string;
+  extra_metadata?: string;
   created_at: string;
 }
 
@@ -65,6 +66,20 @@ const hypothesisService = {
   async setPrimaryHypothesis(projectId: string, hypothesisId: string): Promise<ApiResponse<BackendHypothesis>> {
     const { data } = await api.post<ApiResponse<BackendHypothesis>>(
       `/projects/${projectId}/hypotheses/${hypothesisId}/set-primary`,
+    );
+    return data;
+  },
+
+  async getEvidenceChain(hypothesisId: string): Promise<ApiResponse<EvidenceChain | null>> {
+    const { data } = await api.get<ApiResponse<EvidenceChain | null>>(
+      `/agents/hypotheses/${hypothesisId}/evidence-chain`,
+    );
+    return data;
+  },
+
+  async iterateEvidenceChain(hypothesisId: string): Promise<ApiResponse<{ evidence_chain: EvidenceChain; hypothesis: Record<string, unknown> }>> {
+    const { data } = await api.post(
+      `/agents/hypotheses/${hypothesisId}/evidence-chain/iterate`,
     );
     return data;
   },

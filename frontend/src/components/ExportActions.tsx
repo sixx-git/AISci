@@ -1,7 +1,7 @@
 import { FileText, Download, Copy, FileDown } from 'lucide-react';
 import { Card } from './Card';
 
-export type ExportType = 'generate' | 'markdown' | 'pdf' | 'copy';
+export type ExportType = 'generate' | 'markdown' | 'latex' | 'pdf' | 'copy';
 
 interface ExportActionsProps {
   onAction: (action: ExportType) => void;
@@ -11,6 +11,7 @@ interface ExportActionsProps {
 const actions: { type: ExportType; icon: typeof FileText; label: string }[] = [
   { type: 'generate', icon: FileText,   label: '生成报告' },
   { type: 'markdown', icon: Download,   label: '导出 Markdown' },
+  { type: 'latex',    icon: FileDown,   label: '导出 LaTeX' },
   { type: 'pdf',      icon: FileDown,   label: '导出 PDF' },
   { type: 'copy',     icon: Copy,       label: '复制内容' },
 ];
@@ -19,7 +20,7 @@ export function ExportActions({ onAction, className }: ExportActionsProps) {
   return (
     <Card className={className}>
       <h3 className="text-sm font-semibold text-white mb-3">报告操作</h3>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {actions.map((act) => {
           const Icon = act.icon;
           return (

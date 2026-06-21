@@ -13,6 +13,7 @@ import type { DetailedExperimentDesign, ExperimentBaseline, ExperimentMetric, Ex
 
 interface ExperimentDesignPageProps {
   projectId?: string;
+  projectMode?: string;
   compact?: boolean;
   revalidateKey?: number;
   latestRunId?: string | null;
@@ -145,6 +146,7 @@ function VerifiabilityChecklist({ exp }: { exp: DetailedExperimentDesign }) {
 
 export function ExperimentDesignPage({
   projectId: _projectId,
+  projectMode,
   compact: _compact = false,
   revalidateKey: _revalidateKey,
   latestRunId: _latestRunId,
@@ -204,9 +206,44 @@ export function ExperimentDesignPage({
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">实验设计</h1>
-        <p className="text-gray-400">为选定科学假设生成可执行、可复现的验证方案
+        <p className="text-gray-400">
+          为选定科学假设生成可执行、可复现的验证方案
+          {projectMode === 'federated_learning' && (
+            <span className="ml-2 text-cyan-400 text-sm">· 联邦学习模式</span>
+          )}
         </p>
       </div>
+
+      {projectMode === 'federated_learning' && experiment && (
+        <Card className="p-4 mb-6 border-cyan-500/20 bg-cyan-500/5">
+          <h3 className="text-sm font-semibold text-cyan-300 mb-3">联邦实验计划</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <p className="text-gray-500 mb-1">Baselines</p>
+              <div className="flex flex-wrap gap-1">
+                {experiment.baselines.map((b) => (
+                  <span key={b.name} className="px-1.5 py-0.5 rounded bg-dark-800 text-gray-300 border border-dark-700">
+                    {b.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-1">Metrics</p>
+              <div className="flex flex-wrap gap-1">
+                {experiment.metrics.map((m) => (
+                  <span key={m.name} className="px-1.5 py-0.5 rounded bg-dark-800 text-gray-300 border border-dark-700">
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-3">
+            隐私机制建议：DP、Secure Aggregation、PSI（垂直联邦）— 详见 Pipeline 生成的 federated_plan
+          </p>
+        </Card>
+      )}
 
       {alertMsg && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-300 animate-pulse">

@@ -67,6 +67,7 @@ class ExperimentDesignAgent:
         risk: Optional[str] = None,
         data_files: Optional[List[str]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
+        project_mode: str = "general",
     ) -> Dict[str, Any]:
         """
         设计实验
@@ -98,8 +99,14 @@ class ExperimentDesignAgent:
             prompt_loader = get_prompt_loader()
             prompt = prompt_loader.render_template(
                 "experiment_design",
-                {"hypothesis_info": hypothesis_info}
+                {"hypothesis_info": hypothesis_info},
             )
+            if project_mode == "federated_learning":
+                prompt += (
+                    "\n\n[联邦学习模式] 实验设计必须包含 FedAvg/FedProx/SCAFFOLD、"
+                    "FedMD/FedDF/SplitNN/VFL baseline，以及 accuracy、f1_score、"
+                    "communication_rounds、client_drift、privacy_budget 等指标。"
+                )
             
             # 定义 schema 示例
             schema_example = {

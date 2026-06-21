@@ -131,8 +131,16 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
 }
 
 // ============ 各 Tab 子组件包装 ============
-function QuestionsTab({ projectId, onSaved }: { projectId: string; onSaved?: () => void }) {
-  return <ResearchQuestionPage projectId={projectId} onSaved={onSaved} />;
+function QuestionsTab({
+  projectId,
+  projectMode,
+  onSaved,
+}: {
+  projectId: string;
+  projectMode?: string;
+  onSaved?: () => void;
+}) {
+  return <ResearchQuestionPage projectId={projectId} projectMode={projectMode} onSaved={onSaved} />;
 }
 
 function LiteratureTab({ projectId }: { projectId: string }) {
@@ -172,21 +180,40 @@ function HypothesesTab({ projectId, revalidateKey, latestRunId }: {
   return <HypothesesPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function ExperimentsTab({ projectId, revalidateKey, latestRunId, hypothesisId }: {
+function ExperimentsTab({ projectId, projectMode, revalidateKey, latestRunId, hypothesisId }: {
   projectId: string;
+  projectMode?: string;
   revalidateKey: number;
   latestRunId: string | null;
   hypothesisId: string | null;
 }) {
-  return <ExperimentDesignPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} selectedHypothesisId={hypothesisId} />;
+  return (
+    <ExperimentDesignPage
+      projectId={projectId}
+      projectMode={projectMode}
+      compact
+      revalidateKey={revalidateKey}
+      latestRunId={latestRunId}
+      selectedHypothesisId={hypothesisId}
+    />
+  );
 }
 
-function ReportsTab({ projectId, revalidateKey, latestRunId }: {
+function ReportsTab({ projectId, projectMode, revalidateKey, latestRunId }: {
   projectId: string;
+  projectMode?: string;
   revalidateKey: number;
   latestRunId: string | null;
 }) {
-  return <ReportPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
+  return (
+    <ReportPage
+      projectId={projectId}
+      projectMode={projectMode}
+      compact
+      revalidateKey={revalidateKey}
+      latestRunId={latestRunId}
+    />
+  );
 }
 
 function LogsTab({ projectId, revalidateKey, latestRunId }: {
@@ -287,6 +314,12 @@ export function ProjectWorkspace() {
   }, [id]);
 
   // --- 研究领域 ---
+  const resolvedProjectMode = project?.project_mode || 'general';
+  const projectModeLabel =
+    resolvedProjectMode === 'federated_learning'
+      ? 'Federated Learning Scientist'
+      : 'General AI Scientist';
+
   const resolvedResearchField = useMemo(() => {
     if (project?.research_field) return project.research_field;
     return getStoredResearchDomain(id || '') || '未知领域';
@@ -470,11 +503,11 @@ export function ProjectWorkspace() {
       case 'overview':
         return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
       case 'questions':
-        return <QuestionsTab projectId={id} onSaved={handleResearchSaved} />;
+        return <QuestionsTab projectId={id} projectMode={resolvedProjectMode} onSaved={handleResearchSaved} />;
       case 'literature':
         return <LiteratureTab projectId={id} />;
       case 'datasets':
-        return <DatasetPage projectId={id} />;
+        return <DatasetPage projectId={id} projectMode={resolvedProjectMode} />;
       case 'workflow':
         return (
           <WorkflowTab
@@ -487,9 +520,24 @@ export function ProjectWorkspace() {
       case 'hypotheses':
         return <HypothesesTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'experiments':
-        return <ExperimentsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} hypothesisId={searchParams.get('hypothesis_id')} />;
+        return (
+          <ExperimentsTab
+            projectId={id}
+            projectMode={resolvedProjectMode}
+            revalidateKey={revalidateKey}
+            latestRunId={latestRunId}
+            hypothesisId={searchParams.get('hypothesis_id')}
+          />
+        );
       case 'reports':
-        return <ReportsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
+        return (
+          <ReportsTab
+            projectId={id}
+            projectMode={resolvedProjectMode}
+            revalidateKey={revalidateKey}
+            latestRunId={latestRunId}
+          />
+        );
       case 'logs':
         return <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       default:
@@ -520,6 +568,9 @@ export function ProjectWorkspace() {
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary-500/10 border border-primary-500/20 text-primary-400">
                 <Tag className="w-3.5 h-3.5" />
                 {resolvedResearchField}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-500/10 border border-violet-500/20 text-violet-300">
+                {projectModeLabel}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
                 <TrendingUp className="w-3.5 h-3.5" />

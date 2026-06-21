@@ -13,6 +13,7 @@ import { reportService } from '@/services/reportService';
 
 interface ReportPageProps {
   projectId: string;
+  projectMode?: string;
   compact?: boolean;
   literatureCount?: number;
   revalidateKey?: number;
@@ -21,6 +22,7 @@ interface ReportPageProps {
 
 export function ReportPage({
   projectId,
+  projectMode,
   compact: _compact = false,
   literatureCount,
   revalidateKey: _revalidateKey,
@@ -79,18 +81,28 @@ export function ReportPage({
       return;
     }
 
-    const fileType = action === 'markdown' ? 'md' : 'pdf';
+    const fileType = action === 'markdown' ? 'md' : action === 'latex' ? 'tex' : 'pdf';
+    const downloadNames: Record<string, string> = {
+      md: '科学假设与研究计划.md',
+      tex: '科学假设与研究计划.tex',
+      pdf: '科学假设与研究计划.pdf',
+    };
+    const successLabels: Record<string, string> = {
+      md: 'Markdown',
+      tex: 'LaTeX',
+      pdf: 'PDF',
+    };
     try {
-      const blob = await reportService.download(report.id, fileType);
+      const blob = await reportService.download(report.id, fileType as 'pdf' | 'md' | 'tex');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileType === 'md' ? '科学假设与研究计划.md' : '科学假设与研究计划.pdf';
+      a.download = downloadNames[fileType];
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showAlert(`${action === 'markdown' ? 'Markdown' : 'PDF'} 导出成功`);
+      showAlert(`${successLabels[fileType]} 导出成功`);
     } catch {
       showAlert('导出失败，请重试');
     }
@@ -170,7 +182,16 @@ export function ReportPage({
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
-        <p className="text-gray-400 text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <p className="text-gray-400 text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
+          <span className={`text-[11px] px-2 py-0.5 rounded border ${
+            projectMode === 'federated_learning'
+              ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+              : 'border-gray-600 bg-gray-800 text-gray-400'
+          }`}>
+            {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
+          </span>
+        </div>
       </div>
 
       {/* ── 警告横幅区 ── */}

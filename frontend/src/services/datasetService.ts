@@ -1,6 +1,62 @@
 import api from '@/lib/api';
 import type { ApiResponse, BackendDataset } from '@/types';
 
+export interface ModelingMetric {
+  accuracy?: number;
+  precision?: number;
+  recall?: number;
+  f1?: number;
+  roc_auc?: number | null;
+  rmse?: number;
+  mae?: number;
+  r2?: number;
+  confusion_matrix?: number[][];
+}
+
+export interface ModelingModelResult {
+  model_name: string;
+  metrics: ModelingMetric;
+  feature_importance?: { feature: string; importance: number }[];
+}
+
+export interface SelfCorrectionSuggestion {
+  reason: string;
+  suggestion: string;
+  next_action: string;
+}
+
+export interface ModelingChart {
+  plot_id: string;
+  title: string;
+  type: string;
+  base64?: string;
+  description?: string;
+}
+
+export interface ModelingResult {
+  success: boolean;
+  dataset_id: string;
+  project_id: string;
+  research_task?: string;
+  task_type: string;
+  target_column: string;
+  profile: Record<string, unknown>;
+  models: ModelingModelResult[];
+  best_model: string;
+  charts: ModelingChart[];
+  self_correction_suggestions: SelfCorrectionSuggestion[];
+  is_pilot_validation?: boolean;
+  warnings?: string[];
+  created_at?: string;
+  error?: string;
+}
+
+export interface ModelingRunPayload {
+  target_column?: string;
+  task_type?: string;
+  research_task?: string;
+}
+
 export interface DataContext {
   dataset_count: number;
   available_modalities: string[];
@@ -9,6 +65,18 @@ export interface DataContext {
   target_candidates: string[];
   quality_summary: Record<string, unknown>;
   warnings: string[];
+  project_mode?: string;
+  fl_context?: FlDataContext;
+}
+
+export interface FlDataContext {
+  project_mode?: string;
+  fl_setting?: string;
+  detected_fields?: string[];
+  client_fields?: string[];
+  party_fields?: string[];
+  metrics_fields?: string[];
+  target_candidates?: string[];
 }
 
 interface DataContextEntry {
@@ -87,6 +155,18 @@ const datasetService = {
 
   async runQualityAnalysis(datasetId: string): Promise<ApiResponse<QualityResult>> {
     const res = await api.post(`/datasets/${datasetId}/quality`);
+    return res.data;
+  },
+
+  async runModeling(datasetId: string, payload: ModelingRunPayload = {}): Promise<ApiResponse<ModelingResult>> {
+    const res = await api.post<ApiResponse<ModelingResult>>(`/datasets/${datasetId}/modeling/run`, payload, {
+      timeout: 300000,
+    });
+    return res.data;
+  },
+
+  async getModelingResult(datasetId: string): Promise<ApiResponse<ModelingResult>> {
+    const res = await api.get<ApiResponse<ModelingResult>>(`/datasets/${datasetId}/modeling/result`);
     return res.data;
   },
 };

@@ -39,6 +39,8 @@ class SmallValidationAgent:
         csv_data_path: Optional[str] = None,
         experiment_design: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
+        modeling_results: Optional[List[Dict[str, Any]]] = None,
+        project_mode: str = "general",
     ) -> Dict[str, Any]:
         """
         生成小样验证方案
@@ -101,7 +103,9 @@ class SmallValidationAgent:
             result["skill_outputs"] = skill_outputs
 
             # ── 构建分类结果（actual / simulated / expected）──
-            result["results"] = self._build_categorized_results(result, skill_outputs, hypothesis, experiment_design)
+            result["results"] = self._build_categorized_results(
+                result, skill_outputs, hypothesis, experiment_design, modeling_results
+            )
 
             # 保存验证文件
             self._save_validation_files(result)
@@ -162,6 +166,7 @@ class SmallValidationAgent:
         skill_outputs: Dict[str, Any],
         hypothesis: str,
         experiment_design: Optional[Dict[str, Any]],
+        modeling_results: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         pa_data = skill_outputs.get("preliminary_analysis", {}).get("data", {})
         data_source_flag = pa_data.get("data_source_flag", "no_data")
@@ -186,6 +191,18 @@ class SmallValidationAgent:
                 "time_series_summary": pa_data.get("time_series_summary", {}),
             }
             categorized["result_type_summary"] = "has_actual_results"
+
+        if modeling_results:
+            primary = modeling_results[0]
+            categorized["actual_results"]["modeling_result"] = primary
+            categorized["actual_results"]["modeling_results"] = modeling_results
+            categorized["actual_results"]["data_source"] = "real_data"
+            categorized["result_type_summary"] = "has_actual_results"
+            if primary.get("is_pilot_validation"):
+                categorized["actual_results"]["validation_scope"] = "pilot_validation"
+                categorized["warnings"] = categorized.get("warnings", []) + [
+                    "建模样本量较小，结果仅作为 pilot validation，不得夸大结论"
+                ]
 
         simulated_data = result.get("simulated_data", "")
         simulation_assumptions = result.get("simulation_assumptions", "")
@@ -213,13 +230,15 @@ class SmallValidationAgent:
             if categorized["result_type_summary"] == "none":
                 categorized["result_type_summary"] = "expected_only"
 
-        if not has_real and not simulated_data and not simulation_assumptions:
+        if not has_real and not simulated_data and not simulation_assumptions and not modeling_results:
             categorized["result_type_summary"] = "none"
             categorized["actual_results"] = {"note": "缺少真实数据，未生成实际分析结果"}
             categorized["simulated_results"] = {"note": "未生成模拟数据"}
             categorized["expected_results"] = categorized["expected_results"] or {"note": "未提供预期结果"}
 
-        categorized["warnings"] = skill_outputs.get("preliminary_analysis", {}).get("warnings", [])
+        pa_warnings = skill_outputs.get("preliminary_analysis", {}).get("warnings", [])
+        existing_warnings = categorized.get("warnings", [])
+        categorized["warnings"] = existing_warnings + pa_warnings
 
         return categorized
 

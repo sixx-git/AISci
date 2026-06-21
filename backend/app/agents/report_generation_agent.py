@@ -1,7 +1,7 @@
 """
 报告生成智能体 (ReportGenerationAgent)
-——面向挑战杯 XH-202619 赛题，生成《科学假设与研究计划》Markdown + PDF。
-严格按 12 个标准化字段输出。
+——面向挑战杯 XH-202619 赛题，生成《科学假设与研究计划》Markdown + LaTeX + PDF。
+严格按 12 个标准化字段输出；PDF 优先由 LaTeX 模板编译生成。
 """
 import logging
 import json
@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
-from app.services.pdf_export_service import export_markdown_to_pdf
+from app.services.latex_export_service import export_report_via_latex
 
 CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
@@ -94,6 +94,7 @@ class ReportGenerationAgent:
         preliminary_analysis_skill_outputs: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
         data_context: Optional[Dict[str, Any]] = None,
+        project_mode: str = "general",
     ) -> Dict[str, Any]:
         try:
             logger.info(f"开始生成研究报告，项目: {project_info.get('title', 'Unknown')}")
@@ -151,6 +152,10 @@ class ReportGenerationAgent:
                 novelty_review_skill_outputs, sanity_check_skill_outputs,
                 evidence_facts or [], verified_references or [],
             )
+            result = self._enrich_rationale_with_evidence_chains(result, all_hypotheses)
+            result = self._apply_evidence_chain_references(result, all_hypotheses)
+            if data_context and data_context.get("data_finder_results"):
+                result = self._enrich_report_with_data_finder(result, data_context["data_finder_results"])
             logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
             if pipeline_run_info:
@@ -181,6 +186,21 @@ class ReportGenerationAgent:
             result = self._enrich_results_with_categorized(
                 result, small_validation, preliminary_analysis_skill_outputs
             )
+
+            modeling_charts = []
+            if small_validation:
+                actual = (small_validation.get("results") or {}).get("actual_results") or {}
+                modeling_result = actual.get("modeling_result") or {}
+                modeling_charts = modeling_result.get("charts") or []
+            if modeling_charts:
+                existing = result.get("plots") or []
+                existing_ids = {p.get("plot_id") for p in existing}
+                for chart in modeling_charts:
+                    pid = chart.get("plot_id")
+                    if pid and pid not in existing_ids:
+                        existing.append(chart)
+                        existing_ids.add(pid)
+                result["plots"] = existing
 
             # ── 报告质量检查 ──
             logger.info(f"[报告生成] 步骤5: 开始质量检查")
@@ -232,14 +252,16 @@ class ReportGenerationAgent:
 
             result["chapters"] = chapters
 
-            # ── 重新保存 PDF & JSON（含 plots），保持 MD/PDF/JSON 一致性 ──
-            pdf_result_enriched = export_markdown_to_pdf(
-                markdown_content=result.get("markdown_content", ""),
-                output_path=result.get("pdf_file", ""),
-                css_path=os.path.join(os.path.dirname(__file__), "report_style.css"),
+            # ── 同步 Markdown，并基于 LaTeX 模板导出 PDF ──
+            self._write_markdown_file(result)
+            export_info = self._export_report_pdf(
+                result,
+                project_info,
+                citation_map,
+                verified_references or [],
             )
-            result["pdf_success"] = pdf_result_enriched.get("success", False)
-            self._update_json_with_plots(result)
+            result.update(export_info)
+            self._write_report_json(result)
 
             logger.info("研究报告生成完成")
             return result
@@ -571,6 +593,162 @@ class ReportGenerationAgent:
         except Exception as e:
             logger.warning(f"ReportQualityCheckSkill 异常: {e}")
             return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
+
+    @staticmethod
+    def _enrich_rationale_with_evidence_chains(
+        result: Dict[str, Any],
+        all_hypotheses: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        primary = None
+        for h in all_hypotheses or []:
+            chain = h.get("evidence_chain")
+            if chain and (chain.get("supporting_evidence") or chain.get("counter_evidence")):
+                primary = chain
+                break
+
+        if not primary:
+            return result
+
+        rationale_parts = [chapters.get("rationale", "")] if chapters.get("rationale") else []
+        rationale_parts.append("\n\n### 支持证据归纳\n")
+        for ev in primary.get("supporting_evidence", [])[:5]:
+            rationale_parts.append(
+                f"- [{ev.get('stance', 'support')}] {ev.get('claim', '')[:200]} "
+                f"(来源: {ev.get('source_title', '未知')}, 相关度={ev.get('relevance_score', 0)})\n"
+            )
+
+        rationale_parts.append("\n### 反对证据复核\n")
+        counter = primary.get("counter_evidence", [])
+        if counter:
+            for ev in counter[:3]:
+                rationale_parts.append(
+                    f"- [{ev.get('stance', 'refute')}] {ev.get('claim', '')[:200]} "
+                    f"(来源: {ev.get('source_title', '未知')})\n"
+                )
+        else:
+            reason = primary.get("counter_evidence_empty_reason") or "文献不足，未检索到可验证反例"
+            rationale_parts.append(f"- {reason}\n")
+
+        rationale_parts.append("\n### 假设修正过程\n")
+        for rev in primary.get("revision_history", [])[:3]:
+            rationale_parts.append(
+                f"- 第 {rev.get('round', '?')} 轮: {rev.get('revision_reason', '')}\n"
+                f"  变更: {', '.join(rev.get('what_changed', []))}\n"
+            )
+
+        rationale_parts.append("\n### 最终假设形成逻辑\n")
+        rationale_parts.append(
+            f"综合 {primary.get('support_count', 0)} 条支持与 {primary.get('counter_count', 0)} 条反对证据，"
+            f"证据平衡分={primary.get('evidence_balance_score', 0)}，"
+            f"形成最终假设：{primary.get('final_version', '')[:300]}\n"
+        )
+
+        chapters["rationale"] = "".join(rationale_parts)
+        result["chapters"] = chapters
+        return result
+
+    @staticmethod
+    def _enrich_report_with_data_finder(
+        result: Dict[str, Any],
+        data_finder_results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        tables = data_finder_results.get("extracted_tables") or []
+        provenance = data_finder_results.get("provenance") or []
+        merged = data_finder_results.get("merged") or {}
+
+        datasets_text = chapters.get("datasets") or ""
+        datasets_text += "\n\n【多源数据查找与整合】\n"
+        if tables:
+            datasets_text += f"从 {len(tables)} 个 PDF 表格抽取 CSV；"
+            for t in tables[:5]:
+                datasets_text += (
+                    f"\n- {t.get('source_title', '')} Table page {t.get('page')} "
+                    f"({t.get('table_id', '')}, quality={t.get('quality_score')})"
+                )
+        else:
+            datasets_text += "未从 PDF 抽取到结构化表格。"
+        if merged.get("merged_csv_path"):
+            datasets_text += f"\n已合并 CSV：{merged.get('row_count', 0)} 行。"
+        chapters["datasets"] = datasets_text
+
+        source_text = chapters.get("source") or ""
+        source_text += "\n\n【数据来源与抽取依据】\n"
+        for p in provenance[:8]:
+            source_text += (
+                f"- [{p.get('source_type')}] {p.get('source_title')} "
+                f"page={p.get('page')} {p.get('table_or_figure')} "
+                f"method={p.get('extraction_method')} confidence={p.get('confidence')}\n"
+            )
+        chapters["source"] = source_text
+
+        results_text = chapters.get("results") or ""
+        if merged.get("merged_csv_path"):
+            results_text += (
+                f"\n\n【整合数据验证】使用 data_finder 合并 CSV（{merged.get('row_count', 0)} 行）"
+                f" 进行小样验证；抽取方法见 provenance。"
+            )
+        chapters["results"] = results_text
+        result["chapters"] = chapters
+        result["data_finder_summary"] = {
+            "tables_count": len(tables),
+            "merged_rows": merged.get("row_count", 0),
+            "provenance_count": len(provenance),
+        }
+        return result
+
+    @staticmethod
+    def _apply_evidence_chain_references(
+        result: Dict[str, Any],
+        all_hypotheses: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        refs: List[str] = []
+        seen = set()
+        has_chain = False
+
+        for h in all_hypotheses or []:
+            chain = h.get("evidence_chain") or {}
+            if not chain:
+                continue
+            has_chain = True
+            for ev in (chain.get("supporting_evidence") or []) + (chain.get("counter_evidence") or []):
+                title = (ev.get("source_title") or "").strip()
+                if not title or title.lower() in {"文献不确定点", "unknown", "placeholder"}:
+                    continue
+                key = title.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                year = ev.get("year") or ""
+                doi = ev.get("doi") or ""
+                line = title
+                if year:
+                    line += f" ({year})"
+                if doi:
+                    line += f". DOI: {doi}"
+                refs.append(line)
+
+        if has_chain:
+            if refs:
+                chapters["references"] = refs
+            else:
+                chapters["references"] = [
+                    "证据链不足，需要补充 BibTeX/PDF 文献；当前无可验证 References，禁止虚构引用"
+                ]
+            result["chapters"] = chapters
+
+        return result
 
     def _build_compliance_check(
         self,
@@ -945,19 +1123,15 @@ class ReportGenerationAgent:
         os.makedirs(report_path, exist_ok=True)
 
         md_file = os.path.join(report_path, "report.md")
+        json_file = os.path.join(report_path, "report_data.json")
+        pdf_file = os.path.join(report_path, "report.pdf")
+        tex_file = os.path.join(report_path, "report.tex")
+
         with open(md_file, "w", encoding="utf-8") as f:
             f.write(result.get("markdown_content", ""))
 
-        json_file = os.path.join(report_path, "report_data.json")
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2, default=str)
-
-        pdf_file = os.path.join(report_path, "report.pdf")
-        pdf_result = export_markdown_to_pdf(
-            markdown_content=result.get("markdown_content", ""),
-            output_path=pdf_file,
-            css_path=os.path.join(os.path.dirname(__file__), "report_style.css"),
-        )
 
         logger.info(f"报告文件已保存到: {report_path}")
         return {
@@ -965,25 +1139,72 @@ class ReportGenerationAgent:
             "report_path": report_path,
             "md_file": md_file,
             "json_file": json_file,
-            "pdf_file": pdf_result.get("pdf_path"),
-            "pdf_success": pdf_result.get("success", False),
-            "warning": pdf_result.get("warning"),
+            "tex_file": tex_file,
+            "pdf_file": pdf_file,
+            "pdf_success": False,
         }
 
     @staticmethod
-    def _update_json_with_plots(result: Dict[str, Any]):
-        json_file = result.get("json_file", "")
-        if not json_file or not os.path.exists(json_file):
+    def _write_markdown_file(result: Dict[str, Any]) -> None:
+        md_file = result.get("md_file", "")
+        if not md_file:
             return
         try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            data["plots"] = result.get("plots", [])
-            data["chart_skill_outputs"] = result.get("chart_skill_outputs", {})
-            with open(json_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            with open(md_file, "w", encoding="utf-8") as f:
+                f.write(result.get("markdown_content", ""))
         except Exception as e:
-            logger.warning(f"更新 JSON plots 失败: {e}")
+            logger.warning(f"更新 Markdown 文件失败: {e}")
+
+    @staticmethod
+    def _write_report_json(result: Dict[str, Any]) -> None:
+        json_file = result.get("json_file", "")
+        if not json_file:
+            return
+        try:
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2, default=str)
+        except Exception as e:
+            logger.warning(f"更新 JSON 报告失败: {e}")
+
+    def _export_report_pdf(
+        self,
+        result: Dict[str, Any],
+        project_info: Dict[str, Any],
+        citation_map: List[Dict[str, Any]],
+        verified_references: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        report_path = result.get("report_path", "")
+        if not report_path:
+            return {
+                "pdf_success": False,
+                "warning": "缺少 report_path，无法导出 PDF",
+            }
+
+        export_result = export_report_via_latex(
+            result=result,
+            output_dir=report_path,
+            project_info=project_info,
+            citation_map=citation_map,
+            verified_references=verified_references,
+            fallback_markdown_pdf=True,
+        )
+
+        info = {
+            "latex_content": export_result.get("latex_content", ""),
+            "tex_file": export_result.get("tex_file"),
+            "bib_file": export_result.get("bib_file"),
+            "pdf_file": export_result.get("pdf_path") or result.get("pdf_file"),
+            "pdf_success": export_result.get("pdf_success", False),
+            "export_method": export_result.get("export_method"),
+            "warning": export_result.get("warning"),
+        }
+        if export_result.get("pdf_success"):
+            logger.info(
+                f"报告 PDF 已生成 (method={info.get('export_method')}, path={info.get('pdf_file')})"
+            )
+        else:
+            logger.warning(f"报告 PDF 生成失败: {info.get('warning')}")
+        return info
 
     @staticmethod
     def _embed_charts_in_markdown(
@@ -1065,8 +1286,37 @@ class ReportGenerationAgent:
             if not existing_results or len(str(existing_results).strip()) < 50:
                 result_type = sv_results.get("result_type_summary", "none")
                 enriched = "## 11. Results\n\n"
+                modeling_result = None
 
                 actual = sv_results.get("actual_results", {})
+                if isinstance(actual, dict):
+                    modeling_result = actual.get("modeling_result")
+                if modeling_result and isinstance(modeling_result, dict):
+                    enriched += "### Modeling Results（数据建模评估）\n\n"
+                    if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
+                        enriched += "> **Pilot Validation**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
+                    enriched += f"- 任务类型: {modeling_result.get('task_type', 'unknown')}\n"
+                    enriched += f"- 目标变量: {modeling_result.get('target_column', '-')}\n"
+                    enriched += f"- 最佳模型: {modeling_result.get('best_model', '-')}\n"
+                    best_metrics = {}
+                    for model in modeling_result.get("models", []):
+                        if model.get("model_name") == modeling_result.get("best_model"):
+                            best_metrics = model.get("metrics", {})
+                            break
+                    if best_metrics:
+                        enriched += "- 最佳模型指标:\n"
+                        for key, val in best_metrics.items():
+                            if key == "confusion_matrix":
+                                continue
+                            enriched += f"  - {key}: {val}\n"
+                    suggestions = modeling_result.get("self_correction_suggestions", [])
+                    if suggestions:
+                        enriched += "- 自校正建议:\n"
+                        for item in suggestions[:3]:
+                            if isinstance(item, dict):
+                                enriched += f"  - {item.get('reason', '')} → {item.get('suggestion', '')}\n"
+                    enriched += "\n"
+
                 if actual and isinstance(actual, dict) and actual.get("summary_statistics"):
                     enriched += "### Actual Results（实际分析结果）\n\n"
                     enriched += f"- 基于真实数据的统计分析已完成\n"
@@ -1095,7 +1345,7 @@ class ReportGenerationAgent:
                         enriched += f"- 目标变量: {expected.get('target_variable')}\n"
                     enriched += f"- 说明: {expected.get('note', '预期结果，需通过实验验证')}\n\n"
 
-                if result_type == "none":
+                if result_type == "none" and not modeling_result:
                     enriched += "⚠️ 当前缺少真实数据，未生成实际分析结果。请上传数据集以启用数据驱动分析。\n"
 
                 chapters["results"] = enriched

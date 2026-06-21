@@ -127,6 +127,7 @@ class HypothesisGenerationAgent:
         data_context: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
         data_linking_evidence: Optional[List[Dict[str, Any]]] = None,
+        project_mode: str = "general",
     ) -> HypothesisGenerationResult:
         """
         生成科学假设
@@ -159,6 +160,11 @@ class HypothesisGenerationAgent:
             formatted_facts = self._format_facts(facts)
             formatted_gaps = self._format_gaps(knowledge_gaps)
             formatted_constraints = self._format_constraints(constraints)
+            if project_mode == "federated_learning":
+                formatted_constraints += (
+                    "\n[联邦学习模式] 假设应围绕 Non-IID、FedAvg/FedProx/SCAFFOLD、"
+                    "FedMD/FedDF、SplitNN/VFL、client drift、communication cost、privacy budget 展开。"
+                )
             formatted_data_context = self._format_data_context(
                 data_context, multimodal_datasets, data_linking_evidence
             )

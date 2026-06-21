@@ -4,6 +4,7 @@ Pipeline 服务 - 负责按顺序执行各个 Agent
 import uuid
 import json
 import logging
+import os
 import threading
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List
@@ -27,6 +28,7 @@ from app.models.pipeline import (
     PipelineStage as DB_PipelineStage
 )
 from app.models.project import Report, Project, ProjectStatus
+from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
 
@@ -141,9 +143,19 @@ class PipelineService:
         self.start_pipeline_async(request)
         return self._run_pipeline_stages(request.research_question, request.project_id)
 
+    def _get_project_mode(self, project_id: str) -> str:
+        project = self.db.query(Project).filter(Project.id == project_id).first()
+        if project:
+            return normalize_project_mode(getattr(project, "project_mode", None))
+        return ProjectMode.GENERAL.value
+
     def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
         """执行 Pipeline 所有阶段。"""
-        logger.info(f"[Pipeline] ====== 开始执行全部 8 个阶段 run_id={self.run_id} project_id={project_id} ======")
+        project_mode = self._get_project_mode(project_id)
+        logger.info(
+            f"[Pipeline] ====== 开始执行全部 8 个阶段 run_id={self.run_id} "
+            f"project_id={project_id} mode={project_mode} ======"
+        )
 
         # 初始化阶段日志
         stages: List[PipelineStageLog] = [
@@ -180,6 +192,12 @@ class PipelineService:
             # ── 阶段 2: LiteratureMiningAgent ──
             self._run_stage(stages, 1, results, research_question, project_id,
                 lambda: self._exec_literature_mining(project_id, research_question))
+
+            # ── 阶段 2.5: 多源数据查找与整合 ──
+            try:
+                self._exec_data_finder(project_id, research_question, results, project_mode)
+            except Exception as df_err:
+                logger.warning(f"多源数据查找失败: {df_err}")
             
             # ── 阶段 3: KnowledgeGapAgent ──
             self._run_stage(stages, 2, results, research_question, project_id,
@@ -192,7 +210,13 @@ class PipelineService:
                     results.get("literature_mining"),
                     results.get("knowledge_gap")
                 ))
-            
+
+            # ── 阶段 4.5: 科学机制推理与证据链迭代验证 ──
+            try:
+                self._exec_evidence_reasoning(project_id, research_question, results)
+            except Exception as er_err:
+                logger.warning(f"证据链迭代验证失败: {er_err}")
+
             # 保存假设到数据库
             try:
                 self._save_hypotheses(project_id, research_question, results)
@@ -205,20 +229,26 @@ class PipelineService:
             
             # ── 阶段 6: ExperimentDesignAgent ──
             self._run_stage(stages, 5, results, research_question, project_id,
-                lambda: self._exec_experiment_design(results.get("hypothesis_review")))
+                lambda: self._exec_experiment_design(
+                    results.get("hypothesis_review"),
+                    project_id,
+                    project_mode,
+                ))
             
             # ── 阶段 7: SmallValidationAgent ──
             self._run_stage(stages, 6, results, research_question, project_id,
                 lambda: self._exec_small_validation(
                     results.get("experiment_design"),
-                    results.get("hypothesis_review")
+                    results.get("hypothesis_review"),
+                    project_id,
+                    project_mode,
                 ))
             
             # ── 阶段 8: ReportGenerationAgent ──
             def _exec_report():
                 pipeline_run_info = self._build_pipeline_run_info()
                 return self._exec_report_generation(
-                    results, pipeline_run_info
+                    results, pipeline_run_info, project_mode
                 )
             self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
             
@@ -375,9 +405,15 @@ class PipelineService:
     
     def _build_stage_input(self, idx: int, results: Dict[str, Any], research_question: str, project_id: str) -> Dict[str, Any]:
         """构建阶段输入数据"""
-        base = {"project_id": project_id, "research_question": research_question}
+        project_mode = self._get_project_mode(project_id)
+        base = {
+            "project_id": project_id,
+            "research_question": research_question,
+            "project_mode": project_mode,
+        }
         if idx >= 1:
             base["literature_mining"] = results.get("literature_mining", {})
+            base["data_finder"] = results.get("data_finder", {})
         if idx >= 2:
             base["knowledge_gap"] = results.get("knowledge_gap", {})
         if idx >= 3:
@@ -430,6 +466,45 @@ class PipelineService:
         agent = get_literature_mining_agent()
         result = agent.mine(project_id=project_id, research_question=research_question, db=self.db)
         return self._safe_model_dump(result)
+
+    def _exec_data_finder(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+        project_mode: str,
+    ) -> Dict[str, Any]:
+        from app.services.data_finder_service import get_data_finder_service
+
+        hg = results.get("hypothesis_generation", {})
+        hypotheses = hg.get("hypotheses", []) if hg else []
+        selected_hypothesis = ""
+        if hypotheses:
+            selected_hypothesis = hypotheses[0].get("hypothesis", "")
+
+        service = get_data_finder_service(self.db)
+        search_result = service.run_search_sync(
+            project_id=project_id,
+            research_question=research_question,
+            selected_hypothesis=selected_hypothesis,
+            project_mode=project_mode,
+        )
+        extract_result = service.run_extract_tables_sync(project_id)
+        if extract_result.get("extracted_tables"):
+            service.run_align_schema_sync(project_id)
+            service.run_merge_sync(project_id)
+            extract_result = service.load_results(project_id) or extract_result
+
+        output = {
+            "search": search_result,
+            "extract": extract_result,
+            "paper_link_extractions": search_result.get("paper_extractions", []),
+        }
+        results["data_finder"] = output
+        logger.info(
+            f"[DataFinder] 完成 search + extract: tables={len(extract_result.get('extracted_tables', []))}"
+        )
+        return output
     
     def _exec_knowledge_gap(self, literature_mining: Optional[Dict]) -> dict:
         agent = get_knowledge_gap_agent()
@@ -458,6 +533,7 @@ class PipelineService:
             constraints=[],
             project_id=project_id,
             data_context=data_context,
+            project_mode=self._get_project_mode(project_id),
         )
         result_dict = self._safe_model_dump(result)
 
@@ -522,25 +598,60 @@ class PipelineService:
         )
         return self._safe_model_dump(result)
     
-    def _exec_experiment_design(self, hypothesis_review: Optional[Dict]):
+    def _exec_experiment_design(
+        self,
+        hypothesis_review: Optional[Dict],
+        project_id: str = "",
+        project_mode: str = "general",
+    ):
         agent = get_experiment_design_agent()
         hr = hypothesis_review or {}
         reviews = hr.get("reviews", [])
-        if reviews:
-            best_review = reviews[0]
-            result = agent.design_experiment(
-                hypothesis=best_review.get("hypothesis", ""),
-                rationale=best_review.get("rationale"),
-                novelty=str(best_review.get("novelty", "")),
-                testability=str(best_review.get("testability", "")),
-                required_data=best_review.get("required_data"),
-                possible_method=best_review.get("possible_method"),
-                risk=str(best_review.get("risk", ""))
+        if not reviews:
+            return {}
+
+        best_review = reviews[0]
+        data_context = self._build_data_context(project_id) if project_id else {}
+        lit_mining = self._stage_results.get("literature_mining", {})
+
+        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            from app.services.federated_experiment_service import get_federated_experiment_service
+            import asyncio
+
+            fl_context = data_context.get("fl_context") or {}
+            fl_service = get_federated_experiment_service(self.db)
+            plan = asyncio.run(
+                fl_service.build_experiment_plan(
+                    hypothesis=best_review.get("hypothesis", ""),
+                    fl_context=fl_context,
+                )
             )
-            return result if isinstance(result, dict) else self._safe_model_dump(result)
-        return {}
+            return fl_service.build_experiment_design_result(
+                hypothesis=best_review.get("hypothesis", ""),
+                fl_context=fl_context,
+                plan=plan,
+            )
+
+        result = agent.design_experiment(
+            hypothesis=best_review.get("hypothesis", ""),
+            rationale=best_review.get("rationale"),
+            novelty=str(best_review.get("novelty", "")),
+            testability=str(best_review.get("testability", "")),
+            required_data=best_review.get("required_data"),
+            possible_method=best_review.get("possible_method"),
+            risk=str(best_review.get("risk", "")),
+            literature_facts=lit_mining.get("facts", []),
+            project_mode=project_mode,
+        )
+        return result if isinstance(result, dict) else self._safe_model_dump(result)
     
-    def _exec_small_validation(self, experiment_design: Optional[Dict], hypothesis_review: Optional[Dict] = None):
+    def _exec_small_validation(
+        self,
+        experiment_design: Optional[Dict],
+        hypothesis_review: Optional[Dict] = None,
+        project_id: str = "",
+        project_mode: str = "general",
+    ):
         agent = get_small_validation_agent()
         ed = experiment_design or {}
         hr = hypothesis_review or {}
@@ -555,6 +666,72 @@ class PipelineService:
         if isinstance(ingest_output, dict) and ingest_output.get("data"):
             multimodal_datasets = ingest_output["data"].get("datasets", [])
 
+        modeling_results = []
+        if project_id:
+            from app.services.modeling_service import ModelingService
+            from app.services.dataset_service import DatasetService
+            from app.services.data_finder_service import get_data_finder_service
+
+            modeling_results = ModelingService(self.db).load_project_modeling_results(project_id)
+            if not multimodal_datasets:
+                ds_service = DatasetService(self.db)
+                for ds in ds_service.get_project_datasets(project_id):
+                    if ds.data_type != "tabular":
+                        continue
+                    multimodal_datasets.append(
+                        {
+                            "dataset_id": ds.id,
+                            "filename": ds.filename,
+                            "file_path": ds.file_path,
+                            "data_type": ds.data_type,
+                            "n_rows": ds.n_rows,
+                            "n_columns": ds.n_columns,
+                            "columns": json.loads(ds.columns_json) if ds.columns_json else [],
+                            "dtypes": json.loads(ds.dtypes_json) if ds.dtypes_json else {},
+                            "statistics": json.loads(ds.statistics_json) if ds.statistics_json else {},
+                            "preview": json.loads(ds.preview_json) if ds.preview_json else [],
+                        }
+                    )
+                df_results = get_data_finder_service(self.db).load_results(project_id)
+                merged_path = (df_results or {}).get("merged", {}).get("merged_csv_path")
+                if merged_path and os.path.exists(merged_path):
+                    multimodal_datasets.insert(0, {
+                        "dataset_id": "data_finder_merged",
+                        "filename": os.path.basename(merged_path),
+                        "file_path": merged_path,
+                        "data_type": "tabular",
+                        "source": "data_finder",
+                    })
+
+        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            from app.services.federated_experiment_service import get_federated_experiment_service
+            import asyncio
+
+            data_context = self._build_data_context(project_id) if project_id else {}
+            fl_context = data_context.get("fl_context") or ed.get("fl_context") or {}
+            fl_service = get_federated_experiment_service(self.db)
+            federated_plan = ed.get("federated_plan") or {}
+            pilot = asyncio.run(
+                fl_service.run_pilot_validation(
+                    datasets=multimodal_datasets,
+                    fl_context=fl_context,
+                    experiment_plan=federated_plan,
+                )
+            )
+            return {
+                "hypothesis": hypothesis,
+                "project_mode": project_mode,
+                "federated_pilot": pilot,
+                "results": {
+                    "actual_results": pilot if pilot.get("execution_mode") == "uploaded_csv" else [],
+                    "simulated_results": pilot if pilot.get("execution_mode") == "simulation" else [],
+                    "expected_results": pilot.get("next_round_suggestions", []),
+                    "result_source": pilot.get("result_source", pilot.get("execution_mode")),
+                },
+                "skill_outputs": pilot.get("skill_outputs", {}),
+                "analysis_summary": pilot.get("analysis", {}).get("summary", ""),
+            }
+
         result = agent.generate_validation(
             hypothesis=hypothesis,
             methods=ed.get("methods", ""),
@@ -562,10 +739,17 @@ class PipelineService:
             metrics=ed.get("metrics", ""),
             experiment_design=ed,
             multimodal_datasets=multimodal_datasets,
+            modeling_results=modeling_results,
+            project_mode=project_mode,
         )
         return result if isinstance(result, dict) else self._safe_model_dump(result)
     
-    def _exec_report_generation(self, results: Dict[str, Any], pipeline_run_info: Optional[Dict] = None) -> dict:
+    def _exec_report_generation(
+        self,
+        results: Dict[str, Any],
+        pipeline_run_info: Optional[Dict] = None,
+        project_mode: str = "general",
+    ) -> dict:
         agent = get_report_generation_agent()
         pu = results.get("problem_understanding", {})
         lm = results.get("literature_mining", {})
@@ -579,7 +763,11 @@ class PipelineService:
         citation_map = lm.get("citation_map", []) if isinstance(lm.get("citation_map"), list) else []
         verified_references = lm.get("verified_references", []) if isinstance(lm.get("verified_references"), list) else citation_map
         
-        project_info = {"title": "研究项目", "id": self.run_id}
+        project_info = {
+            "title": "研究项目",
+            "id": self.run_id,
+            "project_mode": project_mode,
+        }
 
         multimodal_datasets = []
         ed_skill_outputs = ed.get("skill_outputs", {})
@@ -590,9 +778,12 @@ class PipelineService:
         preliminary_analysis_outputs = sv.get("skill_outputs", {})
 
         data_context = {}
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        if project_id:
+            data_context = self._build_data_context(project_id)
         hg_input = hg.get("input_data") or hg
-        if isinstance(hg_input, dict):
-            data_context = hg_input.get("data_context", {})
+        if isinstance(hg_input, dict) and hg_input.get("data_context"):
+            data_context = {**data_context, **hg_input.get("data_context", {})}
 
         result = agent.generate_report(
             project_info=project_info,
@@ -612,8 +803,55 @@ class PipelineService:
             preliminary_analysis_skill_outputs=preliminary_analysis_outputs,
             multimodal_datasets=multimodal_datasets,
             data_context=data_context,
+            project_mode=project_mode,
         )
-        return self._safe_model_dump(result)
+        result_dict = self._safe_model_dump(result)
+
+        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            from app.services.federated_experiment_service import get_federated_experiment_service
+
+            fl_service = get_federated_experiment_service(self.db)
+            chapters = result_dict.get("chapters", {})
+            if isinstance(chapters, dict):
+                result_dict["chapters"] = fl_service.enrich_report_sections(
+                    chapters,
+                    data_context.get("fl_context") or ed.get("fl_context") or {},
+                    ed,
+                    sv.get("federated_pilot") or {},
+                )
+                result_dict["report_mode"] = ProjectMode.FEDERATED_LEARNING.value
+
+        return result_dict
+
+    def _exec_evidence_reasoning(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        from app.services.evidence_reasoning_service import get_evidence_reasoning_service
+
+        hg = results.get("hypothesis_generation", {})
+        lm = results.get("literature_mining", {})
+        hypotheses = hg.get("hypotheses", [])
+        if not hypotheses:
+            return {}
+
+        service = get_evidence_reasoning_service()
+        output = service.run_for_hypotheses_sync(
+            hypotheses=hypotheses,
+            research_question=research_question,
+            literature_mining=lm,
+            max_rounds=2,
+        )
+        hg["hypotheses"] = output.get("hypotheses", hypotheses)
+        hg["evidence_reasoning"] = output
+        results["hypothesis_generation"] = hg
+        results["evidence_reasoning"] = output
+        logger.info(
+            f"[EvidenceReasoning] 完成 {len(output.get('hypotheses', []))} 条假设证据链迭代"
+        )
+        return output
     
     def _save_hypotheses(self, project_id: str, research_question: str, results: Dict[str, Any]):
         """保存假设和证据链到数据库"""
@@ -644,10 +882,50 @@ class PipelineService:
             research_question=research_question,
             hypotheses_list=hypotheses_with_alignment
         )
-        # ── 为每条假设创建证据链：只关联其 supporting_fact_ids 对应的事实 ──
+
+        from app.services.evidence_reasoning_service import get_evidence_reasoning_service
+        er_service = get_evidence_reasoning_service()
+
+        # ── 为每条假设创建证据链：优先 evidence_chain，其次 supporting_fact_ids ──
         all_facts = lm.get("facts", [])
-        for db_hypo in created_hypos:
-            # 从存储的 JSON 反序列化 supporting_fact_ids
+        for idx, db_hypo in enumerate(created_hypos):
+            hypo_data = hypotheses_with_alignment[idx] if idx < len(hypotheses_with_alignment) else {}
+            chain = hypo_data.get("evidence_chain")
+            if chain:
+                er_service.save_evidence_chain(project_id, db_hypo.id, chain)
+                final_text = chain.get("final_version") or hypo_data.get("hypothesis")
+                if final_text and final_text != db_hypo.hypothesis:
+                    hypo_service.update_hypothesis(db_hypo.id, {"hypothesis": final_text, "rationale": db_hypo.rationale})
+
+                evidence_items = (chain.get("supporting_evidence") or []) + (chain.get("counter_evidence") or [])
+                facts_for_db = []
+                for ev in evidence_items:
+                    facts_for_db.append(
+                        {
+                            "fact_text": ev.get("claim") or ev.get("quote_or_summary", ""),
+                            "quote_text": ev.get("quote_or_summary", ""),
+                            "source_paper_title": ev.get("source_title", ""),
+                            "document_id": ev.get("paper_id") or ev.get("document_id"),
+                            "relevance_score": ev.get("relevance_score", 0.5),
+                            "extra_metadata": json.dumps(
+                                {
+                                    "stance": ev.get("stance"),
+                                    "stance_reason": ev.get("stance_reason"),
+                                    "reliability_score": ev.get("reliability_score"),
+                                    "evidence_id": ev.get("evidence_id"),
+                                },
+                                ensure_ascii=False,
+                            ),
+                        }
+                    )
+                if facts_for_db:
+                    hypo_service.create_evidence_batch(
+                        project_id=project_id,
+                        hypothesis_id=db_hypo.id,
+                        facts=facts_for_db,
+                    )
+                continue
+
             raw_ids = db_hypo.supporting_fact_ids
             try:
                 target_ids = json.loads(raw_ids) if raw_ids else []

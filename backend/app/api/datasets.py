@@ -1,13 +1,24 @@
 import os
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, Path, Query, Depends, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, Path, Query, Depends, HTTPException, Form, Body
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
+from app.services.modeling_service import ModelingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class ModelingRunRequest(BaseModel):
+    target_column: Optional[str] = Field(None, description="目标变量列名")
+    task_type: Optional[str] = Field(
+        None,
+        description="任务类型: classification / regression / time_series / unknown",
+    )
+    research_task: Optional[str] = Field(None, description="用户研究任务描述")
 
 
 @router.post("/upload")
@@ -119,6 +130,42 @@ async def preprocess_dataset(
     if not dataset:
         raise HTTPException(status_code=404, detail="数据集不存在")
     return {"code": 200, "data": service.to_response(dataset), "message": "预处理完成"}
+
+
+@router.post("/{dataset_id}/modeling/run")
+async def run_dataset_modeling(
+    dataset_id: str = Path(..., description="数据集 ID"),
+    request: Optional[ModelingRunRequest] = Body(default=None),
+    db: Session = Depends(get_db),
+):
+    """运行多源科学数据建模预测与结果自校正流程"""
+    req = request or ModelingRunRequest()
+    service = ModelingService(db)
+    result = await service.run_modeling_pipeline(
+        dataset_id=dataset_id,
+        target_column=req.target_column,
+        task_type=req.task_type,
+        research_task=req.research_task,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "建模失败"))
+    return {"code": 200, "data": result, "message": "自动建模完成"}
+
+
+@router.get("/{dataset_id}/modeling/result")
+async def get_dataset_modeling_result(
+    dataset_id: str = Path(..., description="数据集 ID"),
+    db: Session = Depends(get_db),
+):
+    """获取最近一次建模结果"""
+    service = ModelingService(db)
+    ds = service.get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    result = service.load_result(dataset_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="暂无建模结果，请先运行自动建模")
+    return {"code": 200, "data": result, "message": "success"}
 
 
 @router.put("/{dataset_id}/toggle-hypothesis")

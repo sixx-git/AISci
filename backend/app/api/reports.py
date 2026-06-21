@@ -32,7 +32,7 @@ def get_download_url(report_id: str, file_type: str) -> str:
     
     Args:
         report_id: 报告 ID
-        file_type: 文件类型 (pdf 或 md)
+        file_type: 文件类型 (pdf / md / tex)
         
     Returns:
         下载地址
@@ -74,10 +74,12 @@ async def generate_report(
         # 构建下载地址
         md_download_url = get_download_url(report_file_id, "md") if report_file_id else None
         pdf_download_url = get_download_url(report_file_id, "pdf") if report_file_id and pdf_success else None
+        tex_download_url = get_download_url(report_file_id, "tex") if report_file_id else None
         
         # 更新结果包含下载地址
         report_result["md_download_url"] = md_download_url
         report_result["pdf_download_url"] = pdf_download_url
+        report_result["tex_download_url"] = tex_download_url
         
         # 保存到数据库
         report_service = ReportService(db)
@@ -133,7 +135,7 @@ async def download_report_file(report_id: str, file_type: str, db: Session = Dep
     
     Args:
         report_id: 报告文件 ID（支持 DB UUID 或文件目录名）
-        file_type: 文件类型 (pdf 或 md)
+        file_type: 文件类型 (pdf / md / tex)
     """
     try:
         # 如果传入的是 DB UUID，查找对应的 pdf_path
@@ -155,6 +157,10 @@ async def download_report_file(report_id: str, file_type: str, db: Session = Dep
             file_path = os.path.join(report_dir, "report.md")
             filename = "科学假设与研究计划.md"
             media_type = "text/markdown"
+        elif file_type == "tex":
+            file_path = os.path.join(report_dir, "report.tex")
+            filename = "科学假设与研究计划.tex"
+            media_type = "application/x-tex"
         else:
             raise HTTPException(status_code=400, detail="不支持的文件类型")
         

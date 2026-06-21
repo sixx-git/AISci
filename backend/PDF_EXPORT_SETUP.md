@@ -1,10 +1,19 @@
-# PDF 导出功能说明
+# PDF / LaTeX 报告导出说明
+
+> **推荐路径**：LaTeX 模板 → XeLaTeX 编译 PDF。详见 [LATEX_EXPORT_SETUP.md](../LATEX_EXPORT_SETUP.md)。
 
 ## 概述
 
-本功能使用 **WeasyPrint** 库将 Markdown 格式的研究报告转换为 PDF 文件，支持中文字体渲染。
+PDF 导出优先级：
 
-## 依赖安装
+1. **LaTeX（推荐）** — 使用 `latex_template/scientific_plan_template.tex`，XeLaTeX + BibTeX 编译
+2. **Markdown 回退** — Playwright Chromium 或 WeasyPrint 将 Markdown 转为 PDF
+
+## LaTeX 依赖
+
+请安装 TeX Live / MiKTeX，并确保 `xelatex`、`bibtex` 可用。未安装时仍会生成 `report.tex`，PDF 将尝试 Markdown 回退。
+
+## Markdown 回退依赖
 
 ### 1. Python 依赖
 

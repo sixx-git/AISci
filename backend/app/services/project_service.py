@@ -20,6 +20,7 @@ from app.models import (
     ImportStatus,
     LibraryScope,
 )
+from app.core.project_modes import normalize_project_mode
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectQuery
 
 # Document Parser
@@ -51,6 +52,9 @@ class ProjectService:
             data_source=data.data_source,
             constraints=data.constraints,
             expected_output=data.expected_output,
+            project_mode=normalize_project_mode(
+                data.project_mode.value if data.project_mode else None
+            ),
         )
         
         self.db.add(project)
@@ -105,6 +109,9 @@ class ProjectService:
         
         # 更新字段
         update_data = data.model_dump(exclude_unset=True)
+        if "project_mode" in update_data and update_data["project_mode"] is not None:
+            pm = update_data["project_mode"]
+            update_data["project_mode"] = normalize_project_mode(pm.value if hasattr(pm, "value") else pm)
         for field, value in update_data.items():
             setattr(project, field, value)
         

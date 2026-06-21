@@ -4,7 +4,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import {
   Star, Eye, FlaskConical, AlertTriangle, ChevronDown, ChevronUp,
-  Award, CheckCircle2, Target,
+  Award, CheckCircle2, Target, RefreshCw, ShieldCheck, Link2,
 } from 'lucide-react';
 import type { DetailedHypothesis } from '@/types';
 
@@ -13,6 +13,8 @@ interface HypothesisCardProps {
   onViewEvidence?: (id: string) => void;
   onSetPrimary?: (id: string) => void;
   onEnterExperiment?: (id: string) => void;
+  onIterateEvidence?: (id: string) => void;
+  iterating?: boolean;
 }
 
 function overallColor(score: number) {
@@ -26,6 +28,8 @@ export function HypothesisCard({
   onViewEvidence,
   onSetPrimary,
   onEnterExperiment,
+  onIterateEvidence,
+  iterating = false,
 }: HypothesisCardProps) {
   const [expanded, setExpanded] = useState(false);
   const oc = overallColor(hypothesis.overallScore);
@@ -114,6 +118,23 @@ export function HypothesisCard({
           </span>
         )}
         <span className="text-[11px] text-gray-500">{hypothesis.evidenceCount} 条证据</span>
+        {hypothesis.chainCompleteness != null && (
+          <span className="text-[11px] text-primary-300/80 bg-primary-500/10 border border-primary-500/20 rounded px-1.5 py-0.5">
+            链完整度 {(hypothesis.chainCompleteness * 100).toFixed(0)}%
+          </span>
+        )}
+        {hypothesis.supportEvidenceCount != null && (
+          <span className="text-[11px] text-green-300/80">支持 {hypothesis.supportEvidenceCount}</span>
+        )}
+        {hypothesis.counterEvidenceCount != null && (
+          <span className="text-[11px] text-amber-300/80">反对 {hypothesis.counterEvidenceCount}</span>
+        )}
+        {hypothesis.citationReliability != null && (
+          <span className="text-[11px] text-blue-300/80 flex items-center gap-0.5">
+            <ShieldCheck className="w-3 h-3" />
+            引用 {(hypothesis.citationReliability * 100).toFixed(0)}%
+          </span>
+        )}
         {hasDatasetFields && (
           <span className="text-[11px] text-gray-500">{hypothesis.dataset_field_refs!.length} 个数据字段</span>
         )}
@@ -236,6 +257,15 @@ export function HypothesisCard({
         <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5" />}
           onClick={() => onViewEvidence?.(hypothesis.id)}>
           查看证据链
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={iterating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+          onClick={() => onIterateEvidence?.(hypothesis.id)}
+          disabled={iterating}
+        >
+          迭代修正
         </Button>
         {!hypothesis.isPrimary && (
           <Button variant="secondary" size="sm" icon={<Star className="w-3.5 h-3.5" />}

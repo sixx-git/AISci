@@ -281,6 +281,121 @@ async def get_hypothesis_evidence(
         return error(str(e))
 
 
+@router.get("/hypotheses/{hypothesis_id}/evidence-chain")
+async def get_hypothesis_evidence_chain(
+    hypothesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """获取假设的结构化证据链（支持/反对/修正历史）"""
+    try:
+        from app.services.evidence_reasoning_service import get_evidence_reasoning_service
+
+        hypo_service = HypothesisService(db)
+        hypo = hypo_service.get_hypothesis_by_id(hypothesis_id)
+        if not hypo:
+            return error("假设不存在", code=404)
+
+        er_service = get_evidence_reasoning_service()
+        chain = er_service.load_evidence_chain(hypo.project_id, hypothesis_id)
+        if not chain:
+            return success(None, message="暂无结构化证据链，请先运行 Pipeline 或迭代修正")
+
+        return success(chain, message="获取证据链成功")
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/hypotheses/{hypothesis_id}/evidence-chain/iterate")
+async def iterate_hypothesis_evidence_chain(
+    hypothesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """对单条假设重新运行证据链迭代验证"""
+    try:
+        import asyncio
+
+        from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStage, PipelineStatus
+        from app.services.evidence_reasoning_service import get_evidence_reasoning_service
+
+        hypo_service = HypothesisService(db)
+        hypo = hypo_service.get_hypothesis_by_id(hypothesis_id)
+        if not hypo:
+            return error("假设不存在", code=404)
+
+        literature_mining: dict = {"facts": [], "citation_map": [], "uncertain_points": [], "imported_documents": []}
+        latest_run = (
+            db.query(PipelineRun)
+            .filter(
+                PipelineRun.project_id == hypo.project_id,
+                PipelineRun.status.in_([PipelineStatus.COMPLETED, PipelineStatus.FAILED, PipelineStatus.RUNNING]),
+            )
+            .order_by(PipelineRun.created_at.desc())
+            .first()
+        )
+        if latest_run:
+            stage_exec = (
+                db.query(PipelineStageExecution)
+                .filter(
+                    PipelineStageExecution.pipeline_run_id == latest_run.id,
+                    PipelineStageExecution.stage == PipelineStage.LITERATURE_MINING,
+                )
+                .first()
+            )
+            if stage_exec and isinstance(stage_exec.output_data, dict):
+                literature_mining = stage_exec.output_data
+
+        hypo_dict = {
+            "hypothesis": hypo.hypothesis,
+            "rationale": hypo.rationale,
+            "supporting_fact_ids": [],
+        }
+
+        er_service = get_evidence_reasoning_service()
+        output = asyncio.run(
+            er_service.run_for_hypothesis(
+                hypo_dict,
+                hypo.research_question,
+                literature_mining,
+            )
+        )
+
+        chain = output.get("evidence_chain", {})
+        er_service.save_evidence_chain(hypo.project_id, hypothesis_id, chain)
+
+        enriched = output.get("hypothesis", {})
+        if enriched.get("hypothesis"):
+            hypo_service.update_hypothesis(hypothesis_id, {"hypothesis": enriched["hypothesis"]})
+
+        facts_for_db = []
+        for ev in (chain.get("supporting_evidence") or []) + (chain.get("counter_evidence") or []):
+            facts_for_db.append(
+                {
+                    "fact_text": ev.get("claim") or ev.get("quote_or_summary", ""),
+                    "quote_text": ev.get("quote_or_summary", ""),
+                    "source_title": ev.get("source_title", ""),
+                    "document_id": ev.get("paper_id"),
+                    "relevance_score": ev.get("relevance_score", 0.5),
+                    "extra_metadata": __import__("json").dumps(
+                        {
+                            "stance": ev.get("stance"),
+                            "stance_reason": ev.get("stance_reason"),
+                            "reliability_score": ev.get("reliability_score"),
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+        if facts_for_db:
+            hypo_service.create_evidence_batch(hypo.project_id, hypothesis_id, facts_for_db)
+
+        return success(
+            {"evidence_chain": chain, "hypothesis": enriched},
+            message="证据链迭代完成",
+        )
+    except Exception as e:
+        return error(str(e))
+
+
 @router.post("/hypothesis-review", response_model=ApiResponse[HypothesisReviewResult])
 async def hypothesis_review(
     request: HypothesisReviewRequest

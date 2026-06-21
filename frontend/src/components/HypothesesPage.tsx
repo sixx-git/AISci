@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import hypothesisService, { type BackendHypothesis, type BackendEvidence } from '@/services/hypothesisService';
-import type { DetailedHypothesis, EvidenceItem } from '@/types';
+import type { DetailedHypothesis, EvidenceItem, EvidenceChain } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
@@ -49,6 +49,17 @@ function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
 }
 
 function mapBackendEvidence(e: BackendEvidence): EvidenceItem {
+  let stance: EvidenceItem['stance'];
+  let reliability_score: number | undefined;
+  try {
+    if (e.extra_metadata) {
+      const meta = JSON.parse(e.extra_metadata);
+      stance = meta.stance;
+      reliability_score = meta.reliability_score;
+    }
+  } catch {
+    /* ignore */
+  }
   return {
     id: e.id,
     project_id: e.project_id,
@@ -61,6 +72,21 @@ function mapBackendEvidence(e: BackendEvidence): EvidenceItem {
     relevance_score: e.relevance_score,
     source_title: e.source_title,
     created_at: e.created_at,
+    stance,
+    reliability_score,
+  };
+}
+
+function applyEvidenceChainToHypothesis(h: DetailedHypothesis, chain: EvidenceChain | null): DetailedHypothesis {
+  if (!chain) return h;
+  return {
+    ...h,
+    evidenceChain: chain,
+    chainCompleteness: chain.chain_completeness,
+    supportEvidenceCount: chain.support_count ?? chain.supporting_evidence?.length ?? 0,
+    counterEvidenceCount: chain.counter_count ?? chain.counter_evidence?.length ?? 0,
+    citationReliability: chain.citation_reliability,
+    content: chain.final_version || h.content,
   };
 }
 
@@ -81,6 +107,8 @@ export function HypothesesPage({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedHypothesis, setSelectedHypothesis] = useState<DetailedHypothesis | null>(null);
   const [currentEvidence, setCurrentEvidence] = useState<EvidenceItem[]>([]);
+  const [currentEvidenceChain, setCurrentEvidenceChain] = useState<EvidenceChain | null>(null);
+  const [iteratingId, setIteratingId] = useState<string | null>(null);
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
@@ -98,9 +126,23 @@ export function HypothesesPage({
     setError(null);
 
     hypothesisService.getProjectHypotheses(_projectId)
-      .then((res) => {
+      .then(async (res) => {
         if (res.code === 200 && Array.isArray(res.data)) {
-          setHypotheses(res.data.map(mapBackendToDetailed));
+          const base = res.data.map(mapBackendToDetailed);
+          const withChains = await Promise.all(
+            base.map(async (h) => {
+              try {
+                const chainRes = await hypothesisService.getEvidenceChain(h.id);
+                if (chainRes.code === 200 && chainRes.data) {
+                  return applyEvidenceChainToHypothesis(h, chainRes.data);
+                }
+              } catch {
+                /* ignore per-hypothesis chain load errors */
+              }
+              return h;
+            }),
+          );
+          setHypotheses(withChains);
         } else {
           setError(res.message || '获取假设列表失败');
         }
@@ -115,23 +157,65 @@ export function HypothesesPage({
     const hypo = hypotheses.find(h => h.id === id);
     if (!hypo) return;
     setSelectedHypothesis(hypo);
+    setCurrentEvidenceChain(hypo.evidenceChain ?? null);
     setDrawerOpen(true);
 
-    hypothesisService.getHypothesisEvidence(id)
-      .then((res) => {
-        if (res.code === 200 && Array.isArray(res.data)) {
-          setCurrentEvidence(res.data.map(mapBackendEvidence));
+    Promise.all([
+      hypothesisService.getHypothesisEvidence(id),
+      hypothesisService.getEvidenceChain(id),
+    ])
+      .then(([evRes, chainRes]) => {
+        if (evRes.code === 200 && Array.isArray(evRes.data)) {
+          setCurrentEvidence(evRes.data.map(mapBackendEvidence));
         } else {
           setCurrentEvidence([]);
         }
+        if (chainRes.code === 200 && chainRes.data) {
+          setCurrentEvidenceChain(chainRes.data);
+          setSelectedHypothesis((prev) =>
+            prev && prev.id === id ? applyEvidenceChainToHypothesis(prev, chainRes.data) : prev,
+          );
+        } else {
+          setCurrentEvidenceChain(hypo.evidenceChain ?? null);
+        }
       })
-      .catch(() => setCurrentEvidence([]));
+      .catch(() => {
+        setCurrentEvidence([]);
+        setCurrentEvidenceChain(hypo.evidenceChain ?? null);
+      });
   }, [hypotheses]);
+
+  const handleIterateEvidence = useCallback(async (id: string) => {
+    setIteratingId(id);
+    try {
+      const res = await hypothesisService.iterateEvidenceChain(id);
+      if (res.code === 200 && res.data?.evidence_chain) {
+        const chain = res.data.evidence_chain as EvidenceChain;
+        setHypotheses((prev) =>
+          prev.map((h) => (h.id === id ? applyEvidenceChainToHypothesis(h, chain) : h)),
+        );
+        if (selectedHypothesis?.id === id) {
+          setSelectedHypothesis((prev) =>
+            prev ? applyEvidenceChainToHypothesis(prev, chain) : prev,
+          );
+          setCurrentEvidenceChain(chain);
+        }
+        showAlert('证据链迭代修正完成');
+      } else {
+        showAlert(res.message || '迭代修正失败');
+      }
+    } catch {
+      showAlert('迭代修正失败，请检查后端服务');
+    } finally {
+      setIteratingId(null);
+    }
+  }, [selectedHypothesis, showAlert]);
 
   const handleCloseDrawer = useCallback(() => {
     setDrawerOpen(false);
     setSelectedHypothesis(null);
     setCurrentEvidence([]);
+    setCurrentEvidenceChain(null);
   }, []);
 
   const offTopicHypotheses = useMemo(
@@ -327,6 +411,8 @@ export function HypothesesPage({
                 onViewEvidence={handleViewEvidence}
                 onSetPrimary={handleSetPrimary}
                 onEnterExperiment={handleEnterExperiment}
+                onIterateEvidence={handleIterateEvidence}
+                iterating={iteratingId === primaryHypothesis.id}
               />
             </div>
           )}
@@ -378,6 +464,8 @@ export function HypothesesPage({
                       onViewEvidence={handleViewEvidence}
                       onSetPrimary={handleSetPrimary}
                       onEnterExperiment={handleEnterExperiment}
+                      onIterateEvidence={handleIterateEvidence}
+                      iterating={iteratingId === h.id}
                     />
                   ))}
               </div>
@@ -407,6 +495,8 @@ export function HypothesesPage({
                       hypothesis={h}
                       onViewEvidence={handleViewEvidence}
                       onEnterExperiment={undefined}
+                      onIterateEvidence={handleIterateEvidence}
+                      iterating={iteratingId === h.id}
                     />
                   ))}
                 </div>
@@ -441,6 +531,7 @@ export function HypothesesPage({
         hypothesisContent={selectedHypothesis?.content || ''}
         evidenceCount={selectedHypothesis?.evidenceCount || 0}
         evidenceList={currentEvidence}
+        evidenceChain={currentEvidenceChain}
       />
     </div>
   );

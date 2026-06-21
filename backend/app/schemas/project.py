@@ -17,6 +17,12 @@ class ProjectStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class ProjectMode(str, Enum):
+    """项目运行模式"""
+    GENERAL = "general"
+    FEDERATED_LEARNING = "federated_learning"
+
+
 class ProjectCreate(BaseModel):
     """创建项目请求"""
     name: str = Field(..., min_length=1, max_length=200, description="项目名称")
@@ -31,6 +37,10 @@ class ProjectCreate(BaseModel):
     data_source: Optional[str] = Field(None, description="数据来源")
     constraints: Optional[str] = Field(None, description="限制条件")
     expected_output: Optional[str] = Field(None, description="期望输出")
+    project_mode: Optional[ProjectMode] = Field(
+        default=ProjectMode.GENERAL,
+        description="项目模式: general / federated_learning",
+    )
 
 
 class ProjectUpdate(BaseModel):
@@ -47,6 +57,7 @@ class ProjectUpdate(BaseModel):
     data_source: Optional[str] = Field(None, description="数据来源")
     constraints: Optional[str] = Field(None, description="限制条件")
     expected_output: Optional[str] = Field(None, description="期望输出")
+    project_mode: Optional[ProjectMode] = Field(None, description="项目模式")
 
 
 class ProjectQuery(BaseModel):
@@ -72,6 +83,7 @@ class ProjectBase(BaseModel):
     data_source: Optional[str] = None
     constraints: Optional[str] = None
     expected_output: Optional[str] = None
+    project_mode: Optional[ProjectMode] = ProjectMode.GENERAL
     
     class Config:
         from_attributes = True

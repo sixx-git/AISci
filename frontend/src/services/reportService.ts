@@ -45,6 +45,7 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     complianceCheck,
     plots,
     mdDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/md` : undefined,
+    texDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/tex` : undefined,
     pdfDownloadUrl: db.report_id && db.pdf_generated ? `/api/v1/reports/download/${db.report_id}/pdf` : undefined,
   };
 }
@@ -84,7 +85,7 @@ export const reportService = {
   },
 
   /** GET /api/v1/reports/download/:reportId/:fileType */
-  async download(reportId: string, fileType: 'pdf' | 'md'): Promise<Blob> {
+  async download(reportId: string, fileType: 'pdf' | 'md' | 'tex'): Promise<Blob> {
     const { data } = await api.get(`/reports/download/${reportId}/${fileType}`, {
       responseType: 'blob',
     });

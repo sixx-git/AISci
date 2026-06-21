@@ -1,0 +1,370 @@
+\documentclass{article}
+
+% =============================
+% 中文支持：必须使用 XeLaTeX 编译
+% =============================
+\usepackage[UTF8]{ctex}
+
+% =============================
+% 保留 ICLR 论文风格
+% =============================
+\usepackage{iclr2024_conference,times}
+
+% =============================
+% 常用宏包
+% =============================
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{xcolor}
+
+\geometry{margin=1in}
+
+% =============================
+% 修正 ICLR 样式对中文标题的影响
+% =============================
+\makeatletter
+
+% 1. 修改论文标题区域：去掉 \sc，避免中文标题显示异常
+\def\@maketitle{%
+\vbox{\hsize\textwidth
+{\LARGE\bfseries\centering \@title\par}
+\ificlrfinal
+    \lhead{Published as a conference paper at ICLR 2024}
+    \def\And{\end{tabular}\hfil\linebreak[0]\hfil
+            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
+    \def\AND{\end{tabular}\hfil\linebreak[4]\hfil
+            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
+    \begin{center}
+    \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\@author\end{tabular}
+    \end{center}
+\else
+    \lhead{AI-Scientist Generated Preprint}
+    \begin{center}
+    \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}
+    Anonymous authors\\
+    Paper under double-blind review
+    \end{tabular}
+    \end{center}
+\fi
+\vskip 0.3in minus 0.1in}
+}
+
+% 2. 修改摘要标题：Abstract -> 摘要
+\renewenvironment{abstract}
+  {\vskip.075in
+   \centerline{\large\bfseries 摘要}
+   \vspace{0.5ex}
+   \begin{quote}}
+  {\par\end{quote}\vskip 1ex}
+
+% 3. 修改章节标题：去掉 \sc，改为中文可正常显示的加粗格式
+\def\section{%
+  \@startsection{section}{1}{\z@}%
+  {-2.0ex plus -0.5ex minus -.2ex}%
+  {1.5ex plus 0.3ex minus0.2ex}%
+  {\large\bfseries\raggedright}%
+}
+
+\def\subsection{%
+  \@startsection{subsection}{2}{\z@}%
+  {-1.8ex plus -0.5ex minus -.2ex}%
+  {0.8ex plus .2ex}%
+  {\normalsize\bfseries\raggedright}%
+}
+
+\def\subsubsection{%
+  \@startsection{subsubsection}{3}{\z@}%
+  {-1.5ex plus -0.5ex minus -.2ex}%
+  {0.5ex plus .2ex}%
+  {\normalsize\bfseries\raggedright}%
+}
+
+\makeatother
+
+% =============================
+% 参考文献标题中文化
+% =============================
+\renewcommand{\refname}{参考文献}
+
+% =============================
+% 文献样式
+% =============================
+\bibliographystyle{iclr2024_conference}
+
+% =============================
+% 文档信息
+% =============================
+\title{论文标题：替换为符合学术出版规范的研究标题}
+
+\author{
+作者姓名 \\
+机构名称 \\
+\texttt{email@domain.com}
+}
+
+\begin{document}
+
+\maketitle
+
+% =============================
+% 摘要
+% =============================
+\begin{abstract}
+这里填写论文摘要。摘要应包含研究背景、核心问题、方法概述和预期结果。
+例如：针对当前某一自然科学领域中多源异构数据难以统一建模、机制解释不足和实验验证成本较高等问题，本文提出一种基于多模态数据融合与文献知识增强的科学假设生成方法。该方法结合历史实验数据、公开文献和目标观测数据，通过统计建模、机器学习和可解释性分析生成可验证的科学假设。预期结果表明，该方法能够在一定范围内提高假设生成的针对性、可解释性和实验可行性。
+\end{abstract}
+
+% =============================
+% 1. 待研究问题
+% =============================
+\section{待研究问题}
+
+这里填写 Problem Statement。
+
+本部分需要明确指出当前领域存在的具体局限性，例如：
+
+当前研究在以下方面仍存在不足：
+第一，多模态实验数据与文献知识之间缺乏有效关联；
+第二，已有方法更多关注结果预测，而对潜在机制解释不足；
+第三，自动生成的科学假设往往缺乏可验证性，难以直接转化为实验计划。
+
+因此，本文拟研究的问题是：如何结合历史数据、真实文献和拟采集目标数据，自动生成具有科学依据、逻辑推导链条和实验可验证性的研究假设与计划。
+
+% =============================
+% 2. 解决思路
+% =============================
+\section{解决思路}
+
+这里填写 Rationale。
+
+本研究的基本思路是：首先从历史数据和真实文献中提取关键变量、现象规律和已知机制；然后通过统计分析和机器学习方法发现异常模式、潜在关联或性能瓶颈；最后结合领域知识构建逻辑推导链条，形成可验证的科学假设。
+
+可以将推导过程表示为：
+
+\begin{equation}
+\mathcal{H} = f(\mathcal{D}_{source}, \mathcal{K}_{literature}, \mathcal{C}_{domain}),
+\end{equation}
+
+其中，$\mathcal{H}$ 表示生成的科学假设，$\mathcal{D}_{source}$ 表示历史数据，$\mathcal{K}_{literature}$ 表示文献知识，$\mathcal{C}_{domain}$ 表示领域约束或先验知识。
+
+% =============================
+% 3. 必要的技术手段
+% =============================
+\section{必要的技术手段}
+
+这里填写 Technical Details。
+
+验证该科学假设需要使用以下技术手段：
+
+\begin{itemize}
+    \item \textbf{数据清洗与预处理：} 缺失值处理、异常值检测、特征标准化、多源数据对齐。
+    \item \textbf{统计分析方法：} 相关性分析、显著性检验、方差分析、回归分析。
+    \item \textbf{机器学习方法：} 随机森林、支持向量机、梯度提升树、聚类分析。
+    \item \textbf{深度学习方法：} 多层感知机、图神经网络、Transformer 或多模态融合模型。
+    \item \textbf{可解释性方法：} SHAP、注意力权重分析、特征重要性分析。
+    \item \textbf{文献知识增强：} 文献检索、实体抽取、关系抽取、知识图谱构建。
+\end{itemize}
+
+% =============================
+% 4. 数据集
+% =============================
+\section{数据集}
+
+本部分需要说明使用来源合规、真实存在的数据集，并区分 Source 和 Target。
+
+\subsection{历史数据}
+
+这里填写 Source。
+
+历史数据用于支撑假设推演，可以包括公开数据集、历史实验记录、观测数据或文献中提取的结构化数据。例如：
+
+\begin{itemize}
+    \item 数据来源：公开数据库、科研论文附录、实验平台或领域数据仓库。
+    \item 数据内容：样本特征、实验条件、观测指标、结果标签。
+    \item 数据用途：用于发现变量之间的关联关系，支持科学假设的初步生成。
+\end{itemize}
+
+\subsection{目标数据}
+
+这里填写 Target。
+
+目标数据用于后续实验验证，需要说明拟采集的数据特征。例如：
+
+\begin{itemize}
+    \item 拟采集对象：新的实验样本、传感器观测数据、临床记录或仿真结果。
+    \item 关键变量：输入变量、控制变量、输出指标。
+    \item 采集目的：验证生成假设是否成立，并评估方法的泛化能力。
+\end{itemize}
+
+% =============================
+% 5. 方法论
+% =============================
+\section{方法论}
+
+这里填写 Methods。
+
+本文方法主要包括以下步骤：
+
+\begin{enumerate}
+    \item \textbf{问题解析：} 根据用户输入的科学问题识别研究对象、核心变量和限制条件。
+    \item \textbf{文献检索：} 从真实文献中提取已有理论、实验结果和研究空白。
+    \item \textbf{数据分析：} 对历史数据进行清洗、统计分析和特征建模。
+    \item \textbf{假设生成：} 基于数据规律和文献知识生成候选科学假设。
+    \item \textbf{实验设计：} 为候选假设设计验证实验、基线方法和评价指标。
+    \item \textbf{结果生成：} 输出结构化的《科学假设与研究计划》。
+\end{enumerate}
+
+% 多模态数据展示预留：流程图
+\begin{figure}[H]
+    \centering
+    % 后续可替换为自动生成的流程图
+    % \includegraphics[width=0.85\textwidth]{figures/workflow.png}
+    \fbox{
+        \parbox{0.8\textwidth}{
+        \centering
+        这里预留方法流程图位置。\\
+        后续可插入多模态数据处理流程图、模型结构图或智能体协作流程图。
+        }
+    }
+    \caption{科学假设生成与研究计划构建流程示意图}
+    \label{fig:workflow}
+\end{figure}
+
+% =============================
+% 6. 实验设计
+% =============================
+\section{实验设计}
+
+这里填写 Experiments。
+
+\subsection{基线对比}
+
+这里填写 Baselines。
+
+可设置以下基线方法进行对比：
+
+\begin{itemize}
+    \item \textbf{人工规则方法：} 由领域专家根据经验生成假设。
+    \item \textbf{仅文献检索方法：} 只基于文献摘要或关键词生成研究计划。
+    \item \textbf{仅数据驱动方法：} 只基于历史数据进行建模，不引入文献知识。
+    \item \textbf{通用大模型方法：} 直接使用大语言模型生成假设，不进行数据分析和文献约束。
+    \item \textbf{本文方法：} 结合历史数据、真实文献、多模态信息和实验约束生成假设。
+\end{itemize}
+
+\subsection{评估指标}
+
+这里填写 Metrics。
+
+评价指标可以包括：
+
+\begin{itemize}
+    \item \textbf{科学合理性：} 假设是否符合已有理论和领域知识。
+    \item \textbf{可验证性：} 是否能够设计明确实验进行验证。
+    \item \textbf{创新性：} 是否提出已有研究中较少关注的新关系、新机制或新路径。
+    \item \textbf{数据支撑度：} 是否由历史数据和真实文献共同支持。
+    \item \textbf{实验可行性：} 所需数据、设备和方法是否可获得。
+\end{itemize}
+
+% 实验设计表格
+\begin{table}[H]
+\centering
+\caption{实验设计与评价指标示例}
+\begin{tabular}{lccc}
+\toprule
+方法 & 科学合理性 & 可验证性 & 数据支撑度 \\
+\midrule
+人工规则方法 & 中 & 中 & 低 \\
+仅文献检索方法 & 中 & 低 & 中 \\
+仅数据驱动方法 & 低 & 中 & 中 \\
+通用大模型方法 & 中 & 低 & 低 \\
+本文方法 & 高 & 高 & 高 \\
+\bottomrule
+\end{tabular}
+\label{tab:experiment_design}
+\end{table}
+
+% =============================
+% 7. 实验结果
+% =============================
+\section{实验结果}
+
+这里填写 Results。
+
+本部分需要通过公式推导、初步实验或小规模执行结果说明实验具有可行性。
+
+例如，可以定义一个假设可行性评分函数：
+
+\begin{equation}
+S = \alpha S_{data} + \beta S_{literature} + \gamma S_{feasibility},
+\end{equation}
+
+其中，$S_{data}$ 表示数据支撑度，$S_{literature}$ 表示文献支持度，$S_{feasibility}$ 表示实验可行性，$\alpha$、$\beta$、$\gamma$ 为权重参数。
+
+如果满足：
+
+\begin{equation}
+S > \tau,
+\end{equation}
+
+则认为该科学假设具备进一步实验验证的价值。
+
+% 多模态数据展示预留：实验结果图
+\begin{figure}[H]
+    \centering
+    % 后续可替换为自动生成的实验图表
+    % \includegraphics[width=0.75\textwidth]{figures/results.png}
+    \fbox{
+        \parbox{0.8\textwidth}{
+        \centering
+        这里预留实验结果图位置。\\
+        后续可插入统计图、模型性能对比图、消融实验图或论文中的关键图表。
+        }
+    }
+    \caption{实验结果或多模态分析结果示意图}
+    \label{fig:results}
+\end{figure}
+
+% 多模态数据展示预留：论文图表解析
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        % \includegraphics[width=\textwidth]{figures/paper_figure_a.png}
+        \fbox{
+            \parbox{0.9\textwidth}{
+            \centering
+            文献图表 A
+            }
+        }
+        \caption{原始论文图表}
+        \label{fig:paper_a}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        % \includegraphics[width=\textwidth]{figures/parsed_figure_b.png}
+        \fbox{
+            \parbox{0.9\textwidth}{
+            \centering
+            图表解析结果 B
+            }
+        }
+        \caption{图表结构化解析结果}
+        \label{fig:paper_b}
+    \end{subfigure}
+    \caption{多模态文献图表信息展示预留}
+    \label{fig:multimodal_paper_figures}
+\end{figure}
+
+% =============================
+% 8. 参考论文
+% =============================
+\bibliography{references}
+
+\end{document}

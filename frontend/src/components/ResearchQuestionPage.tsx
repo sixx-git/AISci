@@ -203,10 +203,24 @@ function InputField({ field, value, onChange }: InputFieldProps) {
 // ============ 主组件 ============
 interface ResearchQuestionPageProps {
   projectId: string;
+  projectMode?: string;
   onSaved?: () => void;
 }
 
-export function ResearchQuestionPage({ projectId, onSaved }: ResearchQuestionPageProps) {
+const FL_FORM_TEMPLATE: ResearchQuestionForm = {
+  researchDomain: '联邦学习 / 分布式机器学习',
+  researchQuestion:
+    '在非独立同分布（Non-IID）数据和异构客户端模型结构条件下，如何通过知识蒸馏或个性化联邦机制提升联邦学习系统的模型精度、收敛速度和通信效率？',
+  researchGoal:
+    '在 Non-IID 与异构客户端条件下，设计并验证知识蒸馏、个性化联邦或 VFL 机制，提升全局/本地精度、收敛速度与通信效率。',
+  background:
+    '联邦学习在 Non-IID 客户端、异构模型与通信约束下常出现 client drift、收敛慢与通信开销高。',
+  dataSource: '历史联邦实验 CSV、公开 FL benchmark、组内标注报告',
+  constraints: 'Non-IID 划分、通信带宽、privacy_budget、客户端参与率',
+  expectedOutput: '联邦 baseline 对比报告、通信-精度权衡分析、隐私机制建议',
+};
+
+export function ResearchQuestionPage({ projectId, projectMode, onSaved }: ResearchQuestionPageProps) {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: 'idle' });
@@ -341,6 +355,21 @@ export function ResearchQuestionPage({ projectId, onSaved }: ResearchQuestionPag
       {/* ========== 左侧：表单 ========== */}
       <div className="lg:col-span-2 space-y-5">
         <Card title="研究问题定义" subtitle="填写以下信息，AI 将基于这些内容展开研究">
+          {projectMode === 'federated_learning' && (
+            <div className="mb-4 p-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5">
+              <p className="text-xs text-cyan-300 mb-2">
+                当前为<strong className="text-cyan-200">联邦学习科研模式</strong>，已提供 Non-IID / FedAvg / VFL 研究模板。
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => setForm({ ...FL_FORM_TEMPLATE })}
+              >
+                应用联邦学习模板
+              </Button>
+            </div>
+          )}
           {/* 状态提示 */}
           {renderStatusBar()}
 

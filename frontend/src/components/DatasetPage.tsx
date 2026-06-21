@@ -4,15 +4,17 @@ import {
   Loader2, AlertCircle, Trash2, RefreshCw,
   ChevronDown, ChevronUp, Eye, EyeOff, BarChart3, CheckCircle2,
   XCircle, Clock, Sparkles, Target, ListFilter, TrendingUp,
-  Activity,
+  Activity, Network,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import datasetService, { type DataContext } from '@/services/datasetService';
+import { DataFinderPanel } from '@/components/DataFinderPanel';
+import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
 import type { BackendDataset, DatasetSummary } from '@/types';
 
 interface DatasetPageProps {
   projectId: string;
+  projectMode?: string;
 }
 
 const DATA_TYPE_CONFIG: Record<string, { icon: typeof Database; label: string; color: string }> = {
@@ -87,7 +89,8 @@ function formatQualityScore(score: number | null | undefined): { label: string; 
   return { label: score.toFixed(2), cls: 'text-red-400' };
 }
 
-export function DatasetPage({ projectId }: DatasetPageProps) {
+export function DatasetPage({ projectId, projectMode }: DatasetPageProps) {
+  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder'>('datasets');
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [dataContext, setDataContext] = useState<DataContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,7 +99,14 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [modelingDatasetId, setModelingDatasetId] = useState<string>('');
+  const [targetColumn, setTargetColumn] = useState<string>('');
+  const [researchTask, setResearchTask] = useState<string>('');
+  const [modelingLoading, setModelingLoading] = useState(false);
+  const [modelingResult, setModelingResult] = useState<ModelingResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const tabularDatasets = datasets.filter((ds) => ds.dataType === 'tabular');
 
   const showAlert = useCallback((msg: string) => {
     setAlertMsg(msg);
@@ -110,6 +120,63 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
       }
     }).catch(() => {/* ignore */});
   }, [projectId]);
+
+  useEffect(() => {
+    if (tabularDatasets.length > 0 && !modelingDatasetId) {
+      setModelingDatasetId(tabularDatasets[0].id);
+    }
+  }, [tabularDatasets, modelingDatasetId]);
+
+  useEffect(() => {
+    if (!modelingDatasetId) return;
+    const ds = tabularDatasets.find((d) => d.id === modelingDatasetId);
+    if (!ds) return;
+    const tcKeywords = ['label', 'target', 'class', 'y', 'score', 'result', 'outcome', '标签', '目标', '类别'];
+    const candidates = (ds.columns || []).filter((col) =>
+      tcKeywords.some((k) => col.toLowerCase().includes(k))
+    );
+    if (candidates.length > 0) {
+      setTargetColumn(candidates[0]);
+    } else {
+      const cols = ds.columns || [];
+      if (cols.length > 0) {
+        setTargetColumn(cols[cols.length - 1]);
+      }
+    }
+    datasetService.getModelingResult(modelingDatasetId)
+      .then((res) => {
+        if (res.code === 200 && res.data) setModelingResult(res.data);
+      })
+      .catch(() => setModelingResult(null));
+  }, [modelingDatasetId, tabularDatasets]);
+
+  const handleRunModeling = useCallback(async () => {
+    if (!modelingDatasetId) {
+      showAlert('请先选择表格数据集');
+      return;
+    }
+    if (!targetColumn.trim()) {
+      showAlert('请选择或输入目标变量');
+      return;
+    }
+    setModelingLoading(true);
+    try {
+      const res = await datasetService.runModeling(modelingDatasetId, {
+        target_column: targetColumn.trim(),
+        research_task: researchTask.trim() || undefined,
+      });
+      if (res.code === 200 && res.data) {
+        setModelingResult(res.data);
+        showAlert('自动建模完成');
+      } else {
+        showAlert(res.message || '建模失败');
+      }
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : '建模失败');
+    } finally {
+      setModelingLoading(false);
+    }
+  }, [modelingDatasetId, targetColumn, researchTask, showAlert]);
 
   const loadDatasets = useCallback(() => {
     setLoading(true);
@@ -218,6 +285,43 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
 
   return (
     <div className="max-w-7xl mx-auto">
+      <div className="flex gap-2 mb-4 border-b border-dark-700">
+        <button
+          type="button"
+          onClick={() => setPageTab('datasets')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            pageTab === 'datasets'
+              ? 'border-primary-500 text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          项目数据集
+        </button>
+        <button
+          type="button"
+          onClick={() => setPageTab('data-finder')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            pageTab === 'data-finder'
+              ? 'border-primary-500 text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          多源数据查找与整合
+        </button>
+      </div>
+
+      {pageTab === 'data-finder' ? (
+        <DataFinderPanel
+          projectId={projectId}
+          projectMode={projectMode}
+          onImported={() => {
+            refreshAll();
+            setPageTab('datasets');
+            showAlert('已加入项目数据集');
+          }}
+        />
+      ) : (
+        <>
       {/* 头部控制区 */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -257,6 +361,61 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
           </label>
         </div>
       </div>
+
+      {/* 项目模式 / 联邦数据识别 */}
+      {(projectMode === 'federated_learning' || dataContext?.project_mode === 'federated_learning') && (
+        <Card className="p-4 mb-6 border-cyan-500/20 bg-cyan-500/5">
+          <div className="flex items-center gap-2 mb-3">
+            <Network className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-semibold text-cyan-300">联邦学习数据识别</h3>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-400">
+              Federated Learning Scientist
+            </span>
+          </div>
+          {dataContext?.fl_context ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-gray-500">FL 类型</span>
+                <p className="text-white font-mono mt-0.5">{dataContext.fl_context.fl_setting || 'unknown'}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">检测字段</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.detected_fields || []).join(', ') || '暂无'}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500">指标字段</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.metrics_fields || []).join(', ') || '暂无'}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500">客户端字段</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.client_fields || []).join(', ') || '暂无'}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500">参与方字段</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.party_fields || []).join(', ') || '暂无'}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500">目标候选</span>
+                <p className="text-gray-300 mt-0.5">
+                  {(dataContext.fl_context.target_candidates || dataContext.target_candidates || []).join(', ') || '暂无'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">
+              请上传含 method、non_iid_degree、global_accuracy、f1_score、communication_cost_mb、client_drift 等列的 CSV
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* 数据上下文摘要 */}
       {dataContext && dataContext.dataset_count > 0 && (
@@ -313,6 +472,176 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
                   {w}
                 </div>
               ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* 数据建模与自校正 */}
+      {!loading && tabularDatasets.length > 0 && (
+        <Card className="p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="w-5 h-5 text-primary-400" />
+            <h3 className="text-base font-semibold text-white">数据建模与自校正</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">数据集</label>
+              <select
+                value={modelingDatasetId}
+                onChange={(e) => {
+                  setModelingDatasetId(e.target.value);
+                  setTargetColumn('');
+                  setModelingResult(null);
+                }}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+              >
+                {tabularDatasets.map((ds) => (
+                  <option key={ds.id} value={ds.id}>{ds.filename}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">目标变量</label>
+              <select
+                value={targetColumn}
+                onChange={(e) => setTargetColumn(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+              >
+                <option value="">请选择目标列</option>
+                {(tabularDatasets.find((d) => d.id === modelingDatasetId)?.columns || []).map((col) => (
+                  <option key={col} value={col}>{col}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="text-xs text-gray-500 mb-1 block">研究任务（可选）</label>
+            <input
+              value={researchTask}
+              onChange={(e) => setResearchTask(e.target.value)}
+              placeholder="例如：预测疾病分类 / 估计指标回归"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+            />
+          </div>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={modelingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            onClick={handleRunModeling}
+            disabled={modelingLoading}
+          >
+            {modelingLoading ? '建模中...' : '运行自动建模'}
+          </Button>
+
+          {modelingResult?.success && (
+            <div className="mt-5 space-y-4 border-t border-gray-800 pt-4">
+              {modelingResult.is_pilot_validation && (
+                <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
+                  Pilot Validation：样本量较小，结果仅用于可行性验证，不得夸大为最终结论。
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <div className="bg-gray-900/70 rounded-lg p-2">
+                  <div className="text-gray-500 text-xs">任务类型</div>
+                  <div className="text-white font-medium">{modelingResult.task_type}</div>
+                </div>
+                <div className="bg-gray-900/70 rounded-lg p-2">
+                  <div className="text-gray-500 text-xs">目标变量</div>
+                  <div className="text-white font-medium">{modelingResult.target_column}</div>
+                </div>
+                <div className="bg-gray-900/70 rounded-lg p-2">
+                  <div className="text-gray-500 text-xs">最佳模型</div>
+                  <div className="text-primary-300 font-medium">{modelingResult.best_model}</div>
+                </div>
+                <div className="bg-gray-900/70 rounded-lg p-2">
+                  <div className="text-gray-500 text-xs">样本规模</div>
+                  <div className="text-white font-medium">
+                    {String((modelingResult.profile as { n_rows?: number })?.n_rows ?? '-')}
+                  </div>
+                </div>
+              </div>
+
+              {modelingResult.profile && (
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">数据概览</div>
+                  <div className="text-xs text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <span>字段数: {String((modelingResult.profile as { n_columns?: number }).n_columns ?? '-')}</span>
+                    <span>缺失率: {(((modelingResult.profile as { missing_rate?: number }).missing_rate ?? 0) * 100).toFixed(1)}%</span>
+                    <span>目标候选: {((modelingResult.profile as { target_candidates?: string[] }).target_candidates || []).length}</span>
+                    <span>异常提示: {((modelingResult.profile as { outlier_hints?: string[] }).outlier_hints || []).length}</span>
+                  </div>
+                </div>
+              )}
+
+              {modelingResult.models?.length > 0 && (
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">模型指标</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-gray-500 border-b border-gray-800">
+                          <th className="text-left py-1 pr-2">模型</th>
+                          <th className="text-right py-1 px-1">accuracy</th>
+                          <th className="text-right py-1 px-1">f1</th>
+                          <th className="text-right py-1 px-1">r2</th>
+                          <th className="text-right py-1 px-1">rmse</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modelingResult.models.map((m) => (
+                          <tr key={m.model_name} className={`border-b border-gray-800/50 ${m.model_name === modelingResult.best_model ? 'text-primary-300' : 'text-gray-300'}`}>
+                            <td className="py-1 pr-2 font-mono">{m.model_name}</td>
+                            <td className="text-right py-1 px-1">{m.metrics.accuracy ?? '-'}</td>
+                            <td className="text-right py-1 px-1">{m.metrics.f1 ?? '-'}</td>
+                            <td className="text-right py-1 px-1">{m.metrics.r2 ?? '-'}</td>
+                            <td className="text-right py-1 px-1">{m.metrics.rmse ?? '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {modelingResult.self_correction_suggestions?.length > 0 && (
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">自校正建议</div>
+                  <div className="space-y-2">
+                    {modelingResult.self_correction_suggestions.map((item, idx) => (
+                      <div key={idx} className="text-xs bg-gray-900/60 border border-gray-800 rounded-lg p-2">
+                        <div className="text-yellow-300">{item.reason}</div>
+                        <div className="text-gray-300 mt-1">{item.suggestion}</div>
+                        <div className="text-gray-500 mt-1">下一步: {item.next_action}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {modelingResult.charts?.length > 0 && (
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">图表</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {modelingResult.charts.map((chart) => (
+                      chart.base64 ? (
+                        <div key={chart.plot_id} className="bg-gray-900/60 rounded-lg p-2">
+                          <div className="text-xs text-gray-400 mb-2">{chart.title}</div>
+                          <img
+                            src={`data:image/png;base64,${chart.base64}`}
+                            alt={chart.title}
+                            className="w-full rounded border border-gray-800"
+                          />
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -610,6 +939,8 @@ export function DatasetPage({ projectId }: DatasetPageProps) {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );
