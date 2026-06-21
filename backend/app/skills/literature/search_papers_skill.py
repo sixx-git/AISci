@@ -35,7 +35,7 @@ API_CONFIG = {
         "rows": 25,
     },
     "arxiv": {
-        "search_url": "http://export.arxiv.org/api/query",
+        "search_url": "https://export.arxiv.org/api/query",
         "max_results": 30,
     },
 }

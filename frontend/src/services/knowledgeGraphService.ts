@@ -32,6 +32,7 @@ export interface KgCommunity {
   summary: string;
   dominant_type: string;
   node_count: number;
+  node_ids?: string[];
   top_entities?: string[];
   keywords?: string[];
 }

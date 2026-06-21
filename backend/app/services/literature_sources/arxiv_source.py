@@ -6,7 +6,10 @@ arXiv 文献搜索（通过官方 API，零额外依赖）
 
 返回标准化论文元数据，当前阶段不下载 PDF。
 
-支持 fallback：当 arXiv API 不可访问时，从本地 JSON 文件返回演示数据。
+降级策略（参考 SakanaAI/AI-Scientist）：
+  1. arXiv 官方 API
+  2. OpenAlex API（国内网络通常更稳定）
+  3. 本地 JSON fallback 缓存
 """
 import urllib.request
 import urllib.parse
@@ -15,15 +18,19 @@ import ssl
 import os
 import json
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
 # arXiv API 配置
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
+OPENALEX_API_BASE = "https://api.openalex.org/works"
+DEFAULT_USER_AGENT = "AISci/1.0 (+https://github.com/; research literature retrieval)"
 ARXIV_NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
     'arxiv': 'http://arxiv.org/schemas/atom',
@@ -67,42 +74,57 @@ class ArxivSource:
     """arXiv 文献数据源（只检索元数据，不下载 PDF）"""
 
     FALLBACK_WARNING = "arXiv API 当前不可访问，已使用本地演示文献缓存。"
+    OPENALEX_WARNING = "arXiv API 当前不可访问，已通过 OpenAlex 检索相关论文（参考 AI-Scientist 文献检索降级策略）。"
 
     def __init__(
         self,
         timeout: int = 15,
-        max_retries: int = 1,
+        max_retries: int = 2,
         http_proxy: str = "",
         https_proxy: str = "",
         fallback_data_path: str = "./data/arxiv_fallback.json",
+        user_agent: str = DEFAULT_USER_AGENT,
     ):
         self.timeout = timeout
         self.max_retries = max_retries
         self.fallback_data_path = fallback_data_path
-
-        # 代理配置
-        proxy_handlers = {}
-        if https_proxy:
-            proxy_handlers["https"] = https_proxy
-        if http_proxy:
-            proxy_handlers["http"] = http_proxy
-        self._opener = None
-        if proxy_handlers:
-            self._opener = urllib.request.build_opener(
-                urllib.request.ProxyHandler(proxy_handlers)
-            )
-            logger.info(f"arXiv 使用代理: {proxy_handlers}")
+        self.user_agent = user_agent
+        self.http_proxy = http_proxy
+        self.https_proxy = https_proxy
 
         # 预加载 fallback 数据
         self._fallback_data: Optional[List[Dict[str, Any]]] = None
 
-    def _get_opener(self):
-        return self._opener or urllib.request.build_opener()
+    def _resolve_fallback_path(self) -> str:
+        path = self.fallback_data_path
+        if os.path.isabs(path):
+            return path
+        backend_root = Path(__file__).resolve().parents[3]
+        return str((backend_root / path.lstrip("./")).resolve())
+
+    def _build_opener(self) -> urllib.request.OpenerDirector:
+        """构建支持 SSL 与可选代理的 opener（urllib OpenerDirector.open 不支持 context 参数）"""
+        ctx = ssl.create_default_context()
+        handlers: List[Any] = [urllib.request.HTTPSHandler(context=ctx)]
+        proxy_map: Dict[str, str] = {}
+        if self.https_proxy:
+            proxy_map["https"] = self.https_proxy
+        if self.http_proxy:
+            proxy_map["http"] = self.http_proxy
+        if proxy_map:
+            handlers.insert(0, urllib.request.ProxyHandler(proxy_map))
+            logger.info(f"arXiv 使用代理: {proxy_map}")
+        return urllib.request.build_opener(*handlers)
+
+    def _fetch_text(self, url: str) -> str:
+        req = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
+        with self._build_opener().open(req, timeout=self.timeout) as response:
+            return response.read().decode("utf-8")
 
     def _load_fallback_data(self) -> List[Dict[str, Any]]:
         if self._fallback_data is not None:
             return self._fallback_data
-        path = os.path.normpath(self.fallback_data_path)
+        path = self._resolve_fallback_path()
         if not os.path.isfile(path):
             logger.warning(f"Fallback 数据文件不存在: {path}")
             self._fallback_data = []
@@ -169,14 +191,22 @@ class ArxivSource:
 
         max_results = max(1, min(max_results, 100))
 
-        # 尝试真实 API
+        # 尝试真实 arXiv API
         try:
             papers = self.search(query, max_results, start, sort_by)
             return (papers, False, "")
         except Exception as e:
-            logger.warning(f"arXiv 真实 API 失败，尝试 fallback: {e}")
+            logger.warning(f"arXiv 真实 API 失败: {e}")
 
-        # fallback
+        # OpenAlex 降级（AI-Scientist 推荐的文献检索替代源）
+        try:
+            openalex_papers = self._search_openalex(query, max_results)
+            if openalex_papers:
+                return (openalex_papers, True, self.OPENALEX_WARNING)
+        except Exception as e:
+            logger.warning(f"OpenAlex 降级检索失败: {e}")
+
+        # 本地 JSON fallback
         try:
             fallback_results = self._search_fallback(query, max_results)
             if not fallback_results:
@@ -245,16 +275,10 @@ class ArxivSource:
 
         logger.info(f"arXiv search: query='{query}', max_results={max_results}")
 
-        import time
-
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
-                ctx = ssl.create_default_context()
-                req = urllib.request.Request(url)
-                with self._get_opener().open(req, timeout=self.timeout, context=ctx) as response:
-                    raw_xml = response.read().decode("utf-8")
-
+                raw_xml = self._fetch_text(url)
                 papers = self._parse_atom_response(raw_xml)
                 logger.info(f"arXiv search returned {len(papers)} results")
                 return papers
@@ -264,29 +288,89 @@ class ArxivSource:
                 last_error = RuntimeError(f"arXiv API 连接失败: {reason}")
                 logger.warning(f"arXiv 网络错误 (attempt {attempt+1}/{self.max_retries+1}): {reason}")
             except ssl.SSLError as e:
-                last_error = RuntimeError(f"arXiv SSL 验证失败（可能需要配置代理或 VPN）: {e}")
+                last_error = RuntimeError(f"arXiv SSL 验证失败（可能需要配置 ARXIV_HTTPS_PROXY）: {e}")
                 logger.warning(f"arXiv SSL 错误 (attempt {attempt+1}/{self.max_retries+1}): {e}")
-            except TimeoutError as e:
+            except TimeoutError:
                 last_error = RuntimeError(f"arXiv API 请求超时 ({self.timeout}秒，国内访问可能较慢)")
                 logger.warning(f"arXiv 超时 (attempt {attempt+1}/{self.max_retries+1})")
-            except ConnectionError as e:
-                last_error = RuntimeError(f"arXiv API 连接被拒绝（请检查网络或代理设置）: {e}")
-                logger.warning(f"arXiv 连接拒绝 (attempt {attempt+1}/{self.max_retries+1}): {e}")
             except ET.ParseError as e:
-                # XML 解析错误不重试
                 logger.error(f"arXiv API XML 解析失败: {e}")
                 raise RuntimeError("arXiv 返回数据解析失败") from e
             except Exception as e:
                 last_error = RuntimeError(f"arXiv 搜索异常 ({type(e).__name__}): {e}")
                 logger.warning(f"arXiv 未知错误 (attempt {attempt+1}/{self.max_retries+1}): {type(e).__name__}: {e}")
 
-            # 重试前等待
             if attempt < self.max_retries:
-                wait = 2 * (attempt + 1)
-                time.sleep(wait)
+                time.sleep(2 * (attempt + 1))
 
-        # 所有重试均失败
         raise last_error or RuntimeError("arXiv API 连接失败（已重试）")
+
+    def _search_openalex(self, query: str, max_results: int) -> List[ArxivPaper]:
+        """OpenAlex 降级检索，优先返回带 arXiv ID 的论文"""
+        params = urllib.parse.urlencode({
+            "search": query,
+            "per_page": str(max(1, min(max_results, 25))),
+            "sort": "relevance_score:desc",
+        })
+        url = f"{OPENALEX_API_BASE}?{params}"
+        raw = self._fetch_text(url)
+        payload = json.loads(raw)
+        papers: List[ArxivPaper] = []
+
+        for item in payload.get("results", []):
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+            abstract = (item.get("abstract") or "") or self._reconstruct_openalex_abstract(
+                item.get("abstract_inverted_index") or {}
+            )
+            authors = ", ".join(
+                (a.get("author", {}) or {}).get("display_name", "")
+                for a in (item.get("authorships") or [])
+                if (a.get("author", {}) or {}).get("display_name")
+            )
+            published = item.get("publication_date") or ""
+            published_at = None
+            if published:
+                try:
+                    published_at = datetime.fromisoformat(published)
+                except (ValueError, TypeError):
+                    pass
+
+            ids = item.get("ids") or {}
+            arxiv_url = ids.get("arxiv") or ""
+            arxiv_id = ""
+            if arxiv_url:
+                arxiv_id = arxiv_url.rstrip("/").split("/")[-1]
+                if arxiv_id.lower().startswith("arxiv:"):
+                    arxiv_id = arxiv_id.split(":", 1)[-1]
+
+            doi = (item.get("doi") or "").replace("https://doi.org/", "")
+            papers.append(ArxivPaper(
+                title=title,
+                authors=authors,
+                abstract=abstract[:2000] if abstract else "",
+                published_at=published_at,
+                categories="",
+                external_id=arxiv_id,
+                source_url=f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else (item.get("id") or ""),
+                pdf_url=f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else "",
+                source_type="arxiv" if arxiv_id else "openalex",
+                doi=doi or None,
+            ))
+
+        return papers[:max_results]
+
+    @staticmethod
+    def _reconstruct_openalex_abstract(inverted_index: Dict[str, List[int]]) -> str:
+        if not inverted_index:
+            return ""
+        max_pos = max(max(positions) for positions in inverted_index.values())
+        words = [""] * (max_pos + 1)
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                words[pos] = word
+        return " ".join(w for w in words if w)
 
     def search_by_id(self, arxiv_id: str) -> Optional[ArxivPaper]:
         """

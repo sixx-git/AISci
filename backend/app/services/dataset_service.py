@@ -6,6 +6,7 @@ import asyncio
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.core.project_modes import ProjectMode, normalize_project_mode
+from app.models.research import Dataset
 from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill

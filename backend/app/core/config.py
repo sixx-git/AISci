@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     
     # arXiv 配置
     ARXIV_TIMEOUT: int = 15
-    ARXIV_MAX_RETRIES: int = 1
+    ARXIV_MAX_RETRIES: int = 2
     ARXIV_ENABLE_FALLBACK: bool = True
     ARXIV_FALLBACK_DATA_PATH: str = "./data/arxiv_fallback.json"
     ARXIV_HTTP_PROXY: str = ""

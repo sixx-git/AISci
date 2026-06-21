@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
+import cytoscape, { type Core } from 'cytoscape';
 import {
   Network, Search, RefreshCw, Loader2, AlertCircle, CheckCircle2,
   Trash2, ShieldCheck, Filter, BarChart3, X, BookOpen, GitBranch,
+  ZoomIn, ZoomOut, Maximize2, Tag, Download, Layers,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import {
+  NEO4J_BG,
+  NEO4J_GREEN,
+  NEO4J_BORDER,
+  NODE_COLORS,
+  TYPE_LABELS_ZH,
+  ensureFcoseRegistered,
+  getEducationViewPreset,
+  applyViewPresetToGraph,
+  buildGraphElements,
+  getKgStylesheets,
+  getKgLayout,
+  syncGraphLabels,
+  focusCommunityOnCanvas,
+  exportGraphPng,
+  type LabelDisplayMode,
+} from '@/components/kgGraphConfig';
 import knowledgeGraphService, {
   type KgEdge,
   type KgNode,
@@ -14,26 +32,6 @@ import knowledgeGraphService, {
   type EducationLevel,
   type RetrievalMode,
 } from '@/services/knowledgeGraphService';
-
-const NEO4J_BG = '#0d1117';
-const NEO4J_GREEN = '#00dc82';
-const NEO4J_BORDER = '#30363d';
-
-const NODE_COLORS: Record<string, string> = {
-  Paper: '#68bdf6',
-  Method: '#00dc82',
-  Dataset: '#ffd86e',
-  Metric: '#f85a65',
-  Task: '#4d8bff',
-  Problem: '#ff9f43',
-  Hypothesis: '#d9a5f9',
-  Evidence: '#57c7a9',
-  Result: '#78f5d8',
-  Limitation: '#ff6b6b',
-  FedAlgorithm: '#00dc82',
-  NonIIDType: '#ffb347',
-  default: '#8b949e',
-};
 
 interface KnowledgeGraphPageProps {
   projectId: string;
@@ -65,6 +63,26 @@ export function KnowledgeGraphPage({
   const [educationLevel, setEducationLevel] = useState<EducationLevel>('undergraduate');
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>('hybrid');
   const [scenarioHint, setScenarioHint] = useState<string>('');
+  const [labelMode, setLabelMode] = useState<LabelDisplayMode>('auto');
+  const labelModeRef = useRef<LabelDisplayMode>('auto');
+  const viewPresetRef = useRef(getEducationViewPreset('undergraduate'));
+
+  const viewPreset = useMemo(
+    () => getEducationViewPreset(educationLevel),
+    [educationLevel],
+  );
+
+  useEffect(() => {
+    labelModeRef.current = labelMode;
+  }, [labelMode]);
+
+  useEffect(() => {
+    viewPresetRef.current = viewPreset;
+  }, [viewPreset]);
+
+  useEffect(() => {
+    setLabelMode(viewPreset.defaultLabelMode);
+  }, [viewPreset.mode]);
 
   useEffect(() => {
     knowledgeGraphService.getScenarios().then((res) => {
@@ -102,44 +120,39 @@ export function KnowledgeGraphPage({
     [graph],
   );
 
-  const filteredElements = useMemo(() => {
+  const presetFiltered = useMemo(() => {
     if (!graph) return { nodes: [] as KgNode[], edges: [] as KgEdge[] };
-    const nodes = graph.nodes.filter(
+    return applyViewPresetToGraph(graph.nodes, graph.edges, viewPreset);
+  }, [graph, viewPreset]);
+
+  const filteredElements = useMemo(() => {
+    const nodes = presetFiltered.nodes.filter(
       (n) => nodeTypeFilter.size === 0 || nodeTypeFilter.has(n.type),
     );
     const nodeIds = new Set(nodes.map((n) => n.id));
-    const edges = graph.edges.filter(
+    const edges = presetFiltered.edges.filter(
       (e) =>
         nodeIds.has(e.source) &&
         nodeIds.has(e.target) &&
         (relationFilter.size === 0 || relationFilter.has(e.relation)),
     );
     return { nodes, edges };
-  }, [graph, nodeTypeFilter, relationFilter]);
+  }, [presetFiltered, nodeTypeFilter, relationFilter]);
 
   useEffect(() => {
     if (!containerRef.current || !graph) return;
 
-    const elements: ElementDefinition[] = [
-      ...filteredElements.nodes.map((n) => ({
-        data: {
-          id: n.id,
-          label: n.label?.length > 28 ? `${n.label.slice(0, 28)}…` : n.label,
-          fullLabel: n.label,
-          type: n.type,
-          nodeData: n,
-        },
-      })),
-      ...filteredElements.edges.map((e) => ({
-        data: {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: e.relation,
-          edgeData: e,
-        },
-      })),
-    ];
+    ensureFcoseRegistered();
+
+    const elements = buildGraphElements(
+      filteredElements.nodes,
+      filteredElements.edges,
+      graph.communities,
+      viewPreset,
+      educationLevel,
+    );
+
+    const hasCompounds = elements.some((el) => el.classes === 'community');
 
     if (cyRef.current) {
       cyRef.current.destroy();
@@ -148,81 +161,82 @@ export function KnowledgeGraphPage({
     const cy = cytoscape({
       container: containerRef.current,
       elements,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'background-color': (ele) => NODE_COLORS[ele.data('type')] || NODE_COLORS.default,
-            label: 'data(label)',
-            color: '#c9d1d9',
-            'font-size': '10px',
-            'text-wrap': 'wrap',
-            'text-max-width': '80px',
-            'border-width': 2,
-            'border-color': NEO4J_GREEN,
-            width: 36,
-            height: 36,
-          },
-        },
-        {
-          selector: 'edge',
-          style: {
-            width: 2,
-            'line-color': '#484f58',
-            'target-arrow-color': NEO4J_GREEN,
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            label: 'data(label)',
-            'font-size': '8px',
-            color: '#8b949e',
-            'text-rotation': 'autorotate',
-          },
-        },
-        {
-          selector: ':selected',
-          style: {
-            'border-color': '#fff',
-            'line-color': NEO4J_GREEN,
-            'target-arrow-color': '#fff',
-          },
-        },
-      ],
-      layout: { name: 'cose', animate: true, padding: 40 },
-      minZoom: 0.2,
-      maxZoom: 3,
+      style: getKgStylesheets(viewPreset),
+      layout: getKgLayout(filteredElements.nodes.length, hasCompounds),
+      minZoom: 0.15,
+      maxZoom: 2.5,
+      wheelSensitivity: 0.25,
     });
+
+    const syncLabels = () => {
+      syncGraphLabels(cy, labelModeRef.current, viewPresetRef.current.labelZoomThreshold);
+    };
+
+    const highlightNeighborhood = (nodeId: string | null) => {
+      cy.elements().removeClass('dim highlight');
+      if (!nodeId) return;
+      const node = cy.getElementById(nodeId);
+      if (!node.length) return;
+      const hood = node.closedNeighborhood();
+      cy.elements().not(hood).addClass('dim');
+      hood.edges().addClass('highlight');
+    };
+
+    cy.on('mouseover', 'node', (evt) => {
+      evt.target.addClass('hover');
+      syncLabels();
+    });
+    cy.on('mouseout', 'node', (evt) => {
+      evt.target.removeClass('hover');
+      syncLabels();
+    });
+    cy.on('zoom pan', syncLabels);
 
     cy.on('tap', 'node', (evt) => {
       const nd = evt.target.data('nodeData') as KgNode;
       setSelectedNode(nd);
       setSelectedEdge(null);
+      highlightNeighborhood(evt.target.id());
+      syncLabels();
     });
     cy.on('tap', 'edge', (evt) => {
       const ed = evt.target.data('edgeData') as KgEdge;
       setSelectedEdge(ed);
       setSelectedNode(null);
+      cy.elements().removeClass('dim highlight');
+      evt.target.addClass('highlight');
     });
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
         setSelectedNode(null);
         setSelectedEdge(null);
+        cy.elements().removeClass('dim highlight');
+        syncLabels();
       }
     });
 
     if (focusNodeId) {
       const node = cy.getElementById(focusNodeId);
       if (node.length) {
-        cy.center(node);
+        cy.animate({ center: { eles: node }, zoom: 1.2 }, { duration: 300 });
         node.select();
+        highlightNeighborhood(focusNodeId);
       }
     }
 
+    syncLabels();
     cyRef.current = cy;
     return () => {
       cy.destroy();
       cyRef.current = null;
     };
-  }, [graph, filteredElements, focusNodeId]);
+  }, [graph, filteredElements, focusNodeId, educationLevel, viewPreset]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    syncGraphLabels(cy, labelMode, viewPreset.labelZoomThreshold);
+  }, [labelMode, viewPreset, graph, filteredElements]);
 
   const handleBuild = async () => {
     setLoading(true);
@@ -336,6 +350,41 @@ export function KnowledgeGraphPage({
 
   const qr = graph?.quality_report;
 
+  const handleFit = () => cyRef.current?.fit(undefined, 72);
+  const handleZoomIn = () => {
+    if (cyRef.current) cyRef.current.zoom(cyRef.current.zoom() * 1.2);
+  };
+  const handleZoomOut = () => {
+    if (cyRef.current) cyRef.current.zoom(cyRef.current.zoom() / 1.2);
+  };
+
+  const cycleLabelMode = () => {
+    setLabelMode((m) => (m === 'auto' ? 'always' : m === 'always' ? 'never' : 'auto'));
+  };
+
+  const handleExportPng = () => {
+    if (!cyRef.current) return;
+    exportGraphPng(cyRef.current, `kg-${projectId.slice(0, 8)}.png`);
+  };
+
+  const handleFocusCommunity = (communityId: string) => {
+    if (!cyRef.current) return;
+    focusCommunityOnCanvas(cyRef.current, communityId);
+  };
+
+  const visibleNodeHint =
+    graph && presetFiltered.nodes.length < (graph.nodes?.length || 0)
+      ? `视图已简化：显示 ${presetFiltered.nodes.length}/${graph.nodes.length} 节点`
+      : null;
+
+  const labelModeHint =
+    labelMode === 'auto' ? '悬停/放大显示' : labelMode === 'always' ? '全部显示' : '全部隐藏';
+
+  const legendTypes = useMemo(
+    () => [...new Set((graph?.nodes || []).map((n) => n.type))].slice(0, 8),
+    [graph],
+  );
+
   return (
     <div className="space-y-4">
       {/* Neo4j 风格顶栏 */}
@@ -410,16 +459,20 @@ export function KnowledgeGraphPage({
             />
             <div className="grid grid-cols-2 gap-2 mt-2">
               <select
-                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-gray-300 p-2"
+                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-gray-300 p-2 col-span-2"
                 value={educationLevel}
                 onChange={(e) => setEducationLevel(e.target.value as EducationLevel)}
               >
-                <option value="primary">科普 / 小学</option>
-                <option value="secondary">中学</option>
-                <option value="undergraduate">本科</option>
-                <option value="graduate">研究生</option>
-                <option value="researcher">科研工作者</option>
+                <option value="primary">科普 / 小学 · 简化视图</option>
+                <option value="secondary">中学 · 简化视图</option>
+                <option value="undergraduate">本科 · 标准视图</option>
+                <option value="graduate">研究生 · 科研视图</option>
+                <option value="researcher">科研工作者 · 科研视图</option>
               </select>
+              <p className="col-span-2 text-[10px] text-gray-500 flex items-start gap-1">
+                <Layers className="w-3 h-3 shrink-0 mt-0.5 text-[#00dc82]" />
+                {viewPreset.label}：{viewPreset.hint}
+              </p>
               <select
                 className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-gray-300 p-2"
                 value={retrievalMode}
@@ -564,12 +617,22 @@ export function KnowledgeGraphPage({
             <Card className="border-[#30363d] bg-[#161b22]">
               <div className="text-sm font-medium text-gray-200 mb-2">主题社区 (GraphRAG)</div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {graph!.communities!.slice(0, 4).map((c) => (
-                  <div key={c.community_id} className="text-xs bg-[#0d1117] rounded p-2 border border-[#30363d]">
-                    <span className="text-[#00dc82]">{c.dominant_type}</span>
+                {graph!.communities!.slice(0, viewPreset.mode === 'research' ? 6 : 4).map((c) => (
+                  <button
+                    key={c.community_id}
+                    type="button"
+                    onClick={() => handleFocusCommunity(c.community_id)}
+                    className="w-full text-left text-xs bg-[#0d1117] rounded p-2 border border-[#30363d] hover:border-[#00dc82]/50 transition-colors"
+                  >
+                    <span className="text-[#00dc82]">
+                      {TYPE_LABELS_ZH[c.dominant_type] || c.dominant_type}
+                    </span>
                     <span className="text-gray-500 ml-2">{c.node_count} 节点</span>
+                    {viewPreset.mode === 'research' && (
+                      <span className="text-gray-600 ml-2">· 点击定位</span>
+                    )}
                     <p className="text-gray-400 mt-1 line-clamp-2">{c.summary}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -580,7 +643,7 @@ export function KnowledgeGraphPage({
         <div className="xl:col-span-3 space-y-4">
           <div
             className="relative rounded-xl border overflow-hidden"
-            style={{ background: NEO4J_BG, borderColor: NEO4J_BORDER, minHeight: 480 }}
+            style={{ background: NEO4J_BG, borderColor: NEO4J_BORDER, minHeight: 520 }}
           >
             {!graph && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 z-10">
@@ -588,7 +651,82 @@ export function KnowledgeGraphPage({
                 <p className="text-sm">上传文献后点击「构建图谱」</p>
               </div>
             )}
-            <div ref={containerRef} className="w-full h-[480px]" />
+            {graph && (
+              <>
+                <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 max-w-[55%]">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md bg-[#161b22]/92 border border-[#30363d] text-[#00dc82]"
+                  >
+                    <Layers className="w-3 h-3" />
+                    {viewPreset.label}
+                  </span>
+                  {visibleNodeHint && (
+                    <span className="text-[10px] text-gray-500 px-1">{visibleNodeHint}</span>
+                  )}
+                </div>
+                <div className="absolute top-3 right-3 z-20 flex gap-1.5">
+                  <button
+                    type="button"
+                    title="适应画布"
+                    onClick={handleFit}
+                    className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                  <button type="button" title="放大" onClick={handleZoomIn} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]">
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <button type="button" title="缩小" onClick={handleZoomOut} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]">
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title={`标签: ${labelModeHint}`}
+                    onClick={cycleLabelMode}
+                    className="px-2 py-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-[10px] text-gray-300 hover:text-[#00dc82] flex items-center gap-1"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    {labelMode === 'auto' ? '自动' : labelMode === 'always' ? '全显' : '隐藏'}
+                  </button>
+                  {viewPreset.mode === 'research' && (
+                    <button
+                      type="button"
+                      title="导出 PNG"
+                      onClick={handleExportPng}
+                      className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {legendTypes.length > 0 && (
+                  <div className="absolute bottom-3 left-3 z-20 flex flex-wrap gap-2 max-w-[70%]">
+                    {legendTypes.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-[#161b22]/92 border border-[#30363d] text-gray-400"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ background: NODE_COLORS[t] || NODE_COLORS.default }}
+                        />
+                        {viewPreset.mode === 'simplified' || educationLevel === 'primary' || educationLevel === 'secondary'
+                          ? (TYPE_LABELS_ZH[t] || t)
+                          : t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="absolute bottom-3 right-3 z-20 text-[10px] text-gray-600">
+                  {viewPreset.mode === 'simplified'
+                    ? '点击节点查看详情 · 社区摘要见左侧'
+                    : viewPreset.mode === 'research'
+                      ? '选中边显示关系 · 侧栏社区可定位 · 可导出 PNG'
+                      : '悬停节点查看名称 · 滚轮缩放 · 点击高亮邻域'}
+                </p>
+              </>
+            )}
+            <div ref={containerRef} className="w-full h-[520px]" />
           </div>
 
           {(selectedNode || selectedEdge) && (
