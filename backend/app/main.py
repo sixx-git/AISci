@@ -63,14 +63,21 @@ async def health_check():
 @app.get("/health/llm", tags=["基础"])
 async def health_llm():
     """LLM 客户端健康检查 —— 不发起真实 API 调用"""
-    api_key_configured = bool(settings.QWEN_API_KEY and settings.QWEN_API_KEY.strip())
-    base_url_configured = bool(settings.QWEN_BASE_URL and settings.QWEN_BASE_URL.strip())
+    from app.core.llm_runtime import (
+        build_config_snapshot,
+        get_effective_use_mock_llm,
+    )
+
+    snap = build_config_snapshot()
+    api_key_configured = snap["api_key_configured"]
+    base_url_configured = bool(snap["base_url"] and str(snap["base_url"]).strip())
+    use_mock = get_effective_use_mock_llm()
 
     client_init_ok = False
     init_error = None
-    model = settings.QWEN_MODEL
+    model = snap["model"]
 
-    if settings.USE_MOCK_LLM:
+    if use_mock:
         client_init_ok = True
         model = "mock-model"
     elif api_key_configured and base_url_configured:
@@ -84,10 +91,14 @@ async def health_llm():
 
     return success_response(
         data={
-            "use_mock_llm": settings.USE_MOCK_LLM,
+            "use_mock_llm": use_mock,
             "qwen_api_key_configured": api_key_configured,
+            "api_key_source": snap["api_key_source"],
+            "api_key_masked": snap["api_key_masked"],
             "base_url_configured": base_url_configured,
+            "base_url": snap["base_url"],
             "model": model,
+            "vl_model": snap["vl_model"],
             "client_init_ok": client_init_ok,
             "error": init_error,
         },

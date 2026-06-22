@@ -20,6 +20,12 @@ import openai
 from openai import APIError, APIConnectionError, APIStatusError, APITimeoutError
 
 from app.core.config import get_settings
+from app.core.llm_runtime import (
+    get_effective_api_key,
+    get_effective_base_url,
+    get_effective_model,
+    get_effective_vl_model,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -238,9 +244,9 @@ class QwenClient:
         timeout: int = 180,
         max_retries: int = 2
     ):
-        self.api_key = api_key or settings.QWEN_API_KEY
-        self.base_url = base_url or settings.QWEN_BASE_URL
-        self.model = model or settings.QWEN_MODEL
+        self.api_key = api_key or get_effective_api_key()
+        self.base_url = base_url or get_effective_base_url()
+        self.model = model or get_effective_model()
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -575,7 +581,7 @@ class QwenClient:
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
 
-        model = vl_model or settings.QWEN_VL_MODEL
+        model = vl_model or get_effective_vl_model()
         schema_text = json.dumps(schema_example, ensure_ascii=False, indent=2) if isinstance(schema_example, dict) else str(schema_example or "{}")
         system = (
             "你是科学图表质量评审助手。仅输出合法 JSON，不要 markdown。"
@@ -660,10 +666,16 @@ def get_qwen_client() -> QwenClient:
     return _qwen_client
 
 
-def _set_qwen_client(client: QwenClient) -> None:
-    """设置自定义 Qwen 客户端（用于 mock 注入）"""
+def _set_qwen_client(client: Optional[QwenClient]) -> None:
+    """设置自定义 Qwen 客户端（用于 mock 注入）；传 None 则清除单例"""
     global _qwen_client
     _qwen_client = client
+
+
+def reset_qwen_client() -> None:
+    """清除单例，下次 get_qwen_client 按当前运行时配置重建"""
+    global _qwen_client
+    _qwen_client = None
 
 
 # ==================== 便捷函数 ====================
