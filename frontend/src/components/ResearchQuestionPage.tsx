@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { projectService } from '@/services/projectService';
+import { researchQuestionKey } from '@/lib/storageKeys';
 
 // ============ 表单数据类型 ============
 export interface ResearchQuestionForm {
@@ -32,12 +33,10 @@ const EMPTY_FORM: ResearchQuestionForm = {
 };
 
 // ============ localStorage 工具函数 ============
-const getStorageKey = (projectId: string) => `aisci_research_question_${projectId}`;
-
 function loadDraft(projectId: string | undefined): ResearchQuestionForm {
   if (!projectId) return { ...EMPTY_FORM };
   try {
-    const saved = localStorage.getItem(getStorageKey(projectId));
+    const saved = localStorage.getItem(researchQuestionKey(projectId));
     return saved ? { ...EMPTY_FORM, ...JSON.parse(saved) } : { ...EMPTY_FORM };
   } catch {
     return { ...EMPTY_FORM };
@@ -46,7 +45,7 @@ function loadDraft(projectId: string | undefined): ResearchQuestionForm {
 
 function saveDraft(projectId: string, form: ResearchQuestionForm): void {
   try {
-    localStorage.setItem(getStorageKey(projectId), JSON.stringify(form));
+    localStorage.setItem(researchQuestionKey(projectId), JSON.stringify(form));
   } catch {
     // localStorage 写入失败时静默，不影响主流程
   }

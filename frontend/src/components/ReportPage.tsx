@@ -11,6 +11,7 @@ import type { ExportType } from './ExportActions';
 import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
 import humanLoopService from '@/services/humanLoopService';
+import { useToast } from '@/hooks/useToast';
 
 interface ReportPageProps {
   projectId: string;
@@ -30,18 +31,13 @@ export function ReportPage({
   latestRunId: _latestRunId,
 }: ReportPageProps) {
   const navigate = useNavigate();
+  const { message: alertMsg, showAlert } = useToast(2500);
   const [report, setReport] = useState<ReportData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [reviseMessage, setReviseMessage] = useState('');
   const [reviseBusy, setReviseBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-
-  const showAlert = useCallback((msg: string) => {
-    setAlertMsg(msg);
-    setTimeout(() => setAlertMsg(null), 2500);
-  }, []);
 
   useEffect(() => {
     if (!projectId) return;

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { EvidenceLevelBadge } from '@/components/EvidenceLevelBadge';
+import { ScoreBar } from '@/components/ScoreBar';
 import { HypothesisProvenanceTimeline } from '@/components/HypothesisProvenanceTimeline';
 import {
   Star, Eye, FlaskConical, AlertTriangle, ChevronDown, ChevronUp,
@@ -77,9 +79,7 @@ export function HypothesisCard({
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <span className={`text-[11px] px-1.5 py-0.5 rounded border ${evidenceLevelBadgeCls(hypothesis.evidenceLevel)}`}>
-                {evidenceLevelLabel(hypothesis.evidenceLevel)}
-              </span>
+              <EvidenceLevelBadge level={hypothesis.evidenceLevel} />
               {hypothesis.alignment_score != null && (
                 <span className={`text-[11px] px-1.5 py-0.5 rounded border font-mono ${
                   hypothesis.alignment_score >= 70 ? 'bg-green-500/10 text-green-400 border-green-500/25' :
@@ -323,9 +323,9 @@ export function HypothesisCard({
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>评分维度</span>
             </div>
-            <ScoreBarSimple label="创新性" score={hypothesis.novelty} color="purple" />
-            <ScoreBarSimple label="可验证性" score={hypothesis.verifiability} color="green" />
-            <ScoreBarSimple label="数据可得性" score={hypothesis.dataAvailability} color="blue" />
+            <ScoreBar compact label="创新性" score={hypothesis.novelty} color="purple" />
+            <ScoreBar compact label="可验证性" score={hypothesis.verifiability} color="green" />
+            <ScoreBar compact label="数据可得性" score={hypothesis.dataAvailability} color="blue" />
           </div>
             </>
           )}
@@ -378,42 +378,5 @@ export function HypothesisCard({
         </button>
       </div>
     </Card>
-  );
-}
-
-function evidenceLevelLabel(level: string | undefined): string {
-  switch (level) {
-    case 'high': return '高证据';
-    case 'medium': return '中证据';
-    default: return '低证据';
-  }
-}
-
-function evidenceLevelBadgeCls(level: string | undefined): string {
-  switch (level) {
-    case 'high': return 'bg-green-500/15 text-green-400 border-green-500/30';
-    case 'medium': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-    default: return 'bg-gray-500/15 text-gray-400 border-gray-500/30';
-  }
-}
-
-function ScoreBarSimple({ label, score, color }: { label: string; score: number; color: string }) {
-  const barColorMap: Record<string, string> = {
-    purple: 'bg-purple-500',
-    green: 'bg-green-500',
-    blue: 'bg-blue-500',
-    amber: 'bg-amber-500',
-  };
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500 w-16 shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className={cn('h-full rounded-full', barColorMap[color] || 'bg-gray-500')}
-          style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
-        />
-      </div>
-      <span className="text-xs text-gray-400 font-mono w-6 text-right">{score}</span>
-    </div>
   );
 }

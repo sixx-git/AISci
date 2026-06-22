@@ -19,6 +19,7 @@ import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
+import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import type {
   AgentNodeData,
   AgentStatus,
@@ -64,7 +65,7 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
 
 function getActiveRunId(projectId: string): string | null {
   try {
-    return localStorage.getItem(`aisci_active_run_${projectId}`) || null;
+    return localStorage.getItem(activeRunKey(projectId)) || null;
   } catch {
     return null;
   }
@@ -72,15 +73,15 @@ function getActiveRunId(projectId: string): string | null {
 
 function setActiveRunId(projectId: string, runId: string): void {
   try {
-    localStorage.setItem(`aisci_active_run_${projectId}`, runId);
-    localStorage.setItem(`aisci_active_run_status_${projectId}`, 'running');
+    localStorage.setItem(activeRunKey(projectId), runId);
+    localStorage.setItem(activeRunStatusKey(projectId), 'running');
   } catch { /* ignore */ }
 }
 
 function clearActiveRun(projectId: string): void {
   try {
-    localStorage.removeItem(`aisci_active_run_${projectId}`);
-    localStorage.removeItem(`aisci_active_run_status_${projectId}`);
+    localStorage.removeItem(activeRunKey(projectId));
+    localStorage.removeItem(activeRunStatusKey(projectId));
   } catch { /* ignore */ }
 }
 

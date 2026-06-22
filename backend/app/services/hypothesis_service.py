@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.models.research import Hypothesis, Evidence
 from app.schemas.research import HypothesisCreate, HypothesisResponse
-from app.core.database import get_db
-
 logger = logging.getLogger(__name__)
 
 
@@ -74,13 +72,6 @@ class HypothesisService:
 
         try:
             for idx, hypo_data in enumerate(hypotheses_list):
-                # supporting_fact_ids: JSON 序列化为文本存库
-                fact_ids = hypo_data.get("supporting_fact_ids", [])
-                if isinstance(fact_ids, list):
-                    fact_ids_json = json.dumps(fact_ids, ensure_ascii=False)
-                else:
-                    fact_ids_json = str(fact_ids) if fact_ids else None
-
                 hypothesis_create = HypothesisCreate(
                     project_id=project_id,
                     research_question=research_question,
@@ -241,9 +232,3 @@ class HypothesisService:
             self.db.rollback()
             logger.error(f"删除假设失败：{e}", exc_info=True)
             raise
-
-
-def get_hypothesis_service() -> HypothesisService:
-    """获取 HypothesisService 实例"""
-    db = next(get_db())
-    return HypothesisService(db)

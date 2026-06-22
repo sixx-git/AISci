@@ -2,7 +2,7 @@
 智能体 API
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
@@ -314,7 +314,8 @@ async def iterate_hypothesis_evidence_chain(
     try:
         import asyncio
 
-        from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStage, PipelineStatus
+        from app.core.json_fields import parse_json_list
+        from app.services._utils.pipeline_queries import get_literature_mining_output
         from app.services.evidence_reasoning_service import get_evidence_reasoning_service
 
         hypo_service = HypothesisService(db)
@@ -322,27 +323,7 @@ async def iterate_hypothesis_evidence_chain(
         if not hypo:
             return error("假设不存在", code=404)
 
-        literature_mining: dict = {"facts": [], "citation_map": [], "uncertain_points": [], "imported_documents": []}
-        latest_run = (
-            db.query(PipelineRun)
-            .filter(
-                PipelineRun.project_id == hypo.project_id,
-                PipelineRun.status.in_([PipelineStatus.COMPLETED, PipelineStatus.FAILED, PipelineStatus.RUNNING]),
-            )
-            .order_by(PipelineRun.created_at.desc())
-            .first()
-        )
-        if latest_run:
-            stage_exec = (
-                db.query(PipelineStageExecution)
-                .filter(
-                    PipelineStageExecution.pipeline_run_id == latest_run.id,
-                    PipelineStageExecution.stage == PipelineStage.LITERATURE_MINING,
-                )
-                .first()
-            )
-            if stage_exec and isinstance(stage_exec.output_data, dict):
-                literature_mining = stage_exec.output_data
+        literature_mining = get_literature_mining_output(db, hypo.project_id)
 
         hypo_dict = {
             "hypothesis": hypo.hypothesis,
@@ -408,34 +389,20 @@ async def get_hypothesis_provenance_timeline(
         from app.core.hypothesis_provenance import build_hypothesis_provenance_timeline
         from app.core.data_citation import collect_citation_ids_from_hypothesis
         from app.core.iterative_science import build_general_verifiable_hypothesis_spec
-        from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStage, PipelineStatus
+        from app.core.json_fields import parse_json_list
+        from app.models.pipeline import PipelineStatus
+        from app.services._utils.pipeline_queries import get_literature_mining_output
 
         hypo_service = HypothesisService(db)
         hypo = hypo_service.get_hypothesis_by_id(hypothesis_id)
         if not hypo:
             return error("假设不存在", code=404)
 
-        literature_mining: dict = {"facts": [], "multimodal_evidence": []}
-        latest_run = (
-            db.query(PipelineRun)
-            .filter(
-                PipelineRun.project_id == hypo.project_id,
-                PipelineRun.status == PipelineStatus.COMPLETED,
-            )
-            .order_by(PipelineRun.created_at.desc())
-            .first()
+        literature_mining = get_literature_mining_output(
+            db,
+            hypo.project_id,
+            statuses=[PipelineStatus.COMPLETED],
         )
-        if latest_run:
-            stage = (
-                db.query(PipelineStageExecution)
-                .filter(
-                    PipelineStageExecution.pipeline_run_id == latest_run.id,
-                    PipelineStageExecution.stage == PipelineStage.LITERATURE_MINING,
-                )
-                .first()
-            )
-            if stage and isinstance(stage.output_data, dict):
-                literature_mining = stage.output_data
 
         row_provenance: list = []
         try:
@@ -446,20 +413,9 @@ async def get_hypothesis_provenance_timeline(
         except Exception:
             pass
 
-        def _parse_json_list(raw):
-            if isinstance(raw, list):
-                return raw
-            if isinstance(raw, str) and raw.strip():
-                try:
-                    parsed = json.loads(raw)
-                    return parsed if isinstance(parsed, list) else []
-                except json.JSONDecodeError:
-                    return []
-            return []
-
-        supporting_fact_ids = _parse_json_list(hypo.supporting_fact_ids)
-        data_evidence_ids = _parse_json_list(hypo.data_evidence_ids)
-        dataset_field_refs = _parse_json_list(hypo.dataset_field_refs)
+        supporting_fact_ids = parse_json_list(hypo.supporting_fact_ids)
+        data_evidence_ids = parse_json_list(hypo.data_evidence_ids)
+        dataset_field_refs = parse_json_list(hypo.dataset_field_refs)
 
         hypo_dict = {
             "hypothesis": hypo.hypothesis,

@@ -70,7 +70,14 @@ class HypothesisCreate(BaseModel):
     validation_target: Optional[str] = Field(None, description="验证目标指标")
     expected_measurable_effect: Optional[str] = Field(None, description="预期的可量化效果")
 
-    @field_validator("matched_keywords", "missing_keywords", "dataset_field_refs", "data_evidence_ids", mode="before")
+    @field_validator(
+        "matched_keywords",
+        "missing_keywords",
+        "dataset_field_refs",
+        "data_evidence_ids",
+        "supporting_fact_ids",
+        mode="before",
+    )
     @classmethod
     def _parse_json_list(cls, v):
         if isinstance(v, str):

@@ -14,6 +14,7 @@ import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { DataCatalogPanel } from '@/components/DataCatalogPanel';
 import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
+import { useToast } from '@/hooks/useToast';
 import type { BackendDataset, DatasetSummary } from '@/types';
 
 interface DatasetPageProps {
@@ -111,7 +112,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const { message: alertMsg, showAlert } = useToast();
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [modelingDatasetId, setModelingDatasetId] = useState<string>('');
   const [targetColumn, setTargetColumn] = useState<string>('');
@@ -121,11 +122,6 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tabularDatasets = datasets.filter((ds) => ds.dataType === 'tabular');
-
-  const showAlert = useCallback((msg: string) => {
-    setAlertMsg(msg);
-    setTimeout(() => setAlertMsg(null), 3000);
-  }, []);
 
   const loadDataContext = useCallback(() => {
     datasetService.getDataContext(projectId).then((res) => {

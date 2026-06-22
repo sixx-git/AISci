@@ -3,15 +3,7 @@ import { AlertTriangle, Play, RefreshCw, XCircle } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { humanLoopService } from '@/services/humanLoopService';
-
-export interface HitlGateInfo {
-  paused?: boolean;
-  stage?: string;
-  stage_label?: string;
-  resume_phase?: string;
-  paused_at?: string;
-  cleared_stages?: string[];
-}
+import type { HitlGateInfo } from '@/types';
 
 interface HitlGatePanelProps {
   projectId: string;

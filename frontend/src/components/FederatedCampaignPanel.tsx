@@ -1,17 +1,6 @@
 import { FlaskConical, ShieldAlert, CheckCircle2, RefreshCw, Target, TrendingUp } from 'lucide-react';
 import { FederatedPareto3DPanel, type Pareto3DData } from '@/components/FederatedPareto3DPanel';
-import type { ClosedLoopEvent, IterationSnapshot } from '@/types';
-
-export interface ReplanAction {
-  action_id?: string;
-  action_type?: string;
-  parameter?: string;
-  to_value?: string | number;
-  expected_check?: string;
-  priority?: string;
-  rationale?: string;
-  verifiable?: boolean;
-}
+import type { ClosedLoopEvent, IterationSnapshot, ReplanAction } from '@/types';
 
 export interface ParetoPoint {
   method?: string;

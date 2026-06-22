@@ -17,6 +17,9 @@ import { documentService, vectorService, literatureService } from '@/services';
 import dataFinderService from '@/services/dataFinderService';
 import type { DocumentInfo } from '@/services/documentService';
 import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult, ParseIndexResult } from '@/services/literatureService';
+import { useStatusToast, type StatusToastMessage } from '@/hooks/useToast';
+import { getErrorMessage } from '@/lib/errors';
+import { formatFileSize } from '@/lib/format';
 
 // ============ MIME / 扩展名 → 文献类型 ============
 function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
@@ -54,12 +57,6 @@ function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
   };
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 // ============ 类型标签映射 ============
 const typeConfig: Record<LiteratureItem['type'], { label: string; className: string }> = {
   '论文':   { label: '论文',   className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
@@ -94,12 +91,6 @@ const importStatusConfig: Record<string, { label: string; className: string }> =
   indexed:         { label: '已索引', className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
   failed:          { label: '失败', className: 'bg-red-500/15 text-red-400 border-red-500/25' },
 };
-
-// ============ 状态消息 ============
-interface StatusMsg {
-  type: 'loading' | 'success' | 'error';
-  text: string;
-}
 
 // ============ 表格列定义 ============
 const TABLE_COLUMNS = [
@@ -179,15 +170,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [bibtexImporting, setBibtexImporting] = useState(false);
   const [bibtexResult, setBibtexResult] = useState<ImportBibtexResult | null>(null);
 
-  // ========== 全局状态消息 ==========
-  const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null);
-
-  // ========== 显示状态消息（error 10s，其他 4s） ==========
-  const showStatus = useCallback((msg: StatusMsg) => {
-    setStatusMsg(msg);
-    const duration = msg.type === 'error' ? 10000 : 4000;
-    setTimeout(() => setStatusMsg(null), duration);
-  }, []);
+  const { statusMsg, showStatus } = useStatusToast();
 
   const stats: LiteratureStats = useMemo(() => computeStats(literature), [literature]);
 
@@ -201,8 +184,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         const items = (res.data?.items ?? []).map(docInfoToLiterature);
         setLiterature(items);
       }
-    } catch (err: any) {
-      const message = err?.response?.data?.detail || err?.response?.data?.message || err.message || String(err);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, '未知错误');
       if (import.meta.env.DEV) console.error('获取文献列表失败:', err);
       showStatus({ type: 'error', text: `文献列表加载失败: ${message}` });
     } finally {
@@ -236,8 +219,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       if (res.code === 200) {
         setImportedDocs(res.data?.items ?? []);
       }
-    } catch (err: any) {
-      const message = err?.response?.data?.detail || err?.response?.data?.message || err.message || String(err);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, '未知错误');
       if (import.meta.env.DEV) console.error('获取已入库文献失败:', err);
       showStatus({ type: 'error', text: `已入库文献加载失败: ${message}` });
     } finally {
@@ -277,7 +260,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '上传失败' });
       }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `上传失败: ${detail}` });
     } finally {
       setUploading(false);
@@ -297,7 +280,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '删除失败' });
       }
     } catch (err: any) {
-      showStatus({ type: 'error', text: `删除失败: ${err.message}` });
+      showStatus({ type: 'error', text: `删除失败: ${getErrorMessage(err)}` });
     } finally {
       setDeleting(null);
     }
@@ -317,7 +300,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '构建索引失败' });
       }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `构建索引失败: ${detail}` });
     } finally {
       setBuildingIndex(false);
@@ -350,7 +333,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '搜索失败' });
       }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.detail || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}。可尝试 BibTeX 导入或使用本地示例文献。` });
     } finally {
       setArxivSearching(false);
@@ -397,7 +380,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '推荐失败' });
       }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}。可尝试手动搜索、BibTeX 导入或使用本地示例文献。` });
     } finally {
       setRecommendSearching(false);
@@ -452,7 +435,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         showStatus({ type: 'error', text: res.message || '导入失败' });
       }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `导入失败: ${detail}` });
     } finally {
       setArxivImporting((prev) => ({ ...prev, [paper.external_id]: false }));
@@ -482,7 +465,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       }
       await loadImportedDocs();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `BibTeX 导入失败: ${detail}` });
     } finally {
       setBibtexImporting(false);
@@ -497,7 +480,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       showStatus({ type: 'success', text: `PDF 下载完成: ${docTitle.slice(0, 40)}` });
       await loadImportedDocs();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `PDF 下载失败: ${detail}` });
     } finally {
       setDownloadingDoc(null);
@@ -514,7 +497,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       showStatus({ type: 'success', text: `解析完成: ${r.chunk_count} chunks${idxInfo}` });
       await loadImportedDocs();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.response?.data?.message || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `解析失败: ${detail}` });
     } finally {
       setParsingDoc(null);
@@ -529,7 +512,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       const res = await literatureService.getDocumentChunks(docId, 1, 50);
       setChunkList(res.data.items || []);
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err.message;
+      const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `获取切片失败: ${detail}` });
       setChunkList([]);
     } finally {
@@ -1553,7 +1536,7 @@ function BibTexTabContent({
 }
 
 // ========== 状态提示条 ==========
-function StatusBar({ msg }: { msg: StatusMsg | null }) {
+function StatusBar({ msg }: { msg: StatusToastMessage | null }) {
   const [dismissed, setDismissed] = useState(false);
 
   // 当 msg 变化时重置 dismiss 状态
@@ -1567,6 +1550,7 @@ function StatusBar({ msg }: { msg: StatusMsg | null }) {
     loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-white' },
     success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-white' },
     error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-white' },
+    info:    { bg: 'bg-gray-500/90',  icon: Info,     text: 'text-white' },
   }[msg.type];
 
   const Icon = config.icon;

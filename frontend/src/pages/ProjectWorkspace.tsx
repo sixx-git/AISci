@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Calendar, LayoutDashboard, HelpCircle,
-  BookOpen, GitBranch, Lightbulb, FlaskConical,
-  FileText, ScrollText, Tag, TrendingUp, Play,
-  Loader2, AlertTriangle, CheckCircle2, Database, Network,
+  ArrowLeft, Calendar, HelpCircle,
+  BookOpen, Lightbulb, FlaskConical,
+  FileText, Tag, TrendingUp, Play,
+  Loader2, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -23,28 +23,8 @@ import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
 import { cn } from '@/lib/utils';
-
-// ============ 标签页定义 ============
-interface TabItem {
-  id: string;
-  label: string;
-  icon: React.FC<{ className?: string }>;
-}
-
-const TABS: TabItem[] = [
-  { id: 'overview', label: '项目概览', icon: LayoutDashboard },
-  { id: 'questions', label: '研究问题', icon: HelpCircle },
-  { id: 'literature', label: '文献库', icon: BookOpen },
-  { id: 'knowledge_graph', label: '知识图谱', icon: Network },
-  { id: 'datasets', label: '数据集', icon: Database },
-  { id: 'workflow', label: '智能体工作流', icon: GitBranch },
-  { id: 'hypotheses', label: '候选假设', icon: Lightbulb },
-  { id: 'experiments', label: '实验设计', icon: FlaskConical },
-  { id: 'reports', label: '研究报告', icon: FileText },
-  { id: 'logs', label: '运行日志', icon: ScrollText },
-];
-
-const VALID_TAB_IDS = new Set(TABS.map((t) => t.id));
+import { PROJECT_TABS, VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { researchQuestionKey } from '@/lib/storageKeys';
 
 // ============ localStorage 研究问题读取 ============
 /**
@@ -53,7 +33,7 @@ const VALID_TAB_IDS = new Set(TABS.map((t) => t.id));
  */
 function getStoredResearchQuestion(projectId: string): string {
   try {
-    const raw = localStorage.getItem(`aisci_research_question_${projectId}`);
+    const raw = localStorage.getItem(researchQuestionKey(projectId));
     if (!raw) return '';
     const parsed = JSON.parse(raw);
     return parsed.researchQuestion || parsed.research_question || '';
@@ -64,7 +44,7 @@ function getStoredResearchQuestion(projectId: string): string {
 
 function getStoredResearchDomain(projectId: string): string {
   try {
-    const raw = localStorage.getItem(`aisci_research_question_${projectId}`);
+    const raw = localStorage.getItem(researchQuestionKey(projectId));
     if (!raw) return '';
     const parsed = JSON.parse(raw);
     return parsed.researchDomain || parsed.research_domain || '';
@@ -258,7 +238,7 @@ export function ProjectWorkspace() {
   // 从 URL 读取 tab，非法值回退 overview
   const activeTab = useMemo(() => {
     const tabFromUrl = searchParams.get('tab');
-    return tabFromUrl && VALID_TAB_IDS.has(tabFromUrl) ? tabFromUrl : 'overview';
+    return tabFromUrl && VALID_PROJECT_TAB_IDS.has(tabFromUrl) ? tabFromUrl : 'overview';
   }, [searchParams]);
 
   // 切换 tab → 更新 URL searchParams
@@ -641,7 +621,7 @@ export function ProjectWorkspace() {
       {/* ========== 二级 Tab 导航 ========== */}
       <div className="border-b border-dark-700 mb-6">
         <nav className="flex gap-1 overflow-x-auto -mb-px">
-          {TABS.map((tab) => {
+          {PROJECT_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (

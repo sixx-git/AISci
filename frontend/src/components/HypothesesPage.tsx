@@ -8,76 +8,21 @@ import {
 import { Button } from '@/components/Button';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
-import hypothesisService, { type BackendHypothesis, type BackendEvidence } from '@/services/hypothesisService';
+import hypothesisService from '@/services/hypothesisService';
 import { pipelineService } from '@/services/pipelineService';
 import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
-import type { DetailedHypothesis, EvidenceItem, EvidenceChain, HypothesisTreeData } from '@/types';
+import { useToast } from '@/hooks/useToast';
+import { getErrorMessage } from '@/lib/errors';
+import { mapBackendEvidenceToItem, mapBackendHypothesisToDetailed } from '@/lib/mappers/hypothesisMapper';
+import { navigateToProjectTab } from '@/lib/projectNavigation';
+import { selectedHypothesisKey } from '@/lib/storageKeys';
+import type { DetailedHypothesis, EvidenceChain, EvidenceItem, HypothesisTreeData } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
   compact?: boolean;
   revalidateKey?: number;
   latestRunId?: string | null;
-}
-
-function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
-  return {
-    id: h.id,
-    title: h.hypothesis || '未命名假设',
-    content: h.hypothesis || '',
-    reasoning: h.rationale || '',
-    evidenceCount: (h.supporting_fact_ids || []).length + (h.data_evidence_ids || []).length,
-    novelty: 80,
-    verifiability: h.testability === 'high' ? 88 : h.testability === 'low' ? 55 : 75,
-    dataAvailability: h.required_data === 'high' ? 85 : h.required_data === 'low' ? 55 : 70,
-    overallScore: Math.round((h.confidence || 0.5) * 100),
-    riskWarning: h.risk || '',
-    isPrimary: h.priority === 1,
-    status: (h.status === 'testing' || h.status === 'accepted' || h.status === 'confirmed')
-      ? 'confirmed' : 'draft',
-    alignment_score: h.alignment_score ?? undefined,
-    off_topic: h.off_topic ?? undefined,
-    off_topic_reason: h.off_topic_reason ?? undefined,
-    matched_keywords: h.matched_keywords ?? undefined,
-    missing_keywords: h.missing_keywords ?? undefined,
-    domain_conflict_keywords: h.domain_conflict_keywords ?? undefined,
-    evidenceLevel: h.evidence_level || 'medium',
-    question_alignment: h.question_alignment ?? undefined,
-    dataset_field_refs: h.dataset_field_refs ?? undefined,
-    data_evidence_ids: h.data_evidence_ids ?? undefined,
-    validation_target: h.validation_target ?? undefined,
-    expected_measurable_effect: h.expected_measurable_effect ?? undefined,
-    supporting_fact_ids: h.supporting_fact_ids ?? undefined,
-  };
-}
-
-function mapBackendEvidence(e: BackendEvidence): EvidenceItem {
-  let stance: EvidenceItem['stance'];
-  let reliability_score: number | undefined;
-  try {
-    if (e.extra_metadata) {
-      const meta = JSON.parse(e.extra_metadata);
-      stance = meta.stance;
-      reliability_score = meta.reliability_score;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {
-    id: e.id,
-    project_id: e.project_id,
-    hypothesis_id: e.hypothesis_id,
-    document_id: e.document_id,
-    chunk_id: e.chunk_id,
-    fact_text: e.fact_text,
-    quote_text: e.quote_text,
-    page_number: e.page_number,
-    relevance_score: e.relevance_score,
-    source_title: e.source_title,
-    created_at: e.created_at,
-    stance,
-    reliability_score,
-  };
 }
 
 function applyEvidenceChainToHypothesis(h: DetailedHypothesis, chain: EvidenceChain | null): DetailedHypothesis {
@@ -99,11 +44,11 @@ export function HypothesesPage({
   latestRunId: _latestRunId,
 }: HypothesesPageProps) {
   const navigate = useNavigate();
+  const { message: alertMsg, showAlert } = useToast();
 
   const [hypotheses, setHypotheses] = useState<DetailedHypothesis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [offTopicExpanded, setOffTopicExpanded] = useState(false);
   const [scoringExpanded, setScoringExpanded] = useState(false);
 
@@ -113,11 +58,6 @@ export function HypothesesPage({
   const [currentEvidenceChain, setCurrentEvidenceChain] = useState<EvidenceChain | null>(null);
   const [iteratingId, setIteratingId] = useState<string | null>(null);
   const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
-
-  const showAlert = useCallback((msg: string) => {
-    setAlertMsg(msg);
-    setTimeout(() => setAlertMsg(null), 3000);
-  }, []);
 
   useEffect(() => {
     if (!_projectId) {
@@ -132,7 +72,7 @@ export function HypothesesPage({
     hypothesisService.getProjectHypotheses(_projectId)
       .then(async (res) => {
         if (res.code === 200 && Array.isArray(res.data)) {
-          const base = res.data.map(mapBackendToDetailed);
+          const base = res.data.map(mapBackendHypothesisToDetailed);
           const withChains = await Promise.all(
             base.map(async (h) => {
               try {
@@ -152,7 +92,7 @@ export function HypothesesPage({
         }
       })
       .catch((err) => {
-        setError(err?.message || '获取假设列表失败，请检查后端服务是否启动');
+        setError(getErrorMessage(err, '获取假设列表失败，请检查后端服务是否启动'));
       })
       .finally(() => setLoading(false));
   }, [_projectId, _revalidateKey, _latestRunId]);
@@ -208,7 +148,7 @@ export function HypothesesPage({
     ])
       .then(([evRes, chainRes]) => {
         if (evRes.code === 200 && Array.isArray(evRes.data)) {
-          setCurrentEvidence(evRes.data.map(mapBackendEvidence));
+          setCurrentEvidence(evRes.data.map(mapBackendEvidenceToItem));
         } else {
           setCurrentEvidence([]);
         }
@@ -277,7 +217,7 @@ export function HypothesesPage({
       if (res.code === 200) {
         const updated = await hypothesisService.getProjectHypotheses(_projectId);
         if (updated.code === 200 && Array.isArray(updated.data)) {
-          setHypotheses(updated.data.map(mapBackendToDetailed));
+          setHypotheses(updated.data.map(mapBackendHypothesisToDetailed));
         } else {
           setHypotheses((prev) =>
             prev.map((h) => ({ ...h, isPrimary: h.id === id })),
@@ -294,26 +234,28 @@ export function HypothesesPage({
   }, [_projectId, showAlert]);
 
   const handleEnterExperiment = useCallback((id: string) => {
-    localStorage.setItem(`aisci_selected_hypothesis_${_projectId}`, id);
-    navigate(`/projects/${_projectId}?tab=experiments&hypothesis_id=${id}`);
+    if (!_projectId) return;
+    localStorage.setItem(selectedHypothesisKey(_projectId), id);
+    navigateToProjectTab(navigate, _projectId, 'experiments', { hypothesis_id: id });
   }, [_projectId, navigate]);
 
   const handleGoWorkflow = useCallback(() => {
-    navigate(`/projects/${_projectId}?tab=workflow`);
+    navigateToProjectTab(navigate, _projectId, 'workflow');
   }, [_projectId, navigate]);
 
   const handleGoDatasets = useCallback(() => {
-    navigate(`/projects/${_projectId}?tab=datasets`);
+    navigateToProjectTab(navigate, _projectId, 'datasets');
   }, [_projectId, navigate]);
 
   const handleGoLiterature = useCallback(() => {
-    navigate(`/projects/${_projectId}?tab=literature`);
+    navigateToProjectTab(navigate, _projectId, 'literature');
   }, [_projectId, navigate]);
 
   const handleNavigateToLiterature = useCallback((documentId: string, chunkId?: string) => {
-    const params = new URLSearchParams({ tab: 'literature', doc_id: documentId });
-    if (chunkId) params.set('chunk_id', chunkId);
-    navigate(`/projects/${_projectId}?${params.toString()}`);
+    navigateToProjectTab(navigate, _projectId, 'literature', {
+      doc_id: documentId,
+      chunk_id: chunkId,
+    });
   }, [_projectId, navigate]);
 
   const primaryHypothesis = useMemo(

@@ -5,6 +5,8 @@ interface ScoreBarProps {
   score: number;
   max?: number;
   color?: 'blue' | 'green' | 'amber' | 'purple';
+  /** compact：HypothesisCard 内联样式（单行 + 细条） */
+  compact?: boolean;
 }
 
 const colorMap = {
@@ -14,9 +16,30 @@ const colorMap = {
   purple: { bar: 'bg-purple-500', bg: 'bg-purple-500/20', text: 'text-purple-400' },
 };
 
-export function ScoreBar({ label, score, max = 100, color = 'blue' }: ScoreBarProps) {
-  const pct = Math.min((score / max) * 100, 100);
+export function ScoreBar({
+  label,
+  score,
+  max = 100,
+  color = 'blue',
+  compact = false,
+}: ScoreBarProps) {
+  const pct = Math.min(Math.max(0, (score / max) * 100), 100);
   const c = colorMap[color];
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 w-16 shrink-0">{label}</span>
+        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={cn('h-full rounded-full', c.bar)}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs text-gray-400 font-mono w-6 text-right">{score}</span>
+      </div>
+    );
+  }
 
   return (
     <div>
