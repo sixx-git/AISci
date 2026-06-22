@@ -1,88 +1,99 @@
-# PDF / LaTeX 报告导出说明
-
-> **推荐路径**：LaTeX 模板 → XeLaTeX 编译 PDF。详见 [LATEX_EXPORT_SETUP.md](../LATEX_EXPORT_SETUP.md)。
+# LaTeX 报告导出说明
 
 ## 概述
 
-PDF 导出优先级：
+报告生成流程采用 **LaTeX 优先** 策略：
 
-1. **LaTeX（推荐）** — 使用 `latex_template/scientific_plan_template.tex`，XeLaTeX + BibTeX 编译
-2. **Markdown 回退** — Playwright Chromium 或 WeasyPrint 将 Markdown 转为 PDF
+```
+LLM 结构化章节 → report.tex + references.bib → XeLaTeX 编译 → report.pdf
+```
 
-## LaTeX 依赖
+模板位于项目根目录 `latex_template/`，基于 `scientific_plan_template.tex`（ICLR 中文样式 + ctex）。
 
-请安装 TeX Live / MiKTeX，并确保 `xelatex`、`bibtex` 可用。未安装时仍会生成 `report.tex`，PDF 将尝试 Markdown 回退。
+若编译失败，自动回退 Markdown → PDF（Playwright / WeasyPrint），详见 [PDF_EXPORT_SETUP.md](./PDF_EXPORT_SETUP.md)。
 
-## Markdown 回退依赖
+## 输出文件
 
-### 1. Python 依赖
+每次 Pipeline 报告生成后，在 `backend/storage/reports/{report_id}/` 下写入：
+
+| 文件 | 说明 |
+|------|------|
+| `report.tex` | 完整 LaTeX 源码 |
+| `references.bib` | 参考文献 BibTeX（来自 citation_map / 文献库） |
+| `report.pdf` | XeLaTeX 编译产物（或回退 PDF） |
+| `report.md` | Markdown 预览（前端展示用） |
+| `report_data.json` | 结构化数据（含 `latex_content`、`export_method`、`quality_check`） |
+
+`export_method` 取值示例：`latex` / `markdown_fallback`。
+
+## 安装 XeLaTeX（推荐）
+
+### Windows
+
+安装 [TeX Live](https://tug.org/texlive/) 或 [MiKTeX](https://miktex.org/)，确保 `xelatex` 和 `bibtex` 在 PATH 中。
+
+### macOS
 
 ```bash
-pip install weasyprint markdown
+brew install --cask mactex
 ```
 
-`requirements.txt` 中已包含 `weasyprint` 依赖。
-
-### 2. 系统依赖
-
-#### Windows
-
-Windows 通常不需要额外的系统依赖，WeasyPrint 会自动使用 Windows 自带的字体。
-
-#### macOS
+### Linux
 
 ```bash
-brew install pango libffi
+sudo apt-get install texlive-xetex texlive-lang-chinese texlive-latex-extra
 ```
 
-#### Linux (Ubuntu/Debian)
+验证：
 
 ```bash
-sudo apt-get install -y \
-    python3-cffi \
-    libcairo2 \
-    libpango-1.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libffi-dev \
-    shared-mime-info
+xelatex --version
+bibtex --version
 ```
 
-### 3. 中文字体
+## 环境变量（可选）
 
-Windows 和 macOS 自带中文字体，无需额外配置。Linux 需要安装：
+```env
+# 自定义模板目录（默认 ../latex_template）
+LATEX_TEMPLATE_DIR=D:/Workplace/AISci/latex_template
+
+# 自定义 xelatex 命令名或路径
+XELATEX_COMMAND=xelatex
+```
+
+## 回退机制
+
+若本机未安装 XeLaTeX 或编译失败：
+
+1. 系统尝试 Markdown → PDF 回退
+2. `report.tex` 仍会生成，可手动编译：
 
 ```bash
-sudo apt-get install -y fonts-wqy-microhei fonts-wqy-zenhei
+cd backend/storage/reports/{report_id}
+xelatex report.tex
+bibtex report
+xelatex report.tex
+xelatex report.tex
 ```
 
-## API 使用
+## API 下载
 
-报告生成后，通过以下接口下载：
-
-```
-# 下载 Markdown
-GET /api/v1/reports/{report_id}/download/md
-
-# 下载 PDF
+```http
+GET /api/v1/reports/{report_id}/download/tex
 GET /api/v1/reports/{report_id}/download/pdf
+GET /api/v1/reports/{report_id}/download/md
 ```
 
-前端在 [ExportActions](frontend/src/components/ExportActions.tsx) 组件中提供 Markdown 和 PDF 导出按钮。
+前端 [ExportActions](../frontend/src/components/ExportActions.tsx) 提供导出按钮。
 
-## 故障排除
+## 报告质量与溯源
 
-### 1. PDF 生成失败但 Markdown 正常
+- `ReportQualityCheckSkill` 检查 12 字段与 References 真实性
+- 报告生成输入含 Data Finder **provenance** 与假设 **supporting_fact_ids**
+- 禁止在 References 中写入无法在 citation_map 中验证的条目
 
-系统会自动保留 Markdown 文件，PDF 生成失败不影响其他功能。
+## 相关文档
 
-### 2. 中文显示乱码
-
-检查系统是否安装了中文字体。
-
-### 3. WeasyPrint 报错 "no library called cairo"
-
-安装缺失的系统依赖（见上方系统依赖安装部分）。
-
-### 4. Windows 安装问题
-
-如遇到 WeasyPrint 安装问题，可参考 [WeasyPrint Windows 安装指南](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows)。
+- [PDF_EXPORT_SETUP.md](./PDF_EXPORT_SETUP.md)
+- [backend/README.md](./README.md)
+- [prompts/report_generation.md](./prompts/report_generation.md)

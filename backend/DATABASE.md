@@ -2,7 +2,9 @@
 
 ## 概述
 
-本文档描述了 AI Scientist 项目的数据库设计。数据库使用 SQLite（默认）或 MySQL 构建，使用 SQLAlchemy 作为 ORM。
+本文档描述 AI Scientist 的数据库设计。默认使用 **SQLite**（`backend/data/aiscientist.db`），可选 **MySQL**；ORM 为 SQLAlchemy 2.0。
+
+除关系型表外，部分闭环与 Data Finder 数据持久化在 **`storage/`** 目录（审计链 jsonl、证据链 JSON、Catalog 等），见 [storage/README.md](../../storage/README.md)。
 
 ## 数据库架构
 
@@ -31,7 +33,7 @@
        │              └──────────────┘
        │
        │              ┌──────────────┐
-       ├─────────────*│  PipelineRun │
+       ├─────────────*│  PipelineRun │── extra_metadata: quality_trend / events / decisions
        │              └──────────────┘
        │                    1│
        │                     *│
@@ -48,6 +50,19 @@
        └──────*┌──────────────┐
                │   Dataset    │
                └──────────────┘
+                    1│
+                     *│
+              ┌──────────────┐
+              │MultimodalAsset│
+              └──────────────┘
+
+       ┌──────────────────┐   ┌─────────────────────────┐
+       │  PromptVersion   │   │ ProjectPromptOverride   │
+       └──────────────────┘   └─────────────────────────┘
+
+       ┌──────────────┐       ┌──────────────┐
+       │ ChatSession  │1─────*│ ChatMessage  │
+       └──────────────┘       └──────────────┘
 ```
 
 ## 数据表设计
@@ -72,6 +87,7 @@
 | created_by | VARCHAR(100) | 创建者 |
 | priority | INTEGER | 优先级（1-10） |
 | config | JSON | 项目配置 |
+| project_mode | VARCHAR(50) | 项目模式：`general` / `federated_learning` |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
@@ -250,6 +266,9 @@
 | error_message | TEXT | 错误信息 |
 | failed_stage | VARCHAR(50) | 失败的阶段 |
 | current_stage | VARCHAR(50) | 当前执行阶段 |
+| extra_metadata | JSON | 闭环元数据（见下方说明） |
+| prompt_versions_used | JSON | 各阶段 Prompt 版本 |
+| version | INTEGER | 运行版本号 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
@@ -273,6 +292,7 @@
 | model_parameters | JSON | 模型参数 |
 | prompt_used | TEXT | 使用的 Prompt |
 | token_count | INTEGER | Token 用量 |
+| extra_metadata | JSON | 人工修改、revision_history、HITL 审阅等 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
@@ -304,11 +324,20 @@
 |------|------|------|
 | id | VARCHAR(36) | 主键，UUID |
 | project_id | VARCHAR(36) | 外键 → projects.id |
-| name | VARCHAR(500) | 数据集名称 |
-| source | VARCHAR(500) | 数据来源 |
-| description | TEXT | 描述 |
-| file_path | VARCHAR(500) | 文件路径 |
-| preprocessing_status | VARCHAR(50) | 预处理状态：pending / processing / completed / failed |
+| filename | VARCHAR(500) | 原始文件名 |
+| file_path | VARCHAR(1000) | 存储路径 |
+| file_size | INTEGER | 文件大小（字节） |
+| data_type | VARCHAR(50) | tabular / image / time_series / json / pdf / unknown |
+| source_type | VARCHAR(50) | upload / history / public / data_finder |
+| n_rows | INTEGER | 行数 |
+| n_columns | INTEGER | 列数 |
+| columns_json | TEXT | 列名（JSON 数组） |
+| dtypes_json | TEXT | 字段类型（JSON） |
+| missing_count | INTEGER | 缺失值总数 |
+| missing_rate | FLOAT | 缺失率 0–1 |
+| statistics_json | TEXT | 统计摘要（JSON） |
+| preview_json | TEXT | 预览行（JSON） |
+| preprocessing_status | VARCHAR(50) | pending / processing / completed / failed |
 | use_for_hypothesis | BOOLEAN | 是否用于假设生成 |
 | extra_metadata | TEXT | 额外元数据（JSON） |
 | created_at | DATETIME | 创建时间 |
@@ -316,7 +345,51 @@
 
 ---
 
-### 11. run_logs（运行日志表）
+### 11. multimodal_assets（多模态资产表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| dataset_id | VARCHAR(36) | 可选，关联 datasets.id |
+| file_name | VARCHAR(500) | 文件名 |
+| file_path | VARCHAR(1000) | 存储路径 |
+| modality | VARCHAR(20) | text / image / audio |
+| mime_type | VARCHAR(100) | MIME 类型 |
+| extracted_text | TEXT | 提取/转写全文 |
+| extracted_summary | TEXT | 摘要 |
+| evidence_facts_json | TEXT | 多模态 Evidence Facts（JSON 数组） |
+| metadata_json | TEXT | 解析元数据（JSON） |
+| parse_status | VARCHAR(50) | pending / completed / failed / warning |
+| use_for_hypothesis | BOOLEAN | 是否用于假设生成 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 12. small_validations（小样验证表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键，UUID |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| experiment_design_id | VARCHAR(36) | 外键 → experiment_designs.id |
+| hypothesis | TEXT | 关联假设 |
+| has_real_data | INTEGER | 0=模拟 / 1=真实数据 |
+| analysis_script | TEXT | Python 分析脚本 |
+| simulated_data | TEXT | 模拟数据（JSON） |
+| simulation_assumptions | TEXT | 模拟假设说明 |
+| charts | TEXT | 图表数据（JSON） |
+| statistics | TEXT | 统计结果（JSON） |
+| run_log | TEXT | 运行日志 |
+| status | VARCHAR(50) | draft / generated / running / completed |
+| execution_time | FLOAT | 执行耗时 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 13. run_logs（运行日志表）
 
 | 列名 | 类型 | 说明 |
 |------|------|------|
@@ -336,6 +409,76 @@
 | function | VARCHAR(100) | 函数名称 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
+
+---
+
+### 14. prompt_versions（Prompt 版本表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键 |
+| name | VARCHAR(200) | Prompt 名称 |
+| stage | VARCHAR(50) | 适用 Pipeline 阶段 |
+| version | INTEGER | 版本号 |
+| prompt_template | TEXT | 模板正文 |
+| variables | JSON | 变量列表 |
+| status | VARCHAR(50) | draft / active / deprecated / archived |
+| model | VARCHAR(100) | 默认模型 |
+| default_parameters | JSON | 默认参数 |
+| created_at | DATETIME | 创建时间 |
+
+---
+
+### 15. project_prompt_overrides（项目 Prompt 覆盖表）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | VARCHAR(36) | 主键 |
+| project_id | VARCHAR(36) | 外键 → projects.id |
+| stage | VARCHAR(50) | Pipeline 阶段 |
+| prompt_template | TEXT | 覆盖后的模板 |
+| editor | VARCHAR(100) | 最后编辑者 |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+---
+
+### 16. chat_sessions / chat_messages（对话表）
+
+| 表 | 主要列 | 说明 |
+|----|--------|------|
+| chat_sessions | id, created_at | 对话会话 |
+| chat_messages | id, session_id, role, content, references | 消息记录 |
+
+---
+
+## pipeline_runs.extra_metadata 结构（闭环）
+
+Discovery / 联邦 Campaign 等模式下，`extra_metadata` JSON 常见字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `quality_trend` | array | CQS 质量趋势条目（stage、score、cqs、raw_score） |
+| `closed_loop_events` | array | 闭环事件（discovery_refine、ensemble_review、sandbox_validation 等） |
+| `closed_loop_decisions` | array | 决策记录（trigger、action、reason、next_stage、round） |
+| `hitl_gate` | object | HITL 暂停状态、待审阶段 |
+| `execution_tier` | string | 执行层级标注 |
+| `data_authenticity` | string | 数据真实性标注 |
+| `version_snapshots` | array | 迭代前后 snapshot（用于因果链 Diff） |
+
+完整审计链另写入 **`storage/audit/{run_id}.jsonl`**，可通过 `GET /api/v1/pipeline/audit-export/{run_id}` 导出。
+
+## 文件系统持久化（非 SQL 表）
+
+| 路径 | 内容 |
+|------|------|
+| `storage/evidence_chains/{project_id}/{hypothesis_id}.json` | 结构化证据链 |
+| `storage/data_finder/{project_id}/` | Data Finder 结果、merged CSV、Bundle |
+| `storage/catalog/{project_id}/data_catalog.json` | Data Catalog |
+| `storage/feedback/{project_id}/` | Feedback Hub 约束 |
+| `backend/storage/reports/{report_id}/` | report.md / report.tex / report.pdf |
+
+假设 **`data_citation_id`**（`cite_*`）与 **`table_row_id`** 存于 Data Finder 的 `row_provenance` 与 merged CSV 列 `_data_citation_id`、`_table_row_id`，不单独建表。
 
 ---
 
@@ -370,3 +513,13 @@ python scripts/init_db.py
 
 ### 4. 外键级联删除
 - 使用外键级联删除，确保数据一致性
+
+### 5. 假设溯源字段
+- `hypotheses.supporting_fact_ids` / `dataset_field_refs` / `data_evidence_ids` 均以 JSON 文本存储
+- 字段引用可含 `cite_*` 形式的 `data_citation_id`，对应 Data Finder 行级 provenance
+
+## 相关文档
+
+- [backend/README.md](./README.md)
+- [backend/prompts/README.md](./prompts/README.md)
+- [storage/README.md](../storage/README.md)

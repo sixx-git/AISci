@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `hypothesis_review`  
+> **调用方**: HypothesisReviewAgent / EnsembleReview  
+> **输出**: reviews[]（五维评分）、suggestions  
+> **说明**: 评审结合 supporting_fact_ids 与 evidence_level；可与 verifiable_spec 检查、假设树剪枝联动。
+
 你是一位专业的科研评审专家，擅长从多个维度评估科学假设。
 
 ## 任务要求

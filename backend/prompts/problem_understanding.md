@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `problem_understanding`  
+> **调用方**: ProblemUnderstandingAgent  
+> **输出**: problem_statement、research_domain、keywords、scope_boundary  
+> **说明**: 识别 VFL/联邦学习关键词时会写入 constraints，供后续 federated_learning 模式使用。
+
 你是一位专业的研究顾问，擅长理解和梳理研究问题。
 
 ## 任务要求

@@ -115,26 +115,20 @@ AISci/
 │   ├── app/
 │   │   ├── agents/     # 8 个智能体（独立类 + Prompt + JSON Schema）
 │   │   ├── api/        # API 路由
-│   │   ├── core/       # 配置和数据库
-│   │   ├── models/     # SQLAlchemy 数据模型
-│   │   ├── schemas/    # Pydantic 请求/响应 Schema
-│   │   ├── services/   # 业务逻辑 + Qwen 客户端 + 向量存储
-│   │   ├── skills/     # 科研 Skill 工具层
+│   │   ├── core/       # 配置、闭环控制、质量评分、溯源
+│   │   ├── services/   # 业务逻辑（Pipeline、Data Finder、审计链等）
+│   │   ├── skills/     # 科研 Skill 工具层（40+）
 │   │   └── main.py
-│   ├── prompts/         # 8 个 Markdown Prompt 模板
-│   └── tests/           # pytest 测试
+│   ├── prompts/         # Markdown Prompt 模板
+│   └── tests/           # pytest（含 test_batch1–7 回归）
 ├── frontend/            # React + Vite 前端
 │   └── src/
-│       ├── components/  # 32 个 UI 组件
+│       ├── components/  # 60+ UI 组件
 │       ├── pages/       # 8 个页面
-│       ├── services/    # 10 个 API 服务模块
+│       ├── services/    # API 服务模块
 │       └── types/       # TypeScript 类型定义
-├── scripts/             # 自动化脚本
-│   ├── setup_backend.bat/sh    # 后端环境搭建
-│   ├── setup_frontend.bat/sh   # 前端环境搭建（pnpm install）
-│   ├── run_dev.bat/sh          # 一键启动前后端
-│   └── check_e2e.py            # 端到端验收脚本
-├── storage/             # 运行时数据（FAISS 索引、报告、上传文件）
+├── scripts/             # setup / run_dev / check_e2e 等
+├── storage/             # 审计链、证据链、Catalog、Data Finder 等（见 storage/README.md）
 └── .env.example         # 环境变量模板
 ```
 
@@ -170,6 +164,14 @@ AISci/
 - FAISS 语义检索
 - 文献证据绑定与引用溯源
 
+### 5. 科研闭环（A 级优化）
+
+- **CQS 质量趋势** — 工作流页展示综合质量分与闭环事件/决策
+- **HITL Gate** — 关键节点人工审核暂停与恢复
+- **Data Finder** — PDF 表格抽取、Merge + provenance、Bundle 下载
+- **假设溯源** — 假设卡片「溯源时间线」Tab，可跳转文献 chunk
+- **审计链导出** — 工作流页「导出审计链」或 `GET /pipeline/audit-export/{run_id}`
+
 ---
 
 ## 端到端验收
@@ -190,6 +192,15 @@ python scripts/check_e2e.py
 - 报告接口、Agent 接口可达性
 - 核心 Skill 文件完整性
 - `.env` 配置文件
+
+### 批次回归测试（可选）
+
+```bash
+cd backend
+pytest tests/test_batch*.py -v
+```
+
+覆盖 CQS、verifiable spec、Data Finder、闭环决策、Feedback Hub、溯源审计等 7 批 A 级优化能力。详见 [backend/tests/README.md](./backend/tests/README.md)。
 
 ---
 
@@ -274,7 +285,10 @@ pnpm dev
 
 ## 下一步
 
-- 阅读 [README.md](./README.md) 了解更多详情
+- 阅读 [README.md](./README.md) 了解架构与 A 级优化详情
+- 查看 [backend/README.md](./backend/README.md)、[frontend/README.md](./frontend/README.md)
 - 查看 [API 文档](http://localhost:8000/docs)
 - 运行端到端验收：`python scripts/check_e2e.py`
-- 开始使用 AI Scientist！
+- 运行批次回归：`cd backend && pytest tests/test_batch*.py -v`
+- 阅读 [DATABASE.md](./backend/DATABASE.md) 了解表结构与 `extra_metadata`
+- 阅读 [backend/prompts/README.md](./backend/prompts/README.md) 了解 Prompt 模板

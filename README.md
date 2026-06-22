@@ -15,7 +15,11 @@
 
 ```
 研究问题 → 文献挖掘 → 知识缺口分析 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
+                              ↑___________________________________|
+                                    科研闭环（Discovery 迭代 / HITL / CQS）
 ```
+
+除标准 8 阶段 Pipeline 外，系统支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）** 与 **完整审计链导出**，覆盖从假设溯源到数据 citation 追溯的全链路可审计科研流程。
 
 ### 8 条设计原则
 
@@ -117,27 +121,39 @@ AISci/
 │   │   ├── api/                  # API 路由模块
 │   │   │   ├── projects.py, research.py, literature.py, datasets.py
 │   │   │   ├── agents.py, pipeline.py, reports.py, documents.py
-│   │   │   ├── chat.py, vector_search.py, diagnose.py, v1.py
-│   │   ├── core/                 # 配置（.env 加载）、数据库、响应格式
+│   │   │   ├── data_finder.py, feedback.py, human_loop.py, multimodal.py
+│   │   │   ├── kg.py, chat.py, vector_search.py, diagnose.py, v1.py
+│   │   ├── core/                 # 配置、闭环控制、质量评分、溯源
+│   │   │   ├── quality_scoring.py, iterative_science.py, data_cleaning.py
+│   │   │   ├── closed_loop_decisions.py, hypothesis_provenance.py, data_citation.py
 │   │   ├── models/               # SQLAlchemy 模型（project / core / pipeline / chat / research）
 │   │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   │   ├── services/             # 业务逻辑 + Qwen 客户端 + 向量存储
-│   │   ├── skills/               # 14 个科研 Skill（工具层）
+│   │   │   ├── pipeline_service.py, evidence_reasoning_service.py
+│   │   │   ├── data_finder_service.py, feedback_hub_service.py
+│   │   │   ├── audit_chain_service.py, data_catalog_service.py
+│   │   ├── skills/               # 科研 Skill 工具层（40+）
 │   │   │   ├── literature/       # 论文搜索、引用验证、PDF 证据提取
-│   │   │   ├── data/             # 数据清洗、数据集发现、多模态
-│   │   │   ├── report/           # 图表生成、质量检查
-│   │   │   ├── reasoning/        # 新颖性审查、问题对齐
+│   │   │   ├── data_finder/      # 表格抽取、Schema 对齐、Merge、Entity 对齐
+│   │   │   ├── evidence_reasoning/ # 证据链迭代、假设修订、引用完整性
+│   │   │   ├── multimodal/       # VLM 图像理解、多模态证据构建
+│   │   │   ├── knowledge_graph/  # KG 构建、推理、增量更新
+│   │   │   ├── federated_experiment/ # 联邦学习场景识别与仿真
+│   │   │   ├── data/             # 数据清洗、数据集发现
+│   │   │   ├── report/           # 图表生成、VLM 评审、质量检查
+│   │   │   ├── reasoning/        # 新颖性审查、问题对齐、Ideation
 │   │   │   └── experiment/       # 实验合理性检查
 │   │   └── main.py               # FastAPI 入口 + /health + /health/llm
-│   ├── prompts/                  # 8 个 Markdown Prompt 模板
+│   ├── prompts/                  # 8 个 Markdown Prompt 模板（见 prompts/README.md）
 │   ├── tests/                    # pytest 测试
 │   ├── data/                     # arXiv fallback 数据
-│   └── storage/                  # 运行时数据（FAISS 索引、向量索引、报告、上传文件）
+│   └── storage/                  # 运行时数据（见 storage/README.md）
+├── storage/                      # 项目级持久化（audit / catalog / evidence_chains 等）
 ├── frontend/
 │   └── src/
-│       ├── components/           # 32 个组件（QualityCheckCard、HypothesisCard、PipelineProgress 等）
+│       ├── components/           # 60+ 组件（HypothesisCard、ClosedLoopTimeline、DataFinderPanel 等）
 │       ├── pages/                # 8 个页面（Projects、Workflow、Reports、Documents 等）
-│       ├── services/             # 10 个 API 模块（projectService、pipelineService、hypothesisService 等）
+│       ├── services/             # API 模块（pipelineService、hypothesisService、dataFinderService 等）
 │       ├── types/                # TypeScript 类型定义
 │       ├── lib/                  # 工具函数（api.ts、utils.ts）
 │       └── config/               # 环境配置
@@ -150,6 +166,7 @@ AISci/
 │   └── check_e2e.py              # 端到端验收脚本
 ├── .env.example                  # 环境变量模板
 ├── QUICKSTART.md                 # 详细快速入门
+├── LATEX_EXPORT_SETUP.md         # LaTeX 报告导出
 └── README.md
 ```
 
@@ -217,25 +234,49 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 
 ## 🔬 Skill 工具层
 
-14 个 Skill 分别覆盖 5 个子领域，作为 Agent 调用的工具层：
+Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `backend/app/skills/`）：
 
-| 分类 | Skill | 功能 |
-|------|-------|------|
-| **文献** | arxiv_search_skill | arXiv API 搜索 + 去重 + fallback |
-| | search_papers_skill | 多源搜索整合（arXiv / Semantic Scholar / OpenAlex / CrossRef） |
-| | citation_grounding_skill | 引用真实性验证 → 拒绝 LLM 虚构引用 |
-| | pdf_evidence_extraction_skill | PDF 原文证据提取与定位 |
-| **数据** | preliminary_analysis_skill | CSV 统计描述、缺失值、柱状图 |
-| | dataset_discovery_skill | 公开数据集发现（HuggingFace / Kaggle / PapersWithCode） |
-| | data_juicer_lite_skill | 数据质量分析与清洗 |
-| | multimodal_ingest_skill | 多模态数据导入与预处理 |
-| | multimodal_linking_skill | 跨模态数据对齐与关联 |
-| **推理** | hypothesis_novelty_review_skill | 新颖性自动审查 |
-| | question_alignment_skill | 研究问题-假设对齐度评分 |
-| **报告** | scientific_plot_skill | 基于真实数据的科学图表 |
-| | report_chart_generation_skill | 统计图表生成 |
-| | report_quality_check_skill | 12 字段合规检查 + 虚构引用检测 |
+| 分类 | 代表 Skill | 功能 |
+|------|-----------|------|
+| **文献** | arxiv_search_skill, citation_grounding_skill | 多源检索、引用真实性验证 |
+| **Data Finder** | pdf_table_extraction_skill, dataset_merge_skill, entity_resolution_skill | PDF 表格抽取、Merge + provenance、跨表实体对齐 |
+| **证据推理** | iterative_hypothesis_loop_skill, hypothesis_revision_skill | 多轮证据检索、LLM 假设修订（fact 白名单） |
+| **多模态** | qwen_vl_image_understanding_skill, multimodal_evidence_builder_skill | VLM 图像理解、多模态 fact 构建 |
+| **知识图谱** | evidence_graph_builder_skill, graph_reasoning_skill | 证据图构建与推理 |
+| **联邦实验** | federated_experiment_plan_skill, federated_simulation_executor_skill | 联邦场景识别、仿真与重规划 |
+| **数据** | data_juicer_lite_skill, preliminary_analysis_skill | 数据质量分析与统计描述 |
+| **推理** | hypothesis_novelty_review_skill, ideation_novelty_skill | 新颖性审查、Ideation 合成 |
+| **报告** | scientific_plot_skill, plot_vlm_critique_skill, report_quality_check_skill | 图表生成、VLM 评审、12 字段合规检查 |
 | **实验** | experiment_sanity_check_skill | 实验方案合理性检查 |
+
+---
+
+## 🔄 科研闭环与 A 级优化
+
+系统在标准 Pipeline 之上实现了七批 A 级优化能力：
+
+| 批次 | 主题 | 要点 |
+|------|------|------|
+| **1** | CQS + HITL Gate | 综合质量分 0–100、`execution_tier` 标注、人工审核暂停/恢复 |
+| **2** | Verifiable Spec | 通用可验证假设 spec、证据 Diff、可验证性检查 |
+| **3** | DataJuicer + Coverage + Bundle | 合并后自动清洗、完备性报告、Analysis-Ready Bundle 下载 |
+| **4** | Decision Log + 停滞停止 | 闭环决策记录、CQS 停滞停止、Discovery 因果链、Gap/HF 补搜 |
+| **5** | 图表分层 + 文献自动入库 | 图表 VLM 抽取/复核、Zenodo/NCBI GEO 检索、文献库 ↔ Data Finder |
+| **6** | Feedback Hub + Catalog | 全局约束注入、Multimodal → 证据链、Data Catalog、Entity 对齐 |
+| **7** | 溯源 + 审计链 | 假设溯源时间线 Tab、LLM 深度假设修订、审计链 jsonl 导出、`data_citation_id` 追溯 |
+
+### 关键 API（闭环相关）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/pipeline/audit-export/{run_id}` | 导出完整审计链（quality_trend / events / decisions / jsonl） |
+| GET | `/api/v1/agents/hypotheses/{id}/provenance-timeline` | 假设溯源时间线（fact → 多模态 → 数据集 → spec） |
+| POST | `/api/v1/agents/hypotheses/{id}/evidence-chain/iterate` | 单条假设证据链迭代修正 |
+| GET | `/api/v1/data-finder/citation/{citation_id}` | 按 `data_citation_id` 追溯 provenance |
+| GET | `/api/v1/datasets/catalog` | 项目级 Data Catalog |
+| POST | `/api/v1/feedback/submit` | Feedback Hub 提交全局约束 |
+
+审计链持久化路径：`storage/audit/{run_id}.jsonl`。
 
 ---
 
@@ -322,9 +363,15 @@ python scripts/check_e2e.py
 ```bash
 cd backend
 pytest tests/ -v
+
+# A 级优化批次回归（1–7 批）
+pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
+       tests/test_batch3_data_finder.py tests/test_batch4_closed_loop.py \
+       tests/test_batch5_literature_figures.py tests/test_batch6_feedback_catalog.py \
+       tests/test_batch7_provenance_audit.py -v
 ```
 
-覆盖：Agent 单元测试、Pipeline 端到端、向量存储、数据库、文档解析等。
+覆盖：Agent 单元测试、Pipeline 端到端、向量存储、闭环质量、Data Finder、溯源审计等。详见 [backend/tests/README.md](./backend/tests/README.md)。
 
 ---
 
@@ -337,3 +384,19 @@ pytest tests/ -v
 | pnpm | ≥ 9 |
 
 > ⚠️ 暂不建议 Python 3.13——FAISS、sentence-transformers 等依赖可能存在兼容问题。
+
+---
+
+## 📚 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| [QUICKSTART.md](./QUICKSTART.md) | 5 分钟快速入门 |
+| [backend/README.md](./backend/README.md) | 后端架构、API、测试 |
+| [backend/DATABASE.md](./backend/DATABASE.md) | 数据库表结构与闭环 metadata |
+| [backend/prompts/README.md](./backend/prompts/README.md) | Prompt 模板索引 |
+| [backend/tests/README.md](./backend/tests/README.md) | pytest 与 batch 回归 |
+| [frontend/README.md](./frontend/README.md) | 前端组件与页面 |
+| [storage/README.md](./storage/README.md) | 审计链、证据链、Data Finder 持久化 |
+| [LATEX_EXPORT_SETUP.md](./LATEX_EXPORT_SETUP.md) | LaTeX 报告导出 |
+| [backend/PDF_EXPORT_SETUP.md](./backend/PDF_EXPORT_SETUP.md) | PDF 回退导出 |

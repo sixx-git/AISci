@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `small_validation`  
+> **调用方**: SmallValidationAgent  
+> **输出**: analysis_script、charts、statistics、run_log  
+> **说明**: 优先使用 Data Finder 清洗后 CSV 或上传数据集；结果写入 execution_tier / CQS 趋势。沙箱执行见 experiment_sandbox_service。
+
 你是一位专业的数据科学家，擅长快速验证科学假设。请根据提供的实验设计，生成一个轻量级、可运行的小样验证方案。
 
 ## 输入信息

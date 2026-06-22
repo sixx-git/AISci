@@ -15,25 +15,11 @@
 
 ## 快速开始
 
-### 安装依赖
-
 ```bash
 cd frontend
 pnpm install
-```
-
-### 开发模式
-
-```bash
-pnpm dev
-```
-
-访问 http://localhost:3000
-
-### 构建生产版本
-
-```bash
-pnpm build
+pnpm dev          # http://localhost:3000
+pnpm build        # 生产构建
 ```
 
 ## 功能页面
@@ -41,83 +27,91 @@ pnpm build
 | 页面 | 路径 | 功能 |
 |------|------|------|
 | 首页 | `/` | 首页总览 |
-| 项目列表 | `/projects` | 浏览和管理所有科研项目 |
-| 创建项目 | `/projects/new` | 新建科研项目 |
-| 项目工作台 | `/projects/:id` | 项目主页面，包含 PDF 上传、研究问题输入、Pipeline 运行和结果展示 |
+| 项目列表 | `/projects` | 浏览和管理科研项目 |
+| 项目工作台 | `/projects/:id` | 多 Tab：工作流、假设、文献、数据集、实验、报告等 |
 | 文档管理 | `/documents` | 文献上传、向量化与语义检索 |
-| 工作流 | `/workflow` | 8 阶段 Pipeline 流程可视化 |
-| 报告 | `/reports` | 研究报告浏览与导出（Markdown / PDF） |
+| 工作流 | `/workflow` | Pipeline 进度、闭环时间线、HITL Gate |
+| 报告 | `/reports` | 研究报告浏览与导出 |
+
+项目工作台 Tab 包括：**工作流**、**假设**、**文献库**、**数据集**（含 Data Finder / Catalog / Feedback Hub）、**知识图谱**、**实验设计**、**报告** 等。
+
+## 核心组件（按功能）
+
+### Pipeline 与闭环
+
+| 组件 | 说明 |
+|------|------|
+| `WorkflowPage.tsx` | Pipeline 运行、阶段进度、闭环面板 |
+| `PipelineProgress.tsx` | 阶段进度条 |
+| `ClosedLoopTimeline.tsx` | CQS 趋势、闭环事件/决策、**审计链导出** |
+| `HitlGatePanel.tsx` | HITL Gate 暂停与恢复 |
+| `ExecutionTierBadge.tsx` | execution_tier / data_authenticity 标注 |
+| `DiscoveryLoopPanel.tsx` | Discovery 迭代与因果链 |
+| `StageHumanLoopPanel.tsx` | 阶段级人工审核 |
+
+### 假设与证据
+
+| 组件 | 说明 |
+|------|------|
+| `HypothesesPage.tsx` | 假设列表、主假设选择 |
+| `HypothesisCard.tsx` | 假设卡片（详情 / **溯源时间线** Tab） |
+| `HypothesisProvenanceTimeline.tsx` | fact → 多模态 → 数据集 → spec 溯源 |
+| `HypothesisTreePanel.tsx` | 假设树剪枝与分支评分 |
+| `EvidenceChainDrawer.tsx` | 证据链抽屉 |
+| `EvidenceDiffPanel.tsx` | 迭代前后证据 Diff |
+| `VerifiableChecksPanel.tsx` | 可验证 spec 检查项 |
+| `EnsembleReviewPanel.tsx` | 集成评审结果 |
+
+### 数据与 Data Finder
+
+| 组件 | 说明 |
+|------|------|
+| `DatasetPage.tsx` | 数据集管理（上传 / Catalog / Feedback Hub Tab） |
+| `DataFinderPanel.tsx` | 多源数据查找、表格抽取、Merge、Bundle 下载 |
+| `DataCatalogPanel.tsx` | 项目 Data Catalog |
+| `FeedbackHubPanel.tsx` | Feedback Hub 全局约束 |
+| `FigureReviewPanel.tsx` | 图表 VLM 抽取复核 |
+
+### 文献、报告与其他
+
+| 组件 | 说明 |
+|------|------|
+| `LiteratureLibrary.tsx` | 文献库、PDF 解析索引 |
+| `ReportPage.tsx` | 报告预览与导出 |
+| `QualityCheckCard.tsx` | 报告 12 字段质量检查 |
+| `KnowledgeGraphPage.tsx` | 知识图谱查询与推理 |
+| `MultimodalEvidencePanel.tsx` | 多模态证据 |
+| `FederatedCampaignPanel.tsx` | 联邦 Campaign Pilot |
+
+## API 服务模块
+
+| 模块 | 主要接口 |
+|------|----------|
+| `pipelineService.ts` | Pipeline 运行、状态、**审计链导出** |
+| `hypothesisService.ts` | 假设列表、证据链、**溯源时间线** |
+| `dataFinderService.ts` | Data Finder 搜索/抽取/Merge/Bundle |
+| `datasetService.ts` | 数据集、**Data Catalog** |
+| `literatureService.ts` | 文献检索与导入 |
+| `projectService.ts` | 项目管理 |
+| `reportService.ts` | 报告下载 |
 
 ## 项目结构
 
 ```
 frontend/
 ├── src/
-│   ├── components/          # 32 个 UI 组件
-│   │   ├── Navbar.tsx       # 全局导航栏
-│   │   ├── PageHeader.tsx   # 页面标题栏
-│   │   ├── Card.tsx         # 通用卡片
-│   │   ├── Button.tsx       # 通用按钮
-│   │   ├── EmptyState.tsx   # 空状态提示
-│   │   ├── StatCard.tsx     # 统计卡片
-│   │   ├── StatusBadge.tsx  # 状态徽章
-│   │   ├── ScoreBar.tsx     # 评分进度条
-│   │   ├── HypothesisCard.tsx           # 假设卡片
-│   │   ├── HypothesesPage.tsx           # 假设列表页
-│   │   ├── ExperimentDesignTable.tsx    # 实验设计表格
-│   │   ├── ExperimentDesignPage.tsx     # 实验设计页
-│   │   ├── ResearchQuestionPage.tsx     # 研究问题页
-│   │   ├── LiteratureEvidence.tsx       # 文献证据
-│   │   ├── LiteratureLibrary.tsx        # 文献库
-│   │   ├── PipelineProgress.tsx         # Pipeline 进度
-│   │   ├── RunLogTable.tsx              # 运行日志表
-│   │   ├── RunLogDetail.tsx             # 运行日志详情
-│   │   ├── RunLogsPage.tsx              # 运行日志页
-│   │   ├── QualityCheckCard.tsx         # 质量检查卡片
-│   │   ├── ReportChecklist.tsx          # 报告检查清单
-│   │   ├── ReportPage.tsx              # 报告预览页
-│   │   ├── MarkdownPreview.tsx          # Markdown 预览
-│   │   ├── EvidenceChainDrawer.tsx      # 证据链抽屉
-│   │   ├── EvidenceChainQualityCard.tsx # 证据链质量卡片
-│   │   ├── ExportActions.tsx            # 导出操作按钮
-│   │   ├── AgentNode.tsx               # Agent 节点
-│   │   ├── AgentDetailPanel.tsx         # Agent 详情面板
-│   │   ├── WorkflowActionBar.tsx        # 工作流操作栏
-│   │   ├── WorkflowPage.tsx            # 工作流页面
-│   │   ├── HumanInLoopCard.tsx          # 人工审核卡片
-│   │   ├── ScoresVisualization.tsx      # 评分可视化
-│   │   ├── DatasetPage.tsx             # 数据集页面
-│   │   └── ...
-│   ├── pages/              # 8 个页面组件
-│   │   ├── Home.tsx
-│   │   ├── Projects.tsx
-│   │   ├── CreateProject.tsx
-│   │   ├── ProjectWorkspace.tsx
-│   │   ├── Documents.tsx
-│   │   ├── Workflow.tsx
-│   │   ├── Reports.tsx
-│   │   └── Settings.tsx
-│   ├── services/           # 10 个 API 服务模块
-│   │   ├── index.ts             # 统一导出
-│   │   ├── projectService.ts    # 项目 API
-│   │   ├── documentService.ts   # 文档 API
-│   │   ├── pipelineService.ts   # Pipeline API
-│   │   ├── hypothesisService.ts # 假设 API
-│   │   ├── experimentService.ts # 实验设计 API
-│   │   ├── reportService.ts     # 报告 API
-│   │   ├── literatureService.ts # 文献 API
-│   │   ├── datasetService.ts    # 数据集 API
-│   │   └── vectorService.ts     # 向量检索 API
-│   ├── types/              # TypeScript 类型定义
-│   │   └── index.ts
-│   ├── config/             # 环境配置
-│   ├── lib/                # 工具函数（api.ts、utils.ts）
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
+│   ├── components/     # UI 组件（60+）
+│   ├── pages/          # 页面组件
+│   ├── services/       # API 封装
+│   ├── types/          # TypeScript 类型
+│   ├── lib/            # api.ts、utils.ts
+│   └── config/
 ├── package.json
-├── tsconfig.json
 ├── vite.config.ts
-├── tailwind.config.js
-└── README.md
+└── tailwind.config.js
 ```
+
+## 更多信息
+
+- [项目根目录 README](../README.md)
+- [后端 README](../backend/README.md)

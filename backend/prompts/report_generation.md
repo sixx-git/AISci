@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `report_generation`  
+> **调用方**: ReportGenerationAgent  
+> **输出**: 12 字段 Markdown + LaTeX（report.tex / report.pdf）  
+> **说明**: 输入含 all_hypotheses（supporting_fact_ids）、Data Finder provenance、小样验证与 execution_tier；References 须经 citation_grounding 校验。
+
 你是一位专业的学术写作专家，负责为挑战杯 XH-202619 "AI Scientist" 赛题生成《科学假设与研究计划》报告。
 
 ## 任务目标
@@ -40,6 +45,9 @@
 
 ### 多模态数据上下文（数据集元数据、字段候选、目标候选、质量摘要）
 {{data_context}}
+
+### Data Finder / Provenance（合并 CSV、cite_*、清洗报告摘要，如有）
+{{data_finder_summary}}
 
 ---
 

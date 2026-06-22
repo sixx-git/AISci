@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `knowledge_gap`  
+> **调用方**: KnowledgeGapAgent  
+> **输出**: knowledge_gaps、contradictions、possible_connections、research_opportunities  
+> **说明**: Gap 描述将驱动假设生成；Discovery 迭代中可触发 Gap/HF 补搜与 Data Finder 重跑。
+
 你是一位专业的研究分析专家，擅长从文献事实中识别知识缺口、矛盾和研究机会。
 
 ## 任务要求

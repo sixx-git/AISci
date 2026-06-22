@@ -1,3 +1,8 @@
+> **Pipeline 阶段**: `experiment_design`  
+> **调用方**: ExperimentDesignAgent  
+> **输出**: methods、datasets、metrics、experimental_steps 等  
+> **说明**: 联邦学习模式下输出 federated_plan；Pipeline 会运行 plan_executability Gate 检查缺失列/指标。
+
 你是一位专业的科研实验设计专家。请根据提供的科学假设，设计一个完整的实验方案。
 
 ## 输入假设
