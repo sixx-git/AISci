@@ -36,6 +36,23 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     ? (extraMeta as unknown as ReportData['complianceCheck'])
     : undefined;
 
+  const reportContent: Record<string, string> = {
+    title: db.title || '',
+    paper_title: db.paper_title || '',
+    paper_abstract: db.paper_abstract || '',
+    problem_statement: db.problem_statement || '',
+    rationale: db.rationale || '',
+    technical_details: db.technical_details || '',
+    datasets: db.datasets || '',
+    source: db.source || '',
+    target: db.target || '',
+    methods: db.methods || '',
+    experiments: db.experiments || '',
+    results: db.results || '',
+    references: db.references || '',
+    markdown_content: db.markdown_content || '',
+  };
+
   return {
     id: db.id,
     title: db.title || db.paper_title || '科学假设与研究计划',
@@ -48,6 +65,7 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     texDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/tex` : undefined,
     pdfDownloadUrl: db.report_id && db.pdf_generated ? `/api/v1/reports/download/${db.report_id}/pdf` : undefined,
     extraMetadata: extraMeta,
+    reportContent,
   };
 }
 

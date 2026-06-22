@@ -17,9 +17,11 @@ DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_FEDERATED_CAMPAIGN_MAX = 2
 DEFAULT_HITL_GATE_STAGES = (
+    "hypothesis_generation",
     "hypothesis_review",
     "experiment_design",
     "small_validation",
+    "report_generation",
 )
 DEFAULT_MIN_IMPROVEMENT_DELTA = 3.0
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
@@ -27,9 +29,11 @@ PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
 
 HITL_GATE_STAGE_LABELS = {
+    "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
     "experiment_design": "实验设计",
     "small_validation": "小样验证",
+    "report_generation": "报告生成",
 }
 
 

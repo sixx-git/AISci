@@ -846,6 +846,8 @@ export interface ReportData {
   /** 图表数据 */
   plots?: ReportPlot[];
   extraMetadata?: Record<string, unknown>;
+  /** 12 章节原始字段，供导师评审 / 局部修订 */
+  reportContent?: Record<string, string>;
 }
 
 export interface ReportGenerationResult {

@@ -149,6 +149,18 @@ async def mentor_review(body: MentorReviewRequest, db: Session = Depends(get_db)
     try:
         content = body.content
         research_question = body.research_question
+        if body.report_id and not content:
+            from app.core.report_fields import report_orm_to_dict
+            from app.models.project import Report
+
+            report = (
+                db.query(Report)
+                .filter(Report.id == body.report_id, Report.project_id == body.project_id)
+                .first()
+            )
+            if not report:
+                raise HTTPException(status_code=404, detail="报告未找到")
+            content = report_orm_to_dict(report)
         if body.run_id and body.stage and not content:
             detail = get_stage_human_loop_service(db).get_stage_detail(body.run_id, body.stage)
             content = detail.get("human_modified_output") or detail.get("output_data") or {}

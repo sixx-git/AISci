@@ -94,6 +94,7 @@ class PipelineService:
         self._validation_feedback_constraints: List[str] = []
         self._human_feedback_constraints: List[str] = []
         self._checkpoint_resume: Optional[Dict[str, Any]] = None
+        self._finalize_report_after_gate: bool = False
         self._skip_to_post_validation: bool = False
         self._last_pilot_results: Dict[str, Any] = {}
         self._teaching_refinement_count: int = 0
@@ -1383,13 +1384,18 @@ class PipelineService:
             if isinstance(cp_results, dict):
                 results.update(cp_results)
             resume_phase = cp.get("resume_phase") or ""
-            if resume_phase == "after_hypothesis_review":
+            if resume_phase == "after_hypothesis_generation":
+                start_idx = max(start_idx, 4)
+            elif resume_phase == "after_hypothesis_review":
                 start_idx = max(start_idx, 5)
             elif resume_phase == "after_experiment_design":
                 start_idx = max(start_idx, 6)
             elif resume_phase == "after_small_validation":
                 start_idx = max(start_idx, 7)
                 self._skip_to_post_validation = True
+            elif resume_phase == "after_report_generation":
+                start_idx = max(start_idx, 8)
+                self._finalize_report_after_gate = True
             self._checkpoint_resume = None
             logger.info(f"[Pipeline] 从 HITL checkpoint 恢复 phase={resume_phase} start_idx={start_idx}")
 
@@ -1519,6 +1525,7 @@ class PipelineService:
                     self._save_hypotheses(project_id, research_question, results)
                 except Exception as save_err:
                     logger.warning(f"保存假设/证据链失败: {save_err}")
+                self._maybe_pause_for_hitl_gate("hypothesis_generation", results)
             
             # ── 阶段 5: HypothesisReviewAgent ──
             if start_idx <= 4:
@@ -1584,14 +1591,17 @@ class PipelineService:
                         teaching_report_ran = True
             
             # ── 阶段 8: ReportGenerationAgent ──
-            if start_idx <= 7 and not teaching_report_ran:
+            if getattr(self, "_finalize_report_after_gate", False):
+                self._finalize_report_after_gate = False
+                final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+            elif start_idx <= 7 and not teaching_report_ran:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
                         results, pipeline_run_info, project_mode
                     )
                 self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
-            
+                self._maybe_pause_for_hitl_gate("report_generation", results)
                 final_report_id = self._create_report(project_id, results.get("report_generation", {}))
 
             # ── P5: Discovery 开放循环（Sakana-like）──

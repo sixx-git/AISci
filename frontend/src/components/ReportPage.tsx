@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network } from 'lucide-react';
+import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare } from 'lucide-react';
 import { Card } from './Card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
@@ -10,8 +10,10 @@ import { ExportActions } from './ExportActions';
 import type { ExportType } from './ExportActions';
 import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
-import humanLoopService from '@/services/humanLoopService';
+import humanLoopService, { type MentorReview } from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
+import { REPORT_SECTION_OPTIONS } from '@/config/reportSections';
+import { cn } from '@/lib/utils';
 
 interface ReportPageProps {
   projectId: string;
@@ -38,6 +40,12 @@ export function ReportPage({
   const [reviseMessage, setReviseMessage] = useState('');
   const [reviseBusy, setReviseBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [reviseScope, setReviseScope] = useState<'full' | 'section'>('full');
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [mentorNotes, setMentorNotes] = useState('');
+  const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
+  const [mentorBusy, setMentorBusy] = useState(false);
+  const [lastChatReply, setLastChatReply] = useState('');
 
   useEffect(() => {
     if (!projectId) return;
@@ -59,28 +67,63 @@ export function ReportPage({
   }, [projectId, _revalidateKey, _latestRunId]);
 
   const revisionHistory = (report?.extraMetadata?.revision_history as Array<Record<string, unknown>> | undefined) || [];
+  const chatHistory = (report?.extraMetadata?.chat_history as Array<Record<string, unknown>> | undefined) || [];
+
+  const reloadReport = useCallback(async () => {
+    const data = await reportService.getLatest(projectId);
+    if (data) setReport(data);
+    return data;
+  }, [projectId]);
+
+  const handleMentorReview = useCallback(async () => {
+    if (!report?.id) return;
+    setMentorBusy(true);
+    try {
+      const res = await humanLoopService.mentorReview({
+        project_id: projectId,
+        report_id: report.id,
+        target_type: 'report',
+        content: report.reportContent,
+        user_notes: mentorNotes,
+      });
+      if (res.code === 200 && res.data?.review) {
+        setMentorReview(res.data.review);
+        showAlert('导师评审完成');
+      }
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : '导师评审失败');
+    } finally {
+      setMentorBusy(false);
+    }
+  }, [projectId, report?.id, report?.reportContent, mentorNotes, showAlert]);
 
   const handleReviseReport = useCallback(async () => {
     if (!report?.id || !reviseMessage.trim()) return;
+    if (reviseScope === 'section' && selectedSections.length === 0) {
+      showAlert('请至少选择一个章节');
+      return;
+    }
     setReviseBusy(true);
     try {
       const res = await humanLoopService.reviseReport({
         project_id: projectId,
         report_id: report.id,
         message: reviseMessage.trim(),
+        section_keys: reviseScope === 'section' ? selectedSections : [],
+        apply_change: true,
       });
       if (res.code === 200) {
-        showAlert('报告已根据反馈更新');
+        setLastChatReply(res.data?.explanation || '报告已更新');
         setReviseMessage('');
-        const data = await reportService.getLatest(projectId);
-        if (data) setReport(data);
+        await reloadReport();
+        showAlert(reviseScope === 'section' ? '选定章节已更新' : '报告已根据反馈更新');
       }
     } catch (e) {
       showAlert(e instanceof Error ? e.message : '修改失败');
     } finally {
       setReviseBusy(false);
     }
-  }, [projectId, report?.id, reviseMessage, showAlert]);
+  }, [projectId, report?.id, reviseMessage, reviseScope, selectedSections, reloadReport, showAlert]);
 
   const handleExport = useCallback(async (action: ExportType) => {
     if (action === 'generate') {
@@ -501,10 +544,105 @@ export function ReportPage({
               literatureCount={literatureCount}
             />
 
-            <Card title="根据反馈修改报告" subtitle="多轮人在回路 · 保留修改历史">
+            <Card title="人在回路 · 报告" subtitle="导师评审 · 多轮追问 · 局部修订">
+              <button
+                type="button"
+                onClick={handleMentorReview}
+                disabled={mentorBusy}
+                className="w-full flex items-center justify-center gap-2 text-xs py-2 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"
+              >
+                {mentorBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GraduationCap className="w-3.5 h-3.5" />}
+                导师式评审
+              </button>
+              <textarea
+                className="w-full min-h-[48px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2 mb-2"
+                placeholder="导师评审补充说明（可选）"
+                value={mentorNotes}
+                onChange={(e) => setMentorNotes(e.target.value)}
+              />
+              {mentorReview && (
+                <div className="mb-3 p-2 rounded-lg border border-amber-500/20 bg-amber-500/5 text-[11px] space-y-1.5 max-h-48 overflow-y-auto">
+                  {mentorReview.overall_assessment && (
+                    <p className="text-amber-200/90">{mentorReview.overall_assessment}</p>
+                  )}
+                  {mentorReview.readiness_score != null && (
+                    <p className="text-gray-400">就绪度：{mentorReview.readiness_score}/10</p>
+                  )}
+                  {mentorReview.weaknesses?.length > 0 && (
+                    <div>
+                      <p className="text-gray-500 mb-0.5">不足</p>
+                      <ul className="list-disc pl-4 text-gray-300">
+                        {mentorReview.weaknesses.slice(0, 4).map((w) => <li key={w}>{w}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {mentorReview.revision_suggestions?.length > 0 && (
+                    <div>
+                      <p className="text-gray-500 mb-0.5">修订建议</p>
+                      <ul className="list-disc pl-4 text-gray-300">
+                        {mentorReview.revision_suggestions.slice(0, 4).map((s) => <li key={s}>{s}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setReviseScope('full')}
+                  className={cn(
+                    'flex-1 text-[11px] py-1.5 rounded-lg border',
+                    reviseScope === 'full'
+                      ? 'border-primary-500/40 bg-primary-500/10 text-primary-300'
+                      : 'border-gray-700 text-gray-400',
+                  )}
+                >
+                  整份报告
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviseScope('section')}
+                  className={cn(
+                    'flex-1 text-[11px] py-1.5 rounded-lg border',
+                    reviseScope === 'section'
+                      ? 'border-primary-500/40 bg-primary-500/10 text-primary-300'
+                      : 'border-gray-700 text-gray-400',
+                  )}
+                >
+                  选定章节
+                </button>
+              </div>
+
+              {reviseScope === 'section' && (
+                <div className="mb-2 max-h-28 overflow-y-auto grid grid-cols-1 gap-1">
+                  {REPORT_SECTION_OPTIONS.map((opt) => (
+                    <label key={opt.key} className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedSections.includes(opt.key)}
+                        onChange={(e) => {
+                          setSelectedSections((prev) =>
+                            e.target.checked
+                              ? [...prev, opt.key]
+                              : prev.filter((k) => k !== opt.key),
+                          );
+                        }}
+                        className="rounded border-gray-600"
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                <MessageSquare className="w-3.5 h-3.5" />
+                追问修改
+              </div>
               <textarea
                 className="w-full min-h-[72px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2 mb-2"
-                placeholder="例如：加强数据集部分 / 加入 VFL 约束 / 结论更保守"
+                placeholder="例如：加强 Methods 部分 / 结论更保守 / 补充 VFL 约束"
                 value={reviseMessage}
                 onChange={(e) => setReviseMessage(e.target.value)}
               />
@@ -514,8 +652,33 @@ export function ReportPage({
                 disabled={reviseBusy || !reviseMessage.trim()}
                 className="w-full text-xs py-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-white disabled:opacity-50"
               >
-                {reviseBusy ? '修改中…' : '根据反馈修改报告'}
+                {reviseBusy ? '修改中…' : reviseScope === 'section' ? '修改选定章节' : '根据反馈修改报告'}
               </button>
+
+              {lastChatReply && (
+                <p className="mt-2 text-[11px] text-green-400/90 border border-green-500/20 rounded p-2">
+                  {lastChatReply}
+                </p>
+              )}
+
+              {chatHistory.length > 0 && (
+                <div className="mt-3 space-y-1.5 max-h-44 overflow-y-auto">
+                  <p className="text-[11px] text-gray-500">对话记录 ({chatHistory.length})</p>
+                  {chatHistory.slice().reverse().map((h) => (
+                    <div key={String(h.id || h.at)} className="text-[10px] border border-gray-800 rounded p-2 space-y-1">
+                      <div className="text-gray-500">{String(h.at || '')}</div>
+                      <div className="text-primary-300/90">你：{String(h.user_message || '')}</div>
+                      {h.assistant_explanation ? (
+                        <div className="text-gray-400">助手：{String(h.assistant_explanation)}</div>
+                      ) : null}
+                      {Array.isArray(h.section_keys) && (h.section_keys as string[]).length > 0 && (
+                        <div className="text-gray-600">章节：{(h.section_keys as string[]).join(', ')}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {revisionHistory.length > 0 && (
                 <div className="mt-3">
                   <button
@@ -523,10 +686,10 @@ export function ReportPage({
                     onClick={() => setShowHistory(!showHistory)}
                     className="text-[11px] text-gray-500 hover:text-gray-300"
                   >
-                    {showHistory ? '隐藏' : '查看'}修改历史 ({revisionHistory.length})
+                    {showHistory ? '隐藏' : '查看'}修订快照 ({revisionHistory.length})
                   </button>
                   {showHistory && (
-                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                    <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                       {revisionHistory.slice().reverse().map((h) => (
                         <div key={String(h.id || h.at)} className="text-[10px] text-gray-500 border border-gray-800 rounded p-2">
                           <div className="text-gray-400">{String(h.at || '')}</div>

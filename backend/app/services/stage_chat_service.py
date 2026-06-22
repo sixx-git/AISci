@@ -1,4 +1,4 @@
-"""阶段多轮问答修改 — 基于用户反馈 refine 阶段输出"""
+"""阶段多轮问答修改 — 基于用户反馈 refine 阶段输出 / 报告"""
 from __future__ import annotations
 
 import copy
@@ -6,10 +6,16 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.report_fields import (
+    REPORT_SECTION_FIELDS,
+    apply_report_dict,
+    normalize_section_keys,
+    report_orm_to_dict,
+)
 from app.models.pipeline import PipelineRun, PipelineStage, PipelineStageExecution
 from app.services.qwen_client import qwen_structured_chat
 from app.services.stage_human_loop_service import StageHumanLoopService, get_stage_meta
@@ -112,6 +118,8 @@ class StageChatService:
         report_id: str,
         user_message: str,
         editor: str = "user",
+        section_keys: Optional[List[str]] = None,
+        apply_change: bool = True,
     ) -> Dict[str, Any]:
         from app.models.project import Report
 
@@ -119,8 +127,31 @@ class StageChatService:
         if not report:
             raise ValueError("报告未找到")
 
-        report_data = report.report_data if isinstance(report.report_data, dict) else {}
-        prompt = f"""用户希望修改科研报告，请根据反馈更新报告 JSON 字段（12 章节结构保持不变）。
+        report_data = report_orm_to_dict(report)
+        sections = normalize_section_keys(section_keys)
+        scope_label = "、".join(sections) if sections else "整份报告（12 章节）"
+
+        if sections:
+            scoped = {k: report_data.get(k, "") for k in sections}
+            prompt = f"""用户希望修改科研报告的指定章节，请仅更新下列字段，其他章节不要改动。
+
+目标章节：{scope_label}
+
+用户反馈：
+{user_message}
+
+当前章节内容（JSON）：
+{json.dumps(scoped, ensure_ascii=False, indent=2)[:8000]}
+
+返回格式：
+{{
+  "revised_sections": {{...仅包含被修改的章节键值...}},
+  "explanation": "...",
+  "changes_summary": ["..."]
+}}"""
+            prompt_version = "report_revise_section"
+        else:
+            prompt = f"""用户希望修改科研报告，请根据反馈更新报告 JSON 字段（12 章节结构保持不变）。
 
 用户反馈：
 {user_message}
@@ -134,46 +165,95 @@ class StageChatService:
   "explanation": "...",
   "changes_summary": ["..."]
 }}"""
+            prompt_version = "report_revise"
 
         try:
             raw = qwen_structured_chat(
                 messages=[{"role": "user", "content": prompt}],
-                prompt_version="report_revise",
+                prompt_version=prompt_version,
                 temperature=0.35,
             )
             parsed = json.loads(raw) if isinstance(raw, str) else raw
         except Exception as exc:
             raise ValueError(f"报告修改失败: {exc}") from exc
 
-        revised = parsed.get("revised_report") or report_data
+        if sections:
+            revised_partial = parsed.get("revised_sections") or {}
+            if not isinstance(revised_partial, dict):
+                revised_partial = {}
+            revised = dict(report_data)
+            for key in sections:
+                if key in revised_partial:
+                    revised[key] = revised_partial[key]
+        else:
+            revised = parsed.get("revised_report") or report_data
+            if not isinstance(revised, dict):
+                revised = report_data
+
+        explanation = parsed.get("explanation", "")
+        changes = parsed.get("changes_summary") or []
+
+        chat_record = {
+            "id": str(uuid.uuid4()),
+            "at": datetime.now(CHINA_TZ).isoformat(),
+            "editor": editor,
+            "user_message": user_message,
+            "assistant_explanation": explanation,
+            "changes_summary": changes,
+            "section_keys": sections,
+            "applied": apply_change,
+        }
+
         meta = report.extra_metadata if isinstance(report.extra_metadata, dict) else {}
+        chat_history = list(meta.get("chat_history") or [])
+        chat_history.append(chat_record)
+        meta["chat_history"] = chat_history[-50:]
+
+        if not apply_change:
+            return {
+                "report_id": report_id,
+                "revised_report": revised,
+                "explanation": explanation,
+                "changes_summary": changes,
+                "section_keys": sections,
+                "applied": False,
+                "chat_history": meta["chat_history"],
+            }
+
         history = list(meta.get("revision_history") or [])
         history.append(
             {
-                "id": str(uuid.uuid4()),
-                "at": datetime.now(CHINA_TZ).isoformat(),
+                "id": chat_record["id"],
+                "at": chat_record["at"],
                 "editor": editor,
                 "user_message": user_message,
-                "explanation": parsed.get("explanation", ""),
-                "changes_summary": parsed.get("changes_summary") or [],
+                "explanation": explanation,
+                "changes_summary": changes,
+                "section_keys": sections,
                 "previous_report": copy.deepcopy(report_data),
             }
         )
         meta["revision_history"] = history[-30:]
         meta["last_human_feedback"] = user_message
-        report.report_data = revised
+
+        apply_report_dict(report, revised)
         report.extra_metadata = meta
-        if report.markdown_content and isinstance(revised, dict):
-            report.markdown_content = revised.get("markdown_content") or report.markdown_content
+        if revised.get("markdown_content"):
+            report.markdown_content = str(revised["markdown_content"])
+        if revised.get("title") or revised.get("paper_title"):
+            report.title = str(revised.get("title") or revised.get("paper_title") or report.title)
         report.updated_at = datetime.now(CHINA_TZ)
         self.db.commit()
 
         return {
             "report_id": report_id,
             "revised_report": revised,
-            "explanation": parsed.get("explanation", ""),
-            "changes_summary": parsed.get("changes_summary") or [],
+            "explanation": explanation,
+            "changes_summary": changes,
+            "section_keys": sections,
             "revision_history": meta["revision_history"],
+            "chat_history": meta["chat_history"],
+            "applied": True,
         }
 
     def _get_run(self, run_id: str) -> PipelineRun:

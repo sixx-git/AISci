@@ -267,6 +267,8 @@ async def revise_report(body: ReportReviseRequest, db: Session = Depends(get_db)
             project_id=body.project_id,
             report_id=body.report_id,
             user_message=body.message,
+            section_keys=body.section_keys,
+            apply_change=body.apply_change,
         )
         return success(result, message="报告已根据反馈更新")
     except ValueError as e:

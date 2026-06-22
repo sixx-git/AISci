@@ -89,6 +89,7 @@ export const humanLoopService = {
   async mentorReview(payload: {
     project_id: string;
     run_id?: string;
+    report_id?: string;
     stage?: string;
     target_type: 'hypothesis' | 'experiment_design' | 'report';
     content?: Record<string, unknown>;
@@ -103,7 +104,15 @@ export const humanLoopService = {
     project_id: string;
     report_id: string;
     message: string;
-  }): Promise<ApiResponse<{ revision_history?: Array<Record<string, unknown>> }>> {
+    section_keys?: string[];
+    apply_change?: boolean;
+  }): Promise<ApiResponse<{
+    explanation?: string;
+    changes_summary?: string[];
+    revision_history?: Array<Record<string, unknown>>;
+    chat_history?: Array<Record<string, unknown>>;
+    applied?: boolean;
+  }>> {
     const { data } = await api.post('/reports/revise', payload);
     return data;
   },

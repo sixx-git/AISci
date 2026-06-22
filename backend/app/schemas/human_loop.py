@@ -73,6 +73,7 @@ class StageChatResponse(BaseModel):
 class MentorReviewRequest(BaseModel):
     project_id: str
     run_id: Optional[str] = None
+    report_id: Optional[str] = None
     target_type: str = Field(..., description="hypothesis | experiment_design | report")
     stage: Optional[str] = None
     content: Optional[Dict[str, Any]] = None
@@ -90,6 +91,7 @@ class ReportReviseRequest(BaseModel):
     report_id: str
     message: str
     apply_change: bool = True
+    section_keys: List[str] = Field(default_factory=list, description="局部修订的章节字段，空则整份报告")
 
 
 class HitlGateResumeRequest(BaseModel):
