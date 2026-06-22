@@ -18,6 +18,9 @@ from app.schemas.human_loop import (
     MentorReviewRequest,
     MentorReviewResponse,
     ReportReviseRequest,
+    HitlGateResumeRequest,
+    HitlGateStatusResponse,
+    HitlGateResumeResponse,
 )
 from app.services.stage_human_loop_service import (
     StageHumanLoopService,
@@ -172,5 +175,74 @@ async def mentor_review(body: MentorReviewRequest, db: Session = Depends(get_db)
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/gate/{run_id}", response_model=ResponseModel[HitlGateStatusResponse])
+async def get_hitl_gate_status(run_id: str, db: Session = Depends(get_db)):
+    try:
+        svc = get_stage_human_loop_service(db)
+        data = svc.get_hitl_gate_status(run_id)
+        return ResponseModel(code=200, message="获取成功", data=HitlGateStatusResponse(**data))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/gate/resume", response_model=ResponseModel[HitlGateResumeResponse])
+async def resume_hitl_gate(body: HitlGateResumeRequest, db: Session = Depends(get_db)):
+    try:
+        hl_svc = get_stage_human_loop_service(db)
+        result = hl_svc.resume_hitl_gate(
+            run_id=body.run_id,
+            action=body.action,
+            human_feedback=body.human_feedback,
+            inject_feedback=body.inject_feedback,
+        )
+
+        if result["action"] == "continue":
+
+            def _bg():
+                bg_db = SessionLocal()
+                try:
+                    svc = get_pipeline_service(bg_db)
+                    svc.execute_pipeline_run(body.run_id)
+                except Exception as exc:
+                    logger.exception(f"HITL Gate 续跑失败: {exc}")
+                finally:
+                    bg_db.close()
+
+            threading.Thread(target=_bg, daemon=True).start()
+
+        elif result["action"] == "rerun":
+            pipeline_service = get_pipeline_service(db)
+            stage = result.get("rerun_from_stage") or "hypothesis_review"
+            new_run_id = pipeline_service.start_rerun_from_stage(
+                project_id=body.project_id,
+                parent_run_id=body.run_id,
+                from_stage=stage,
+                use_human_modified_output=True,
+            )
+            result["run_id"] = new_run_id
+
+            def _bg_rerun():
+                bg_db = SessionLocal()
+                try:
+                    svc = get_pipeline_service(bg_db)
+                    svc.execute_pipeline_run(new_run_id)
+                except Exception as exc:
+                    logger.exception(f"HITL Gate 重跑失败: {exc}")
+                finally:
+                    bg_db.close()
+
+            threading.Thread(target=_bg_rerun, daemon=True).start()
+
+        return ResponseModel(
+            code=200,
+            message=f"HITL Gate: {result['action']}",
+            data=HitlGateResumeResponse(**result),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

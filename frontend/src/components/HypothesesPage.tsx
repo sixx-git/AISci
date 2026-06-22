@@ -47,6 +47,7 @@ function mapBackendToDetailed(h: BackendHypothesis): DetailedHypothesis {
     data_evidence_ids: h.data_evidence_ids ?? undefined,
     validation_target: h.validation_target ?? undefined,
     expected_measurable_effect: h.expected_measurable_effect ?? undefined,
+    supporting_fact_ids: h.supporting_fact_ids ?? undefined,
   };
 }
 
@@ -309,6 +310,12 @@ export function HypothesesPage({
     navigate(`/projects/${_projectId}?tab=literature`);
   }, [_projectId, navigate]);
 
+  const handleNavigateToLiterature = useCallback((documentId: string, chunkId?: string) => {
+    const params = new URLSearchParams({ tab: 'literature', doc_id: documentId });
+    if (chunkId) params.set('chunk_id', chunkId);
+    navigate(`/projects/${_projectId}?${params.toString()}`);
+  }, [_projectId, navigate]);
+
   const primaryHypothesis = useMemo(
     () => hypotheses.find((h) => h.isPrimary),
     [hypotheses],
@@ -455,6 +462,7 @@ export function HypothesesPage({
                 onSetPrimary={handleSetPrimary}
                 onEnterExperiment={handleEnterExperiment}
                 onIterateEvidence={handleIterateEvidence}
+                onNavigateToLiterature={handleNavigateToLiterature}
                 iterating={iteratingId === primaryHypothesis.id}
               />
             </div>
@@ -508,6 +516,7 @@ export function HypothesesPage({
                       onSetPrimary={handleSetPrimary}
                       onEnterExperiment={handleEnterExperiment}
                       onIterateEvidence={handleIterateEvidence}
+                      onNavigateToLiterature={handleNavigateToLiterature}
                       iterating={iteratingId === h.id}
                     />
                   ))}
@@ -539,6 +548,7 @@ export function HypothesesPage({
                       onViewEvidence={handleViewEvidence}
                       onEnterExperiment={undefined}
                       onIterateEvidence={handleIterateEvidence}
+                      onNavigateToLiterature={handleNavigateToLiterature}
                       iterating={iteratingId === h.id}
                     />
                   ))}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Upload, Database, Table2, Image, FileJson, FileText,
   Loader2, AlertCircle, Trash2, RefreshCw,
@@ -10,6 +11,8 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { DataFinderPanel } from '@/components/DataFinderPanel';
 import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
+import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
+import { DataCatalogPanel } from '@/components/DataCatalogPanel';
 import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
 import type { BackendDataset, DatasetSummary } from '@/types';
 
@@ -92,7 +95,16 @@ function formatQualityScore(score: number | null | undefined): { label: string; 
 }
 
 export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: DatasetPageProps) {
-  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder' | 'multimodal'>('datasets');
+  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder' | 'multimodal' | 'catalog' | 'feedback'>('datasets');
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const sub = searchParams.get('subtab');
+    if (sub === 'data-finder') setPageTab('data-finder');
+    else if (sub === 'multimodal') setPageTab('multimodal');
+    else if (sub === 'catalog') setPageTab('catalog');
+    else if (sub === 'feedback') setPageTab('feedback');
+  }, [searchParams]);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [dataContext, setDataContext] = useState<DataContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -321,9 +333,35 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
         >
           多模态证据
         </button>
+        <button
+          type="button"
+          onClick={() => setPageTab('catalog')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            pageTab === 'catalog'
+              ? 'border-primary-500 text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          数据目录
+        </button>
+        <button
+          type="button"
+          onClick={() => setPageTab('feedback')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            pageTab === 'feedback'
+              ? 'border-primary-500 text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          反馈中心
+        </button>
       </div>
 
-      {pageTab === 'multimodal' ? (
+      {pageTab === 'feedback' ? (
+        <FeedbackHubPanel projectId={projectId} />
+      ) : pageTab === 'catalog' ? (
+        <DataCatalogPanel projectId={projectId} />
+      ) : pageTab === 'multimodal' ? (
         <MultimodalEvidencePanel projectId={projectId} researchQuestion={researchQuestion} />
       ) : pageTab === 'data-finder' ? (
         <DataFinderPanel

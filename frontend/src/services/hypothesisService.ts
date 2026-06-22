@@ -83,6 +83,25 @@ const hypothesisService = {
     );
     return data;
   },
+
+  async getProvenanceTimeline(hypothesisId: string): Promise<ApiResponse<ProvenanceTimelineResponse>> {
+    const { data } = await api.get<ApiResponse<ProvenanceTimelineResponse>>(
+      `/agents/hypotheses/${hypothesisId}/provenance-timeline`,
+    );
+    return data;
+  },
 };
+
+export interface ProvenanceTimelineStep {
+  step: string;
+  label: string;
+  count?: number;
+  items?: Array<Record<string, unknown>>;
+}
+
+export interface ProvenanceTimelineResponse {
+  hypothesis_id: string;
+  timeline: ProvenanceTimelineStep[];
+}
 
 export default hypothesisService;

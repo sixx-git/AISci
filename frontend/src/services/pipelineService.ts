@@ -38,4 +38,10 @@ export const pipelineService = {
     const { data } = await api.get<ApiResponse<PipelineRunDetail>>(`/pipeline/run/${runId}`);
     return data;
   },
+
+  /** GET /api/v1/pipeline/audit-export/:runId */
+  async exportAuditChain(runId: string): Promise<ApiResponse<Record<string, unknown>>> {
+    const { data } = await api.get<ApiResponse<Record<string, unknown>>>(`/pipeline/audit-export/${runId}`);
+    return data;
+  },
 };

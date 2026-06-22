@@ -202,3 +202,19 @@ async def delete_dataset(
     if not success:
         raise HTTPException(status_code=404, detail="数据集不存在")
     return {"code": 200, "data": None, "message": "数据集已删除"}
+
+
+@router.get("/catalog")
+async def get_data_catalog(
+    project_id: str = Query(..., description="项目 ID"),
+    refresh: bool = Query(False, description="是否重新生成目录"),
+    db: Session = Depends(get_db),
+):
+    from app.services.data_catalog_service import get_data_catalog_service
+
+    service = get_data_catalog_service(db)
+    if refresh:
+        catalog = service.build_catalog(project_id)
+    else:
+        catalog = service.load_catalog(project_id) or service.build_catalog(project_id)
+    return {"code": 200, "data": catalog, "message": "success"}

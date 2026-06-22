@@ -89,6 +89,7 @@ class LiteratureMiningResponse(BaseModel):
     evidence_facts: int = Field(0, description="从文献中提取的事实数")
     verified_references_count: int = Field(0, description="已验证的引用数")
     candidate_references_count: int = Field(0, description="候选引用数（未导入文献库）")
+    retrieval_provenance: Optional[Dict[str, Any]] = Field(None, description="检索→自动入库 provenance")
 
 
 # ==================== Agent 实现 ====================
@@ -172,6 +173,27 @@ class LiteratureMiningAgent:
             response.skill_outputs = self._run_skills_sync(
                 project_id, research_question, top_k, search_results
             )
+
+            search_output = response.skill_outputs.get("search_papers", {})
+            if search_output.get("success") and search_output.get("data") and db is not None:
+                from app.services.literature_corpus_service import ensure_corpora_from_search
+
+                corpus_meta = ensure_corpora_from_search(
+                    project_id,
+                    research_question,
+                    search_output.get("data"),
+                    db,
+                    max_import=5,
+                )
+                response.skill_outputs["corpus_auto_import"] = corpus_meta
+                if corpus_meta.get("imported", 0) > 0:
+                    response.retrieval_provenance = corpus_meta.get("retrieval_provenance")
+                    extra = (
+                        f"已从检索结果自动导入 {corpus_meta['imported']} 篇文献并索引"
+                    )
+                    response.warning = (
+                        f"{response.warning}; {extra}" if response.warning else extra
+                    )
 
             response.imported_documents = len(response.citation_map)
             response.evidence_facts = len(response.facts)

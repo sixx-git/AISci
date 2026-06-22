@@ -718,8 +718,11 @@ class DatasetService:
             if df_results:
                 context["data_finder_results"] = df_results
                 merged = df_results.get("merged") or {}
-                if merged.get("merged_csv_path"):
-                    context["data_finder_merged_csv"] = merged.get("merged_csv_path")
+                csv_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
+                if csv_path:
+                    context["data_finder_merged_csv"] = csv_path
+                if df_results.get("coverage_report"):
+                    context["data_finder_coverage"] = df_results["coverage_report"]
         except Exception:
             pass
 

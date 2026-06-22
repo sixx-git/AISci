@@ -62,6 +62,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
               <div className="space-y-2 text-xs">
                 <CompareRow label="假设" changed={hypo.changed} text={hypo.preview} />
                 <CompareRow label="实验步骤" changed={steps.changed} text={steps.preview} />
+                <EvidenceCompareRow before={before} after={after} />
                 <div className="flex gap-4 text-[10px] text-gray-500">
                   <span>沙箱: {String(before.sandbox_success ?? '—')} → {String(after.sandbox_success ?? '—')}</span>
                   <span>决策: {before.ensemble_decision || '—'} → {after.ensemble_decision || '—'}</span>
@@ -85,6 +86,37 @@ function CompareRow({ label, changed, text }: { label: string; changed: boolean;
       <p className={`text-gray-300 line-clamp-3 ${changed ? 'border-l-2 border-amber-500/50 pl-2' : ''}`}>
         {text}
       </p>
+    </div>
+  );
+}
+
+function EvidenceCompareRow({ before, after }: { before: IterationSnapshot; after: IterationSnapshot }) {
+  const countBefore = before.supporting_fact_count ?? 0;
+  const countAfter = after.supporting_fact_count ?? 0;
+  const changed =
+    countBefore !== countAfter
+    || before.evidence_level !== after.evidence_level
+    || (before.verifiable_spec_summary || '') !== (after.verifiable_spec_summary || '');
+
+  if (!changed && countAfter === 0 && !after.verifiable_spec_summary) return null;
+
+  return (
+    <div>
+      <p className="text-[10px] text-gray-500 mb-0.5">
+        证据 / 可验证 spec
+        {changed && <span className="ml-1 text-emerald-400">已变更</span>}
+      </p>
+      <p className="text-gray-400 text-[11px]">
+        fact {countBefore}→{countAfter}
+        {before.evidence_level || after.evidence_level
+          ? ` · 等级 ${before.evidence_level || '—'}→${after.evidence_level || '—'}`
+          : ''}
+      </p>
+      {after.verifiable_primary_metric && (
+        <p className="text-emerald-400/80 text-[10px] font-mono mt-0.5">
+          主指标 {after.verifiable_primary_metric}
+        </p>
+      )}
     </div>
   );
 }

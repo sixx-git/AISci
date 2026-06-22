@@ -47,12 +47,14 @@ class EvidenceReasoningService:
         research_question: str,
         literature_mining: Dict[str, Any],
         max_rounds: int = 2,
+        multimodal_facts: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         facts = literature_mining.get("facts", []) or []
         citation_map = literature_mining.get("citation_map", []) or []
         uncertain_points = literature_mining.get("uncertain_points", []) or []
         imported = literature_mining.get("imported_documents", []) or []
         retrieved = literature_mining.get("retrieved_papers", []) or []
+        mm_facts = list(multimodal_facts or literature_mining.get("multimodal_evidence") or [])
 
         loop_skill = IterativeHypothesisLoopSkill()
         loop_result = await loop_skill.run(
@@ -66,6 +68,7 @@ class EvidenceReasoningService:
                 "imported_papers": imported,
                 "uploaded_pdfs": [d for d in imported if d.get("source_type") == "uploaded_pdf"],
                 "bibtex_docs": [d for d in imported if d.get("source_type") == "bibtex"],
+                "multimodal_facts": mm_facts,
                 "max_rounds": max_rounds,
             },
             {"stage": "evidence_reasoning"},
@@ -105,6 +108,7 @@ class EvidenceReasoningService:
         research_question: str,
         literature_mining: Dict[str, Any],
         max_rounds: int = 2,
+        multimodal_facts: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         enriched_list = []
         all_warnings = []
@@ -114,7 +118,10 @@ class EvidenceReasoningService:
             if hypo.get("off_topic"):
                 enriched_list.append(hypo)
                 continue
-            item = await self.run_for_hypothesis(hypo, research_question, literature_mining, max_rounds)
+            item = await self.run_for_hypothesis(
+                hypo, research_question, literature_mining, max_rounds,
+                multimodal_facts=multimodal_facts,
+            )
             enriched_list.append(item["hypothesis"])
             chains.append(item["evidence_chain"])
             all_warnings.extend(item.get("warnings", []))
@@ -123,6 +130,7 @@ class EvidenceReasoningService:
             "hypotheses": enriched_list,
             "evidence_chains": chains,
             "warnings": all_warnings,
+            "multimodal_facts_used": len(multimodal_facts or []),
             "processed_at": datetime.now(CHINA_TZ).isoformat(),
         }
 

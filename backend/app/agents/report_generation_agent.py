@@ -697,8 +697,18 @@ class ReportGenerationAgent:
                 )
         else:
             datasets_text += "未从 PDF 抽取到结构化表格。"
-        if merged.get("merged_csv_path"):
-            datasets_text += f"\n已合并 CSV：{merged.get('row_count', 0)} 行。"
+        if merged.get("merged_csv_path") or merged.get("cleaned_csv_path"):
+            row_count = merged.get("row_count", 0)
+            cleaned = "（已清洗）" if merged.get("cleaned_csv_path") else ""
+            datasets_text += f"\n已合并 CSV：{row_count} 行{cleaned}。"
+        coverage = data_finder_results.get("coverage_report") or {}
+        if coverage.get("completeness_score") is not None:
+            datasets_text += (
+                f"\n数据发现完备性得分：{coverage.get('completeness_score')}/100。"
+            )
+            gaps = coverage.get("gaps") or []
+            if gaps:
+                datasets_text += f" 待补充：{'; '.join(gaps[:3])}"
         chapters["datasets"] = datasets_text
 
         source_text = chapters.get("source") or ""
@@ -712,10 +722,17 @@ class ReportGenerationAgent:
         chapters["source"] = source_text
 
         results_text = chapters.get("results") or ""
-        if merged.get("merged_csv_path"):
+        csv_used = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
+        if csv_used:
+            cleaning = merged.get("cleaning_report") or {}
+            clean_note = ""
+            if cleaning.get("rows_before") is not None:
+                clean_note = (
+                    f"；清洗 {cleaning.get('rows_before')}→{cleaning.get('rows_after')} 行"
+                )
             results_text += (
-                f"\n\n【整合数据验证】使用 data_finder 合并 CSV（{merged.get('row_count', 0)} 行）"
-                f" 进行小样验证；抽取方法见 provenance。"
+                f"\n\n【整合数据验证】使用 data_finder 合并 CSV（{merged.get('row_count', 0)} 行"
+                f"{clean_note}）进行小样验证；抽取方法见 provenance。"
             )
         chapters["results"] = results_text
         result["chapters"] = chapters
@@ -723,6 +740,9 @@ class ReportGenerationAgent:
             "tables_count": len(tables),
             "merged_rows": merged.get("row_count", 0),
             "provenance_count": len(provenance),
+            "completeness_score": coverage.get("completeness_score"),
+            "has_cleaned_csv": bool(merged.get("cleaned_csv_path")),
+            "bundle_ready": bool((data_finder_results.get("analysis_bundle") or {}).get("ready")),
         }
         return result
 

@@ -41,6 +41,7 @@ class DataFinderService:
         os.makedirs(path, exist_ok=True)
         os.makedirs(os.path.join(path, "tables"), exist_ok=True)
         os.makedirs(os.path.join(path, "merged"), exist_ok=True)
+        os.makedirs(os.path.join(path, "bundle"), exist_ok=True)
         return path
 
     def _results_path(self, project_id: str) -> str:
@@ -113,6 +114,9 @@ class DataFinderService:
 
         figures_all: List[Dict[str, Any]] = []
         fig_skill = FigureDataExtractionSkill()
+        from app.skills.data_finder.figure_vlm_series_skill import FigureVlmSeriesSkill
+
+        series_skill = FigureVlmSeriesSkill()
         for pe in paper_extractions:
             doc = next((d for d in documents if d["id"] == pe.get("paper_id")), {})
             fig_res = await fig_skill.run(
@@ -124,6 +128,25 @@ class DataFinderService:
                 },
                 ctx,
             )
+            for fig in fig_res.data.get("figures", []):
+                fig["extraction_method"] = "rule"
+                fig["extraction_tier"] = "L1_metadata"
+                series_res = await series_skill.run(
+                    {
+                        "caption": fig.get("caption", ""),
+                        "possible_data_series": fig.get("possible_data_series", []),
+                        "research_question": research_question,
+                    },
+                    ctx,
+                )
+                sdata = series_res.data or {}
+                fig["extracted_series_preview"] = sdata.get("rows", [])
+                fig["extraction_method"] = sdata.get("extraction_method", "rule_series")
+                fig["extraction_tier"] = "L2_vlm" if sdata.get("extraction_method") == "vlm" else "L2_rule_series"
+                fig["extraction_confidence"] = sdata.get("extraction_confidence", fig.get("extraction_confidence"))
+                fig["needs_manual_review"] = sdata.get("needs_manual_review", True)
+                fig["included_in_csv"] = False
+                fig["review_status"] = "pending"
             figures_all.extend(fig_res.data.get("figures", []))
 
         payload = {
@@ -232,8 +255,62 @@ class DataFinderService:
             },
             {"stage": "data_finder_merge"},
         )
-        results["merged"] = merge_res.data
+        merged_data = merge_res.data or {}
+        results["merged"] = merged_data
+        row_prov = merged_data.get("row_provenance") or []
+        if row_prov:
+            results["row_provenance"] = row_prov
         results.setdefault("warnings", []).extend(merge_res.warnings)
+
+        from app.skills.data_finder.entity_resolution_skill import EntityResolutionSkill
+
+        entity_skill = EntityResolutionSkill()
+        entity_res = await entity_skill.run(
+            {
+                "tables": results.get("extracted_tables", []),
+                "alignments": results.get("alignments", []),
+            },
+            {"stage": "entity_resolution"},
+        )
+        results["entity_alignment"] = entity_res.data or {}
+        if entity_res.warnings:
+            results.setdefault("warnings", []).extend(entity_res.warnings)
+
+        cleaning_report: Dict[str, Any] = {}
+        merged_path = merged_data.get("merged_csv_path")
+        if merged_path and os.path.exists(merged_path):
+            from app.core.data_cleaning import clean_csv_file
+
+            cleaned_path = os.path.join(merged_dir, f"{merged_data.get('merge_id', 'merged')}_cleaned.csv")
+            try:
+                cleaning_report = clean_csv_file(merged_path, cleaned_path)
+                merged_data["cleaned_csv_path"] = cleaning_report.get("cleaned_csv_path")
+                merged_data["cleaning_report"] = cleaning_report
+                results["merged"] = merged_data
+            except Exception as clean_err:
+                logger.warning("Data Finder 清洗失败: %s", clean_err)
+                results.setdefault("warnings", []).append(f"清洗未应用: {clean_err}")
+
+        from app.services.data_finder_coverage import build_coverage_report
+        from app.services.data_finder_bundle import build_analysis_bundle
+
+        doc_count = len(self._load_project_documents(project_id))
+        coverage = build_coverage_report(
+            results,
+            documents_count=doc_count,
+            cleaning_report=cleaning_report,
+        )
+        results["coverage_report"] = coverage
+
+        bundle_meta = build_analysis_bundle(
+            project_id,
+            self._project_dir(project_id),
+            results,
+            coverage_report=coverage,
+            cleaning_report=cleaning_report,
+        )
+        results["analysis_bundle"] = bundle_meta
+
         self.save_results(project_id, results)
         return results
 
@@ -247,9 +324,11 @@ class DataFinderService:
 
         results = self.load_results(project_id) or {}
         if merge_id and results.get("merged", {}).get("merge_id") == merge_id:
-            csv_path = results["merged"].get("merged_csv_path")
-        elif not csv_path and results.get("merged", {}).get("merged_csv_path"):
-            csv_path = results["merged"]["merged_csv_path"]
+            merged = results["merged"]
+            csv_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
+        elif not csv_path and results.get("merged"):
+            merged = results["merged"]
+            csv_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
         elif not csv_path and results.get("extracted_tables"):
             csv_path = results["extracted_tables"][0].get("csv_path")
 
@@ -263,10 +342,13 @@ class DataFinderService:
         shutil.copy2(csv_path, dest_path)
 
         provenance = results.get("provenance", [])
+        bundle = results.get("analysis_bundle") or {}
         extra = {
             "data_finder_import": True,
             "provenance": provenance[:20],
             "source": "data_finder",
+            "coverage_score": (results.get("coverage_report") or {}).get("completeness_score"),
+            "bundle_path": bundle.get("bundle_path"),
         }
         ds = ds_service.create_dataset(
             project_id=project_id,
@@ -292,6 +374,140 @@ class DataFinderService:
 
     def run_merge_sync(self, project_id: str) -> Dict[str, Any]:
         return asyncio.run(self.run_merge(project_id))
+
+    def get_bundle_zip_path(self, project_id: str) -> str:
+        results = self.load_results(project_id) or {}
+        bundle = results.get("analysis_bundle") or {}
+        zip_path = bundle.get("bundle_zip_path")
+        if zip_path and os.path.exists(zip_path):
+            return zip_path
+        project_dir = self._project_dir(project_id)
+        fallback = os.path.join(project_dir, "analysis_bundle.zip")
+        if os.path.exists(fallback):
+            return fallback
+        raise FileNotFoundError("Analysis Bundle 尚未生成，请先执行合并")
+
+    async def run_gap_enrichment(
+        self,
+        project_id: str,
+        refinement_queries: Optional[List[str]] = None,
+        *,
+        auto_import: bool = True,
+    ) -> Dict[str, Any]:
+        """Batch4: 基于 Coverage gaps 补搜并可选自动入库 HF 数据集。"""
+        from app.services.data_finder_gap_search import (
+            DEFAULT_COVERAGE_THRESHOLD,
+            build_gap_search_queries,
+            pick_import_candidates,
+            should_run_gap_enrichment,
+        )
+        from app.services.external_dataset_import_service import auto_import_external_candidates
+        from app.skills.data_finder._utils import new_id
+
+        results = self.load_results(project_id) or {}
+        threshold = float(
+            (results.get("coverage_report") or {}).get("threshold")
+            or DEFAULT_COVERAGE_THRESHOLD
+        )
+        coverage = results.get("coverage_report") or {}
+        if not should_run_gap_enrichment(coverage, threshold=threshold):
+            return {"skipped": True, "reason": "coverage 已达标"}
+
+        gap_queries = build_gap_search_queries(
+            coverage,
+            refinement_queries,
+            results.get("data_requirements"),
+        )
+        ctx = {"stage": "data_finder_gap"}
+        ext_skill = ExternalDatasetSearchSkill()
+        combined_query = " ".join(gap_queries[:4])[:400] or results.get("data_requirements", {}).get("data_need", "")
+        ext_res = await ext_skill.run(
+            {
+                "research_question": combined_query,
+                "dataset_keywords": gap_queries,
+            },
+            ctx,
+        )
+        new_candidates = ext_res.data.get("candidates", [])
+        existing = results.get("external_candidates") or []
+        seen = {(c.get("dataset_name") or c.get("url") or "").lower() for c in existing}
+        for c in new_candidates:
+            key = (c.get("dataset_name") or c.get("url") or "").lower()
+            if key and key not in seen:
+                seen.add(key)
+                existing.append(c)
+        results["external_candidates"] = existing
+
+        import_meta: Dict[str, Any] = {"imported_count": 0, "imported": [], "errors": []}
+        imported_tables: List[Dict[str, Any]] = list(results.get("extracted_tables") or [])
+
+        if auto_import:
+            ext_dir = os.path.join(self._project_dir(project_id), "external")
+            picks = pick_import_candidates(existing, max_count=2)
+            import_meta = auto_import_external_candidates(picks, ext_dir, max_imports=2)
+            for item in import_meta.get("imported") or []:
+                table_id = new_id("ext")
+                imported_tables.append({
+                    "table_id": table_id,
+                    "paper_id": "",
+                    "source_title": item.get("dataset_name", "HF Dataset"),
+                    "page": 0,
+                    "caption": f"External import: {item.get('dataset_name')}",
+                    "csv_path": item.get("csv_path"),
+                    "columns": item.get("columns") or [],
+                    "quality_score": 0.65,
+                    "extraction_method": item.get("import_method", "hf_auto_import"),
+                    "source_type": "hf_dataset",
+                })
+                results.setdefault("provenance", []).append({
+                    "record_id": table_id,
+                    "source_type": "hf_dataset",
+                    "source_title": item.get("dataset_name", ""),
+                    "paper_id": "",
+                    "page": None,
+                    "table_or_figure": table_id,
+                    "extraction_method": item.get("import_method", "hf_auto_import"),
+                    "confidence": 0.65,
+                })
+
+        results["extracted_tables"] = imported_tables
+        results["external_import"] = import_meta
+
+        if imported_tables:
+            await self.run_align_schema(project_id)
+            await self.run_merge(project_id)
+            results = self.load_results(project_id) or results
+
+        from app.services.data_finder_coverage import build_coverage_report
+
+        coverage = build_coverage_report(
+            results,
+            documents_count=len(self._load_project_documents(project_id)),
+            cleaning_report=(results.get("merged") or {}).get("cleaning_report"),
+        )
+        coverage["external_import_succeeded"] = import_meta.get("imported_count", 0)
+        coverage["gap_queries"] = gap_queries
+        results["coverage_report"] = coverage
+        results["gap_enrichment"] = {
+            "queries": gap_queries,
+            "import_meta": import_meta,
+            "skipped": False,
+        }
+        self.save_results(project_id, results)
+        return results.get("gap_enrichment") or {}
+
+    def run_gap_enrichment_sync(self, **kwargs) -> Dict[str, Any]:
+        return asyncio.run(self.run_gap_enrichment(**kwargs))
+
+    def resolve_data_citation(self, project_id: str, citation_id: str) -> Optional[Dict[str, Any]]:
+        from app.core.data_citation import resolve_data_citation
+
+        results = self.load_results(project_id) or {}
+        return resolve_data_citation(
+            citation_id,
+            provenance=results.get("provenance") or [],
+            row_provenance=results.get("row_provenance") or [],
+        )
 
 
 def get_data_finder_service(db: Session) -> DataFinderService:

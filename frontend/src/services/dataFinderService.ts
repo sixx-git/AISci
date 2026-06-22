@@ -67,11 +67,45 @@ export interface DataFinderResult {
   merged?: {
     merge_id?: string;
     merged_csv_path?: string;
+    cleaned_csv_path?: string;
     row_count?: number;
     columns?: string[];
+    cleaning_report?: Record<string, unknown>;
   } | null;
+  coverage_report?: CoverageReport;
+  analysis_bundle?: AnalysisBundleMeta;
+  entity_alignment?: {
+    match_rate?: number;
+    skipped?: boolean;
+    alignment_warnings?: string[];
+  };
   warnings?: string[];
   updated_at?: string;
+}
+
+export interface CoverageReport {
+  completeness_score?: number;
+  project_mode?: string;
+  documents_count?: number;
+  papers_screened?: number;
+  tables_extracted?: number;
+  rows_merged?: number;
+  external_candidates_count?: number;
+  domain_checklist?: Array<{ id: string; label: string; hit: boolean }>;
+  gaps?: string[];
+  has_cleaned_csv?: boolean;
+  external_import_succeeded?: number;
+  gap_queries?: string[];
+  cleaning_summary?: Record<string, unknown>;
+}
+
+export interface AnalysisBundleMeta {
+  bundle_path?: string;
+  bundle_zip_path?: string;
+  ready?: boolean;
+  files?: string[];
+  generated_at?: string;
+  reason?: string;
 }
 
 const dataFinderService = {
@@ -115,6 +149,47 @@ const dataFinderService = {
     const { data } = await api.post('/data-finder/import-to-dataset', {
       project_id: projectId,
       merge_id: mergeId,
+    });
+    return data;
+  },
+
+  getBundleDownloadUrl(projectId: string): string {
+    return `/api/v1/data-finder/bundle/download?project_id=${encodeURIComponent(projectId)}`;
+  },
+
+  async downloadBundle(projectId: string): Promise<Blob> {
+    const { data } = await api.get('/data-finder/bundle/download', {
+      params: { project_id: projectId },
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  async getPaperExtractionStats(projectId: string): Promise<ApiResponse<{
+    by_paper: Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>;
+    total_tables: number;
+    total_figures: number;
+    figures_pending_review: number;
+  }>> {
+    const { data } = await api.get('/data-finder/paper-extraction-stats', {
+      params: { project_id: projectId },
+    });
+    return data;
+  },
+
+  async reviewFigure(
+    projectId: string,
+    figureId: string,
+    action: 'confirm' | 'reject' | 'confirm_edited',
+    editedRows?: Array<Record<string, unknown>>,
+    reviewerNote?: string,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    const { data } = await api.post('/data-finder/figures/review', {
+      project_id: projectId,
+      figure_id: figureId,
+      action,
+      edited_rows: editedRows,
+      reviewer_note: reviewerNote || '',
     });
     return data;
   },

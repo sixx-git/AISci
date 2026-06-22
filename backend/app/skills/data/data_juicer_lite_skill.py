@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -21,6 +22,8 @@ class DataJuicerLiteSkill(BaseSkill):
         file_paths: List[str] = input_data.get("file_paths", [])
         file_metas: List[dict] = input_data.get("file_metas", [])
         missing_strategy = input_data.get("missing_strategy", "report")
+        apply_fixes = bool(input_data.get("apply_fixes", False))
+        output_dir = input_data.get("output_dir", "")
         outlier_method = input_data.get("outlier_method", "iqr")
         outlier_threshold = input_data.get("outlier_threshold", 1.5)
 
@@ -166,6 +169,25 @@ class DataJuicerLiteSkill(BaseSkill):
             "recommendations": recommendations,
             "cleaned_file_paths": [],
         }
+
+        if apply_fixes and output_dir:
+            from app.core.data_cleaning import clean_csv_file
+
+            cleaned_paths: List[str] = []
+            os.makedirs(output_dir, exist_ok=True)
+            for meta in file_metas:
+                fp = meta.get("file_path")
+                if not fp or meta.get("data_type") != "tabular" or not os.path.exists(fp):
+                    continue
+                out_name = f"cleaned_{Path(fp).stem}.csv"
+                out_path = os.path.join(output_dir, out_name)
+                try:
+                    clean_csv_file(fp, out_path)
+                    cleaned_paths.append(out_path)
+                except Exception as exc:
+                    result.warnings.append(f"清洗 {meta.get('filename')} 失败: {exc}")
+            result.data["cleaned_file_paths"] = cleaned_paths
+            quality_report["cleaned_file_paths"] = cleaned_paths
 
         return result
 

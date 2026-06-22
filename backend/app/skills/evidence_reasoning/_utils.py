@@ -48,6 +48,9 @@ def is_verifiable_source(fact: Dict[str, Any], citation_map: List[Dict[str, Any]
 
     if doc_id or chunk_id or paper_id:
         return True
+    if fact.get("modality") in ("image", "audio", "text", "multimodal"):
+        if fact.get("asset_id") or fact.get("fact_id"):
+            return True
     if title and normalize_text(title) not in PLACEHOLDER_TITLES and len(title) >= 8:
         return True
 
@@ -75,7 +78,9 @@ def fact_to_evidence(
     quote = fact.get("quote_text") or content[:300]
 
     source_type = "paper"
-    if doc_id:
+    if fact.get("modality") in ("image", "audio", "text", "multimodal"):
+        source_type = "multimodal"
+    elif doc_id:
         source_type = "uploaded_pdf"
     for cit in citation_map or []:
         if cit.get("document_id") == doc_id:
@@ -98,7 +103,9 @@ def fact_to_evidence(
         "year": fact.get("year"),
         "doi": fact.get("doi", ""),
         "arxiv_id": fact.get("arxiv_id") or fact.get("external_id", ""),
-        "paper_id": fact.get("paper_id") or doc_id or "",
+        "paper_id": fact.get("paper_id") or doc_id or fact.get("asset_id", ""),
+        "modality": fact.get("modality"),
+        "asset_id": fact.get("asset_id"),
         "quote_or_summary": quote[:500],
         "relevance_score": rel,
         "reliability_score": round(min(1.0, reliability), 4),

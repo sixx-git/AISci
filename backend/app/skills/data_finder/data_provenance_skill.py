@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from app.skills.base import BaseSkill, SkillResult
+from app.skills.data_finder._utils import new_id
 
 
 class DataProvenanceSkill(BaseSkill):
@@ -16,6 +17,7 @@ class DataProvenanceSkill(BaseSkill):
         provenance_list: List[Dict[str, Any]] = []
 
         for rec in records:
+            record_id = rec.get("record_id") or rec.get("table_id") or rec.get("figure_id", "")
             prov = {
                 "source_type": rec.get("source_type", "paper_table"),
                 "source_title": rec.get("source_title", ""),
@@ -25,7 +27,8 @@ class DataProvenanceSkill(BaseSkill):
                 "url": rec.get("url", ""),
                 "extraction_method": rec.get("extraction_method", ""),
                 "confidence": rec.get("confidence", rec.get("quality_score", 0.0)),
-                "record_id": rec.get("record_id") or rec.get("table_id") or rec.get("figure_id", ""),
+                "record_id": record_id,
+                "data_citation_id": rec.get("data_citation_id") or new_id("cite"),
             }
             provenance_list.append(prov)
 

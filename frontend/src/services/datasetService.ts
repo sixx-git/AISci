@@ -177,6 +177,13 @@ const datasetService = {
     const res = await api.get<ApiResponse<ModelingResult>>(`/datasets/${datasetId}/modeling/result`);
     return res.data;
   },
+
+  async getDataCatalog(projectId: string, refresh = false): Promise<ApiResponse<Record<string, unknown>>> {
+    const res = await api.get('/datasets/catalog', {
+      params: { project_id: projectId, refresh },
+    });
+    return res.data;
+  },
 };
 
 export default datasetService;

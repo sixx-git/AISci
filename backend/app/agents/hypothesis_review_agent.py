@@ -59,6 +59,11 @@ class HypothesisCandidate(BaseModel):
     required_data: Optional[str] = Field(None, description="所需数据")
     possible_method: Optional[str] = Field(None, description="可能的方法")
     risk: Optional[str] = Field(None, description="风险")
+    supporting_fact_ids: List[str] = Field(default_factory=list, description="文献 fact_id")
+    validation_target: Optional[str] = Field(default="", description="验证指标")
+    expected_measurable_effect: Optional[str] = Field(default="", description="预期可量化效果")
+    evidence_level: Optional[str] = Field(default="", description="证据等级")
+    verifiable_spec: Optional[Dict[str, Any]] = Field(default_factory=dict, description="可验证 spec")
 
 
 class HypothesisReviewRequest(BaseModel):
@@ -259,6 +264,17 @@ class HypothesisReviewAgent:
                 hypo_text += f"可能的方法: {hypo.possible_method}\n"
             if hypo.risk:
                 hypo_text += f"风险: {hypo.risk}\n"
+            if hypo.supporting_fact_ids:
+                hypo_text += f"文献 fact_id: {', '.join(hypo.supporting_fact_ids[:6])}\n"
+            if hypo.evidence_level:
+                hypo_text += f"证据等级: {hypo.evidence_level}\n"
+            if hypo.validation_target:
+                hypo_text += f"验证指标: {hypo.validation_target}\n"
+            if hypo.expected_measurable_effect:
+                hypo_text += f"预期效果: {hypo.expected_measurable_effect}\n"
+            vspec = hypo.verifiable_spec or {}
+            if vspec.get("falsification_criteria"):
+                hypo_text += f"可 falsify 条件: {vspec.get('falsification_criteria')}\n"
             
             formatted.append(hypo_text)
         

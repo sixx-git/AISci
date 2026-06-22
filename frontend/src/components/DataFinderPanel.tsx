@@ -6,6 +6,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import dataFinderService, { type DataFinderResult } from '@/services/dataFinderService';
+import { FigureReviewPanel } from '@/components/FigureReviewPanel';
 
 interface DataFinderPanelProps {
   projectId: string;
@@ -97,6 +98,28 @@ export function DataFinderPanel({
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '导入失败');
+    } finally {
+      setLoading(false);
+      setAction(null);
+    }
+  };
+
+  const handleDownloadBundle = async () => {
+    setLoading(true);
+    setAction('bundle');
+    setError(null);
+    try {
+      const blob = await dataFinderService.downloadBundle(projectId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analysis_bundle_${projectId.slice(0, 8)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Bundle 下载失败');
     } finally {
       setLoading(false);
       setAction(null);
@@ -250,19 +273,93 @@ export function DataFinderPanel({
         </Card>
       )}
 
+      {result?.figures && result.figures.length > 0 && (
+        <FigureReviewPanel
+          projectId={projectId}
+          figures={result.figures}
+          onUpdated={loadResults}
+        />
+      )}
+
+      {result?.coverage_report && (
+        <Card className="p-4 border-cyan-500/20 bg-cyan-500/5">
+          <h4 className="text-sm font-semibold text-cyan-300 mb-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" />
+            数据发现完备性 · {result.coverage_report.completeness_score ?? '—'}/100
+          </h4>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {(result.coverage_report.domain_checklist || []).map((item) => (
+              <span
+                key={item.id}
+                className={`text-[10px] px-2 py-0.5 rounded border ${
+                  item.hit
+                    ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                    : 'border-dark-600 bg-dark-900 text-gray-500'
+                }`}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
+          {(result.coverage_report.gaps || []).length > 0 && (
+            <ul className="text-[10px] text-amber-400/90 list-disc list-inside">
+              {result.coverage_report.gaps!.slice(0, 4).map((g) => (
+                <li key={g}>{g}</li>
+              ))}
+            </ul>
+          )}
+          {(result.coverage_report.external_import_succeeded ?? 0) > 0 && (
+            <p className="text-[10px] text-emerald-400 mt-2">
+              已自动入库外部数据集 {result.coverage_report.external_import_succeeded} 个
+            </p>
+          )}
+          {result.entity_alignment && !result.entity_alignment.skipped && result.entity_alignment.match_rate != null && (
+            <p className="text-[10px] text-indigo-400/90 mt-2">
+              Entity 跨表匹配率: {(Number(result.entity_alignment.match_rate) * 100).toFixed(0)}%
+            </p>
+          )}
+        </Card>
+      )}
+
       {result?.merged?.row_count ? (
         <Card className="p-4 border-green-500/20 bg-green-500/5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h4 className="text-sm font-semibold text-green-300 flex items-center gap-1.5">
                 <GitMerge className="w-4 h-4" />
                 最终整合 CSV
               </h4>
-              <p className="text-xs text-gray-400 mt-1">{result.merged.row_count} 行 · merge_id={result.merged.merge_id}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {result.merged.row_count} 行 · merge_id={result.merged.merge_id}
+                {result.merged.cleaned_csv_path && (
+                  <span className="text-emerald-400 ml-2">已清洗</span>
+                )}
+              </p>
+              {result.merged.cleaning_report && (
+                <p className="text-[10px] text-gray-500 mt-1">
+                  清洗: 行 {String(result.merged.cleaning_report.rows_before)}→
+                  {String(result.merged.cleaning_report.rows_after)} · 缺失{' '}
+                  {String(result.merged.cleaning_report.missing_cells_before)}→
+                  {String(result.merged.cleaning_report.missing_cells_after)}
+                </p>
+              )}
             </div>
-            <span className="text-xs text-gray-500 flex items-center gap-1">
-              <Download className="w-3.5 h-3.5" /> 服务端存储，可导入数据集
-            </span>
+            <div className="flex flex-wrap gap-2">
+              {result.analysis_bundle?.ready && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  onClick={handleDownloadBundle}
+                  isLoading={loading && action === 'bundle'}
+                >
+                  下载 Analysis Bundle
+                </Button>
+              )}
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <Download className="w-3.5 h-3.5" /> 含 schema / provenance / README
+              </span>
+            </div>
           </div>
         </Card>
       ) : null}

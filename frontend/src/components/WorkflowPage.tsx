@@ -4,11 +4,15 @@ import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
+import { HitlGatePanel } from '@/components/HitlGatePanel';
+import { ExecutionTierBadge } from '@/components/ExecutionTierBadge';
 import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
 import { FederatedCampaignPanel } from '@/components/FederatedCampaignPanel';
 import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
+import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
+import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
@@ -167,6 +171,14 @@ function summarizeStageData(stageName: string, data: unknown): string {
 
   if (stageName === 'experiment_design') {
     const parts: string[] = [];
+    const gate = d.executability_gate as Record<string, unknown> | undefined;
+    if (gate) {
+      parts.push(
+        gate.passed
+          ? `可执行性 ✓ ${Number(gate.score ?? 0).toFixed(0)}`
+          : `可执行性 ✗ ${Number(gate.score ?? 0).toFixed(0)}`,
+      );
+    }
     const so = d.skill_outputs as Record<string, unknown> | undefined;
     if (so) {
       const dd = so.dataset_discovery as Record<string, unknown> | undefined;
@@ -532,6 +544,34 @@ export function WorkflowPage({
     };
   }, [nodes, runExtraMetadata]);
 
+  const validationExecutionMeta = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    if (!validationOut) return null;
+    return {
+      executionTier: validationOut.execution_tier as string | undefined,
+      executionTierLabel: validationOut.execution_tier_label as string | undefined,
+      dataAuthenticity: validationOut.data_authenticity as string | undefined,
+      dataAuthenticityLabel: validationOut.data_authenticity_label as string | undefined,
+    };
+  }, [nodes]);
+
+  const verifiableValidation = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    if (!validationOut) return null;
+    return {
+      checks: validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined,
+      passed: validationOut.verifiable_passed as boolean | null | undefined,
+      spec: validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined,
+    };
+  }, [nodes]);
+
+  const versionSnapshots = useMemo(
+    () => runExtraMetadata?.version_snapshots ?? [],
+    [runExtraMetadata],
+  );
+
+  const hitlGateInfo = useMemo(() => runExtraMetadata?.hitl_gate ?? null, [runExtraMetadata]);
+
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
     if (!projectId) return;
@@ -571,6 +611,10 @@ export function WorkflowPage({
               setErrorMessage(errMsg || 'Pipeline 执行失败');
               setHasExistingRuns(true);
             }
+          } else if (status === 'human_review_required') {
+            setRunState('idle');
+            setStatusMessage('等待人工复核（HITL Gate）…');
+            await refreshFromRunDetail(savedRunId);
           } else if (status === 'running') {
             startPolling(savedRunId);
           } else {
@@ -735,6 +779,15 @@ export function WorkflowPage({
                   : 'Pipeline 执行失败');
               setErrorMessage(errMsg);
             }
+            return;
+          }
+
+          if (status === 'human_review_required') {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            setRunState('idle');
+            setStatusMessage('等待人工复核（HITL Gate）…');
+            await refreshFromRunDetail(runId);
             return;
           }
 
@@ -1158,12 +1211,38 @@ export function WorkflowPage({
       )}
 
       {/* 闭环质量趋势 */}
-      {(runExtraMetadata?.closed_loop_events?.length || runExtraMetadata?.quality_trend?.length) ? (
+      {(runExtraMetadata?.closed_loop_events?.length
+        || runExtraMetadata?.quality_trend?.length
+        || runExtraMetadata?.closed_loop_decisions?.length) ? (
         <ClosedLoopTimeline
           events={runExtraMetadata?.closed_loop_events}
           qualityTrend={runExtraMetadata?.quality_trend}
+          decisions={runExtraMetadata?.closed_loop_decisions}
+          runId={currentRunId}
         />
       ) : null}
+
+      {projectId && currentRunId && (
+        <HitlGatePanel
+          projectId={projectId}
+          runId={currentRunId}
+          gate={hitlGateInfo}
+          runStatus={hitlGateInfo?.paused ? 'human_review_required' : undefined}
+          onResumed={(newRunId) => {
+            const rid = newRunId || currentRunId;
+            setCurrentRunId(rid);
+            currentRunIdRef.current = rid;
+            if (projectId) setActiveRunId(projectId, rid);
+            startPolling(rid);
+          }}
+        />
+      )}
+
+      {validationExecutionMeta && (
+        <div className="mb-4 px-1">
+          <ExecutionTierBadge {...validationExecutionMeta} />
+        </div>
+      )}
 
       {federatedCampaignData && (
         <FederatedCampaignPanel
@@ -1184,6 +1263,18 @@ export function WorkflowPage({
         teachingRefinement={teachingRefinementData}
         qualityAcceptance={qualityAcceptance}
       />
+
+      {versionSnapshots.length >= 2 && (
+        <EvidenceDiffPanel snapshots={versionSnapshots} />
+      )}
+
+      {verifiableValidation && (
+        <VerifiableChecksPanel
+          checks={verifiableValidation.checks}
+          passed={verifiableValidation.passed ?? null}
+          spec={verifiableValidation.spec}
+        />
+      )}
 
       {ideationData && (
         <IdeationNoveltyPanel ideation={ideationData} />

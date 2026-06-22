@@ -1,8 +1,10 @@
 """多源数据查找 API"""
 import logging
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -39,6 +41,14 @@ class DataFinderImportRequest(BaseModel):
     project_id: str
     csv_path: Optional[str] = None
     merge_id: Optional[str] = None
+
+
+class FigureReviewRequest(BaseModel):
+    project_id: str
+    figure_id: str
+    action: str = Field(..., description="confirm | confirm_edited | reject")
+    edited_rows: Optional[List[dict]] = None
+    reviewer_note: str = ""
 
 
 def _resolve_project_mode(db: Session, project_id: str, override: Optional[str]) -> str:
@@ -113,6 +123,75 @@ async def data_finder_import_to_dataset(body: DataFinderImportRequest, db: Sessi
         service = get_data_finder_service(db)
         dataset = service.import_to_dataset(body.project_id, body.csv_path, body.merge_id)
         return {"code": 200, "data": dataset, "message": "已加入项目数据集"}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/paper-extraction-stats")
+async def paper_extraction_stats(
+    project_id: str = Query(..., description="项目 ID"),
+    db: Session = Depends(get_db),
+):
+    from app.services.figure_review_service import get_figure_review_service
+
+    stats = get_figure_review_service(db).get_paper_extraction_stats(project_id)
+    return {"code": 200, "data": stats, "message": "success"}
+
+
+@router.post("/figures/review")
+async def review_figure(body: FigureReviewRequest, db: Session = Depends(get_db)):
+    from app.services.figure_review_service import get_figure_review_service
+
+    try:
+        service = get_figure_review_service(db)
+        result = service.review_figure(
+            body.project_id,
+            body.figure_id,
+            action=body.action,
+            edited_rows=body.edited_rows,
+            reviewer_note=body.reviewer_note,
+        )
+        return {"code": 200, "data": result, "message": "图表复核已保存"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/citation/{citation_id}")
+async def resolve_data_citation(
+    citation_id: str,
+    project_id: str = Query(..., description="项目 ID"),
+    db: Session = Depends(get_db),
+):
+    """按 data_citation_id 追溯 provenance 记录"""
+    try:
+        service = get_data_finder_service(db)
+        record = service.resolve_data_citation(project_id, citation_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="未找到 data_citation 记录")
+        return {"code": 200, "data": record, "message": "追溯成功"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/bundle/download")
+async def download_analysis_bundle(
+    project_id: str = Query(..., description="项目 ID"),
+    db: Session = Depends(get_db),
+):
+    try:
+        service = get_data_finder_service(db)
+        zip_path = service.get_bundle_zip_path(project_id)
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename=f"data_finder_bundle_{project_id[:8]}.zip",
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

@@ -520,3 +520,20 @@ async def get_run_debug(
             "hint": hint,
         }
     )
+
+
+@router.get("/audit-export/{run_id}")
+async def export_audit_chain(
+    run_id: str,
+    db: Session = Depends(get_db),
+):
+    """导出完整审计链：quality_trend / events / decisions / jsonl 记录"""
+    run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Pipeline 运行记录未找到")
+
+    from app.services.audit_chain_service import get_audit_chain_service
+
+    meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+    bundle = get_audit_chain_service().export_audit_bundle(run_id, meta=meta)
+    return ResponseModel(code=200, message="导出成功", data=bundle)

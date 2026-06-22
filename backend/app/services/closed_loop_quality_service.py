@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from app.core.pipeline_modes import ENSEMBLE_ACCEPT_SCORE
+from app.core.quality_scoring import summarize_cqs_trend
 
 
 def compute_quality_acceptance(
@@ -15,7 +16,17 @@ def compute_quality_acceptance(
     """汇总闭环是否 Accept、分数是否提升、薄弱环节。"""
     trend = list(quality_trend or [])
     events = list(closed_loop_events or [])
-    scores = [float(t["score"]) for t in trend if t.get("score") is not None]
+    cqs_summary = summarize_cqs_trend(trend)
+    scores = []
+    for t in trend:
+        if not isinstance(t, dict):
+            continue
+        s = t.get("cqs", t.get("score"))
+        if s is not None:
+            try:
+                scores.append(float(s))
+            except (TypeError, ValueError):
+                pass
 
     hr = hypothesis_review or {}
     ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
@@ -72,7 +83,12 @@ def compute_quality_acceptance(
     else:
         summary_parts.append(f"集成评审未 Accept（decision={decision or '—'}）")
     if delta is not None:
-        summary_parts.append(f"质量趋势 {'↑' if improved else '→/↓'} {delta:+.1f}")
+        summary_parts.append(f"CQS 质量趋势 {'↑' if improved else '→/↓'} {delta:+.1f}")
+    elif cqs_summary.get("cqs_delta") is not None:
+        cd = cqs_summary["cqs_delta"]
+        summary_parts.append(
+            f"CQS {'↑' if cqs_summary.get('cqs_improved') else '→/↓'} {cd:+.1f}"
+        )
     if discovery_rounds > 1:
         summary_parts.append(f"Discovery 执行 {discovery_rounds} 轮")
     if fed_discovery_accept:
@@ -97,6 +113,10 @@ def compute_quality_acceptance(
         "literature_refresh_count": literature_refreshes,
         "refining_rounds": len([h for h in discovery_history if h.get("status") == "refining"]),
         "federated_discovery_accept": fed_discovery_accept,
+        "cqs_first": cqs_summary.get("cqs_first"),
+        "cqs_last": cqs_summary.get("cqs_last"),
+        "cqs_delta": cqs_summary.get("cqs_delta") if cqs_summary.get("cqs_delta") is not None else delta,
+        "cqs_improved": cqs_summary.get("cqs_improved") if cqs_summary.get("cqs_count", 0) >= 2 else improved,
         "summary": "；".join(summary_parts),
     }
 

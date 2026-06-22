@@ -259,6 +259,22 @@ class KnowledgeGraphService:
         self.save_graph(project_id, updated)
         return {"graph": updated, "incremental": res.data.get("incremental", {})}
 
+    def incremental_update_sync(
+        self,
+        project_id: str,
+        new_facts: Optional[List[Dict[str, Any]]] = None,
+        new_citation_map: Optional[List[Dict[str, Any]]] = None,
+        research_question: str = "",
+    ) -> Dict[str, Any]:
+        return asyncio.run(
+            self.incremental_update(
+                project_id,
+                new_facts=new_facts,
+                new_citation_map=new_citation_map,
+                research_question=research_question,
+            )
+        )
+
     def get_scenario_catalog(self) -> Dict[str, Any]:
         return get_scenario_catalog()
 

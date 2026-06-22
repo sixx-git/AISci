@@ -165,6 +165,118 @@ class StageHumanLoopService:
                 results[k] = parent_output[k]
         return results
 
+    def collect_feedback_constraints(self, run_id: str) -> List[str]:
+        """汇总各阶段 human_feedback 为下一轮约束。"""
+        run = self._get_run(run_id)
+        stages = (
+            self.db.query(PipelineStageExecution)
+            .filter(PipelineStageExecution.pipeline_run_id == run.id)
+            .order_by(PipelineStageExecution.stage_order)
+            .all()
+        )
+        out: List[str] = []
+        for stage_exec in stages:
+            meta = get_stage_meta(stage_exec)
+            fb = (meta.get("human_feedback") or "").strip()
+            if not fb:
+                continue
+            stage_key = stage_exec.stage.value if hasattr(stage_exec.stage, "value") else str(stage_exec.stage)
+            out.append(f"阶段「{stage_key}」人工反馈: {fb}")
+        return out[:10]
+
+    def get_hitl_gate_status(self, run_id: str) -> Dict[str, Any]:
+        run = self._get_run(run_id)
+        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+        gate = meta.get("hitl_gate") or {}
+        status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+        paused = bool(gate.get("paused")) or status_val == PipelineStatus.HUMAN_REVIEW_REQUIRED.value
+        return {
+            "run_id": run.run_id,
+            "project_id": run.project_id,
+            "status": status_val,
+            "paused": paused,
+            "stage": gate.get("stage"),
+            "stage_label": gate.get("stage_label"),
+            "resume_phase": gate.get("resume_phase"),
+            "paused_at": gate.get("paused_at"),
+            "cleared_stages": gate.get("cleared_stages") or [],
+        }
+
+    def resume_hitl_gate(
+        self,
+        run_id: str,
+        action: str,
+        human_feedback: str = "",
+        inject_feedback: bool = True,
+    ) -> Dict[str, Any]:
+        run = self._get_run(run_id)
+        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+        gate = dict(meta.get("hitl_gate") or {})
+        stage = gate.get("stage")
+
+        if run.status != PipelineStatus.HUMAN_REVIEW_REQUIRED and not gate.get("paused"):
+            raise ValueError("Pipeline 未处于 HITL Gate 暂停状态")
+
+        if action == "abort":
+            run.status = PipelineStatus.CANCELLED
+            gate["paused"] = False
+            gate["last_action"] = "abort"
+            gate["aborted_at"] = _now_iso()
+            meta["hitl_gate"] = gate
+            run.extra_metadata = meta
+            run.current_stage = None
+            self.db.commit()
+            return {"action": "abort", "status": "cancelled", "run_id": run.run_id}
+
+        if action == "rerun":
+            if not stage:
+                raise ValueError("无法重跑：缺少 gate stage")
+            gate["paused"] = False
+            gate["last_action"] = "rerun"
+            meta["hitl_gate"] = gate
+            run.extra_metadata = meta
+            self.db.commit()
+            return {
+                "action": "rerun",
+                "status": "rerun_requested",
+                "run_id": run.run_id,
+                "rerun_from_stage": stage,
+            }
+
+        if action != "continue":
+            raise ValueError(f"未知 action: {action}")
+
+        constraints: List[str] = []
+        if inject_feedback and human_feedback.strip():
+            constraints.append(f"人工反馈（{stage or 'gate'}）: {human_feedback.strip()}")
+        if inject_feedback:
+            constraints.extend(self.collect_feedback_constraints(run_id))
+
+        cleared = list(gate.get("cleared_stages") or [])
+        if stage and stage not in cleared:
+            cleared.append(stage)
+
+        gate["cleared_stages"] = cleared
+        gate["feedback_constraints"] = constraints
+        gate["resumed"] = True
+        gate["paused"] = False
+        gate["last_action"] = "continue"
+        gate["continued_at"] = _now_iso()
+        if human_feedback.strip():
+            gate["last_human_feedback"] = human_feedback.strip()
+
+        meta["hitl_gate"] = gate
+        run.status = PipelineStatus.RUNNING
+        run.extra_metadata = meta
+        self.db.commit()
+
+        return {
+            "action": "continue",
+            "status": "running",
+            "run_id": run.run_id,
+            "feedback_constraints_count": len(constraints),
+        }
+
     def _get_run(self, run_id: str) -> PipelineRun:
         run = self.db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         if not run:

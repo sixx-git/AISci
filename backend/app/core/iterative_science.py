@@ -1,7 +1,7 @@
 """可验证假设、结构化 replan 与 Campaign 迭代辅助逻辑"""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 VFL_ALIGNMENT_MIN_RATE = 0.85
@@ -106,6 +106,259 @@ def build_verifiable_hypothesis_spec(
             "privacy_leakage_risk 超过预设上限",
         ],
         "fl_setting": fl_setting,
+    }
+
+
+def build_general_verifiable_hypothesis_spec(
+    hypothesis: str,
+    hypo_meta: Optional[Dict[str, Any]] = None,
+    experiment_design: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """通用科研模式 — 可 falsify 的结构化假设 spec。"""
+    meta = hypo_meta or {}
+    ed = experiment_design or {}
+    metrics_raw = str(ed.get("metrics") or meta.get("validation_target") or "")
+    primary_metric = (
+        meta.get("validation_target")
+        or (metrics_raw.split(",")[0].strip() if metrics_raw else "")
+        or "primary_metric"
+    )
+    expected = str(
+        meta.get("expected_measurable_effect")
+        or ed.get("expected_results")
+        or ""
+    ).strip()
+    claim = (hypothesis or meta.get("hypothesis") or "").strip() or "待验证科研假设"
+
+    success_criteria: List[str] = []
+    if expected:
+        success_criteria.append(expected)
+    success_criteria.append(f"{primary_metric} 达到或超过预设阈值（沙箱/pilot 可复核）")
+    success_criteria.append("验证执行成功（沙箱 success 或 pilot 非 gate_blocked）")
+
+    falsification = (
+        f"若 {primary_metric} 未达预期（{expected or '见 expected_measurable_effect'}）"
+        f"或沙箱/验证执行失败，则拒绝该假设"
+    )
+
+    fact_ids = list(meta.get("supporting_fact_ids") or [])
+    evidence_level = meta.get("evidence_level") or "medium"
+    if not fact_ids:
+        evidence_level = "low"
+
+    return {
+        "claim": claim,
+        "primary_metric": primary_metric,
+        "comparison_baselines": [],
+        "success_criteria": success_criteria[:4],
+        "falsification_criteria": falsification,
+        "stop_criteria": [
+            "连续 2 轮验证无指标改善",
+            "证据等级持续为 low 且无新 literature fact",
+            "集成评审未 Accept 且 CQS 停滞",
+        ],
+        "mode": "general",
+        "supporting_fact_ids": fact_ids[:12],
+        "evidence_level": evidence_level,
+        "dataset_field_refs": list(meta.get("dataset_field_refs") or [])[:8],
+    }
+
+
+def build_verifiable_hypothesis_spec_for_mode(
+    hypothesis: str,
+    *,
+    project_mode: str = "general",
+    hypo_meta: Optional[Dict[str, Any]] = None,
+    plan: Optional[Dict[str, Any]] = None,
+    fl_context: Optional[Dict[str, Any]] = None,
+    experiment_design: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """按项目模式构建 verifiable spec（联邦 / 通用）。"""
+    if project_mode == "federated_learning":
+        return build_verifiable_hypothesis_spec(
+            hypothesis,
+            plan or experiment_design or {},
+            fl_context or (experiment_design or {}).get("fl_context") or {},
+        )
+    return build_general_verifiable_hypothesis_spec(
+        hypothesis, hypo_meta, experiment_design
+    )
+
+
+def attach_verifiable_specs_to_hypotheses(
+    hypothesis_generation: Dict[str, Any],
+    *,
+    project_mode: str = "general",
+    fl_context: Optional[Dict[str, Any]] = None,
+    experiment_design: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """为每条假设附加 verifiable_spec，并写入 primary_verifiable_spec。"""
+    hg = dict(hypothesis_generation or {})
+    hypotheses = list(hg.get("hypotheses") or [])
+    plan = (experiment_design or {}).get("federated_plan") or {}
+    updated: List[Dict[str, Any]] = []
+
+    for hypo in hypotheses:
+        h = dict(hypo) if isinstance(hypo, dict) else {"hypothesis": str(hypo)}
+        spec = build_verifiable_hypothesis_spec_for_mode(
+            h.get("hypothesis", ""),
+            project_mode=project_mode,
+            hypo_meta=h,
+            plan=plan,
+            fl_context=fl_context,
+            experiment_design=experiment_design,
+        )
+        h["verifiable_spec"] = spec
+        updated.append(h)
+
+    hg["hypotheses"] = updated
+    primary_idx = int(hg.get("primary_index") or 0)
+    if updated:
+        primary_idx = min(max(0, primary_idx), len(updated) - 1)
+        hg["primary_verifiable_spec"] = updated[primary_idx].get("verifiable_spec")
+    return hg
+
+
+def evaluate_verifiable_spec_against_validation(
+    small_validation: Dict[str, Any],
+    verifiable_spec: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """对照 verifiable_spec 与验证结果，生成可审计 checks。"""
+    sv = small_validation or {}
+    spec = verifiable_spec or sv.get("verifiable_hypothesis") or sv.get("verifiable_spec") or {}
+    checks: List[Dict[str, Any]] = []
+
+    sb = sv.get("sandbox_execution") or {}
+    if sb.get("success") is not None or sb.get("return_code") is not None:
+        passed = bool(sb.get("success"))
+        checks.append({
+            "check_id": "sandbox_success",
+            "description": "沙箱执行成功",
+            "expected": "success=True",
+            "actual": str(sb.get("success")),
+            "passed": passed,
+            "source": "sandbox_execution",
+        })
+        metrics = sb.get("metrics") or {}
+        if metrics and spec.get("primary_metric"):
+            checks.append({
+                "check_id": "sandbox_metrics_present",
+                "description": f"沙箱产出 metrics（主指标 {spec.get('primary_metric')}）",
+                "expected": "metrics 非空",
+                "actual": str(list(metrics.keys())[:5]),
+                "passed": bool(metrics),
+                "source": "sandbox_execution",
+            })
+
+    fp = sv.get("federated_pilot") or {}
+    if fp:
+        gate = fp.get("alignment_gate") or {}
+        if gate and not gate.get("skipped"):
+            checks.append({
+                "check_id": "vfl_alignment_gate",
+                "description": "VFL 对齐 gate",
+                "expected": "passed=True",
+                "actual": str(gate.get("passed")),
+                "passed": bool(gate.get("passed")),
+                "source": "federated_pilot",
+            })
+        mode = fp.get("execution_mode", "")
+        checks.append({
+            "check_id": "federated_pilot_ran",
+            "description": "联邦 pilot 已执行",
+            "expected": "mode 非 skipped/gate_blocked",
+            "actual": mode,
+            "passed": mode not in ("skipped", "gate_blocked", ""),
+            "source": "federated_pilot",
+        })
+        comp = fp.get("metric_comparison") or []
+        if comp and spec.get("primary_metric"):
+            best = max(
+                comp,
+                key=lambda r: float(
+                    r.get("global_accuracy")
+                    or r.get("prediction_accuracy")
+                    or r.get("accuracy")
+                    or 0
+                ),
+            )
+            acc = (
+                best.get("global_accuracy")
+                or best.get("prediction_accuracy")
+                or best.get("accuracy")
+            )
+            checks.append({
+                "check_id": "federated_primary_metric",
+                "description": f"联邦 {spec.get('primary_metric')} 有观测值",
+                "expected": "best_method accuracy 可读取",
+                "actual": f"{best.get('method')}={acc}",
+                "passed": acc is not None,
+                "source": "federated_pilot",
+            })
+
+    evidence_level = spec.get("evidence_level")
+    fact_count = len(spec.get("supporting_fact_ids") or [])
+    if evidence_level == "low" or fact_count == 0:
+        checks.append({
+            "check_id": "evidence_sufficiency",
+            "description": "文献证据支撑充分",
+            "expected": "evidence_level != low 且 supporting_fact_ids ≥ 1",
+            "actual": f"level={evidence_level}, facts={fact_count}",
+            "passed": evidence_level not in ("low", None) and fact_count > 0,
+            "source": "hypothesis_provenance",
+        })
+
+    for i, criterion in enumerate((spec.get("success_criteria") or [])[:3], start=1):
+        checks.append({
+            "check_id": f"success_criterion_{i}",
+            "description": str(criterion)[:120],
+            "expected": "验证结果支持该判据（启发式）",
+            "actual": "见 sandbox/pilot checks",
+            "passed": any(c.get("passed") for c in checks if c.get("source") != "hypothesis_provenance"),
+            "source": "verifiable_spec",
+        })
+
+    return checks
+
+
+def compute_evidence_provenance_summary(hypo: Dict[str, Any]) -> Dict[str, Any]:
+    """从假设 dict 提取溯源摘要，供快照与评审使用。"""
+    fact_ids = list(hypo.get("supporting_fact_ids") or [])
+    return {
+        "supporting_fact_count": len(fact_ids),
+        "supporting_fact_ids_sample": fact_ids[:8],
+        "data_evidence_count": len(hypo.get("data_evidence_ids") or []),
+        "dataset_field_count": len(hypo.get("dataset_field_refs") or []),
+        "evidence_level": hypo.get("evidence_level") or "medium",
+        "validation_target": hypo.get("validation_target") or "",
+    }
+
+
+def assess_evidence_sufficiency(hypo: Dict[str, Any]) -> Dict[str, Any]:
+    """评审侧证据充分度评估。"""
+    summary = compute_evidence_provenance_summary(hypo)
+    count = summary["supporting_fact_count"]
+    level = summary["evidence_level"]
+    missing: List[str] = []
+
+    if count == 0:
+        missing.append("无 supporting_fact_ids")
+    if level == "low":
+        missing.append("证据等级为 low")
+    if summary["dataset_field_count"] == 0 and summary["data_evidence_count"] == 0:
+        missing.append("未绑定数据集字段或多模态 evidence")
+
+    if count >= 3 and level == "high":
+        verdict = "adequate"
+    elif count >= 1:
+        verdict = "weak"
+    else:
+        verdict = "missing"
+
+    return {
+        "evidence_sufficiency": verdict,
+        "missing_evidence_types": missing,
+        **summary,
     }
 
 

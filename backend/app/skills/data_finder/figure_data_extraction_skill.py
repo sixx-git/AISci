@@ -63,8 +63,10 @@ class FigureDataExtractionSkill(BaseSkill):
                 "legend": legend,
                 "possible_data_series": series,
                 "extraction_confidence": confidence,
+                "extraction_method": "rule",
                 "needs_manual_review": confidence < 0.65,
                 "included_in_csv": False,
+                "review_status": "pending",
             })
 
         result.data = {"figures": figures_out, "count": len(figures_out)}

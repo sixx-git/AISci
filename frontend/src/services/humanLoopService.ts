@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { ApiResponse } from '@/types';
+import type { ApiResponse, HitlGateInfo } from '@/types';
 
 export interface StageHumanDetail {
   run_id: string;
@@ -51,7 +51,7 @@ export const humanLoopService = {
     stage: string;
     use_human_modified_output?: boolean;
   }): Promise<ApiResponse<{ run_id: string; parent_run_id: string; rerun_from_stage: string; status: string }>> {
-    const { data } = await api.post('/pipeline/rerun-from-stage', payload);
+    const { data } = await api.post('/human-loop/rerun-from-stage', payload);
     return data;
   },
 
@@ -67,6 +67,22 @@ export const humanLoopService = {
     changes_summary: string[];
   }>> {
     const { data } = await api.post('/human-loop/stage-chat', payload);
+    return data;
+  },
+
+  async getHitlGateStatus(runId: string): Promise<ApiResponse<HitlGateInfo & { run_id: string; status: string }>> {
+    const { data } = await api.get(`/human-loop/gate/${runId}`);
+    return data;
+  },
+
+  async resumeHitlGate(payload: {
+    project_id: string;
+    run_id: string;
+    action: 'continue' | 'rerun' | 'abort';
+    human_feedback?: string;
+    inject_feedback?: boolean;
+  }): Promise<ApiResponse<{ action: string; status: string; run_id: string; rerun_from_stage?: string }>> {
+    const { data } = await api.post('/human-loop/gate/resume', payload);
     return data;
   },
 

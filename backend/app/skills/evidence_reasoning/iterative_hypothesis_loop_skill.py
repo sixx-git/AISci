@@ -28,6 +28,7 @@ class IterativeHypothesisLoopSkill(BaseSkill):
         imported_papers = input_data.get("imported_papers", [])
         uploaded_pdfs = input_data.get("uploaded_pdfs", [])
         bibtex_docs = input_data.get("bibtex_docs", [])
+        multimodal_facts = input_data.get("multimodal_facts", []) or []
 
         current_hypothesis = hypothesis
         revision_history = []
@@ -53,11 +54,12 @@ class IterativeHypothesisLoopSkill(BaseSkill):
                 {
                     "hypothesis": current_hypothesis,
                     "research_question": research_question,
-                    "facts": facts,
+                    "facts": facts + multimodal_facts,
                     "citation_map": citation_map,
                     "imported_papers": imported_papers,
                     "uploaded_pdfs": uploaded_pdfs,
                     "bibtex_docs": bibtex_docs,
+                    "multimodal_facts": multimodal_facts,
                 },
                 context,
             )
@@ -66,7 +68,7 @@ class IterativeHypothesisLoopSkill(BaseSkill):
             counter_res = await counter_skill.run(
                 {
                     "hypothesis": current_hypothesis,
-                    "facts": facts,
+                    "facts": facts + multimodal_facts,
                     "citation_map": citation_map,
                     "uncertain_points": uncertain_points,
                 },
@@ -89,6 +91,9 @@ class IterativeHypothesisLoopSkill(BaseSkill):
                     "hypothesis": current_hypothesis,
                     "supporting_evidence": supporting,
                     "counter_evidence": counter,
+                    "facts": facts + multimodal_facts,
+                    "fact_whitelist": [f.get("fact_id") for f in facts + multimodal_facts if f.get("fact_id")],
+                    "research_question": research_question,
                 },
                 context,
             )
@@ -105,7 +110,8 @@ class IterativeHypothesisLoopSkill(BaseSkill):
                 "supporting_evidence": supporting,
                 "counter_evidence": counter,
                 "citation_map": citation_map,
-                "facts": facts,
+                "facts": facts + multimodal_facts,
+                "multimodal_facts": multimodal_facts,
             },
             context,
         )
@@ -127,6 +133,11 @@ class IterativeHypothesisLoopSkill(BaseSkill):
 
         chain = builder_res.data.get("evidence_chain", {})
         chain["citation_integrity"] = integrity_res.data
+        if multimodal_facts:
+            chain["multimodal_evidence_count"] = len(multimodal_facts)
+            chain["multimodal_in_chain"] = sum(
+                1 for e in supporting + counter if e.get("source_type") == "multimodal"
+            )
 
         result.data = {
             "evidence_chain": chain,

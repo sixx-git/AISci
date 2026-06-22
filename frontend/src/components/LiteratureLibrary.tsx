@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Upload, FileText,
   Database, Eye, Sparkles, Trash2,
@@ -13,6 +14,7 @@ import { StatCard } from '@/components/StatCard';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
+import dataFinderService from '@/services/dataFinderService';
 import type { DocumentInfo } from '@/services/documentService';
 import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult, ParseIndexResult } from '@/services/literatureService';
 
@@ -108,6 +110,7 @@ const TABLE_COLUMNS = [
   { key: 'parseStatus', label: '解析状态', className: 'text-center' },
   { key: 'snippetCount', label: '切片', className: 'text-center' },
   { key: 'factCount', label: '事实', className: 'text-center' },
+  { key: 'dataFinder', label: 'Data Finder', className: 'text-center' },
   { key: 'actions', label: '操作', className: 'text-right' },
 ] as const;
 
@@ -128,6 +131,7 @@ interface LiteratureLibraryProps {
 }
 
 export function LiteratureLibrary({ projectId = 'default', compact: _compact = false }: LiteratureLibraryProps) {
+  const navigate = useNavigate();
   // ========== Tab 状态 ==========
   const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'bibtex' | 'library'>('upload');
 
@@ -138,6 +142,9 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [deleting, setDeleting] = useState<string | null>(null);
   const [buildingIndex, setBuildingIndex] = useState(false);
   const [search, setSearch] = useState('');
+  const [extractionStats, setExtractionStats] = useState<
+    Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>
+  >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ========== arXiv 检索状态 ==========
@@ -203,6 +210,24 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     }
   }, [projectId, showStatus]);
 
+  const loadExtractionStats = useCallback(async () => {
+    if (!projectId || projectId === 'default') return;
+    try {
+      const res = await dataFinderService.getPaperExtractionStats(projectId);
+      if (res.code === 200 && res.data?.by_paper) {
+        setExtractionStats(res.data.by_paper);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [projectId]);
+
+  const openDataFinder = useCallback(() => {
+    if (projectId && projectId !== 'default') {
+      navigate(`/projects/${projectId}?tab=datasets&subtab=data-finder`);
+    }
+  }, [navigate, projectId]);
+
   const loadImportedDocs = useCallback(async () => {
     if (!projectId) return;
     setImportedLoading(true);
@@ -223,7 +248,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   useEffect(() => {
     loadDocuments();
     loadImportedDocs();
-  }, [loadDocuments, loadImportedDocs]);
+    loadExtractionStats();
+  }, [loadDocuments, loadImportedDocs, loadExtractionStats]);
 
   // ========== 上传 PDF ==========
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -701,6 +727,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
               loading={loading}
               deleting={deleting}
               onDelete={handleDelete}
+              extractionStats={extractionStats}
+              onOpenDataFinder={openDataFinder}
             />
           </div>
         )}
@@ -1310,12 +1338,14 @@ function LibraryTabContent({
 
 // ---------- 已有文献表格 ----------
 function LiteratureTable({
-  items, loading, deleting, onDelete,
+  items, loading, deleting, onDelete, extractionStats = {}, onOpenDataFinder,
 }: {
   items: LiteratureItem[];
   loading: boolean;
   deleting: string | null;
   onDelete: (id: string) => void;
+  extractionStats?: Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>;
+  onOpenDataFinder?: () => void;
 }) {
   return (
     <Card className="overflow-hidden p-0">
@@ -1362,6 +1392,26 @@ function LiteratureTable({
                   <td className="px-4 py-3 text-center text-gray-300">{item.snippetCount}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-gray-600'}>{item.factCount}</span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {(() => {
+                      const st = extractionStats[item.id];
+                      if (!st || (st.tables === 0 && st.figures_confirmed === 0)) {
+                        return <span className="text-gray-600 text-[11px]">—</span>;
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={onOpenDataFinder}
+                          className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300"
+                          title="跳转 Data Finder 详情"
+                        >
+                          <Database className="w-3 h-3" />
+                          {st.tables}表
+                          {st.figures_confirmed > 0 ? ` · ${st.figures_confirmed}图` : ''}
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">

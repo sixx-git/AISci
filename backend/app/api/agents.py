@@ -396,6 +396,104 @@ async def iterate_hypothesis_evidence_chain(
         return error(str(e))
 
 
+@router.get("/hypotheses/{hypothesis_id}/provenance-timeline")
+async def get_hypothesis_provenance_timeline(
+    hypothesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """假设溯源时间线：facts → 多模态 → 数据集 → verifiable spec"""
+    try:
+        import json
+
+        from app.core.hypothesis_provenance import build_hypothesis_provenance_timeline
+        from app.core.data_citation import collect_citation_ids_from_hypothesis
+        from app.core.iterative_science import build_general_verifiable_hypothesis_spec
+        from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStage, PipelineStatus
+
+        hypo_service = HypothesisService(db)
+        hypo = hypo_service.get_hypothesis_by_id(hypothesis_id)
+        if not hypo:
+            return error("假设不存在", code=404)
+
+        literature_mining: dict = {"facts": [], "multimodal_evidence": []}
+        latest_run = (
+            db.query(PipelineRun)
+            .filter(
+                PipelineRun.project_id == hypo.project_id,
+                PipelineRun.status == PipelineStatus.COMPLETED,
+            )
+            .order_by(PipelineRun.created_at.desc())
+            .first()
+        )
+        if latest_run:
+            stage = (
+                db.query(PipelineStageExecution)
+                .filter(
+                    PipelineStageExecution.pipeline_run_id == latest_run.id,
+                    PipelineStageExecution.stage == PipelineStage.LITERATURE_MINING,
+                )
+                .first()
+            )
+            if stage and isinstance(stage.output_data, dict):
+                literature_mining = stage.output_data
+
+        row_provenance: list = []
+        try:
+            from app.services.data_finder_service import get_data_finder_service
+
+            df = get_data_finder_service(db).load_results(hypo.project_id) or {}
+            row_provenance = df.get("row_provenance") or []
+        except Exception:
+            pass
+
+        def _parse_json_list(raw):
+            if isinstance(raw, list):
+                return raw
+            if isinstance(raw, str) and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                    return parsed if isinstance(parsed, list) else []
+                except json.JSONDecodeError:
+                    return []
+            return []
+
+        supporting_fact_ids = _parse_json_list(hypo.supporting_fact_ids)
+        data_evidence_ids = _parse_json_list(hypo.data_evidence_ids)
+        dataset_field_refs = _parse_json_list(hypo.dataset_field_refs)
+
+        hypo_dict = {
+            "hypothesis": hypo.hypothesis,
+            "supporting_fact_ids": supporting_fact_ids,
+            "data_evidence_ids": data_evidence_ids,
+            "dataset_field_refs": dataset_field_refs,
+            "data_citation_ids": [],
+            "verifiable_spec": build_general_verifiable_hypothesis_spec(
+                hypo.hypothesis or "",
+                {
+                    "supporting_fact_ids": supporting_fact_ids,
+                    "dataset_field_refs": dataset_field_refs,
+                    "evidence_level": hypo.evidence_level,
+                    "validation_target": hypo.validation_target,
+                    "expected_measurable_effect": hypo.expected_measurable_effect,
+                },
+            ),
+        }
+        hypo_dict["data_citation_ids"] = collect_citation_ids_from_hypothesis(hypo_dict)
+
+        timeline = build_hypothesis_provenance_timeline(
+            hypo_dict,
+            facts=literature_mining.get("facts") or [],
+            multimodal_facts=literature_mining.get("multimodal_evidence") or [],
+            row_provenance=row_provenance,
+        )
+        return success(
+            {"hypothesis_id": hypothesis_id, "timeline": timeline},
+            message="获取溯源时间线成功",
+        )
+    except Exception as e:
+        return error(str(e))
+
+
 @router.post("/hypothesis-review", response_model=ApiResponse[HypothesisReviewResult])
 async def hypothesis_review(
     request: HypothesisReviewRequest

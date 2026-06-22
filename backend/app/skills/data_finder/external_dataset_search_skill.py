@@ -35,8 +35,10 @@ class ExternalDatasetSearchSkill(BaseSkill):
         )
         if disc_res.data.get("datasets"):
             for ds in disc_res.data["datasets"]:
+                src = ds.get("source", "known_catalog")
+                platform = "Kaggle (curated index)" if "kaggle" in str(src).lower() else src
                 candidates.append({
-                    "source_platform": ds.get("source", "known_catalog"),
+                    "source_platform": platform,
                     "dataset_name": ds.get("dataset_name", ""),
                     "url": ds.get("url", ""),
                     "description": ds.get("description", ""),
@@ -56,6 +58,18 @@ class ExternalDatasetSearchSkill(BaseSkill):
         else:
             candidates.extend(hf.get("results", []))
 
+        zenodo = self._search_zenodo(query)
+        if zenodo.get("error"):
+            warnings.append(zenodo["error"])
+        else:
+            candidates.extend(zenodo.get("results", []))
+
+        pubmed_geo = self._search_pubmed_geo(query)
+        if pubmed_geo.get("error"):
+            warnings.append(pubmed_geo["error"])
+        else:
+            candidates.extend(pubmed_geo.get("results", []))
+
         if not candidates:
             warnings.append("无法联网或未命中外部数据源，已优先使用本地 PDF/BibTeX 抽取结果")
 
@@ -71,9 +85,13 @@ class ExternalDatasetSearchSkill(BaseSkill):
             "candidates": dedup[:20],
             "count": len(dedup),
             "offline_fallback": bool(warnings),
+            "live_apis": ["openalex", "huggingface", "zenodo", "ncbi_geo"],
+            "curated_catalogs": ["known_datasets", "kaggle_index"],
         }
         result.warnings.extend(warnings)
         result.warnings.extend(disc_res.warnings)
+        if any("kaggle" in str(c.get("source_platform", "")).lower() for c in dedup):
+            result.warnings.append("Kaggle 条目来自 curated index，非实时 API")
         return result
 
     @staticmethod
@@ -128,5 +146,86 @@ class ExternalDatasetSearchSkill(BaseSkill):
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             logger.warning(f"HuggingFace 检索失败: {exc}")
             return {"error": f"HuggingFace 不可用: {exc}", "results": []}
+        except Exception as exc:
+            return {"error": str(exc), "results": []}
+
+    @staticmethod
+    def _search_zenodo(query: str) -> Dict[str, Any]:
+        try:
+            params = urllib.parse.urlencode({"q": query, "size": 5, "type": "dataset"})
+            url = f"https://zenodo.org/api/records?{params}"
+            req = urllib.request.Request(url, headers={"User-Agent": "AISci-DataFinder/1.0"})
+            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            results = []
+            for hit in (data.get("hits", {}).get("hits") or [])[:5]:
+                meta = hit.get("metadata") or {}
+                title = meta.get("title") or hit.get("title") or ""
+                rec_id = hit.get("id") or ""
+                results.append({
+                    "source_platform": "Zenodo",
+                    "dataset_name": title[:200],
+                    "url": f"https://zenodo.org/record/{rec_id}" if rec_id else "",
+                    "description": (meta.get("description") or "")[:300],
+                    "license": (meta.get("license") or {}).get("id", "") if isinstance(meta.get("license"), dict) else str(meta.get("license") or ""),
+                    "confidence": 0.72,
+                    "api_type": "live",
+                })
+            return {"results": results}
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            logger.warning("Zenodo 检索失败: %s", exc)
+            return {"error": f"Zenodo 不可用: {exc}", "results": []}
+        except Exception as exc:
+            return {"error": str(exc), "results": []}
+
+    @staticmethod
+    def _search_pubmed_geo(query: str) -> Dict[str, Any]:
+        """NCBI E-utilities — GEO 数据集元数据（live API）。"""
+        try:
+            esearch_params = urllib.parse.urlencode({
+                "db": "gds",
+                "term": f"{query}[All Fields] AND gse[Entry Type]",
+                "retmax": 5,
+                "retmode": "json",
+            })
+            esearch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?{esearch_params}"
+            req = urllib.request.Request(esearch_url, headers={"User-Agent": "AISci-DataFinder/1.0"})
+            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+                es_data = json.loads(resp.read().decode("utf-8"))
+            ids = (es_data.get("esearchresult") or {}).get("idlist") or []
+            if not ids:
+                return {"results": []}
+
+            esummary_params = urllib.parse.urlencode({
+                "db": "gds",
+                "id": ",".join(ids[:5]),
+                "retmode": "json",
+            })
+            esummary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?{esummary_params}"
+            req2 = urllib.request.Request(esummary_url, headers={"User-Agent": "AISci-DataFinder/1.0"})
+            with urllib.request.urlopen(req2, timeout=REQUEST_TIMEOUT) as resp2:
+                sum_data = json.loads(resp2.read().decode("utf-8"))
+
+            results = []
+            result_map = (sum_data.get("result") or {})
+            for gid in ids[:5]:
+                item = result_map.get(gid) or {}
+                if not isinstance(item, dict):
+                    continue
+                title = item.get("title") or item.get("gse") or f"GEO {gid}"
+                gse = item.get("gse") or ""
+                results.append({
+                    "source_platform": "NCBI GEO",
+                    "dataset_name": str(title)[:200],
+                    "url": f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={gse}" if gse else "",
+                    "description": (item.get("summary") or "GEO 表达/芯片数据集元数据")[:300],
+                    "confidence": 0.68,
+                    "api_type": "live",
+                    "geo_id": gse,
+                })
+            return {"results": results}
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            logger.warning("NCBI GEO 检索失败: %s", exc)
+            return {"error": f"NCBI GEO 不可用: {exc}", "results": []}
         except Exception as exc:
             return {"error": str(exc), "results": []}

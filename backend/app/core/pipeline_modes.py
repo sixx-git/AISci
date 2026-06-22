@@ -16,8 +16,21 @@ DEFAULT_NUM_IDEAS = 3
 DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_FEDERATED_CAMPAIGN_MAX = 2
+DEFAULT_HITL_GATE_STAGES = (
+    "hypothesis_review",
+    "experiment_design",
+    "small_validation",
+)
+DEFAULT_MIN_IMPROVEMENT_DELTA = 3.0
+DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
+
+HITL_GATE_STAGE_LABELS = {
+    "hypothesis_review": "假设评审",
+    "experiment_design": "实验设计",
+    "small_validation": "小样验证",
+}
 
 
 def normalize_pipeline_mode(mode: str | None) -> str:
@@ -53,6 +66,22 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         fed_max = max(1, min(fed_max, 3))
     except (TypeError, ValueError):
         fed_max = DEFAULT_FEDERATED_CAMPAIGN_MAX
+    enable_hitl_gate = opts.get("enable_hitl_gate")
+    if enable_hitl_gate is None:
+        enable_hitl_gate = mode == PipelineMode.TEACHING.value
+    gate_stages = opts.get("hitl_gate_stages")
+    if not gate_stages:
+        gate_stages = list(DEFAULT_HITL_GATE_STAGES)
+    min_delta = opts.get("min_improvement_delta", DEFAULT_MIN_IMPROVEMENT_DELTA)
+    try:
+        min_delta = float(min_delta)
+    except (TypeError, ValueError):
+        min_delta = DEFAULT_MIN_IMPROVEMENT_DELTA
+    coverage_threshold = opts.get("coverage_gap_threshold", DEFAULT_COVERAGE_GAP_THRESHOLD)
+    try:
+        coverage_threshold = float(coverage_threshold)
+    except (TypeError, ValueError):
+        coverage_threshold = DEFAULT_COVERAGE_GAP_THRESHOLD
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -64,4 +93,11 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_federated_campaign_loop": bool(opts.get("enable_federated_campaign_loop", True)),
         "federated_campaign_max": fed_max,
         "sandbox_use_docker": bool(opts.get("sandbox_use_docker")),
+        "enable_hitl_gate": bool(enable_hitl_gate),
+        "hitl_gate_stages": list(gate_stages),
+        "enable_executability_gate": opts.get("enable_executability_gate", True),
+        "min_improvement_delta": min_delta,
+        "enable_gap_search": opts.get("enable_gap_search", True),
+        "enable_hf_auto_import": opts.get("enable_hf_auto_import", True),
+        "coverage_gap_threshold": coverage_threshold,
     }

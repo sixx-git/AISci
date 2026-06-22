@@ -1,6 +1,7 @@
 import { RefreshCw, BookOpen, TrendingUp, CheckCircle2, AlertCircle, FlaskConical, Shield } from 'lucide-react';
 import type { DiscoveryLoopData, TeachingAutoRefinementData, QualityAcceptance } from '@/types';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
+import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 
 interface DiscoveryLoopPanelProps {
   discoveryLoop?: DiscoveryLoopData | null;
@@ -37,11 +38,13 @@ export function DiscoveryLoopPanel({
           <div className="flex flex-wrap gap-3 text-[11px]">
             <Stat label="Accept" value={qualityAcceptance.accepted ? '是' : '否'} />
             <Stat
-              label="分数趋势"
+              label="CQS 趋势"
               value={
-                qualityAcceptance.score_delta != null
-                  ? `${qualityAcceptance.score_improved ? '↑' : '→/↓'} ${qualityAcceptance.score_delta >= 0 ? '+' : ''}${qualityAcceptance.score_delta.toFixed(1)}`
-                  : '—'
+                qualityAcceptance.cqs_delta != null
+                  ? `${qualityAcceptance.cqs_improved ? '↑' : '→/↓'} ${qualityAcceptance.cqs_delta >= 0 ? '+' : ''}${qualityAcceptance.cqs_delta.toFixed(1)}`
+                  : qualityAcceptance.score_delta != null
+                    ? `${qualityAcceptance.score_improved ? '↑' : '→/↓'} ${qualityAcceptance.score_delta >= 0 ? '+' : ''}${qualityAcceptance.score_delta.toFixed(1)}`
+                    : '—'
               }
             />
             <Stat label="Discovery 轮次" value={String(qualityAcceptance.discovery_rounds ?? '—')} />
@@ -146,6 +149,27 @@ export function DiscoveryLoopPanel({
                     </p>
                   )}
 
+                  {entry.driven_by && (
+                    <p className="text-[10px] text-primary-400/90 mb-1">
+                      驱动: {entry.driven_by}
+                    </p>
+                  )}
+                  {(entry.data_changes || []).length > 0 && (
+                    <p className="text-[10px] text-emerald-400/90 mb-1">
+                      数据变更: {(entry.data_changes || []).join(' · ')}
+                    </p>
+                  )}
+                  {(entry.plan_changes || []).length > 0 && (
+                    <p className="text-[10px] text-blue-400/90 mb-1">
+                      计划变更: {(entry.plan_changes || []).join(' · ')}
+                    </p>
+                  )}
+                  {entry.status === 'stagnant' && entry.stagnation && (
+                    <p className="text-[10px] text-amber-400 mb-1">
+                      CQS 停滞: {String((entry.stagnation as { reason?: string }).reason || '建议人工介入')}
+                    </p>
+                  )}
+
                   {(entry.refinement_notes || []).slice(0, 2).map((note) => (
                     <p key={note} className="text-[10px] text-gray-500 line-clamp-1">• {note}</p>
                   ))}
@@ -157,6 +181,7 @@ export function DiscoveryLoopPanel({
       )}
 
       <VersionComparePanel snapshots={snapshots} />
+      <EvidenceDiffPanel snapshots={snapshots} />
     </div>
   );
 }

@@ -90,3 +90,31 @@ class ReportReviseRequest(BaseModel):
     report_id: str
     message: str
     apply_change: bool = True
+
+
+class HitlGateResumeRequest(BaseModel):
+    run_id: str
+    project_id: str
+    action: str = Field(..., description="continue | rerun | abort")
+    human_feedback: str = ""
+    inject_feedback: bool = True
+
+
+class HitlGateStatusResponse(BaseModel):
+    run_id: str
+    project_id: Optional[str] = None
+    status: str
+    paused: bool = False
+    stage: Optional[str] = None
+    stage_label: Optional[str] = None
+    resume_phase: Optional[str] = None
+    paused_at: Optional[str] = None
+    cleared_stages: List[str] = Field(default_factory=list)
+
+
+class HitlGateResumeResponse(BaseModel):
+    action: str
+    status: str
+    run_id: str
+    rerun_from_stage: Optional[str] = None
+    feedback_constraints_count: Optional[int] = None

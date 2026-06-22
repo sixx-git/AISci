@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { HypothesisProvenanceTimeline } from '@/components/HypothesisProvenanceTimeline';
 import {
   Star, Eye, FlaskConical, AlertTriangle, ChevronDown, ChevronUp,
-  Award, CheckCircle2, Target, RefreshCw, ShieldCheck, Link2,
+  Award, CheckCircle2, Target, RefreshCw, ShieldCheck, Link2, GitBranch,
 } from 'lucide-react';
 import type { DetailedHypothesis } from '@/types';
 
@@ -14,6 +15,7 @@ interface HypothesisCardProps {
   onSetPrimary?: (id: string) => void;
   onEnterExperiment?: (id: string) => void;
   onIterateEvidence?: (id: string) => void;
+  onNavigateToLiterature?: (documentId: string, chunkId?: string) => void;
   iterating?: boolean;
 }
 
@@ -29,9 +31,11 @@ export function HypothesisCard({
   onSetPrimary,
   onEnterExperiment,
   onIterateEvidence,
+  onNavigateToLiterature,
   iterating = false,
 }: HypothesisCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [detailTab, setDetailTab] = useState<'detail' | 'provenance'>('detail');
   const oc = overallColor(hypothesis.overallScore);
   const hasDatasetFields = (hypothesis.dataset_field_refs?.length ?? 0) > 0;
   const hasDataEvidence = (hypothesis.data_evidence_ids?.length ?? 0) > 0;
@@ -161,6 +165,37 @@ export function HypothesisCard({
       {/* ===== 展开详情 ===== */}
       {expanded && (
         <div className="mt-3 pt-3 border-t border-gray-800 space-y-3 animate-fade-in">
+          <div className="flex items-center gap-1 border-b border-gray-800 pb-2">
+            <button
+              type="button"
+              onClick={() => setDetailTab('detail')}
+              className={cn(
+                'text-xs px-2.5 py-1 rounded transition-colors',
+                detailTab === 'detail' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300',
+              )}
+            >
+              详情
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailTab('provenance')}
+              className={cn(
+                'text-xs px-2.5 py-1 rounded transition-colors flex items-center gap-1',
+                detailTab === 'provenance' ? 'bg-primary-500/20 text-primary-300' : 'text-gray-500 hover:text-gray-300',
+              )}
+            >
+              <GitBranch className="w-3 h-3" />
+              溯源时间线
+            </button>
+          </div>
+
+          {detailTab === 'provenance' ? (
+            <HypothesisProvenanceTimeline
+              hypothesisId={hypothesis.id}
+              onNavigateToLiterature={onNavigateToLiterature}
+            />
+          ) : (
+            <>
           {/* 偏题警告 */}
           {hypothesis.off_topic && hypothesis.off_topic_reason && (
             <div className="p-2.5 rounded-lg border border-red-500/20 bg-red-500/5">
@@ -189,6 +224,49 @@ export function HypothesisCard({
                 推理依据
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">{hypothesis.reasoning}</p>
+            </div>
+          )}
+
+          {/* 可验证 spec */}
+          {hypothesis.verifiable_spec && (
+            <div className="p-2.5 rounded-lg border border-emerald-500/15 bg-emerald-500/5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Target className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-medium text-emerald-400">可验证 spec</span>
+              </div>
+              {hypothesis.verifiable_spec.claim && (
+                <p className="text-xs text-gray-300 mb-1">{hypothesis.verifiable_spec.claim}</p>
+              )}
+              {hypothesis.verifiable_spec.primary_metric && (
+                <p className="text-[10px] font-mono text-emerald-300/90">
+                  主指标: {hypothesis.verifiable_spec.primary_metric}
+                </p>
+              )}
+              {hypothesis.verifiable_spec.falsification_criteria && (
+                <p className="text-[10px] text-gray-500 mt-1 line-clamp-2">
+                  Falsify: {hypothesis.verifiable_spec.falsification_criteria}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 文献 fact 溯源 */}
+          {(hypothesis.supporting_fact_ids?.length ?? 0) > 0 && (
+            <div className="p-2.5 rounded-lg border border-primary-500/15 bg-primary-500/5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Link2 className="w-3.5 h-3.5 text-primary-400" />
+                <span className="text-xs font-medium text-primary-400">文献 fact 溯源</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {hypothesis.supporting_fact_ids!.map((fid) => (
+                  <span
+                    key={fid}
+                    className="text-[10px] font-mono text-primary-300/80 bg-primary-500/10 px-1.5 py-0.5 rounded"
+                  >
+                    {fid}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
@@ -249,6 +327,8 @@ export function HypothesisCard({
             <ScoreBarSimple label="可验证性" score={hypothesis.verifiability} color="green" />
             <ScoreBarSimple label="数据可得性" score={hypothesis.dataAvailability} color="blue" />
           </div>
+            </>
+          )}
         </div>
       )}
 

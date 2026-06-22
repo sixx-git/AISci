@@ -261,6 +261,9 @@ export interface PipelineRunSummary {
 export interface QualityTrendEntry {
   stage?: string;
   score?: number;
+  cqs?: number;
+  raw_score?: number;
+  breakdown?: Record<string, number>;
   round?: number;
   branch_id?: string;
   label?: string;
@@ -280,8 +283,19 @@ export interface ClosedLoopEvent {
   [key: string]: unknown;
 }
 
+export interface HitlGateInfo {
+  paused?: boolean;
+  stage?: string;
+  stage_label?: string;
+  resume_phase?: string;
+  paused_at?: string;
+  cleared_stages?: string[];
+  last_action?: string;
+}
+
 export interface PipelineRunExtraMetadata {
   closed_loop_events?: ClosedLoopEvent[];
+  closed_loop_decisions?: ClosedLoopDecision[];
   quality_trend?: QualityTrendEntry[];
   quality_acceptance?: QualityAcceptance;
   version_snapshots?: IterationSnapshot[];
@@ -289,6 +303,28 @@ export interface PipelineRunExtraMetadata {
   parent_run_id?: string;
   rerun_from?: string;
   run_options?: PipelineRunOptions;
+  hitl_gate?: HitlGateInfo;
+}
+
+export interface ClosedLoopDecision {
+  trigger?: string;
+  action?: string;
+  reason?: string;
+  actor?: string;
+  next_stage?: string;
+  round?: number;
+  at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ExecutabilityGate {
+  passed?: boolean;
+  score?: number;
+  blockers?: string[];
+  warnings?: string[];
+  missing_columns?: string[];
+  matched_columns?: string[];
+  available_columns_sample?: string[];
 }
 
 export interface QualityAcceptance {
@@ -306,6 +342,10 @@ export interface QualityAcceptance {
   literature_refresh_count?: number;
   refining_rounds?: number;
   federated_discovery_accept?: boolean;
+  cqs_first?: number;
+  cqs_last?: number;
+  cqs_delta?: number;
+  cqs_improved?: boolean;
   summary?: string;
 }
 
@@ -324,6 +364,11 @@ export interface IterationSnapshot {
   federated_execution_mode?: string;
   federated_gate_passed?: boolean;
   replan_action_count?: number;
+  supporting_fact_count?: number;
+  supporting_fact_ids_sample?: string[];
+  evidence_level?: string;
+  verifiable_spec_summary?: string;
+  verifiable_primary_metric?: string;
 }
 
 export interface ReplanAction {
@@ -356,6 +401,11 @@ export interface DiscoveryLoopHistoryEntry {
   snapshot_after?: IterationSnapshot;
   federated_acceptance?: DiscoveryFederatedAcceptance;
   federated_campaign?: FederatedCampaignRefinementData;
+  data_changes?: string[];
+  plan_changes?: string[];
+  driven_by?: string;
+  summary?: string;
+  stagnation?: Record<string, unknown>;
 }
 
 export interface DiscoveryLoopData {
@@ -564,6 +614,26 @@ export interface Hypothesis {
   scores: HypothesisScores;
 }
 
+export interface VerifiableSpec {
+  claim?: string;
+  primary_metric?: string;
+  success_criteria?: string[];
+  falsification_criteria?: string;
+  stop_criteria?: string[];
+  mode?: string;
+  supporting_fact_ids?: string[];
+  evidence_level?: string;
+}
+
+export interface VerifiableCheck {
+  check_id?: string;
+  description?: string;
+  expected?: string;
+  actual?: string;
+  passed?: boolean;
+  source?: string;
+}
+
 export interface DetailedHypothesis {
   id: string;
   title: string;
@@ -594,6 +664,8 @@ export interface DetailedHypothesis {
   supportEvidenceCount?: number;
   counterEvidenceCount?: number;
   citationReliability?: number;
+  supporting_fact_ids?: string[];
+  verifiable_spec?: VerifiableSpec | null;
 }
 
 /** 后端返回的数据集记录 */
