@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Search, FileSpreadsheet, Link2, Image, GitMerge, Download,
-  Loader2, AlertCircle, Database, CheckCircle2, Map,
+  Loader2, AlertCircle, Database, CheckCircle2, Map, Workflow, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import dataFinderService, { type DataFinderResult } from '@/services/dataFinderService';
 import { FigureReviewPanel } from '@/components/FigureReviewPanel';
+import { ExternalCandidateTodoPanel } from '@/components/ExternalCandidateTodoPanel';
 
 interface DataFinderPanelProps {
   projectId: string;
@@ -41,6 +42,50 @@ export function DataFinderPanel({
   useEffect(() => {
     loadResults();
   }, [loadResults]);
+
+  const runGapEnrich = async () => {
+    setLoading(true);
+    setAction('gap');
+    setError(null);
+    try {
+      const res = await dataFinderService.gapEnrich(projectId);
+      if (res.code === 200 && res.data?.results) {
+        setResult(res.data.results);
+      } else {
+        setError(res.message || 'Gap 补搜失败');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gap 补搜失败');
+    } finally {
+      setLoading(false);
+      setAction(null);
+    }
+  };
+
+  const runAcquire = async () => {
+    setLoading(true);
+    setAction('acquire');
+    setError(null);
+    try {
+      const res = await dataFinderService.acquire({
+        project_id: projectId,
+        research_question: researchQuestion,
+        selected_hypothesis: hypothesis,
+        project_mode: projectMode,
+        auto_import: true,
+      });
+      if (res.code === 200 && res.data) {
+        setResult(res.data);
+      } else {
+        setError(res.message || '采集失败');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '采集失败');
+    } finally {
+      setLoading(false);
+      setAction(null);
+    }
+  };
 
   const runSearch = async () => {
     setLoading(true);
@@ -134,7 +179,7 @@ export function DataFinderPanel({
           多源科学数据查找与整合
         </h3>
         <p className="text-xs text-gray-500 mb-3">
-          从已导入 PDF/BibTeX、论文链接与开放数据平台查找数据，抽取表格并输出可下载 CSV（含 provenance）。
+          从已导入 PDF、论文链接与开放数据平台查找数据，抽取表格并输出可下载 CSV（含 provenance）。
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
           <input
@@ -146,7 +191,13 @@ export function DataFinderPanel({
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" size="sm" icon={<Search className="w-4 h-4" />} onClick={runSearch} isLoading={loading && action === 'search'}>
+          <Button variant="primary" size="sm" icon={<Workflow className="w-4 h-4" />} onClick={runAcquire} isLoading={loading && action === 'acquire'}>
+            一键多源采集
+          </Button>
+          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-4 h-4" />} onClick={runGapEnrich} isLoading={loading && action === 'gap'} disabled={!result?.coverage_report?.gap_enrichment_recommended && !result?.coverage_report}>
+            Gap 补搜
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Search className="w-4 h-4" />} onClick={runSearch} isLoading={loading && action === 'search'}>
             查找数据源
           </Button>
           <Button variant="secondary" size="sm" icon={<FileSpreadsheet className="w-4 h-4" />} onClick={runExtract} isLoading={loading && action === 'extract'}>
@@ -167,7 +218,93 @@ export function DataFinderPanel({
         )}
       </Card>
 
-      {result?.data_requirements && (
+      {result?.data_acquisition?.steps && result.data_acquisition.steps.length > 0 && (
+        <Card className="p-4 border-teal-500/20 bg-teal-500/5">
+          <h4 className="text-sm font-semibold text-teal-200 mb-3 flex items-center gap-1.5">
+            <Workflow className="w-4 h-4" />
+            采集流水线进度
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {result.data_acquisition.steps.map((step) => {
+              const detail = result.data_acquisition?.step_details?.[step];
+              const skipped = detail?.skipped;
+              const labelMap: Record<string, string> = {
+                discover: '发现',
+                fetch_supplementary: '补充材料',
+                fetch_external: '外部数据',
+                extract: '抽取',
+                align: '对齐',
+                merge: '合并',
+              };
+              return (
+                <div
+                  key={step}
+                  className={`text-xs p-2 rounded border ${
+                    skipped
+                      ? 'border-dark-600 bg-dark-900/50 text-gray-500'
+                      : 'border-teal-500/30 bg-teal-500/10 text-teal-200'
+                  }`}
+                >
+                  <div className="font-medium">{labelMap[step] || step}</div>
+                  {skipped ? (
+                    <span className="text-[10px] text-gray-500">已跳过</span>
+                  ) : (
+                    <span className="text-[10px] text-gray-400">
+                      {detail?.tables != null && `表 ${detail.tables}`}
+                      {detail?.rows != null && ` · 行 ${detail.rows}`}
+                      {detail?.imported != null && ` · 导入 ${detail.imported}`}
+                      {detail?.candidates != null && ` · 候选 ${detail.candidates}`}
+                      {detail?.duration_ms != null && ` · ${detail.duration_ms}ms`}
+                      {detail?.error_code && (
+                        <span className="text-red-400"> · {detail.error_code}</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {result.data_acquisition.stats && (
+            <p className="text-[10px] text-gray-500 mt-2">
+              外部候选 {result.data_acquisition.stats.external_candidates ?? 0} ·
+              表格 {result.data_acquisition.stats.tables ?? 0} ·
+              合并行 {result.data_acquisition.stats.merged_rows ?? '—'}
+              {result.data_acquisition.stats.total_duration_ms != null && (
+                <span> · 耗时 {result.data_acquisition.stats.total_duration_ms}ms</span>
+              )}
+              {result.data_acquisition.stats.release_gate_passed != null && (
+                <span className={result.data_acquisition.stats.release_gate_passed ? ' text-green-400' : ' text-amber-400'}>
+                  {' '}· Release Gate {result.data_acquisition.stats.release_gate_passed ? '通过' : '未通过'}
+                </span>
+              )}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {result?.data_spec && (
+        <Card className="p-4 border-indigo-500/20 bg-indigo-500/5">
+          <h4 className="text-sm font-semibold text-indigo-200 mb-2">DataSpec · 数据需求</h4>
+          <p className="text-xs text-gray-400 mb-2">
+            场景 {result.data_spec.scenario || 'general'}
+            {result.data_spec.merge_strategy_hint && (
+              <span className="text-gray-500"> · 合并策略 {result.data_spec.merge_strategy_hint}</span>
+            )}
+          </p>
+          {(result.data_spec.entities_of_interest?.length ?? 0) > 0 && (
+            <p className="text-[10px] text-gray-500 mb-1">
+              实体字段: {result.data_spec.entities_of_interest!.join(', ')}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {(result.data_spec.target_variables || result.data_requirements?.expected_metrics || []).map((m) => (
+              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-gray-400 border border-dark-700">{m}</span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {result?.data_requirements && !result?.data_spec && (
         <Card className="p-4">
           <h4 className="text-sm font-semibold text-white mb-2">数据需求理解</h4>
           <p className="text-xs text-gray-400 mb-2">{result.data_requirements.data_need}</p>
@@ -178,6 +315,47 @@ export function DataFinderPanel({
           </div>
         </Card>
       )}
+
+      {result?.text_facts && result.text_facts.length > 0 && (
+        <Card className="p-4 border-violet-500/20 bg-violet-500/5">
+          <h4 className="text-sm font-semibold text-violet-200 mb-2">正文数值事实 L1 ({result.text_facts.length})</h4>
+          <p className="text-[10px] text-gray-500 mb-2">来自 Methods/Results，供假设与实验设计引用（不进 merge CSV）</p>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {result.text_facts.slice(0, 6).map((fact) => (
+              <div key={String(fact.fact_id)} className="text-xs text-gray-400 p-2 rounded border border-dark-700">
+                <span className="text-violet-300/80 text-[10px]">{String(fact.section)}</span>
+                <p className="line-clamp-2 mt-0.5">{String(fact.sentence)}</p>
+                {(fact.matched_targets as string[] | undefined)?.length ? (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    命中: {(fact.matched_targets as string[]).join(', ')}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {result?.literature_discovery && (result.literature_discovery.imported ?? 0) > 0 && (
+        <Card className="p-4 border-blue-500/20 bg-blue-500/5">
+          <h4 className="text-sm font-semibold text-blue-200 mb-1 flex items-center gap-1.5">
+            <Link2 className="w-4 h-4" />
+            自动文献发现
+          </h4>
+          <p className="text-xs text-gray-400">
+            导入 {result.literature_discovery.imported} 篇 · 来源 {result.literature_discovery.fallback_source}
+            {result.literature_discovery.pdf_downloaded != null && (
+              <span> · PDF {result.literature_discovery.pdf_downloaded}</span>
+            )}
+          </p>
+        </Card>
+      )}
+
+      <ExternalCandidateTodoPanel
+        projectId={projectId}
+        candidates={result?.external_candidates}
+        onUpdated={loadResults}
+      />
 
       {result?.paper_extractions && result.paper_extractions.length > 0 && (
         <Card className="p-4">
@@ -234,6 +412,9 @@ export function DataFinderPanel({
           {result.alignments.map((a) => (
             <div key={a.table_id} className="text-xs text-gray-400 mb-2">
               <span className="text-gray-300">{a.table_id}</span>: {a.standard_columns?.join(', ') || '无标准字段'}
+              {a.merge_strategy && (
+                <span className="text-indigo-400/80 ml-1">[{a.merge_strategy}]</span>
+              )}
               {a.unmatched_columns?.length > 0 && (
                 <span className="text-amber-400"> · 未匹配: {a.unmatched_columns.join(', ')}</span>
               )}
@@ -286,7 +467,28 @@ export function DataFinderPanel({
           <h4 className="text-sm font-semibold text-cyan-300 mb-2 flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4" />
             数据发现完备性 · {result.coverage_report.completeness_score ?? '—'}/100
+            {result.coverage_report.data_spec_coverage?.data_spec_score != null && (
+              <span className="text-indigo-300 font-normal">
+                · DataSpec {result.coverage_report.data_spec_coverage.data_spec_score}/100
+              </span>
+            )}
           </h4>
+          {(result.coverage_report.data_spec_coverage?.checklist || []).length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {result.coverage_report.data_spec_coverage!.checklist!.map((item) => (
+                <span
+                  key={item.field || item.label}
+                  className={`text-[10px] px-2 py-0.5 rounded border ${
+                    item.hit
+                      ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
+                      : 'border-dark-600 bg-dark-900 text-gray-500'
+                  }`}
+                >
+                  {item.label || item.field}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mb-2">
             {(result.coverage_report.domain_checklist || []).map((item) => (
               <span
@@ -311,6 +513,19 @@ export function DataFinderPanel({
           {(result.coverage_report.external_import_succeeded ?? 0) > 0 && (
             <p className="text-[10px] text-emerald-400 mt-2">
               已自动入库外部数据集 {result.coverage_report.external_import_succeeded} 个
+            </p>
+          )}
+          {(result.coverage_report.gap_enrichment_recommended ?? false) && (
+            <p className="text-[10px] text-amber-400/90 mt-2">
+              建议执行 Gap 补搜（完备性 &lt; {result.coverage_report.threshold ?? 70}% 或 DataSpec &lt; {result.coverage_report.data_spec_threshold ?? 60}%）
+            </p>
+          )}
+          {result.gap_enrichment && !result.gap_enrichment.skipped && (
+            <p className="text-[10px] text-emerald-400 mt-2">
+              最近 Gap 补搜：{result.gap_enrichment.score_before ?? '—'}→{result.gap_enrichment.score_after ?? '—'} 分
+              {result.gap_enrichment.data_spec_score_after != null && (
+                <span> · DataSpec {result.gap_enrichment.data_spec_score_after}/100</span>
+              )}
             </p>
           )}
           {result.entity_alignment && !result.entity_alignment.skipped && result.entity_alignment.match_rate != null && (
@@ -357,7 +572,7 @@ export function DataFinderPanel({
                 </Button>
               )}
               <span className="text-xs text-gray-500 flex items-center gap-1">
-                <Download className="w-3.5 h-3.5" /> 含 schema / provenance / README
+                <Download className="w-3.5 h-3.5" /> 含 data_spec / manifest / provenance
               </span>
             </div>
           </div>

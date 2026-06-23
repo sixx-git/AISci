@@ -1,6 +1,53 @@
 import api from '@/lib/api';
 import type { ApiResponse } from '@/types';
 
+export interface DataSpec {
+  research_question?: string;
+  scenario?: 'general' | 'ml_benchmark' | 'federated_learning';
+  entities_of_interest?: string[];
+  target_variables?: string[];
+  column_synonyms?: Record<string, string[]>;
+  dataset_keywords?: string[];
+  domain_keywords?: string[];
+  preferred_sources?: string[];
+  merge_strategy_hint?: string;
+  output_format?: string;
+}
+
+export interface ExtractionManifest {
+  figure_id?: string;
+  identification?: {
+    method?: string;
+    caption?: string;
+    page?: number;
+    chart_type?: string;
+    image_path?: string;
+  };
+  extraction?: {
+    tier?: string;
+    method?: string;
+    confidence?: number;
+    limitations?: string[];
+    rows_preview?: Array<Record<string, unknown>>;
+  };
+  validation?: {
+    status?: string;
+    checks?: string[];
+    needs_manual_review?: boolean;
+    included_in_merged_csv?: boolean;
+  };
+}
+
+export interface DataAssetIndex {
+  asset_id?: string;
+  source_type?: string;
+  source_title?: string;
+  extraction_tier?: string;
+  extraction_method?: string;
+  confidence?: number;
+  csv_path?: string;
+}
+
 export interface DataFinderRequirements {
   data_need?: string;
   target_variables?: string[];
@@ -9,6 +56,10 @@ export interface DataFinderRequirements {
   dataset_keywords?: string[];
   preferred_sources?: string[];
   output_format?: string;
+  data_spec?: DataSpec;
+  scenario?: string;
+  entities_of_interest?: string[];
+  merge_strategy_hint?: string;
 }
 
 export interface PaperExtraction {
@@ -41,6 +92,9 @@ export interface SchemaAlignment {
   standard_columns: string[];
   mapping: Record<string, string>;
   unmatched_columns: string[];
+  scenario?: string;
+  join_keys?: string[];
+  merge_strategy?: string;
 }
 
 export interface ProvenanceRecord {
@@ -54,13 +108,64 @@ export interface ProvenanceRecord {
   confidence: number;
 }
 
+export interface DataAcquisitionStep {
+  skipped?: boolean;
+  tables?: number;
+  rows?: number;
+  imported?: number;
+  candidates?: number;
+  warnings?: string[];
+  duration_ms?: number;
+  error_code?: string | null;
+}
+
+export interface ReleaseGateReport {
+  passed?: boolean;
+  ready_for_report?: boolean;
+  failed_ids?: string[];
+  checks?: Array<{ id: string; label?: string; passed?: boolean }>;
+}
+
+export interface DataAcquisitionMeta {
+  steps?: string[];
+  stats?: {
+    external_candidates?: number;
+    tables?: number;
+    merged_rows?: number;
+    gap_rounds?: number;
+    release_gate_passed?: boolean;
+    total_duration_ms?: number;
+  };
+  step_details?: Record<string, DataAcquisitionStep>;
+}
+
+export interface ExternalCandidateItem {
+  candidate_id?: string;
+  source_platform?: string;
+  dataset_name?: string;
+  url?: string;
+  description?: string;
+  availability?: string;
+  import_supported?: boolean;
+  imported?: boolean;
+  user_upload_status?: string;
+  user_upload_filename?: string;
+  user_upload_error?: string;
+  linked_table_id?: string;
+}
+
 export interface DataFinderResult {
   project_id: string;
   project_mode?: string;
+  data_spec?: DataSpec;
   data_requirements?: DataFinderRequirements;
   paper_extractions?: PaperExtraction[];
-  external_candidates?: Array<Record<string, unknown>>;
-  figures?: Array<Record<string, unknown>>;
+  external_candidates?: ExternalCandidateItem[];
+  figures?: Array<Record<string, unknown> & {
+    extraction_manifest?: ExtractionManifest;
+    image_path?: string;
+  }>;
+  assets_index?: DataAssetIndex[];
   extracted_tables?: ExtractedTable[];
   alignments?: SchemaAlignment[];
   provenance?: ProvenanceRecord[];
@@ -81,10 +186,71 @@ export interface DataFinderResult {
   };
   warnings?: string[];
   updated_at?: string;
+  data_acquisition?: DataAcquisitionMeta;
+  gap_enrichment?: {
+    skipped?: boolean;
+    round?: number;
+    score_before?: number;
+    score_after?: number;
+    data_spec_score_before?: number;
+    data_spec_score_after?: number;
+    queries?: string[];
+  };
+  literature_discovery?: {
+    imported?: number;
+    query?: string;
+    fallback_source?: string;
+    pdf_downloaded?: number;
+    skipped?: boolean;
+  };
+  text_facts?: Array<{
+    fact_id?: string;
+    paper_id?: string;
+    section?: string;
+    sentence?: string;
+    matched_targets?: string[];
+    extraction_tier?: string;
+  }>;
+  release_gate?: ReleaseGateReport;
+}
+
+export interface DataSpecCoverage {
+  data_spec_score?: number;
+  entities_requested?: string[];
+  entities_hit?: string[];
+  entities_miss?: string[];
+  targets_requested?: string[];
+  targets_hit?: string[];
+  targets_miss?: string[];
+  figures_with_manifest?: number;
+  figures_confirmed?: number;
+  gaps?: string[];
+  checklist?: Array<{ field?: string; label?: string; hit?: boolean }>;
+}
+
+export interface SourceAvailabilityReport {
+  total?: number;
+  importable_count?: number;
+  imported_count?: number;
+  catalog_only_count?: number;
+  metadata_only_count?: number;
+  search_and_import_count?: number;
+  by_availability?: Record<string, number>;
+  candidates_summary?: Array<{
+    dataset_name?: string;
+    source_platform?: string;
+    availability?: string;
+    import_supported?: boolean;
+    imported?: boolean;
+  }>;
 }
 
 export interface CoverageReport {
   completeness_score?: number;
+  data_spec_coverage?: DataSpecCoverage;
+  threshold?: number;
+  data_spec_threshold?: number;
+  gap_enrichment_recommended?: boolean;
   project_mode?: string;
   documents_count?: number;
   papers_screened?: number;
@@ -95,6 +261,7 @@ export interface CoverageReport {
   gaps?: string[];
   has_cleaned_csv?: boolean;
   external_import_succeeded?: number;
+  source_availability?: SourceAvailabilityReport;
   gap_queries?: string[];
   cleaning_summary?: Record<string, unknown>;
 }
@@ -109,6 +276,36 @@ export interface AnalysisBundleMeta {
 }
 
 const dataFinderService = {
+  async gapEnrich(
+    projectId: string,
+    options?: {
+      auto_import?: boolean;
+      coverage_gap_threshold?: number;
+      data_spec_gap_threshold?: number;
+      max_gap_rounds?: number;
+    },
+  ): Promise<ApiResponse<{ history: unknown[]; results: DataFinderResult | null }>> {
+    const { data } = await api.post('/data-finder/gap-enrich', {
+      project_id: projectId,
+      auto_import: options?.auto_import ?? true,
+      coverage_gap_threshold: options?.coverage_gap_threshold,
+      data_spec_gap_threshold: options?.data_spec_gap_threshold,
+      max_gap_rounds: options?.max_gap_rounds,
+    });
+    return data;
+  },
+
+  async acquire(payload: {
+    project_id: string;
+    research_question?: string;
+    selected_hypothesis?: string;
+    project_mode?: string;
+    auto_import?: boolean;
+  }): Promise<ApiResponse<DataFinderResult>> {
+    const { data } = await api.post('/data-finder/acquire', payload);
+    return data;
+  },
+
   async search(payload: {
     project_id: string;
     research_question?: string;
@@ -190,6 +387,21 @@ const dataFinderService = {
       action,
       edited_rows: editedRows,
       reviewer_note: reviewerNote || '',
+    });
+    return data;
+  },
+
+  async uploadExternalCandidate(
+    projectId: string,
+    candidateId: string,
+    file: File,
+  ): Promise<ApiResponse<DataFinderResult>> {
+    const form = new FormData();
+    form.append('project_id', projectId);
+    form.append('candidate_id', candidateId);
+    form.append('file', file);
+    const { data } = await api.post('/data-finder/external-candidates/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data;
   },

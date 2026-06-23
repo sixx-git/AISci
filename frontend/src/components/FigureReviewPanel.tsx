@@ -20,7 +20,13 @@ interface FigureItem {
   needs_manual_review?: boolean;
   included_in_csv?: boolean;
   review_status?: string;
+  image_path?: string;
   extracted_series_preview?: Array<Record<string, unknown>>;
+  extraction_manifest?: {
+    identification?: { method?: string; chart_type?: string };
+    extraction?: { tier?: string; method?: string; limitations?: string[] };
+    validation?: { status?: string; checks?: string[] };
+  };
 }
 
 export function FigureReviewPanel({ projectId, figures = [], onUpdated }: FigureReviewPanelProps) {
@@ -57,7 +63,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
         图表数据复核 · {pending.length} 待确认
       </h4>
       <p className="text-[10px] text-gray-500 mb-3">
-        L1 元信息 → L2 近似序列（低置信）→ L3 人工确认后写入 CSV
+        L1 元信息 → L2 caption 数值 → L3 VLM 结构化 → L4 点列数字化（复核后写入 CSV 并自动 re-merge）
       </p>
 
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
@@ -85,11 +91,22 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
                 )}
               </div>
               <p className="text-[10px] text-gray-500 line-clamp-2 mb-2">{fig.caption}</p>
+              {fig.extraction_manifest?.extraction?.limitations && fig.extraction_manifest.extraction.limitations.length > 0 && (
+                <p className="text-[10px] text-amber-500/80 mb-2">
+                  {fig.extraction_manifest.extraction.limitations[0]}
+                </p>
+              )}
+              {fig.image_path && (
+                <p className="text-[10px] text-cyan-500/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
+              )}
               {preview.length > 0 && (
                 <div className="text-[10px] text-gray-400 mb-2 font-mono">
                   {preview.slice(0, 3).map((row, i) => (
                     <div key={i}>
-                      {String(row.series)} = {String(row.value ?? '—')}
+                      {String(row.series)}
+                      {row.x != null && row.y != null
+                        ? ` (${String(row.x)}, ${String(row.y)})`
+                        : ` = ${String(row.value ?? '—')}`}
                     </div>
                   ))}
                 </div>
