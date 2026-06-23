@@ -98,7 +98,6 @@ async def health_llm():
             "base_url_configured": base_url_configured,
             "base_url": snap["base_url"],
             "model": model,
-            "vl_model": snap["vl_model"],
             "client_init_ok": client_init_ok,
             "error": init_error,
         },

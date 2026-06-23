@@ -280,7 +280,7 @@ export function ReportPage({
                 参考论文缺失或未验证，不符合赛题要求
               </p>
               <p className="text-xs text-red-300/70 mb-2 leading-relaxed">
-                参考文献未能在文献库中找到匹配条目，存在虚构引用风险。请先上传 PDF、导入 arXiv 或 BibTeX 文献后再生成报告。
+                参考文献未能在文献库中找到匹配条目，存在虚构引用风险。请先上传 PDF 或导入 arXiv 文献后再生成报告。
               </p>
               <button
                 onClick={() => navigate('/documents')}

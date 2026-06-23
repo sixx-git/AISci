@@ -56,7 +56,17 @@ export interface ProjectOverview {
   description: string;
   current_stage: string;
   research_question?: string;
+  research_domain?: string;
+  research_goal?: string;
+  research_background?: string;
+  data_source?: string;
+  constraints?: string;
+  expected_output?: string;
   project_mode?: ProjectMode;
+  config?: {
+    data_spec_hints?: Record<string, unknown>;
+    data_acquisition?: Record<string, unknown>;
+  };
   created_at: string;
   updated_at: string;
   status: string;

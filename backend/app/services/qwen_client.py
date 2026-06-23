@@ -24,7 +24,6 @@ from app.core.llm_runtime import (
     get_effective_api_key,
     get_effective_base_url,
     get_effective_model,
-    get_effective_vl_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -581,7 +580,7 @@ class QwenClient:
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
 
-        model = vl_model or get_effective_vl_model()
+        model = vl_model or get_effective_model()
         schema_text = json.dumps(schema_example, ensure_ascii=False, indent=2) if isinstance(schema_example, dict) else str(schema_example or "{}")
         system = (
             "你是科学图表质量评审助手。仅输出合法 JSON，不要 markdown。"

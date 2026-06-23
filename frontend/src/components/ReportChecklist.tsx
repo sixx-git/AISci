@@ -207,7 +207,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             </h4>
             {cc && cc.references_verified === 0 ? (
               <p className="text-[11px] text-red-300/80 mt-1 leading-relaxed">
-                当前报告缺少真实文献引用，请先上传 PDF、导入 arXiv 或 BibTeX。
+                当前报告缺少真实文献引用，请先上传 PDF 或导入 arXiv 文献。
               </p>
             ) : (
               <p className="text-[11px] text-amber-300/70 mt-1 leading-relaxed">

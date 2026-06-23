@@ -8,8 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.core.llm_runtime import (
-    AVAILABLE_TEXT_MODELS,
-    AVAILABLE_VL_MODELS,
+    AVAILABLE_QWEN_MODELS,
     build_config_snapshot,
     update_runtime,
 )
@@ -29,24 +28,19 @@ class LlmConfigResponse(BaseModel):
     api_key_configured: bool
     api_key_masked: str
     model: str
-    vl_model: str
     base_url: str
     use_mock_llm: bool
     env_model: str
-    env_vl_model: str
     env_base_url: str
     available_models: List[str]
-    available_vl_models: List[str]
     model_override: Optional[str] = None
-    vl_model_override: Optional[str] = None
 
 
 class LlmConfigUpdateRequest(BaseModel):
     use_env_api_key: Optional[bool] = Field(None, description="True=使用 .env 密钥")
-    api_key: Optional[str] = Field(None, description="自定义 API Key（仅 use_env_api_key=false 时生效）")
+    api_key: Optional[str] = Field(None, description="自定义 API Key")
     clear_custom_api_key: bool = Field(False, description="清除已保存的自定义密钥")
-    model: Optional[str] = Field(None, description="文本模型")
-    vl_model: Optional[str] = Field(None, description="视觉模型")
+    model: Optional[str] = Field(None, description="Qwen 模型（文本/多模态统一）")
     base_url: Optional[str] = Field(None, description="API Base URL")
     use_mock_llm: Optional[bool] = Field(None, description="Mock LLM 模式")
 
@@ -81,18 +75,14 @@ def get_llm_config():
 @router.put("/config", response_model=ResponseModel[LlmConfigResponse])
 def update_llm_config(body: LlmConfigUpdateRequest):
     """更新运行时 LLM 配置（内存生效，重启后恢复 .env）"""
-    if body.model and body.model not in AVAILABLE_TEXT_MODELS:
-        # 允许自定义模型名，仅记录日志
-        logger.info("使用自定义文本模型: %s", body.model)
-    if body.vl_model and body.vl_model not in AVAILABLE_VL_MODELS:
-        logger.info("使用自定义视觉模型: %s", body.vl_model)
+    if body.model and body.model not in AVAILABLE_QWEN_MODELS:
+        logger.info("使用自定义 Qwen 模型: %s", body.model)
 
     update_runtime(
         use_env_api_key=body.use_env_api_key,
         api_key=body.api_key,
         clear_api_key_override=body.clear_custom_api_key,
         model=body.model,
-        vl_model=body.vl_model,
         base_url=body.base_url,
         use_mock_llm=body.use_mock_llm,
     )

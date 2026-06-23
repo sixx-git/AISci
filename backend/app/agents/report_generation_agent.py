@@ -685,9 +685,19 @@ class ReportGenerationAgent:
         tables = data_finder_results.get("extracted_tables") or []
         provenance = data_finder_results.get("provenance") or []
         merged = data_finder_results.get("merged") or {}
+        data_spec = data_finder_results.get("data_spec") or {}
+        figures = data_finder_results.get("figures") or []
+        coverage = data_finder_results.get("coverage_report") or {}
+        spec_cov = coverage.get("data_spec_coverage") or {}
 
         datasets_text = chapters.get("datasets") or ""
         datasets_text += "\n\n【多源数据查找与整合】\n"
+        if data_spec:
+            datasets_text += (
+                f"DataSpec 场景={data_spec.get('scenario', 'general')}；"
+                f"实体字段={', '.join(data_spec.get('entities_of_interest') or []) or '—'}；"
+                f"目标变量={', '.join(data_spec.get('target_variables') or []) or '—'}。\n"
+            )
         if tables:
             datasets_text += f"从 {len(tables)} 个 PDF 表格抽取 CSV；"
             for t in tables[:5]:
@@ -701,24 +711,53 @@ class ReportGenerationAgent:
             row_count = merged.get("row_count", 0)
             cleaned = "（已清洗）" if merged.get("cleaned_csv_path") else ""
             datasets_text += f"\n已合并 CSV：{row_count} 行{cleaned}。"
-        coverage = data_finder_results.get("coverage_report") or {}
         if coverage.get("completeness_score") is not None:
             datasets_text += (
                 f"\n数据发现完备性得分：{coverage.get('completeness_score')}/100。"
             )
-            gaps = coverage.get("gaps") or []
-            if gaps:
-                datasets_text += f" 待补充：{'; '.join(gaps[:3])}"
+        if spec_cov.get("data_spec_score") is not None:
+            datasets_text += (
+                f" DataSpec 字段覆盖率：{spec_cov.get('data_spec_score')}/100"
+                f"（实体命中 {len(spec_cov.get('entities_hit') or [])}/"
+                f"{len(spec_cov.get('entities_requested') or [])}，"
+                f"目标变量命中 {len(spec_cov.get('targets_hit') or [])}/"
+                f"{len(spec_cov.get('targets_requested') or [])}）。"
+            )
+        gaps = coverage.get("gaps") or []
+        if gaps:
+            datasets_text += f" 待补充：{'; '.join(gaps[:3])}"
         chapters["datasets"] = datasets_text
 
         source_text = chapters.get("source") or ""
         source_text += "\n\n【数据来源与抽取依据】\n"
         for p in provenance[:8]:
+            cite = p.get("data_citation_id") or p.get("record_id") or ""
+            cite_tag = f" cite={cite}" if cite else ""
             source_text += (
                 f"- [{p.get('source_type')}] {p.get('source_title')} "
                 f"page={p.get('page')} {p.get('table_or_figure')} "
-                f"method={p.get('extraction_method')} confidence={p.get('confidence')}\n"
+                f"method={p.get('extraction_method')} confidence={p.get('confidence')}{cite_tag}\n"
             )
+
+        manifests = []
+        for fig in figures[:6]:
+            manifest = fig.get("extraction_manifest") or {}
+            if not manifest:
+                continue
+            ident = manifest.get("identification") or {}
+            extr = manifest.get("extraction") or {}
+            valid = manifest.get("validation") or {}
+            fig_id = manifest.get("figure_id") or fig.get("figure_id", "")
+            lims = extr.get("limitations") or []
+            lim_note = f"；限制: {lims[0]}" if lims else ""
+            manifests.append(
+                f"- Fig {ident.get('figure_number', '?')} ({fig_id}): "
+                f"tier={extr.get('tier', '?')}, method={extr.get('method', '?')}, "
+                f"confidence={extr.get('confidence', '?')}, "
+                f"status={valid.get('status', 'pending')}{lim_note}"
+            )
+        if manifests:
+            source_text += "\n【图表 extraction manifest】\n" + "\n".join(manifests) + "\n"
         chapters["source"] = source_text
 
         results_text = chapters.get("results") or ""
@@ -732,7 +771,7 @@ class ReportGenerationAgent:
                 )
             results_text += (
                 f"\n\n【整合数据验证】使用 data_finder 合并 CSV（{merged.get('row_count', 0)} 行"
-                f"{clean_note}）进行小样验证；抽取方法见 provenance。"
+                f"{clean_note}）进行小样验证；抽取方法见 provenance 与 figure_manifest。"
             )
         chapters["results"] = results_text
         result["chapters"] = chapters
@@ -741,6 +780,9 @@ class ReportGenerationAgent:
             "merged_rows": merged.get("row_count", 0),
             "provenance_count": len(provenance),
             "completeness_score": coverage.get("completeness_score"),
+            "data_spec_score": spec_cov.get("data_spec_score"),
+            "figures_with_manifest": spec_cov.get("figures_with_manifest")
+            or sum(1 for f in figures if f.get("extraction_manifest")),
             "has_cleaned_csv": bool(merged.get("cleaned_csv_path")),
             "bundle_ready": bool((data_finder_results.get("analysis_bundle") or {}).get("ready")),
         }

@@ -9,16 +9,12 @@ export interface LlmConfig {
   api_key_configured: boolean;
   api_key_masked: string;
   model: string;
-  vl_model: string;
   base_url: string;
   use_mock_llm: boolean;
   env_model: string;
-  env_vl_model: string;
   env_base_url: string;
   available_models: string[];
-  available_vl_models: string[];
   model_override?: string | null;
-  vl_model_override?: string | null;
 }
 
 export interface LlmConfigUpdate {
@@ -26,16 +22,8 @@ export interface LlmConfigUpdate {
   api_key?: string;
   clear_custom_api_key?: boolean;
   model?: string;
-  vl_model?: string;
   base_url?: string;
   use_mock_llm?: boolean;
-}
-
-export interface LlmTestResult {
-  ok: boolean;
-  model: string;
-  message: string;
-  latency_ms?: number;
 }
 
 export const llmConfigService = {
@@ -46,11 +34,6 @@ export const llmConfigService = {
 
   async updateConfig(payload: LlmConfigUpdate): Promise<ApiResponse<LlmConfig>> {
     const { data } = await api.put<ApiResponse<LlmConfig>>('/llm/config', payload);
-    return data;
-  },
-
-  async testConnection(): Promise<ApiResponse<LlmTestResult>> {
-    const { data } = await api.post<ApiResponse<LlmTestResult>>('/llm/test');
     return data;
   },
 };
