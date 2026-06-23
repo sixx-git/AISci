@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Upload, FileText,
   Database, Eye, Sparkles, Trash2,
-  FileSearch, Loader2, CheckCircle, Clock, AlertCircle, AlertTriangle, Plus,
+  FileSearch, Loader2, CheckCircle, Clock, AlertCircle, Plus,
   Layers, BrainCircuit,
   XCircle, ArrowUp, Search, Download, ExternalLink,
-  ClipboardList, Info, FileCode,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
 import dataFinderService from '@/services/dataFinderService';
 import type { DocumentInfo } from '@/services/documentService';
-import type { ArxivPaper, ImportedDocument, ImportArxivResult, ImportBibtexResult, ParseIndexResult } from '@/services/literatureService';
+import type { ArxivPaper, ImportedDocument, ImportArxivResult, ParseIndexResult } from '@/services/literatureService';
 import { useStatusToast, type StatusToastMessage } from '@/hooks/useToast';
 import { getErrorMessage } from '@/lib/errors';
 import { formatFileSize } from '@/lib/format';
@@ -124,7 +124,7 @@ interface LiteratureLibraryProps {
 export function LiteratureLibrary({ projectId = 'default', compact: _compact = false }: LiteratureLibraryProps) {
   const navigate = useNavigate();
   // ========== Tab 状态 ==========
-  const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'bibtex' | 'library'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'library'>('upload');
 
   // ========== 上传 PDF 状态 ==========
   const [literature, setLiterature] = useState<LiteratureItem[]>([]);
@@ -147,7 +147,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [arxivImported, setArxivImported] = useState<Record<string, boolean>>({});
   const [arxivSearched, setArxivSearched] = useState(false);
   const [arxivFallback, setArxivFallback] = useState(false);
-  const [arxivWarning, setArxivWarning] = useState('');
 
   // ========== 研究问题推荐状态 ==========
   const [researchQuestion, setResearchQuestion] = useState('');
@@ -164,11 +163,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const [chunkViewer, setChunkViewer] = useState<{ docId: string; title: string } | null>(null);
   const [chunkLoading, setChunkLoading] = useState(false);
   const [chunkList, setChunkList] = useState<any[]>([]);
-
-  // ========== BibTeX 导入状态 ==========
-  const [bibtexText, setBibtexText] = useState('');
-  const [bibtexImporting, setBibtexImporting] = useState(false);
-  const [bibtexResult, setBibtexResult] = useState<ImportBibtexResult | null>(null);
 
   const { statusMsg, showStatus } = useStatusToast();
 
@@ -316,25 +310,23 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     setArxivSearched(true);
     setArxivResults([]);
     setArxivFallback(false);
-    setArxivWarning('');
 
     try {
       const res = await literatureService.searchArxiv(q, arxivMaxResults);
       if (res.code === 200) {
         setArxivResults(res.data?.results ?? []);
         setArxivFallback(!!res.data?.fallback);
-        setArxivWarning(res.data?.warning || '');
         if (!res.data?.results?.length) {
           showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文' });
         } else if (res.data?.fallback) {
-          showStatus({ type: 'error', text: res.data.warning || 'arXiv API 不可访问，已使用本地演示文献缓存。' });
+          showStatus({ type: 'error', text: res.data.warning || 'arXiv API 不可访问，请稍后重试。' });
         }
       } else {
         showStatus({ type: 'error', text: res.message || '搜索失败' });
       }
     } catch (err: any) {
       const detail = getErrorMessage(err);
-      showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}。可尝试 BibTeX 导入或使用本地示例文献。` });
+      showStatus({ type: 'error', text: `arXiv 搜索失败: ${detail}。请尝试其他关键词。` });
     } finally {
       setArxivSearching(false);
     }
@@ -349,7 +341,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     setArxivSearched(true);
     setArxivResults([]);
     setArxivFallback(false);
-    setArxivWarning('');
     setRecommendInfo(null);
 
     try {
@@ -358,7 +349,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         const d = res.data;
         setArxivResults(d.results ?? []);
         setArxivFallback(!!d.fallback);
-        setArxivWarning(d.warning || '');
         setRecommendInfo({
           query_mode: d.query_mode,
           keywords: d.keywords,
@@ -367,7 +357,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         if (!d.results?.length) {
           showStatus({ type: 'error', text: '未找到匹配的 arXiv 论文，请尝试其他研究问题' });
         } else if (d.fallback) {
-          showStatus({ type: 'error', text: d.warning || 'arXiv API 不可访问，已使用本地演示文献缓存。' });
+          showStatus({ type: 'error', text: d.warning || 'arXiv API 不可访问，请稍后重试。' });
         } else {
           showStatus({
             type: 'success',
@@ -381,37 +371,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       }
     } catch (err: any) {
       const detail = getErrorMessage(err);
-      showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}。可尝试手动搜索、BibTeX 导入或使用本地示例文献。` });
+      showStatus({ type: 'error', text: `arXiv 推荐失败: ${detail}。请尝试手动搜索其他关键词。` });
     } finally {
       setRecommendSearching(false);
     }
   }, [researchQuestion, arxivMaxResults, projectId, showStatus]);
-
-  // ========== 使用本地示例文献 ==========
-  const handleUseFallback = useCallback(async () => {
-    setArxivQuery('AI scientist machine learning');
-    // 强制触发一次搜索以使用 fallback
-    setArxivSearching(true);
-    setArxivSearched(true);
-    setArxivResults([]);
-    setArxivFallback(false);
-    setArxivWarning('');
-    try {
-      const res = await literatureService.searchArxiv('AI scientist machine learning', arxivMaxResults);
-      if (res.code === 200) {
-        setArxivResults(res.data?.results ?? []);
-        setArxivFallback(!!res.data?.fallback);
-        setArxivWarning(res.data?.warning || '');
-        if (res.data?.fallback) {
-          showStatus({ type: 'error', text: res.data.warning || '已加载本地演示文献。' });
-        }
-      }
-    } catch {
-      showStatus({ type: 'error', text: '本地示例文献加载失败' });
-    } finally {
-      setArxivSearching(false);
-    }
-  }, [arxivMaxResults, showStatus]);
 
   // ========== arXiv 导入 ==========
   const handleImportArxiv = useCallback(async (paper: ArxivPaper) => {
@@ -441,36 +405,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       setArxivImporting((prev) => ({ ...prev, [paper.external_id]: false }));
     }
   }, [projectId, loadImportedDocs, showStatus]);
-
-  // ========== BibTeX 导入 ==========
-  const handleImportBibtex = useCallback(async () => {
-    const text = bibtexText.trim();
-    if (!text) return;
-
-    setBibtexImporting(true);
-    setBibtexResult(null);
-
-    try {
-      const res = await literatureService.importBibtex(projectId, text, 'google_scholar_import');
-      const result = res.data as ImportBibtexResult;
-      setBibtexResult(result);
-
-      if (result.failed > 0) {
-        showStatus({ type: 'error', text: `导入完成，但有 ${result.failed} 条失败` });
-      } else {
-        showStatus({
-          type: 'success',
-          text: `BibTeX 导入完成: 新增 ${result.imported}，重复 ${result.duplicates}`,
-        });
-      }
-      await loadImportedDocs();
-    } catch (err: any) {
-      const detail = getErrorMessage(err);
-      showStatus({ type: 'error', text: `BibTeX 导入失败: ${detail}` });
-    } finally {
-      setBibtexImporting(false);
-    }
-  }, [bibtexText, projectId, loadImportedDocs, showStatus]);
 
   // ========== 下载 PDF ==========
   const handleDownloadPdf = useCallback(async (docId: string, docTitle: string) => {
@@ -537,7 +471,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
   const tabs = [
     { key: 'upload' as const, label: '上传 PDF', icon: Upload },
     { key: 'arxiv' as const, label: 'arXiv 检索', icon: Search },
-    { key: 'bibtex' as const, label: 'BibTeX 导入', icon: ClipboardList },
     { key: 'library' as const, label: '已入库文献', icon: Database },
   ];
 
@@ -593,21 +526,9 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
               recommendSearching={recommendSearching}
               recommendInfo={recommendInfo}
               onRecommend={handleRecommendArxiv}
-              fallback={arxivFallback}
-              fallbackWarning={arxivWarning}
-              onUseFallback={handleUseFallback}
             />
           )}
           {activeTab === 'library' && <LibraryTabEmpty />}
-          {activeTab === 'bibtex' && (
-            <BibTexTabContent
-              text={bibtexText}
-              onTextChange={setBibtexText}
-              onImport={handleImportBibtex}
-              importing={bibtexImporting}
-              result={bibtexResult}
-            />
-          )}
         </div>
       </div>
     );
@@ -736,11 +657,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             recommendSearching={recommendSearching}
             recommendInfo={recommendInfo}
             onRecommend={handleRecommendArxiv}
-              fallback={arxivFallback}
-              fallbackWarning={arxivWarning}
-              onUseFallback={handleUseFallback}
-            />
-          )}
+          />
+        )}
 
         {/* TAB 3: 已入库文献 */}
         {activeTab === 'library' && (
@@ -756,17 +674,6 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             chunkLoading={chunkLoading}
             chunkList={chunkList}
             onCloseChunks={() => setChunkViewer(null)}
-          />
-        )}
-
-        {/* TAB 4: BibTeX 导入 */}
-        {activeTab === 'bibtex' && (
-          <BibTexTabContent
-            text={bibtexText}
-            onTextChange={setBibtexText}
-            onImport={handleImportBibtex}
-            importing={bibtexImporting}
-            result={bibtexResult}
           />
         )}
       </div>
@@ -839,7 +746,6 @@ function ArxivTabContent({
   query, onQueryChange, maxResults, onMaxResultsChange, onSearch, searching,
   results, searched, importing, imported, onImport, truncate,
   researchQuestion, onResearchQuestionChange, recommendSearching, recommendInfo, onRecommend,
-  fallback, fallbackWarning, onUseFallback,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
@@ -853,9 +759,6 @@ function ArxivTabContent({
   imported: Record<string, boolean>;
   onImport: (paper: ArxivPaper) => void;
   truncate: (text: string, maxLen: number) => string;
-  fallback?: boolean;
-  fallbackWarning?: string;
-  onUseFallback?: () => void;
   // 研究问题推荐
   researchQuestion: string;
   onResearchQuestionChange: (v: string) => void;
@@ -936,7 +839,7 @@ function ArxivTabContent({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
-                placeholder="输入研究主题或关键词，如: chain of thought reasoning…"
+                placeholder="输入研究主题或关键词"
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && onSearch()}
@@ -966,18 +869,6 @@ function ArxivTabContent({
               {searching ? '搜索中…' : '搜索 arXiv'}
             </Button>
           </div>
-          {onUseFallback && (
-            <div className="flex items-end">
-              <Button
-                icon={<Database className="w-4 h-4" />}
-                disabled={searching}
-                onClick={onUseFallback}
-                variant="secondary"
-              >
-                使用本地示例文献
-              </Button>
-            </div>
-          )}
         </div>
       </Card>
 
@@ -998,17 +889,6 @@ function ArxivTabContent({
 
       {!searching && results.length > 0 && (
         <div className="space-y-4">
-          {fallback && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/25">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-400">当前展示本地缓存文献</p>
-                <p className="text-xs text-yellow-400/70 mt-1">
-                  {fallbackWarning || 'arXiv API 当前不可访问，已使用本地缓存文献。'}
-                </p>
-              </div>
-            </div>
-          )}
           <div className="text-sm text-gray-500 mb-2">共 {results.length} 条结果</div>
           {results.map((paper) => {
             const isImporting = importing[paper.external_id];
@@ -1424,114 +1304,6 @@ function LiteratureTable({
         <div className="py-12 text-center text-gray-500 text-sm">没有匹配的文献</div>
       )}
     </Card>
-  );
-}
-
-// ========== BibTeX 导入 Tab 内容 ==========
-function BibTexTabContent({
-  text, onTextChange, onImport, importing, result,
-}: {
-  text: string;
-  onTextChange: (v: string) => void;
-  onImport: () => void;
-  importing: boolean;
-  result: ImportBibtexResult | null;
-}) {
-  return (
-    <div>
-      {/* 说明 */}
-      <Card className="mb-6 border-amber-500/20 bg-amber-500/5">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-semibold text-amber-300 mb-1">Google Scholar / BibTeX 手动导入</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Google Scholar 暂无官方开放 API。本系统<strong className="text-gray-200">不直接爬取 Scholar</strong>，
-              仅支持用户从 Google Scholar 或其他学术网站导出的 <strong className="text-gray-200">BibTeX 引用格式</strong> 导入。
-            </p>
-            <p className="text-xs text-gray-500 mt-2">
-              操作步骤：在 Google Scholar 搜索结果中点「引用」→「BibTeX」→ 复制全部文本 → 粘贴到下方文本框 → 点击导入。
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* 文本框 */}
-      <Card className="mb-4">
-        <label className="block text-xs font-medium text-gray-400 mb-2">粘贴 BibTeX 内容</label>
-        <textarea
-          placeholder={`@article{vaswani2017attention,\n  title={Attention Is All You Need},\n  author={Vaswani, Ashish and Shazeer, Noam and ...},\n  year={2017},\n  journal={Advances in Neural Information Processing Systems},\n  ...\n}`}
-          value={text}
-          onChange={(e) => onTextChange(e.target.value)}
-          rows={12}
-          className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500 transition-colors resize-y"
-        />
-
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-xs text-gray-600">
-            支持 @article / @inproceedings / @misc 等类型，可粘贴多条 BibTeX 同时导入
-          </span>
-          <Button
-            icon={importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCode className="w-4 h-4" />}
-            disabled={importing || !text.trim()}
-            onClick={onImport}
-          >
-            {importing ? '导入中…' : '导入文献'}
-          </Button>
-        </div>
-      </Card>
-
-      {/* 导入结果 */}
-      {result && (
-        <Card className={result.failed > 0 ? 'border-red-500/20' : 'border-green-500/20'}>
-          <h4 className="text-sm font-semibold text-gray-200 mb-3">导入结果</h4>
-
-          {/* 统计 */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="text-2xl font-bold text-green-400">{result.imported}</div>
-              <div className="text-xs text-green-500">新增</div>
-            </div>
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <div className="text-2xl font-bold text-amber-400">{result.duplicates}</div>
-              <div className="text-xs text-amber-500">重复</div>
-            </div>
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-              <div className="text-2xl font-bold text-red-400">{result.failed}</div>
-              <div className="text-xs text-red-500">失败</div>
-            </div>
-          </div>
-
-          {/* 条目列表 */}
-          {result.results.length > 0 && (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {result.results.map((r, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded text-xs',
-                    r.duplicate ? 'bg-amber-500/5 text-amber-400' : r.error ? 'bg-red-500/5 text-red-400' : 'bg-green-500/5 text-green-400',
-                  )}
-                >
-                  {r.duplicate ? (
-                    <Clock className="w-3.5 h-3.5 shrink-0" />
-                  ) : r.error ? (
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  ) : (
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                  )}
-                  <span className="truncate">
-                    {r.title || r.cite_key || `条目 ${i + 1}`}
-                    {r.duplicate && '（已存在，跳过）'}
-                    {r.error && `（${r.error}）`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-    </div>
   );
 }
 

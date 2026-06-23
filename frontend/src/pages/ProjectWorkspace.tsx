@@ -19,6 +19,8 @@ import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
 import { DatasetPage } from '@/components/DatasetPage';
 import { KnowledgeGraphPage } from '@/components/KnowledgeGraphPage';
+import { ResearchClosedLoopOverview } from '@/components/ResearchClosedLoopOverview';
+import { PromptManagementPage } from '@/components/PromptManagementPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
@@ -102,9 +104,9 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
         <div className="mt-6 flex justify-end">
           <Button
             icon={<Play className="w-4 h-4" />}
-            onClick={() => navigate(`/projects/${project.id}?tab=workflow`)}
+            onClick={() => navigate(`/projects/${project.id}?tab=closed_loop`)}
           >
-            继续工作
+            查看闭环
           </Button>
         </div>
       </Card>
@@ -506,6 +508,14 @@ export function ProjectWorkspace() {
     switch (activeTab) {
       case 'overview':
         return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
+      case 'closed_loop':
+        return (
+          <ResearchClosedLoopOverview
+            projectId={id}
+            latestRunId={latestRunId}
+            revalidateKey={revalidateKey}
+          />
+        );
       case 'questions':
         return <QuestionsTab projectId={id} projectMode={resolvedProjectMode} onSaved={handleResearchSaved} />;
       case 'literature':
@@ -530,6 +540,8 @@ export function ProjectWorkspace() {
             onPipelineCompleted={handlePipelineCompleted}
           />
         );
+      case 'prompts':
+        return <PromptManagementPage projectId={id} projectMode={resolvedProjectMode} />;
       case 'hypotheses':
         return <HypothesesTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'experiments':

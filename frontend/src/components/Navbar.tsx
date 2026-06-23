@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { FlaskConical, Home, FileText, GitBranch, ClipboardList } from 'lucide-react';
+import { Home, BookOpen, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ApiManagementPanel } from '@/components/ApiManagementPanel';
 
@@ -9,9 +9,7 @@ export function Navbar() {
 
   const navItems = [
     { path: '/', label: '首页', icon: Home },
-    { path: '/projects', label: '项目', icon: FlaskConical },
-    { path: '/documents', label: '文档', icon: FileText },
-    { path: '/workflow', label: '工作流', icon: GitBranch },
+    { path: '/documents', label: '文献', icon: BookOpen },
     { path: '/reports', label: '报告', icon: ClipboardList },
   ];
 
@@ -21,7 +19,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16 gap-4">
           <Link to="/" className="flex items-center gap-3 shrink-0">
             <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center shadow-lg">
-              <FlaskConical className="w-6 h-6 text-white" />
+              <Home className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">

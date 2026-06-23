@@ -108,7 +108,7 @@ export function Reports() {
             请先创建项目并通过工作流生成研究报告
           </p>
           <Link
-            to="/projects"
+            to="/"
             className="px-4 py-2 rounded-lg bg-primary-500/20 border border-primary-500/30 text-primary-300 text-xs hover:bg-primary-500/30 transition-colors"
           >
             前往项目列表
