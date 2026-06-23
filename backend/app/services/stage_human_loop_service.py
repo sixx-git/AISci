@@ -20,6 +20,7 @@ CHINA_TZ = timezone(timedelta(hours=8))
 STAGE_KEY_ORDER = [
     "problem_understanding",
     "literature_mining",
+    "data_acquisition",
     "knowledge_gap",
     "hypothesis_generation",
     "hypothesis_review",

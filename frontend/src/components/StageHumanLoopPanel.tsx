@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Edit3, Save, MessageSquare, GraduationCap, Play, Tag, Loader2, History,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ export function StageHumanLoopPanel({
   onUpdated,
   onRerunStarted,
 }: StageHumanLoopPanelProps) {
+  const navigate = useNavigate();
   const stage = NODE_ID_TO_STAGE[nodeId] || nodeId;
   const effectiveOutput = humanModifiedOutput || outputData || {};
   const [editJson, setEditJson] = useState('');
@@ -166,6 +168,13 @@ export function StageHumanLoopPanel({
         <div className="flex flex-wrap gap-2 mb-3">
           <Button variant="secondary" className="text-xs" onClick={() => setShowPrompt(true)}>
             <Tag className="w-3.5 h-3.5 mr-1" /> 编辑 Prompt
+          </Button>
+          <Button
+            variant="secondary"
+            className="text-xs"
+            onClick={() => navigate(`/projects/${projectId}?tab=prompts&prompt_stage=${stage}`)}
+          >
+            <Tag className="w-3.5 h-3.5 mr-1" /> Prompt 管理
           </Button>
           <Button variant="secondary" className="text-xs" onClick={handleMentorReview} disabled={!!busy}>
             {busy === 'mentor' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <GraduationCap className="w-3.5 h-3.5 mr-1" />}

@@ -52,6 +52,57 @@ class PromptInfoResponse(BaseModel):
     updated_at: Optional[str] = None
 
 
+class PromptPresetVariantInfo(BaseModel):
+    id: str
+    label: str
+    file: str
+    description: Optional[str] = None
+
+
+class PromptPresetPackInfo(BaseModel):
+    id: str
+    label: str
+    description: str = ""
+    reference: Optional[str] = None
+    recommended_pipeline_mode: Optional[str] = None
+    requires_federated: bool = False
+    stages: Dict[str, List[PromptPresetVariantInfo]] = Field(default_factory=dict)
+
+
+class PromptPresetCatalogResponse(BaseModel):
+    version: int = 1
+    excluded_stages: List[str] = Field(default_factory=list)
+    excluded_reason: str = ""
+    packs: List[PromptPresetPackInfo] = Field(default_factory=list)
+    default_pack_id: str = "pack_c"
+
+
+class PromptPresetContentResponse(BaseModel):
+    pack_id: str
+    pack_label: Optional[str] = None
+    stage: str
+    variant_id: str
+    variant_label: Optional[str] = None
+    description: Optional[str] = None
+    content: str
+
+
+class PromptPresetApplyRequest(BaseModel):
+    project_id: str
+    pack_id: str
+    stage: Optional[str] = None
+    variant_id: Optional[str] = None
+    apply_all_stages: bool = False
+
+
+class PromptPresetApplyResponse(BaseModel):
+    project_id: str
+    pack_id: str
+    variant_id: Optional[str] = None
+    applied: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+
+
 class StageChatRequest(BaseModel):
     project_id: str
     run_id: str
