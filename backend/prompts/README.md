@@ -20,6 +20,21 @@
 - **证据链迭代**：假设修订由 `HypothesisRevisionSkill`（独立 Prompt `hypothesis_revision` 内置于 Skill）完成，非本目录文件。
 - **Discovery 迭代**：多轮 refine 复用上述 Prompt，输入含上一轮 snapshot 与 Decision Log 摘要。
 
+## 范式预设库（Prompt Presets）
+
+`presets/manifest.json` 定义多套科研自动化范式（参考 Sakana AI Scientist / v2），**不含 `report_generation`**。
+
+| 包 ID | 说明 |
+|-------|------|
+| `pack_a` | AI Scientist v1：想法 → 代码 → 运行 → 评审 |
+| `pack_b` | AI Scientist v2：树搜索、剪枝、pilot 门禁 |
+| `pack_c` | AISci 默认：证据溯源 + 可验证假设（推荐新项目） |
+| `pack_d` | 联邦学习（**仅 `federated_learning` 项目**在 API/UI 中可见） |
+
+生成/更新预设文件：`python scripts/generate_prompt_presets.py`
+
+API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/apply`
+
 ## 编辑约定
 
 1. 保持 JSON 输出 Schema 与对应 `schemas/` / Agent 解析逻辑一致。

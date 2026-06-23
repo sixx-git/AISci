@@ -25,6 +25,8 @@ DEFAULT_HITL_GATE_STAGES = (
 )
 DEFAULT_MIN_IMPROVEMENT_DELTA = 3.0
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
+DEFAULT_DATA_SPEC_GAP_THRESHOLD = 60.0
+DEFAULT_MAX_GAP_ROUNDS = 2
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
 
@@ -86,6 +88,16 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         coverage_threshold = float(coverage_threshold)
     except (TypeError, ValueError):
         coverage_threshold = DEFAULT_COVERAGE_GAP_THRESHOLD
+    data_spec_threshold = opts.get("data_spec_gap_threshold", DEFAULT_DATA_SPEC_GAP_THRESHOLD)
+    try:
+        data_spec_threshold = float(data_spec_threshold)
+    except (TypeError, ValueError):
+        data_spec_threshold = DEFAULT_DATA_SPEC_GAP_THRESHOLD
+    max_gap_rounds = opts.get("max_gap_rounds", DEFAULT_MAX_GAP_ROUNDS)
+    try:
+        max_gap_rounds = max(1, min(int(max_gap_rounds), 4))
+    except (TypeError, ValueError):
+        max_gap_rounds = DEFAULT_MAX_GAP_ROUNDS
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -104,4 +116,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_gap_search": opts.get("enable_gap_search", True),
         "enable_hf_auto_import": opts.get("enable_hf_auto_import", True),
         "coverage_gap_threshold": coverage_threshold,
+        "data_spec_gap_threshold": data_spec_threshold,
+        "max_gap_rounds": max_gap_rounds,
     }

@@ -1,0 +1,226 @@
+"""生成 Prompt 范式预设文件与 manifest.json（一次性维护脚本）"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PROMPTS_DIR = ROOT / "prompts"
+PRESETS_DIR = PROMPTS_DIR / "presets"
+
+# report_generation 不生成预设
+STAGES = [
+    "problem_understanding",
+    "literature_mining",
+    "knowledge_gap",
+    "hypothesis_generation",
+    "hypothesis_review",
+    "experiment_design",
+    "small_validation",
+]
+
+PACK_META = {
+    "pack_a": {
+        "label": "AI Scientist v1 · 端到端自动发现",
+        "description": "参考 Sakana AI Scientist：大胆想法 → 可执行代码 → 运行出图 → 模拟同行评审",
+        "reference": "https://github.com/SakanaAI/AI-Scientist",
+        "recommended_pipeline_mode": "discovery",
+        "requires_federated": False,
+    },
+    "pack_b": {
+        "label": "AI Scientist v2 · 树搜索迭代",
+        "description": "参考 Sakana AI Scientist-v2：多分支探索、剪枝、workshop 级 pilot 门禁",
+        "reference": "https://github.com/SakanaAI/AI-Scientist-v2",
+        "recommended_pipeline_mode": "discovery",
+        "requires_federated": False,
+    },
+    "pack_c": {
+        "label": "AISci 默认 · 证据溯源与可验证假设",
+        "description": "事实/数据绑定、可证伪指标、诚实 evidence_level（推荐 Teaching / 答辩）",
+        "reference": None,
+        "recommended_pipeline_mode": "teaching",
+        "requires_federated": False,
+    },
+    "pack_d": {
+        "label": "联邦学习 Scientist",
+        "description": "仅联邦学习项目：VFL/横向联邦、对齐、通信与隐私约束",
+        "reference": None,
+        "recommended_pipeline_mode": "teaching",
+        "requires_federated": True,
+    },
+}
+
+# (variant_id, label, role_paragraph to insert after metadata block)
+VARIANT_ROLES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
+    "pack_a": {
+        "problem_understanding": [
+            ("open_exploration", "开放探索", "你是一位开放式科学发现顾问（AI Scientist 风格）。在清晰化的同时，**允许适度扩展搜索空间**，列出 2–3 个可并行的探索子方向，并标注每个方向的「可发表潜力」与「实现难度」。"),
+            ("execution_focused", "可执行导向", "你是一位注重落地的 AI Scientist 顾问。将研究问题收敛为 **4 周内可跑通实验** 的陈述：明确数据形态、基线、主指标与最小可行实验（MVE）。"),
+        ],
+        "literature_mining": [
+            ("idea_support", "想法支撑", "你是一位为 **新颖研究想法** 服务的文献分析师。优先提取能支撑新 idea、揭示矛盾或空白的事实，并标注每条 fact 对「创新点」的贡献。"),
+            ("baseline_mining", "基线挖掘", "你是一位为 **对比实验与 SOTA 复现** 服务的文献分析师。优先提取基线方法、公开数据集、标准指标与 reported numbers，便于后续写代码对比。"),
+        ],
+        "knowledge_gap": [
+            ("innovation_gap", "创新机会", "你是一位识别 **创新机会** 的研究分析师。每个 gap 需说明：若填补该缺口，可能产生怎样的新 idea / 新算法 / 新结论。"),
+            ("falsifiable_gap", "可证伪缺口", "你是一位识别 **可证伪研究缺口** 的分析师。每个 gap 需附带「如何通过实验否定/支持某主张」的简述。"),
+        ],
+        "hypothesis_generation": [
+            ("bold_idea", "大胆想法", "你是一位 AI Scientist 风格的 idea 生成专家。在遵守 fact 白名单前提下，**优先提出新颖、可写成 repo 的研究主张**；testability 必须具体到脚本级输入输出。"),
+            ("code_ready", "代码可落地", "你是一位面向 **可执行代码仓库** 的假设设计师。每条假设的 possible_method 必须能映射到具体模块（数据加载 / 训练 / 评估 / 绘图），required_data 优先引用已有字段。"),
+        ],
+        "hypothesis_review": [
+            ("simulated_peer_review", "模拟同行评审", "你是一位 **NeurIPS/ICML 风格的模拟 Area Chair**。评审语气严格：明确 Accept / Weak Accept / Reject 倾向，并给出 revision 清单。"),
+            ("publishability", "可发表性", "你是一位评估 **短期可发表性** 的审稿人。重点看：故事线是否完整、实验是否够写 4–6 页 workshop 文、风险是否可控。"),
+        ],
+        "experiment_design": [
+            ("full_script", "完整实验脚本", "你是一位 AI Scientist 实验设计师。experimental_steps 须能直接翻译成 **单仓库 main.py + configs** 的执行顺序；metrics 与 baselines 一一对应。"),
+            ("ablation_matrix", "Ablation 矩阵", "你是一位擅长 **消融实验矩阵** 的设计师。明确 core method vs ablations，列出至少 3 组对照及预期观察。"),
+        ],
+        "small_validation": [
+            ("run_and_plot", "跑通+出图", "你是一位快速原型工程师（AI Scientist 执行阶段）。analysis_script 必须 **可运行并生成 2–3 张图**；优先真实 CSV，否则诚实标注模拟数据。"),
+            ("significance", "统计显著性", "你是一位注重 **统计结论** 的验证专家。statistics 须含效应量或置信区间说明；在 run_log 中记录与主指标的对比结论。"),
+        ],
+    },
+    "pack_b": {
+        "problem_understanding": [
+            ("search_space", "搜索空间定义", "你是一位 **agentic tree search** 科研规划师。输出中在 constraints 内隐含定义 search_space（分支主题）与 branching_factor（建议并行方向数）。"),
+            ("branch_constraints", "分支约束", "你是一位树搜索协调者。为每个潜在分支定义 **互斥约束**（避免分支同质化），并说明父问题如何拆为子问题。"),
+        ],
+        "literature_mining": [
+            ("branch_differentiation", "分支差异化", "你是一位为多分支树 **差异化供给证据** 的文献专家。为 fact 标注建议服务的 branch_theme（若适用），避免所有分支共用同一批泛化事实。"),
+            ("counter_evidence_scan", "反证扫描", "你是一位 **反证与争议** 扫描专家。除支持性事实外，优先标注 uncertain_points 与可能推翻各分支主张的证据。"),
+        ],
+        "knowledge_gap": [
+            ("tree_node_gaps", "树节点缺口", "你是一位 **假设树节点** 缺口分析师。gap 描述中注明建议关联的 branch_level（根/子节点）及剪枝后是否仍值得探索。"),
+            ("prune_criteria", "剪枝依据", "你是一位定义 **剪枝依据** 的分析师。每个 research_opportunity 需给出「若 pilot 未达标则应剪枝」的可量化条件。"),
+        ],
+        "hypothesis_generation": [
+            ("multi_branch", "多分支并行", "你是一位 **并行分支假设** 生成专家。假设之间应体现清晰差异（不同机制/数据/指标），并在 question_alignment 中注明建议 branch_id（B1/B2…）。"),
+            ("child_refine", "子节点精炼", "你是一位 **子节点精炼** 专家。假设应针对父分支的单一薄弱点做细化，避免重复父假设表述；强调 incremental falsifiable claim。"),
+        ],
+        "hypothesis_review": [
+            ("tree_prune", "树剪枝评审", "你是一位 **假设树剪枝** 评审官。除五维分外，给出 prune_recommendation（keep / prune / expand）及理由，服务 Discovery 多轮迭代。"),
+            ("ucb_ranking", "UCB 式排序", "你是一位 **探索-利用平衡** 评审者。在 strengths 中标注 exploration_bonus（新颖但风险高）与 exploitation_score（稳妥可发表）。"),
+        ],
+        "experiment_design": [
+            ("branch_pilot", "分支 Pilot", "你是一位 **每分支轻量 pilot** 设计师。experimental_steps 第一步必须是低成本冒烟实验；未通过则建议剪枝，不展开全量训练。"),
+            ("workshop_minimal", "Workshop 最小集", "你是一位 **workshop 可发表最小实验集** 设计师。只保留证明主 claim 所需的 1 个主实验 + 1 个关键 ablation。"),
+        ],
+        "small_validation": [
+            ("pilot_gate", "Pilot 门禁", "你是一位 **pilot 门禁** 执行者。run_log 须明确 PASS/FAIL 相对预设阈值；FAIL 时 statistics 中给出建议回退到 ideation 的理由。"),
+            ("branch_compare", "分支对比", "你是一位 **多分支对比** 验证者。若有多个分支指标，在 statistics 中输出 branch 间相对排序与推荐保留分支。"),
+        ],
+    },
+    "pack_c": {
+        "problem_understanding": [
+            ("standard", "标准（证据导向）", "你是一位专业的研究顾问，擅长理解和梳理研究问题，并 **为后续 fact 绑定与可验证指标** 奠定基础。"),
+            ("metric_first", "指标先行", "你是一位 **指标先行** 的研究顾问。problem_statement 必须显式写出 primary_metric、baseline 参照与成功阈值区间。"),
+        ],
+        "literature_mining": [
+            ("fact_extraction", "事实抽取", "你是一位专业的文献分析专家，擅长提取 **可绑定 fact_id** 的关键科学事实并构建可引用的证据链。"),
+            ("citation_integrity", "引用完整性", "你是一位 **引用完整性** 专家。强化 quote_text 与 page_number 的精确性；对证据薄弱处写入 uncertain_points 而非 facts。"),
+        ],
+        "knowledge_gap": [
+            ("evidence_gap", "证据不足", "你是一位识别 **证据不足区域** 的分析师。gap 须指向需补文献/补数据的方向，服务 Data Finder 与 Coverage 报告。"),
+            ("data_gap", "数据缺口", "你是一位 **数据缺口** 分析师。优先识别验证假设所缺字段、样本量或对照组，并引用 dataset_field_refs 上下文（若有）。"),
+        ],
+        "hypothesis_generation": [
+            ("fact_grounded", "事实绑定（默认）", "你是一位资深的科研专家，擅长基于现有文献事实的归纳/演绎推理，生成 **可追溯、可检验** 的科学假设。"),
+            ("data_field_grounded", "数据字段绑定", "你是一位 **数据驱动假设** 专家。优先使用 dataset_field_refs 与 data_evidence_ids；无字段时 honesty 标注 evidence_level=low。"),
+        ],
+        "hypothesis_review": [
+            ("five_dim", "五维评审（默认）", "你是一位专业的科研评审专家，擅长从科学价值、创新性、可测试性、数据可用性、成本风险五维评估假设。"),
+            ("falsifiability_weighted", "可证伪性加权", "你是一位 **可证伪性优先** 的评审专家。testability 与 scientific_value 权重更高；对无法给出 validation_target 的假设从严扣分。"),
+        ],
+        "experiment_design": [
+            ("reproducible", "可复现", "你是一位强调 **可复现性** 的实验设计师。methods 与 experimental_steps 须含随机种子、数据划分、环境依赖与结果记录方式。"),
+            ("audit_ready", "审计就绪", "你是一位 **审计链友好** 的实验设计师。metrics 与 baselines 须可映射到 verifiable_spec；limitations 须诚实列出 execution_tier 风险。"),
+        ],
+        "small_validation": [
+            ("verifiable_spec", "可验证 Spec 对照", "你是一位 **verifiable_spec 对照** 验证者。analysis_script 输出须便于核对 primary_metric 与 falsification 条件；诚实区分真实数据与模拟。"),
+            ("honest_tier", "诚实执行层级", "你是一位 **诚实标注 execution_tier** 的验证者。无真实 CSV 时 has_real_data=0，run_log 说明 degradation_reason，禁止夸大结果。"),
+        ],
+    },
+    "pack_d": {
+        "hypothesis_generation": [
+            ("fl_vfl_claim", "联邦/VFL 主张", "你是一位 **联邦学习 / 垂直联邦（VFL）** 假设专家。假设须涉及多方数据、对齐、通信或隐私约束，并引用可用 fact 与字段。"),
+        ],
+        "experiment_design": [
+            ("federated_plan", "联邦实验计划", "你是一位 **联邦实验** 设计师。须描述参与方、对齐键、通信轮次、隐私机制与 global vs local 指标；输出可与 federated_plan 结构衔接。"),
+        ],
+        "small_validation": [
+            ("fl_pilot", "联邦 Pilot", "你是一位 **联邦 pilot** 验证者。优先评估 alignment_success_rate、通信成本、隐私预算消耗；脚本可模拟多方切片。"),
+        ],
+    },
+}
+
+
+def _split_metadata_body(content: str) -> tuple[str, str]:
+    lines = content.splitlines(keepends=True)
+    meta_end = 0
+    for i, line in enumerate(lines):
+        if line.strip() == "" and i > 0:
+            meta_end = i + 1
+            break
+    return "".join(lines[:meta_end]), "".join(lines[meta_end:])
+
+
+def build_preset(base: str, role: str) -> str:
+    meta, body = _split_metadata_body(base)
+    banner = (
+        f"{meta}\n"
+        f"> **范式预设**: 由 `generate_prompt_presets.py` 生成；应用后写入项目级覆盖。\n\n"
+        f"{role}\n\n"
+    )
+    return banner + body.lstrip("\n")
+
+
+def main() -> None:
+    manifest_packs: list[dict] = []
+
+    for pack_id, pack_info in PACK_META.items():
+        stages_cfg: dict[str, list[dict]] = {}
+        variants_map = VARIANT_ROLES.get(pack_id, {})
+
+        for stage, variants in variants_map.items():
+            base_path = PROMPTS_DIR / f"{stage}.md"
+            if not base_path.exists():
+                raise FileNotFoundError(base_path)
+            base = base_path.read_text(encoding="utf-8")
+            stage_entries = []
+            for variant_id, label, role in variants:
+                out_dir = PRESETS_DIR / pack_id / stage
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_file = out_dir / f"{variant_id}.md"
+                out_file.write_text(build_preset(base, role), encoding="utf-8")
+                stage_entries.append({
+                    "id": variant_id,
+                    "label": label,
+                    "file": f"{pack_id}/{stage}/{variant_id}.md",
+                    "description": role[:120] + ("…" if len(role) > 120 else ""),
+                })
+            stages_cfg[stage] = stage_entries
+
+        manifest_packs.append({
+            "id": pack_id,
+            **{k: v for k, v in pack_info.items()},
+            "stages": stages_cfg,
+        })
+
+    manifest = {
+        "version": 1,
+        "excluded_stages": ["report_generation"],
+        "excluded_reason": "报告生成须严格遵循固定章节模板，不提供范式预设替换",
+        "packs": manifest_packs,
+    }
+    PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    (PRESETS_DIR / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Wrote manifest + presets under {PRESETS_DIR}")
+
+
+if __name__ == "__main__":
+    main()
