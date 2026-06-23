@@ -1,6 +1,7 @@
 """图表人工复核 — 确认后写入 CSV 并纳入 merge"""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.core.figure_extraction import write_figure_series_csv
+from app.schemas.data_integration import build_figure_extraction_manifest
 from app.skills.data_finder._utils import new_id
 
 logger = logging.getLogger(__name__)
@@ -64,8 +66,10 @@ class FigureReviewService:
             target["extraction_method"] = method
             target["extraction_confidence"] = 0.85
             target["needs_manual_review"] = False
+            target["extraction_tier"] = "L4_confirmed"
             target["reviewer_note"] = reviewer_note
             target["reviewed_at"] = datetime.now(CHINA_TZ).isoformat()
+            target["extraction_manifest"] = build_figure_extraction_manifest(target)
 
             table_id = target.get("table_id") or new_id("figtbl")
             target["table_id"] = table_id
@@ -115,7 +119,25 @@ class FigureReviewService:
                 break
         results["figures"] = figures
         self._df.save_results(project_id, results)
-        return target
+
+        remerge: Optional[Dict[str, Any]] = None
+        if action in ("confirm", "confirm_edited"):
+            asyncio.run(self._df.run_align_schema(project_id))
+            merged_results = asyncio.run(self._df.run_merge(project_id))
+            remerge = {
+                "align_tables": len(merged_results.get("alignments") or []),
+                "merged_rows": (merged_results.get("merged") or {}).get("row_count"),
+                "merged_csv_path": (merged_results.get("merged") or {}).get("merged_csv_path"),
+            }
+            target = next(
+                (f for f in (merged_results.get("figures") or figures) if f.get("figure_id") == figure_id),
+                target,
+            )
+
+        response = dict(target)
+        if remerge:
+            response["remerge"] = remerge
+        return response
 
     def get_paper_extraction_stats(self, project_id: str) -> Dict[str, Any]:
         results = self._df.load_results(project_id) or {}

@@ -5,14 +5,9 @@ import csv
 import os
 from typing import Any, Dict, List, Set
 
+from app.core.data_scenario_presets import get_entity_column_hints, project_mode_to_scenario
 from app.skills.base import BaseSkill, SkillResult
 from app.skills.data_finder._utils import normalize_col
-
-
-ENTITY_COLUMN_HINTS = (
-    "entity_id", "client_id", "party_id", "sample_id", "patient_id",
-    "subject_id", "user_id", "id",
-)
 
 
 class EntityResolutionSkill(BaseSkill):
@@ -23,6 +18,10 @@ class EntityResolutionSkill(BaseSkill):
         result = SkillResult(success=True)
         tables = input_data.get("tables", []) or []
         alignments = input_data.get("alignments", []) or []
+        data_spec = input_data.get("data_spec") or {}
+        project_mode = input_data.get("project_mode", "general")
+        scenario = data_spec.get("scenario") or project_mode_to_scenario(project_mode)
+        entity_hints = get_entity_column_hints(scenario, data_spec)
 
         if len(tables) < 2:
             result.data = {
@@ -40,7 +39,9 @@ class EntityResolutionSkill(BaseSkill):
             if not csv_path or not os.path.exists(csv_path):
                 continue
             cols = tbl.get("columns") or []
-            entity_col = self._pick_entity_column(cols, align_by_id.get(tbl.get("table_id"), {}))
+            entity_col = self._pick_entity_column(
+                cols, align_by_id.get(tbl.get("table_id"), {}), entity_hints,
+            )
             if not entity_col:
                 continue
             ids = self._read_entity_ids(csv_path, entity_col)
@@ -75,10 +76,15 @@ class EntityResolutionSkill(BaseSkill):
         return result
 
     @staticmethod
-    def _pick_entity_column(columns: List[str], alignment: Dict[str, Any]) -> str:
+    def _pick_entity_column(
+        columns: List[str],
+        alignment: Dict[str, Any],
+        entity_hints: List[str] | None = None,
+    ) -> str:
         mapping = alignment.get("mapping") or {}
         std_cols = set(alignment.get("standard_columns") or [])
-        for hint in ENTITY_COLUMN_HINTS:
+        hints = entity_hints or []
+        for hint in hints:
             for col in columns:
                 if normalize_col(col) == hint or col in std_cols and hint in normalize_col(col):
                     return col

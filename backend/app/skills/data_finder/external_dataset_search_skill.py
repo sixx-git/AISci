@@ -9,7 +9,6 @@ import urllib.request
 from typing import Any, Dict, List
 
 from app.skills.base import BaseSkill, SkillResult
-from app.skills.data.dataset_discovery_skill import KNOWN_DATASETS, DatasetDiscoverySkill
 
 logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 12
@@ -17,7 +16,7 @@ REQUEST_TIMEOUT = 12
 
 class ExternalDatasetSearchSkill(BaseSkill):
     name = "ExternalDatasetSearch"
-    description = "从 OpenAlex/HuggingFace/Kaggle 等平台检索候选数据源"
+    description = "从 OpenAlex / NCBI GEO 检索元数据候选（HF/Zenodo/Kaggle 由 registry 负责）"
 
     async def run(self, input_data: Dict[str, Any], context: Dict[str, Any]) -> SkillResult:
         result = SkillResult(success=True)
@@ -28,41 +27,11 @@ class ExternalDatasetSearchSkill(BaseSkill):
         candidates: List[Dict[str, Any]] = []
         warnings: List[str] = []
 
-        discovery = DatasetDiscoverySkill()
-        disc_res = await discovery.run(
-            {"research_question": query, "keywords": dataset_keywords, "max_results": 8},
-            context,
-        )
-        if disc_res.data.get("datasets"):
-            for ds in disc_res.data["datasets"]:
-                src = ds.get("source", "known_catalog")
-                platform = "Kaggle (curated index)" if "kaggle" in str(src).lower() else src
-                candidates.append({
-                    "source_platform": platform,
-                    "dataset_name": ds.get("dataset_name", ""),
-                    "url": ds.get("url", ""),
-                    "description": ds.get("description", ""),
-                    "license": ds.get("license", ""),
-                    "confidence": 0.7,
-                })
-
         openalex = self._search_openalex(query)
         if openalex.get("error"):
             warnings.append(openalex["error"])
         else:
             candidates.extend(openalex.get("results", []))
-
-        hf = self._search_huggingface(query)
-        if hf.get("error"):
-            warnings.append(hf["error"])
-        else:
-            candidates.extend(hf.get("results", []))
-
-        zenodo = self._search_zenodo(query)
-        if zenodo.get("error"):
-            warnings.append(zenodo["error"])
-        else:
-            candidates.extend(zenodo.get("results", []))
 
         pubmed_geo = self._search_pubmed_geo(query)
         if pubmed_geo.get("error"):
@@ -85,13 +54,10 @@ class ExternalDatasetSearchSkill(BaseSkill):
             "candidates": dedup[:20],
             "count": len(dedup),
             "offline_fallback": bool(warnings),
-            "live_apis": ["openalex", "huggingface", "zenodo", "ncbi_geo"],
-            "curated_catalogs": ["known_datasets", "kaggle_index"],
+            "live_apis": ["openalex", "ncbi_geo"],
+            "registry_sources": ["huggingface", "zenodo", "figshare", "kaggle_catalog"],
         }
         result.warnings.extend(warnings)
-        result.warnings.extend(disc_res.warnings)
-        if any("kaggle" in str(c.get("source_platform", "")).lower() for c in dedup):
-            result.warnings.append("Kaggle 条目来自 curated index，非实时 API")
         return result
 
     @staticmethod
@@ -115,6 +81,9 @@ class ExternalDatasetSearchSkill(BaseSkill):
                     "doi": doi,
                     "description": "OpenAlex 论文/work 条目，可能含 data availability 链接",
                     "confidence": 0.55,
+                    "availability": "metadata_only",
+                    "import_supported": False,
+                    "api_type": "metadata",
                 })
             return {"results": results}
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -220,7 +189,9 @@ class ExternalDatasetSearchSkill(BaseSkill):
                     "url": f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={gse}" if gse else "",
                     "description": (item.get("summary") or "GEO 表达/芯片数据集元数据")[:300],
                     "confidence": 0.68,
-                    "api_type": "live",
+                    "availability": "metadata_only",
+                    "import_supported": False,
+                    "api_type": "metadata",
                     "geo_id": gse,
                 })
             return {"results": results}

@@ -44,9 +44,14 @@ def write_figure_series_csv(
     figure_meta: Dict[str, Any],
 ) -> str:
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    has_xy = any(row.get("x") not in (None, "") or row.get("y") not in (None, "") for row in rows)
     fieldnames = ["figure_id", "figure_number", "series", "value", "unit",
                   "_provenance_extraction_method", "_confidence",
                   "_provenance_source_title", "_provenance_paper_id"]
+    if has_xy:
+        fieldnames = ["figure_id", "figure_number", "series", "x", "y", "value", "unit",
+                      "_provenance_extraction_method", "_confidence",
+                      "_provenance_source_title", "_provenance_paper_id"]
     with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
@@ -55,6 +60,8 @@ def write_figure_series_csv(
                 "figure_id": figure_meta.get("figure_id", ""),
                 "figure_number": figure_meta.get("figure_number", ""),
                 "series": row.get("series", ""),
+                "x": row.get("x", ""),
+                "y": row.get("y", ""),
                 "value": row.get("value", ""),
                 "unit": row.get("unit", ""),
                 "_provenance_extraction_method": row.get(

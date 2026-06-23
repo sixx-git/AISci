@@ -1,4 +1,4 @@
-"""外部数据集自动入库 — HuggingFace Datasets Server API"""
+"""外部数据集自动入库 — HuggingFace + 开放仓库"""
 from __future__ import annotations
 
 import csv
@@ -113,23 +113,54 @@ def auto_import_external_candidates(
     *,
     max_imports: int = 2,
 ) -> Dict[str, Any]:
+    """同步入口：HF + Zenodo/Figshare（通过 registry）。"""
+    import asyncio
+
+    return asyncio.run(auto_import_external_candidates_async(candidates, output_dir, max_imports=max_imports))
+
+
+async def auto_import_external_candidates_async(
+    candidates: List[Dict[str, Any]],
+    output_dir: str,
+    *,
+    max_imports: int = 2,
+) -> Dict[str, Any]:
     imported: List[Dict[str, Any]] = []
     errors: List[str] = []
 
-    hf_candidates = [
-        c for c in candidates
-        if "huggingface" in (c.get("source_platform") or "").lower()
-        or "huggingface.co" in (c.get("url") or "").lower()
-    ]
-
-    for cand in hf_candidates[:max_imports]:
+    ranked = _rank_import_candidates(candidates)
+    for cand in ranked[:max_imports]:
+        platform = (cand.get("source_platform") or "").lower()
         try:
-            item = import_huggingface_candidate(cand, output_dir)
-            item["candidate_url"] = cand.get("url")
-            imported.append(item)
-            cand["imported"] = True
-            cand["imported_csv_path"] = item["csv_path"]
+            if "huggingface" in platform or "huggingface.co" in (cand.get("url") or "").lower():
+                item = import_huggingface_candidate(cand, output_dir)
+                item["candidate_url"] = cand.get("url")
+                imported.append(item)
+                cand["imported"] = True
+                cand["imported_csv_path"] = item["csv_path"]
+            elif any(x in platform for x in ("zenodo", "figshare", "dryad")) or "zenodo.org" in (cand.get("url") or "").lower():
+                from app.services.data_sources.registry import fetch_candidate
+                from app.skills.data_finder._utils import new_id
+
+                assets = await fetch_candidate(cand, output_dir)
+                for asset in assets:
+                    item = {
+                        "source_platform": cand.get("source_platform", "Repository"),
+                        "dataset_name": cand.get("dataset_name", asset.source_title),
+                        "csv_path": asset.local_path,
+                        "row_count": asset.row_count,
+                        "columns": asset.columns,
+                        "import_method": asset.extraction_method,
+                        "table_id": new_id("ext"),
+                    }
+                    imported.append(item)
+                    cand["imported"] = True
+                    cand["imported_csv_path"] = asset.local_path
+            else:
+                errors.append(f"暂不支持自动导入: {platform or cand.get('url', '')[:40]}")
         except ValueError as exc:
+            errors.append(str(exc))
+        except Exception as exc:
             errors.append(str(exc))
 
     return {
@@ -137,3 +168,24 @@ def auto_import_external_candidates(
         "imported_count": len(imported),
         "errors": errors,
     }
+
+
+def _rank_import_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from app.services.data_sources.base import normalize_legacy_candidate
+
+    ranked: List[Dict[str, Any]] = []
+    for c in candidates or []:
+        nc = normalize_legacy_candidate(c)
+        if nc.get("import_supported") is False:
+            continue
+        platform = (nc.get("source_platform") or "").lower()
+        score = float(nc.get("confidence") or 0.5)
+        if "huggingface" in platform:
+            score += 0.15
+        if "zenodo" in platform:
+            score += 0.12
+        if nc.get("imported"):
+            continue
+        ranked.append({**nc, "_rank": score})
+    ranked.sort(key=lambda x: x.get("_rank", 0), reverse=True)
+    return [{k: v for k, v in c.items() if k != "_rank"} for c in ranked]
