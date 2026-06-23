@@ -14,12 +14,12 @@
 ### 核心流程
 
 ```
-研究问题 → 文献挖掘 → 知识缺口分析 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
-                              ↑___________________________________|
+研究问题 → 文献挖掘 → 多源数据采集 → 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
+                              ↑___________________________________________________________|
                                     科研闭环（Discovery 迭代 / HITL / CQS）
 ```
 
-除标准 8 阶段 Pipeline 外，系统支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）** 与 **完整审计链导出**，覆盖从假设溯源到数据 citation 追溯的全链路可审计科研流程。
+除标准 **9 阶段** Pipeline 外，系统支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）** 与 **完整审计链导出**，覆盖从假设溯源到数据 citation 追溯的全链路可审计科研流程。
 
 ### 8 条设计原则
 
@@ -109,7 +109,7 @@ python scripts\check_e2e.py
 AISci/
 ├── backend/
 │   ├── app/
-│   │   ├── agents/               # 8 个智能体（独立类 + Prompt + JSON Schema）
+│   │   ├── agents/               # 各阶段智能体（独立类 + Prompt + JSON Schema）
 │   │   │   ├── problem_understanding_agent.py
 │   │   │   ├── literature_mining_agent.py
 │   │   │   ├── knowledge_gap_agent.py
@@ -144,19 +144,22 @@ AISci/
 │   │   │   ├── reasoning/        # 新颖性审查、问题对齐、Ideation
 │   │   │   └── experiment/       # 实验合理性检查
 │   │   └── main.py               # FastAPI 入口 + /health + /health/llm
-│   ├── prompts/                  # 8 个 Markdown Prompt 模板（见 prompts/README.md）
+│   ├── prompts/                  # 阶段 Prompt 模板 + presets/ 范式预设库（见 prompts/README.md）
+│   ├── scripts/                  # generate_prompt_presets.py 等工具脚本
 │   ├── tests/                    # pytest 测试
 │   ├── data/                     # arXiv fallback 数据
 │   └── storage/                  # 运行时数据（见 storage/README.md）
 ├── storage/                      # 项目级持久化（audit / catalog / evidence_chains 等）
+├── docs/                         # 专题文档（如 DATA_ACQUISITION.md）
+├── designs/                      # Pencil UI 设计稿（*.pen，与前端代码同仓版本管理）
 ├── frontend/
 │   └── src/
-│       ├── components/           # 60+ 组件（HypothesisCard、ClosedLoopTimeline、DataFinderPanel 等）
-│       ├── pages/                # 8 个页面（Projects、Workflow、Reports、Documents 等）
-│       ├── services/             # API 模块（pipelineService、hypothesisService、dataFinderService 等）
+│       ├── components/           # 60+ 组件（ClosedLoopTimeline、DataFinderPanel、PromptManagementPage 等）
+│       ├── pages/                # Home、ProjectWorkspace、Documents、Reports、Settings 等
+│       ├── services/             # API 模块（pipelineService、dataFinderService、promptService 等）
 │       ├── types/                # TypeScript 类型定义
 │       ├── lib/                  # 工具函数（api.ts、utils.ts）
-│       └── config/               # 环境配置
+│       └── config/               # projectTabs、promptStages、llmModels 等
 ├── scripts/
 │   ├── setup_backend.bat/sh      # 后端环境搭建（venv + pip install）
 │   ├── setup_frontend.bat/sh     # 前端环境搭建（pnpm install）
@@ -217,6 +220,7 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 |-------|------|------|----------|
 | **ProblemUnderstanding** | 研究问题文本 | 问题陈述、领域、关键词、边界 | 将模糊问题转化为可研究的结构化描述 |
 | **LiteratureMining** | project_id + 研究问题 | 科学事实 + 证据列表 + 引用映射 | FAISS 检索 → Qwen 提取事实，每条绑定 chunk_id |
+| **DataAcquisition**（Pipeline 阶段） | 数据需求 + 文献/外部源 | 合并表格、Bundle、provenance | Data Finder 多源检索、PDF 表格/图表抽取、HF/Zenodo 等连接器 |
 | **KnowledgeGap** | 文献事实 + 不确定点 | 知识缺口、矛盾、研究机会 | 发现文献中的空白和可研究方向 |
 | **HypothesisGeneration** | 知识缺口 + 文献证据 | 候选假设 + 对齐评分 + 数据证据 | 基于缺口生成可验证假设，标注 supporting_fact_ids |
 | **HypothesisReview** | 候选假设 + 文献上下文 | 新颖性评分、可行性评估 | 评估假设质量和原创性 |
@@ -229,6 +233,36 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 - **Prompt 模板** — `backend/prompts/*.md`，独立于代码，方便调优
 - **JSON Schema 约束** — Pydantic 模型确保输出类型安全
 - **来源绑定** — 所有事实和引用 traceable 到原始文献
+
+### Prompt 范式预设库
+
+除各阶段默认 Prompt 外，`backend/prompts/presets/` 提供多套可一键应用的科研范式（**不含 `report_generation`**，报告固定 12 章模板）：
+
+| 包 ID | 说明 |
+|-------|------|
+| `pack_a` | AI Scientist v1：想法 → 代码 → 运行 → 评审 |
+| `pack_b` | AI Scientist v2：树搜索、剪枝、pilot 门禁 |
+| `pack_c` | AISci 默认：证据溯源 + 可验证假设（**推荐新项目**） |
+| `pack_d` | 联邦学习（仅 `federated_learning` 项目可见） |
+
+API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/apply`  
+前端：项目工作台 **Prompt 管理** Tab + 工作流阶段 **PromptPresetBar**
+
+---
+
+## 🖥️ 前端信息架构
+
+| 入口 | 路径 | 说明 |
+|------|------|------|
+| 首页 | `/` | 项目搜索、筛选与列表（已合并原「项目」页） |
+| 项目工作台 | `/projects/:id` | 多 Tab 科研全流程 |
+| 文献 | `/documents` | 文献上传、arXiv 检索与导入 |
+| 报告 | `/reports` | 研究报告浏览与导出 |
+| 设置 | `/settings` | LLM 与系统配置 |
+
+`/projects`、`/workflow` 已重定向至 `/`。
+
+**项目工作台 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 科研闭环总览 · 研究问题 · 文献库 · 知识图谱 · 数据集 · 智能体工作流 · **Prompt 管理** · 候选假设 · 实验设计 · 研究报告 · 运行日志
 
 ---
 
@@ -253,7 +287,7 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 
 ## 🔄 科研闭环与 A 级优化
 
-系统在标准 Pipeline 之上实现了七批 A 级优化能力：
+系统在标准 Pipeline 之上实现了多批 A 级优化能力：
 
 | 批次 | 主题 | 要点 |
 |------|------|------|
@@ -264,6 +298,8 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | **5** | 图表分层 + 文献自动入库 | 图表 VLM 抽取/复核、Zenodo/NCBI GEO 检索、文献库 ↔ Data Finder |
 | **6** | Feedback Hub + Catalog | 全局约束注入、Multimodal → 证据链、Data Catalog、Entity 对齐 |
 | **7** | 溯源 + 审计链 | 假设溯源时间线 Tab、LLM 深度假设修订、审计链 jsonl 导出、`data_citation_id` 追溯 |
+| **8** | 数据获取增强 | 外部数据源连接器、补充材料/图表抽取、Release Gate、分阶段集成测试（见 [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md)） |
+| **9** | Prompt 范式预设 | pack_a/b/c/d 多套预设、项目内 Prompt 管理 Tab、一键应用 API |
 
 ### 关键 API（闭环相关）
 
@@ -286,7 +322,9 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 POST /api/v1/pipeline/run
 ```
 
-8 个阶段顺序执行，每个阶段记录：
+阶段顺序：`problem_understanding` → `literature_mining` → `data_acquisition` → `knowledge_gap` → `hypothesis_generation` → `hypothesis_review` → `experiment_design` → `small_validation` → `report_generation`
+
+9 个阶段顺序执行（含 `data_acquisition` 多源数据采集），每个阶段记录：
 
 ```
   StageExecution
@@ -387,6 +425,27 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 
 ---
 
+## 🤝 AI 协作（Cursor / Agent 上下文）
+
+在新对话中粘贴以下摘要，可让 Agent 快速理解本仓库（完整版见下方代码块后的说明）：
+
+```
+项目：AISci — Qwen 多智能体科研系统（d:\Workplace\AISci）
+栈：FastAPI + React/Vite/Tailwind + FAISS + SQLite
+Pipeline 9 阶段：问题理解→文献→数据采集→知识缺口→假设→评估→实验→小样→报告
+闭环：Discovery 迭代 / HITL / CQS / 审计链 storage/audit/{run_id}.jsonl
+前端：/ 首页 | /projects/:id 工作台 | /documents 文献 | /reports 报告
+关键路径：pipeline_service.py | projectTabs.ts | DATABASE.md | prompts/presets/
+原则：最小改动、中文回复、禁止虚构引用、不擅自 git commit
+任务：（在此填写）
+```
+
+**Pencil 设计任务**（需安装 Pencil 扩展并连接 MCP）：设计稿 `designs/aisci-ui.pen`，须用 Pencil MCP 读写（勿直接 Read `.pen` 文件）；风格对齐深色 Tailwind UI（参考 `Home.tsx`、`ResearchClosedLoopOverview.tsx`）。
+
+**建议 Agent 按任务选读**：`README.md` → `backend/DATABASE.md` → `docs/DATA_ACQUISITION.md` → 相关组件/服务源码。
+
+---
+
 ## 📚 文档索引
 
 | 文档 | 说明 |
@@ -394,7 +453,8 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 | [QUICKSTART.md](./QUICKSTART.md) | 5 分钟快速入门 |
 | [backend/README.md](./backend/README.md) | 后端架构、API、测试 |
 | [backend/DATABASE.md](./backend/DATABASE.md) | 数据库表结构与闭环 metadata |
-| [backend/prompts/README.md](./backend/prompts/README.md) | Prompt 模板索引 |
+| [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md) | Data Finder 多源数据获取与 Release Gate |
+| [backend/prompts/README.md](./backend/prompts/README.md) | Prompt 模板与范式预设索引 |
 | [backend/tests/README.md](./backend/tests/README.md) | pytest 与 batch 回归 |
 | [frontend/README.md](./frontend/README.md) | 前端组件与页面 |
 | [storage/README.md](./storage/README.md) | 审计链、证据链、Data Finder 持久化 |
