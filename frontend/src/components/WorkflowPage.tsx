@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw } from 'lucide-react';
+import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw, Database } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
@@ -53,6 +53,7 @@ const MAX_ALL_PENDING_POLLS = 5;
 const STAGE_TO_NODE_ID: Record<string, string> = {
   problem_understanding: 'problem',
   literature_mining: 'literature',
+  data_acquisition: 'data',
   knowledge_gap: 'gaps',
   hypothesis_generation: 'hypothesis',
   hypothesis_review: 'evaluation',
@@ -286,6 +287,13 @@ const BASE_AGENT_NODES: AgentNodeData[] = [
     model: '', promptVersion: '', icon: BookOpen,
   },
   {
+    id: 'data', name: '多源数据采集',
+    shortDesc: 'DataSpec 驱动：PDF/外部库/补充材料 → 对齐合并',
+    status: 'pending', duration: null,
+    inputSummary: '', outputSummary: '', logs: [],
+    model: '', promptVersion: '', icon: Database,
+  },
+  {
     id: 'gaps', name: '知识缺口发现智能体',
     shortDesc: '分析现有文献，识别知识空白与研究机会',
     status: 'pending', duration: null,
@@ -465,6 +473,9 @@ export function WorkflowPage({
   const [numIdeas, setNumIdeas] = useState(3);
   const [enableTeachingAutoRefinement, setEnableTeachingAutoRefinement] = useState(true);
   const [sandboxUseDocker, setSandboxUseDocker] = useState(false);
+  const [coverageGapThreshold, setCoverageGapThreshold] = useState(70);
+  const [dataSpecGapThreshold, setDataSpecGapThreshold] = useState(60);
+  const [enableGapSearch, setEnableGapSearch] = useState(true);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
@@ -865,6 +876,11 @@ export function WorkflowPage({
         enable_plot_vlm_critique: true,
         enable_teaching_auto_refinement: enableTeachingAutoRefinement,
         sandbox_use_docker: sandboxUseDocker,
+        enable_gap_search: enableGapSearch,
+        enable_hf_auto_import: true,
+        coverage_gap_threshold: coverageGapThreshold,
+        data_spec_gap_threshold: dataSpecGapThreshold,
+        max_gap_rounds: 2,
       });
       const result: PipelineRunResult = response.data;
 
@@ -896,6 +912,9 @@ export function WorkflowPage({
     numIdeas,
     enableTeachingAutoRefinement,
     sandboxUseDocker,
+    enableGapSearch,
+    coverageGapThreshold,
+    dataSpecGapThreshold,
   ]);
 
   // ========== 暂停 ==========
@@ -1041,6 +1060,40 @@ export function WorkflowPage({
               验证失败时自动重跑实验设计
             </label>
           )}
+          <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableGapSearch}
+              onChange={(e) => setEnableGapSearch(e.target.checked)}
+              disabled={runState !== 'idle'}
+              className="rounded border-dark-600"
+            />
+            数据采集 Gap 自动补搜
+          </label>
+          <div>
+            <label className="text-[11px] text-gray-500 block mb-1">完备性阈值</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={coverageGapThreshold}
+              onChange={(e) => setCoverageGapThreshold(Number(e.target.value) || 70)}
+              disabled={runState !== 'idle'}
+              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-gray-500 block mb-1">DataSpec 阈值</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={dataSpecGapThreshold}
+              onChange={(e) => setDataSpecGapThreshold(Number(e.target.value) || 60)}
+              disabled={runState !== 'idle'}
+              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+            />
+          </div>
           <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
             <input
               type="checkbox"

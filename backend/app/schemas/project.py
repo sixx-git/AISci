@@ -2,7 +2,7 @@
 项目相关 schemas
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -21,6 +21,32 @@ class ProjectMode(str, Enum):
     """项目运行模式"""
     GENERAL = "general"
     FEDERATED_LEARNING = "federated_learning"
+
+
+class DataSpecHints(BaseModel):
+    """用户在研究问题页填写的结构化数据需求（写入 project.config）。"""
+    entities_of_interest: Optional[List[str]] = Field(None, description="实体/对齐字段")
+    target_variables: Optional[List[str]] = Field(None, description="目标变量/指标")
+    preferred_sources: Optional[List[str]] = Field(None, description="偏好数据来源")
+    merge_strategy_hint: Optional[str] = Field(None, description="auto | stack | join")
+    data_need_note: Optional[str] = Field(None, description="补充数据需求说明")
+
+
+class DataAcquisitionConfig(BaseModel):
+    """Gap 闭环与补搜阈值（写入 project.config.data_acquisition）。"""
+    coverage_gap_threshold: Optional[float] = Field(None, ge=0, le=100)
+    data_spec_gap_threshold: Optional[float] = Field(None, ge=0, le=100)
+    max_gap_rounds: Optional[int] = Field(None, ge=1, le=4)
+    enable_gap_search: Optional[bool] = None
+    auto_literature_discovery: Optional[bool] = Field(
+        None, description="是否自动检索并导入 arXiv/OpenAlex 文献",
+    )
+    auto_literature_min_docs: Optional[int] = Field(
+        None, ge=0, le=20, description="低于该文献数时触发自动发现（默认 3）",
+    )
+    auto_literature_max_papers: Optional[int] = Field(
+        None, ge=1, le=10, description="单次自动文献导入上限",
+    )
 
 
 class ProjectCreate(BaseModel):
@@ -58,6 +84,8 @@ class ProjectUpdate(BaseModel):
     constraints: Optional[str] = Field(None, description="限制条件")
     expected_output: Optional[str] = Field(None, description="期望输出")
     project_mode: Optional[ProjectMode] = Field(None, description="项目模式")
+    data_spec_hints: Optional[DataSpecHints] = Field(None, description="结构化数据需求提示")
+    data_acquisition: Optional[DataAcquisitionConfig] = Field(None, description="数据采集/Gap 闭环配置")
 
 
 class ProjectQuery(BaseModel):
@@ -84,6 +112,7 @@ class ProjectBase(BaseModel):
     constraints: Optional[str] = None
     expected_output: Optional[str] = None
     project_mode: Optional[ProjectMode] = ProjectMode.GENERAL
+    config: Optional[Dict[str, Any]] = None
     
     class Config:
         from_attributes = True

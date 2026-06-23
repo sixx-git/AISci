@@ -62,17 +62,19 @@ STAGE_DEFS: List[Dict[str, Any]] = [
      "db_stage_enum": DB_PipelineStage.PROBLEM_UNDERSTANDING, "label": "问题理解"},
     {"idx": 1, "key": "literature_mining", "stage_enum": PipelineStage.LITERATURE_MINING,
      "db_stage_enum": DB_PipelineStage.LITERATURE_MINING, "label": "文献挖掘"},
-    {"idx": 2, "key": "knowledge_gap", "stage_enum": PipelineStage.KNOWLEDGE_GAP,
+    {"idx": 2, "key": "data_acquisition", "stage_enum": PipelineStage.DATA_ACQUISITION,
+     "db_stage_enum": DB_PipelineStage.DATA_ACQUISITION, "label": "多源数据采集"},
+    {"idx": 3, "key": "knowledge_gap", "stage_enum": PipelineStage.KNOWLEDGE_GAP,
      "db_stage_enum": DB_PipelineStage.KNOWLEDGE_GAP, "label": "知识缺口"},
-    {"idx": 3, "key": "hypothesis_generation", "stage_enum": PipelineStage.HYPOTHESIS_GENERATION,
+    {"idx": 4, "key": "hypothesis_generation", "stage_enum": PipelineStage.HYPOTHESIS_GENERATION,
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_GENERATION, "label": "假设生成"},
-    {"idx": 4, "key": "hypothesis_review", "stage_enum": PipelineStage.HYPOTHESIS_REVIEW,
+    {"idx": 5, "key": "hypothesis_review", "stage_enum": PipelineStage.HYPOTHESIS_REVIEW,
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_REVIEW, "label": "假设评估"},
-    {"idx": 5, "key": "experiment_design", "stage_enum": PipelineStage.EXPERIMENT_DESIGN,
+    {"idx": 6, "key": "experiment_design", "stage_enum": PipelineStage.EXPERIMENT_DESIGN,
      "db_stage_enum": DB_PipelineStage.EXPERIMENT_DESIGN, "label": "实验设计"},
-    {"idx": 6, "key": "small_validation", "stage_enum": PipelineStage.SMALL_VALIDATION,
+    {"idx": 7, "key": "small_validation", "stage_enum": PipelineStage.SMALL_VALIDATION,
      "db_stage_enum": DB_PipelineStage.SMALL_VALIDATION, "label": "小样验证"},
-    {"idx": 7, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
+    {"idx": 8, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
      "db_stage_enum": DB_PipelineStage.REPORT_GENERATION, "label": "报告生成"},
 ]
 
@@ -752,12 +754,12 @@ class PipelineService:
         refresh_meta = lm.get("discovery_refresh") if isinstance(lm, dict) else {}
 
         self._run_stage(
-            stages, 2, results, research_question, project_id,
+            stages, 3, results, research_question, project_id,
             lambda: self._exec_knowledge_gap(lm, project_id),
         )
 
         try:
-            df_out = self._exec_data_finder(
+            df_out = self._exec_data_acquisition(
                 project_id,
                 research_question,
                 results,
@@ -895,7 +897,7 @@ class PipelineService:
             },
         )
 
-        self._run_stage(stages, 5, results, research_question, project_id,
+        self._run_stage(stages, 6, results, research_question, project_id,
             lambda: self._exec_experiment_design(
                 results.get("hypothesis_review"), project_id, project_mode,
             ))
@@ -904,7 +906,7 @@ class PipelineService:
             self._executability_blocked
             and self._run_options.get("enable_executability_gate", True)
         ):
-            self._run_stage(stages, 6, results, research_question, project_id,
+            self._run_stage(stages, 7, results, research_question, project_id,
                 lambda: self._exec_small_validation(
                     results.get("experiment_design"),
                     results.get("hypothesis_review"),
@@ -919,7 +921,7 @@ class PipelineService:
         def _exec_report():
             return self._exec_report_generation(results, self._build_pipeline_run_info(), project_mode)
 
-        self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+        self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
         final_report_id = self._create_report(project_id, results.get("report_generation", {}))
         post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_after")
 
@@ -997,11 +999,11 @@ class PipelineService:
             },
         )
 
-        self._run_stage(stages, 5, results, research_question, project_id,
+        self._run_stage(stages, 6, results, research_question, project_id,
             lambda: self._exec_experiment_design(
                 results.get("hypothesis_review"), project_id, project_mode,
             ))
-        self._run_stage(stages, 6, results, research_question, project_id,
+        self._run_stage(stages, 7, results, research_question, project_id,
             lambda: self._exec_small_validation(
                 results.get("experiment_design"),
                 results.get("hypothesis_review"),
@@ -1178,7 +1180,7 @@ class PipelineService:
             )
             self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
 
-            self._run_stage(stages, 3, results, research_question, project_id,
+            self._run_stage(stages, 4, results, research_question, project_id,
                 lambda: self._exec_hypothesis_generation(
                     results.get("problem_understanding"),
                     results.get("literature_mining"),
@@ -1204,9 +1206,9 @@ class PipelineService:
             except Exception:
                 pass
 
-            self._run_stage(stages, 4, results, research_question, project_id,
-                lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
             self._run_stage(stages, 5, results, research_question, project_id,
+                lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
+            self._run_stage(stages, 6, results, research_question, project_id,
                 lambda: self._exec_experiment_design(
                     results.get("hypothesis_review"), project_id, project_mode,
                 ))
@@ -1215,7 +1217,7 @@ class PipelineService:
                 "enable_executability_gate", True
             )
             if not skip_validation:
-                self._run_stage(stages, 6, results, research_question, project_id,
+                self._run_stage(stages, 7, results, research_question, project_id,
                     lambda: self._exec_small_validation(
                         results.get("experiment_design"),
                         results.get("hypothesis_review"),
@@ -1255,7 +1257,7 @@ class PipelineService:
                     results, self._build_pipeline_run_info(), project_mode,
                 )
 
-            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+            self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
             final_report_id = self._create_report(project_id, results.get("report_generation", {}))
             post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
             history[-1]["snapshot_after"] = post_snapshot
@@ -1434,11 +1436,9 @@ class PipelineService:
                 except Exception as mm_err:
                     logger.warning(f"多模态 evidence 同步失败: {mm_err}")
 
-            if start_idx <= 1:
-                try:
-                    self._exec_data_finder(project_id, research_question, results, project_mode)
-                except Exception as df_err:
-                    logger.warning(f"多源数据查找失败: {df_err}")
+            if start_idx <= 2:
+                self._run_stage(stages, 2, results, research_question, project_id,
+                    lambda: self._exec_data_acquisition(project_id, research_question, results, project_mode))
 
                 try:
                     self._exec_knowledge_graph(
@@ -1447,9 +1447,9 @@ class PipelineService:
                 except Exception as kg_err:
                     logger.warning(f"知识图谱初始构建失败: {kg_err}")
             
-            # ── 阶段 3: KnowledgeGapAgent ──
-            if start_idx <= 2:
-                self._run_stage(stages, 2, results, research_question, project_id,
+            # ── 阶段 4: KnowledgeGapAgent ──
+            if start_idx <= 3:
+                self._run_stage(stages, 3, results, research_question, project_id,
                     lambda: self._exec_knowledge_gap(
                         results.get("literature_mining"),
                         project_id,
@@ -1462,8 +1462,8 @@ class PipelineService:
                 except Exception as kg_err:
                     logger.warning(f"知识图谱增量更新失败: {kg_err}")
             
-            # ── 阶段 4: HypothesisGenerationAgent ──
-            if start_idx <= 3:
+            # ── 阶段 5: HypothesisGenerationAgent ──
+            if start_idx <= 4:
                 # ── P3: Ideation 新颖性预检（OpenAlex + Semantic Scholar）──
                 try:
                     ideation = self._exec_ideation_novelty(
@@ -1489,7 +1489,7 @@ class PipelineService:
                 except Exception as ide_err:
                     logger.warning(f"Ideation 新颖性检查失败: {ide_err}")
 
-                self._run_stage(stages, 3, results, research_question, project_id,
+                self._run_stage(stages, 4, results, research_question, project_id,
                     lambda: self._exec_hypothesis_generation(
                         results.get("problem_understanding"),
                         results.get("literature_mining"),
@@ -1527,15 +1527,15 @@ class PipelineService:
                     logger.warning(f"保存假设/证据链失败: {save_err}")
                 self._maybe_pause_for_hitl_gate("hypothesis_generation", results)
             
-            # ── 阶段 5: HypothesisReviewAgent ──
-            if start_idx <= 4:
-                self._run_stage(stages, 4, results, research_question, project_id,
+            # ── 阶段 6: HypothesisReviewAgent ──
+            if start_idx <= 5:
+                self._run_stage(stages, 5, results, research_question, project_id,
                     lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
                 self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
-            # ── 阶段 6: ExperimentDesignAgent ──
-            if start_idx <= 5:
-                self._run_stage(stages, 5, results, research_question, project_id,
+            # ── 阶段 7: ExperimentDesignAgent ──
+            if start_idx <= 6:
+                self._run_stage(stages, 6, results, research_question, project_id,
                     lambda: self._exec_experiment_design(
                         results.get("hypothesis_review"),
                         project_id,
@@ -1549,8 +1549,8 @@ class PipelineService:
             skip_validation_run = getattr(self, "_skip_to_post_validation", False)
             if self._executability_blocked and self._run_options.get("enable_executability_gate", True):
                 skip_validation_run = True
-            if start_idx <= 6 and not skip_validation_run:
-                self._run_stage(stages, 6, results, research_question, project_id,
+            if start_idx <= 7 and not skip_validation_run:
+                self._run_stage(stages, 7, results, research_question, project_id,
                     lambda: self._exec_small_validation(
                         results.get("experiment_design"),
                         results.get("hypothesis_review"),
@@ -1572,7 +1572,7 @@ class PipelineService:
                 self._skip_to_post_validation = False
 
             # ── 联邦 Campaign 自动第二轮（实验设计→pilot 迭代）──
-            if start_idx <= 6 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            if start_idx <= 7 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
                 fed_campaign_meta = self._run_federated_campaign_refinement(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1580,7 +1580,7 @@ class PipelineService:
                     results["federated_campaign_refinement"] = fed_campaign_meta
 
             # ── P2-6: Teaching 轻量自动闭环 ──
-            if start_idx <= 6:
+            if start_idx <= 7:
                 teaching_meta = self._run_teaching_auto_refinement(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1590,22 +1590,22 @@ class PipelineService:
                         final_report_id = teaching_meta["final_report_id"]
                         teaching_report_ran = True
             
-            # ── 阶段 8: ReportGenerationAgent ──
+            # ── 阶段 9: ReportGenerationAgent ──
             if getattr(self, "_finalize_report_after_gate", False):
                 self._finalize_report_after_gate = False
                 final_report_id = self._create_report(project_id, results.get("report_generation", {}))
-            elif start_idx <= 7 and not teaching_report_ran:
+            elif start_idx <= 8 and not teaching_report_ran:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
                         results, pipeline_run_info, project_mode
                     )
-                self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+                self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
                 self._maybe_pause_for_hitl_gate("report_generation", results)
                 final_report_id = self._create_report(project_id, results.get("report_generation", {}))
 
             # ── P5: Discovery 开放循环（Sakana-like）──
-            if start_idx <= 3 and self._run_options.get("pipeline_mode") == PipelineMode.DISCOVERY.value:
+            if start_idx <= 4 and self._run_options.get("pipeline_mode") == PipelineMode.DISCOVERY.value:
                 discovery_meta = self._run_discovery_loop(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1950,7 +1950,7 @@ class PipelineService:
                 results["literature_mining"] = lm
         return ctx
 
-    def _exec_data_finder(
+    def _exec_data_acquisition(
         self,
         project_id: str,
         research_question: str,
@@ -1981,42 +1981,60 @@ class PipelineService:
         if refinement_queries:
             search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
 
-        search_result = service.run_search_sync(
+        gap_options = {
+            "enable_gap_search": self._run_options.get("enable_gap_search", True),
+            "auto_import": self._run_options.get("enable_hf_auto_import", True),
+            "coverage_gap_threshold": self._run_options.get("coverage_gap_threshold"),
+            "data_spec_gap_threshold": self._run_options.get("data_spec_gap_threshold"),
+            "max_gap_rounds": self._run_options.get("max_gap_rounds"),
+            "refinement_queries": refinement_queries,
+        }
+        final = service.run_data_acquisition_sync(
             project_id=project_id,
             research_question=search_query,
             selected_hypothesis=selected_hypothesis or "",
             project_mode=project_mode,
+            auto_import=self._run_options.get("enable_hf_auto_import", True),
+            gap_options=gap_options,
         )
-        extract_result = service.run_extract_tables_sync(project_id)
-        if extract_result.get("extracted_tables"):
-            service.run_align_schema_sync(project_id)
-            service.run_merge_sync(project_id)
-            extract_result = service.load_results(project_id) or extract_result
 
-        gap_meta = {}
-        if self._run_options.get("enable_gap_search", True):
-            try:
-                gap_meta = service.run_gap_enrichment_sync(
-                    project_id,
-                    refinement_queries=refinement_queries,
-                    auto_import=self._run_options.get("enable_hf_auto_import", True),
-                )
-                extract_result = service.load_results(project_id) or extract_result
-            except Exception as gap_err:
-                logger.warning(f"Data Finder gap 补搜失败: {gap_err}")
+        gap_meta = final.get("gap_enrichment") or {}
+        da = final.get("data_acquisition") or {}
+        gap_loop = da.get("step_details", {}).get("gap_loop") if isinstance(da.get("step_details"), dict) else None
+        if gap_loop:
+            gap_meta = {"loop": gap_loop, "rounds": len(gap_loop) if isinstance(gap_loop, list) else 0}
 
         output = {
-            "search": search_result,
-            "extract": extract_result,
-            "paper_link_extractions": search_result.get("paper_extractions", []),
+            "data_acquisition": final.get("data_acquisition", {}),
+            "search": final,
+            "extract": final,
+            "paper_link_extractions": final.get("paper_extractions", []),
             "refinement_queries": refinement_queries or [],
             "gap_enrichment": gap_meta,
         }
+        results["data_acquisition"] = output
         results["data_finder"] = output
         logger.info(
-            f"[DataFinder] 完成 search + extract: tables={len(extract_result.get('extracted_tables', []))}"
+            f"[DataAcquisition] 完成: tables={len(final.get('extracted_tables', []))} "
+            f"merged={(final.get('merged') or {}).get('row_count')}"
         )
         return output
+
+    def _exec_data_finder(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+        project_mode: str,
+        refinement_queries: Optional[List[str]] = None,
+        selected_hypothesis: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """兼容别名 → 多源数据采集。"""
+        return self._exec_data_acquisition(
+            project_id, research_question, results, project_mode,
+            refinement_queries=refinement_queries,
+            selected_hypothesis=selected_hypothesis,
+        )
 
     def _exec_knowledge_graph(
         self,

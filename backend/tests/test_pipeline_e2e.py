@@ -239,7 +239,7 @@ try:
     
     # 最终判定
     assert result.status == "completed", f"Pipeline 应该完成，实际: {result.status}"
-    assert len(result.stages) == 8, f"应该 8 个阶段，实际 {len(result.stages)}"
+    assert len(result.stages) == 9, f"应该 9 个阶段，实际 {len(result.stages)}"
     assert all(s.status == "completed" for s in result.stages), "所有阶段应完成"
     assert result.final_report_id is not None, "应该有报告 ID"
     assert len(logs) >= 1, f"至少 1 条调用日志，实际 {len(logs)}"

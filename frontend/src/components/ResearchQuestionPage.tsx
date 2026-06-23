@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Save, Play, ArrowRight, CheckCircle, XCircle, AlertTriangle,
@@ -20,6 +20,15 @@ export interface ResearchQuestionForm {
   dataSource: string;
   constraints: string;
   expectedOutput: string;
+  dataEntities: string;
+  dataTargetVariables: string;
+  dataMergeStrategy: string;
+  dataPreferredSources: string;
+  dataNeedNote: string;
+  coverageGapThreshold: string;
+  dataSpecGapThreshold: string;
+  maxGapRounds: string;
+  autoLiteratureDiscovery: string;
 }
 
 const EMPTY_FORM: ResearchQuestionForm = {
@@ -30,6 +39,15 @@ const EMPTY_FORM: ResearchQuestionForm = {
   dataSource: '',
   constraints: '',
   expectedOutput: '',
+  dataEntities: '',
+  dataTargetVariables: '',
+  dataMergeStrategy: 'auto',
+  dataPreferredSources: '',
+  dataNeedNote: '',
+  coverageGapThreshold: '70',
+  dataSpecGapThreshold: '60',
+  maxGapRounds: '2',
+  autoLiteratureDiscovery: 'true',
 };
 
 // ============ localStorage 工具函数 ============
@@ -138,12 +156,49 @@ const FORM_TO_API_MAP: Partial<Record<keyof ResearchQuestionForm, string>> = {
   expectedOutput: 'expected_output',
 };
 
-function formToApiPayload(form: ResearchQuestionForm): Record<string, string> {
-  const payload: Record<string, string> = {};
+function parseCommaList(text: string): string[] {
+  return text
+    .split(/[,;，；\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function formToApiPayload(form: ResearchQuestionForm): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
   for (const [formKey, apiKey] of Object.entries(FORM_TO_API_MAP)) {
     if (apiKey && form[formKey as keyof ResearchQuestionForm]) {
       payload[apiKey] = form[formKey as keyof ResearchQuestionForm];
     }
+  }
+  const hints: Record<string, unknown> = {};
+  const entities = parseCommaList(form.dataEntities);
+  const targets = parseCommaList(form.dataTargetVariables);
+  const sources = parseCommaList(form.dataPreferredSources);
+  if (entities.length) hints.entities_of_interest = entities;
+  if (targets.length) hints.target_variables = targets;
+  if (sources.length) hints.preferred_sources = sources;
+  if (form.dataMergeStrategy && form.dataMergeStrategy !== 'auto') {
+    hints.merge_strategy_hint = form.dataMergeStrategy;
+  }
+  if (form.dataNeedNote.trim()) hints.data_need_note = form.dataNeedNote.trim();
+  if (Object.keys(hints).length > 0) {
+    payload.data_spec_hints = hints;
+  }
+  const acq: Record<string, unknown> = {};
+  const covThr = parseFloat(form.coverageGapThreshold);
+  const specThr = parseFloat(form.dataSpecGapThreshold);
+  const rounds = parseInt(form.maxGapRounds, 10);
+  if (!Number.isNaN(covThr)) acq.coverage_gap_threshold = covThr;
+  if (!Number.isNaN(specThr)) acq.data_spec_gap_threshold = specThr;
+  if (!Number.isNaN(rounds)) acq.max_gap_rounds = Math.max(1, Math.min(4, rounds));
+  acq.enable_gap_search = true;
+  if (form.autoLiteratureDiscovery === 'false') {
+    acq.auto_literature_discovery = false;
+  } else if (form.autoLiteratureDiscovery === 'true') {
+    acq.auto_literature_discovery = true;
+  }
+  if (Object.keys(acq).length > 0) {
+    payload.data_acquisition = acq;
   }
   return payload;
 }
@@ -217,6 +272,15 @@ const FL_FORM_TEMPLATE: ResearchQuestionForm = {
   dataSource: '历史联邦实验 CSV、公开 FL benchmark、组内标注报告',
   constraints: 'Non-IID 划分、通信带宽、privacy_budget、客户端参与率',
   expectedOutput: '联邦 baseline 对比报告、通信-精度权衡分析、隐私机制建议',
+  dataEntities: 'client_id, party_id, entity_id',
+  dataTargetVariables: 'global_accuracy, f1_score, communication_cost_mb',
+  dataMergeStrategy: 'join',
+  dataPreferredSources: 'paper_table, huggingface, zenodo',
+  dataNeedNote: '需要 Non-IID 划分下的 baseline 与通信轮次指标',
+  coverageGapThreshold: '70',
+  dataSpecGapThreshold: '60',
+  maxGapRounds: '2',
+  autoLiteratureDiscovery: 'true',
 };
 
 const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
@@ -230,12 +294,66 @@ const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
   dataSource: '历史多方特征 CSV、人工标注报告、VFL 实验日志、aligned_id 对齐表',
   constraints: '样本 ID 对齐、特征方/标签方不可 Raw 共享、privacy_budget、通信轮次、对齐成功率',
   expectedOutput: 'VFL baseline 对比、通信-精度-隐私权衡、下一轮 replan 建议',
+  dataEntities: 'entity_id, party_id, sample_id',
+  dataTargetVariables: 'auc, accuracy, communication_cost_mb',
+  dataMergeStrategy: 'join',
+  dataPreferredSources: 'paper_table, supplementary, zenodo',
+  dataNeedNote: '需多方特征对齐表与标签方指标',
+  coverageGapThreshold: '70',
+  dataSpecGapThreshold: '60',
+  maxGapRounds: '2',
+  autoLiteratureDiscovery: 'true',
 };
 
 export function ResearchQuestionPage({ projectId, projectMode, onSaved }: ResearchQuestionPageProps) {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: 'idle' });
+
+  useEffect(() => {
+    if (!projectId) return;
+    projectService.getProject(projectId).then((res) => {
+      if (res.code !== 200 || !res.data) return;
+      const p = res.data;
+      const hints = p.config?.data_spec_hints || {};
+      setForm((prev) => ({
+        ...prev,
+        researchDomain: String(p.research_domain || p.research_field || prev.researchDomain),
+        researchQuestion: String(p.research_question || prev.researchQuestion),
+        researchGoal: String(p.research_goal || prev.researchGoal),
+        background: String(p.research_background || prev.background),
+        dataSource: String(p.data_source || prev.dataSource),
+        constraints: String(p.constraints || prev.constraints),
+        expectedOutput: String(p.expected_output || prev.expectedOutput),
+        dataEntities: Array.isArray(hints.entities_of_interest)
+          ? (hints.entities_of_interest as string[]).join(', ')
+          : prev.dataEntities,
+        dataTargetVariables: Array.isArray(hints.target_variables)
+          ? (hints.target_variables as string[]).join(', ')
+          : prev.dataTargetVariables,
+        dataPreferredSources: Array.isArray(hints.preferred_sources)
+          ? (hints.preferred_sources as string[]).join(', ')
+          : prev.dataPreferredSources,
+        dataMergeStrategy: String(hints.merge_strategy_hint || prev.dataMergeStrategy || 'auto'),
+        dataNeedNote: String(hints.data_need_note || prev.dataNeedNote),
+        coverageGapThreshold: String(
+          p.config?.data_acquisition?.coverage_gap_threshold ?? prev.coverageGapThreshold,
+        ),
+        dataSpecGapThreshold: String(
+          p.config?.data_acquisition?.data_spec_gap_threshold ?? prev.dataSpecGapThreshold,
+        ),
+        maxGapRounds: String(
+          p.config?.data_acquisition?.max_gap_rounds ?? prev.maxGapRounds,
+        ),
+        autoLiteratureDiscovery:
+          p.config?.data_acquisition?.auto_literature_discovery === false
+            ? 'false'
+            : p.config?.data_acquisition?.auto_literature_discovery === true
+              ? 'true'
+              : prev.autoLiteratureDiscovery,
+      }));
+    }).catch(() => { /* ignore */ });
+  }, [projectId]);
 
   const updateField = useCallback(
     (key: keyof ResearchQuestionForm, value: string) => {
@@ -282,7 +400,6 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
   const handleRunAgent = useCallback(async () => {
     if (!projectId) return;
 
-    // 先保存
     saveDraft(projectId, form);
     setSaveStatus({ type: 'saving' });
 
@@ -290,15 +407,9 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
       const payload = formToApiPayload(form);
       await projectService.updateProject(projectId, payload);
 
-      // 问题理解 Agent 暂未实现独立 API
-      // 保存成功后提示用户进入工作流运行完整 Pipeline
       setSaveStatus({ type: 'success' });
       onSaved?.();
-
-      // 延迟导航提示，让用户看到成功状态
-      setTimeout(() => {
-        setSaveStatus({ type: 'idle' });
-      }, 3000);
+      navigate(`/projects/${projectId}?tab=workflow`);
     } catch (err: unknown) {
       const detail =
         err instanceof Error ? err.message : String(err);
@@ -308,7 +419,7 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
       });
       setTimeout(() => setSaveStatus({ type: 'idle' }), 5000);
     }
-  }, [projectId, form, onSaved]);
+  }, [projectId, form, onSaved, navigate]);
 
   const filledCount = useMemo(
     () => Object.values(form).filter((v) => v.trim().length > 0).length,
@@ -404,6 +515,121 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
                 onChange={updateField}
               />
             ))}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-dark-700 space-y-4">
+            <h4 className="text-sm font-semibold text-indigo-200 flex items-center gap-1.5">
+              <Database className="w-4 h-4" />
+              结构化数据需求（DataSpec）
+            </h4>
+            <p className="text-xs text-gray-500">
+              可选：指定跨表对齐字段、目标变量与偏好数据源，将在多源数据采集阶段与自动推断的 DataSpec 合并。
+            </p>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-1.5 block">实体 / 对齐字段（逗号分隔）</label>
+              <input
+                type="text"
+                value={form.dataEntities}
+                onChange={(e) => updateField('dataEntities', e.target.value)}
+                placeholder="例如：patient_id, sample_id, client_id"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-1.5 block">目标变量 / 指标（逗号分隔）</label>
+              <input
+                type="text"
+                value={form.dataTargetVariables}
+                onChange={(e) => updateField('dataTargetVariables', e.target.value)}
+                placeholder="例如：accuracy, f1_score, auc"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-300 mb-1.5 block">合并策略</label>
+                <select
+                  value={form.dataMergeStrategy}
+                  onChange={(e) => updateField('dataMergeStrategy', e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white"
+                >
+                  <option value="auto">自动（auto）</option>
+                  <option value="stack">纵向堆叠（stack）</option>
+                  <option value="join">按键连接（join）</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-300 mb-1.5 block">偏好数据源（逗号分隔）</label>
+                <input
+                  type="text"
+                  value={form.dataPreferredSources}
+                  onChange={(e) => updateField('dataPreferredSources', e.target.value)}
+                  placeholder="zenodo, huggingface, paper_table"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-1.5 block">补充数据需求说明</label>
+              <textarea
+                value={form.dataNeedNote}
+                onChange={(e) => updateField('dataNeedNote', e.target.value)}
+                placeholder="例如：需要对照实验的 baseline 表与消融实验指标…"
+                rows={2}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 resize-none"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-dark-700/80">
+              <div>
+                <label className="text-xs font-medium text-gray-400 mb-1 block">完备性阈值 (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.coverageGapThreshold}
+                  onChange={(e) => updateField('coverageGapThreshold', e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 mb-1 block">DataSpec 阈值 (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.dataSpecGapThreshold}
+                  onChange={(e) => updateField('dataSpecGapThreshold', e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 mb-1 block">Gap 最大轮次</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={form.maxGapRounds}
+                  onChange={(e) => updateField('maxGapRounds', e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                />
+              </div>
+            </div>
+            <div className="pt-2 border-t border-dark-700/80">
+              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.autoLiteratureDiscovery !== 'false'}
+                  onChange={(e) =>
+                    updateField('autoLiteratureDiscovery', e.target.checked ? 'true' : 'false')
+                  }
+                  className="rounded border-gray-600 bg-gray-900 text-primary-500 focus:ring-primary-500/50"
+                />
+                文献不足时自动检索 arXiv / OpenAlex 并导入
+              </label>
+              <p className="text-[10px] text-gray-500 mt-1 ml-6">
+                项目文献少于 3 篇时触发；关闭后仅使用已上传的 PDF 与 arXiv 文献。
+              </p>
+            </div>
           </div>
 
           {/* 操作按钮 */}

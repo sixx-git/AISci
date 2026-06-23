@@ -26,6 +26,7 @@ class PipelineStage(str, Enum):
     """Pipeline 阶段枚举"""
     PROBLEM_UNDERSTANDING = "problem_understanding"
     LITERATURE_MINING = "literature_mining"
+    DATA_ACQUISITION = "data_acquisition"
     KNOWLEDGE_GAP = "knowledge_gap"
     HYPOTHESIS_GENERATION = "hypothesis_generation"
     HYPOTHESIS_REVIEW = "hypothesis_review"

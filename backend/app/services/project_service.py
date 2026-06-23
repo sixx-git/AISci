@@ -109,6 +109,20 @@ class ProjectService:
         
         # 更新字段
         update_data = data.model_dump(exclude_unset=True)
+        hints_payload = update_data.pop("data_spec_hints", None)
+        acq_payload = update_data.pop("data_acquisition", None)
+        if hints_payload is not None or acq_payload is not None:
+            config = dict(project.config or {})
+            if hints_payload is not None:
+                existing = config.get("data_spec_hints") if isinstance(config.get("data_spec_hints"), dict) else {}
+                merged_hints = {**existing, **{k: v for k, v in hints_payload.items() if v is not None}}
+                config["data_spec_hints"] = merged_hints
+            if acq_payload is not None:
+                existing_acq = config.get("data_acquisition") if isinstance(config.get("data_acquisition"), dict) else {}
+                merged_acq = {**existing_acq, **{k: v for k, v in acq_payload.items() if v is not None}}
+                config["data_acquisition"] = merged_acq
+            project.config = config
+
         if "project_mode" in update_data and update_data["project_mode"] is not None:
             pm = update_data["project_mode"]
             update_data["project_mode"] = normalize_project_mode(pm.value if hasattr(pm, "value") else pm)
