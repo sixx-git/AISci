@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Orbit, Play, Lightbulb, BookOpen, Database, GitBranch, Loader2, AlertTriangle,
+  Orbit, Play, Lightbulb, BookOpen, Database, GitBranch,
   ChevronRight, FileText, FlaskConical,
 } from 'lucide-react';
 import { Card } from '@/components/Card';
@@ -12,6 +12,8 @@ import { VersionComparePanel } from '@/components/VersionComparePanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import { pipelineService } from '@/services/pipelineService';
 import hypothesisService, { type BackendHypothesis } from '@/services/hypothesisService';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
@@ -190,22 +192,13 @@ export function ResearchClosedLoopOverview({
   );
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-bp-muted">
-        <Loader2 className="w-8 h-8 animate-spin text-bp-cyan mb-3" />
-        <span className="text-sm">正在加载科研闭环数据...</span>
-      </div>
-    );
+    return <LoadingState message="正在加载科研闭环数据..." />;
   }
 
   if (error) {
     return (
       <Card className="border-danger-500/30 bg-danger-500/5">
-        <div className="flex flex-col items-center py-8 text-center">
-          <AlertTriangle className="w-10 h-10 text-danger-400 mb-3" />
-          <p className="text-danger-300 text-sm mb-4">{error}</p>
-          <Button variant="secondary" onClick={loadRuns}>重试</Button>
-        </div>
+        <ErrorState message={error} onRetry={loadRuns} compact />
       </Card>
     );
   }

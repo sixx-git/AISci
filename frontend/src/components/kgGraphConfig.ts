@@ -1,11 +1,12 @@
-/** 知识图谱 Cytoscape 样式、布局与教育阶段视图预设（Neo4j Browser 风格） */
+/** 知识图谱 Cytoscape 样式、布局与教育阶段视图预设（Blueprint 画布 + 科研节点色） */
 import cytoscape, { type Core, type ElementDefinition, type LayoutOptions, type StylesheetStyle } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import type { EducationLevel, KgCommunity, KgEdge, KgNode } from '@/services/knowledgeGraphService';
+import { pencilVariables } from '@/config/designTokens';
 
-export const NEO4J_BG = '#0d1117';
-export const NEO4J_GREEN = '#00dc82';
-export const NEO4J_BORDER = '#30363d';
+export const NEO4J_BG = pencilVariables['bp-bg'];
+export const NEO4J_GREEN = pencilVariables['bp-cyan'];
+export const NEO4J_BORDER = pencilVariables['border-default'];
 
 export const NODE_COLORS: Record<string, string> = {
   Paper: '#68bdf6',

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { FileText, Clock, Loader2, ArrowRight, FlaskConical, AlertTriangle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FileText, Clock, ArrowRight, FlaskConical } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
+import { EmptyState } from '@/components/EmptyState';
 import { projectService } from '@/services/projectService';
 import { reportService } from '@/services/reportService';
 import type { ProjectOverview, ReportData } from '@/types';
@@ -15,9 +17,11 @@ interface ReportEntry {
 }
 
 export function Reports() {
+  const navigate = useNavigate();
   const [reports, setReports] = useState<ReportEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -57,61 +61,47 @@ export function Reports() {
         setIsLoading(false);
       }
     })();
-  }, []);
+  }, [reloadTick]);
+
+  const shell = (children: React.ReactNode) => (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageHeader
+        title="报告中心"
+        subtitle="查看和管理 AI Scientist 生成的研究报告"
+      />
+      {children}
+    </div>
+  );
 
   if (isLoading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PageHeader
-          title="报告中心"
-          subtitle="查看和管理 AI Scientist 生成的研究报告"
-        />
-        <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
-          <span className="text-bp-muted">正在加载报告...</span>
-        </Card>
-      </div>
+    return shell(
+      <Card>
+        <LoadingState message="正在加载报告..." />
+      </Card>,
     );
   }
 
   if (errorMsg) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PageHeader
-          title="报告中心"
-          subtitle="查看和管理 AI Scientist 生成的研究报告"
+    return shell(
+      <Card>
+        <ErrorState
+          message={errorMsg}
+          onRetry={() => setReloadTick((t) => t + 1)}
         />
-        <Card className="flex flex-col items-center justify-center py-12 gap-3 border-danger-500/30 bg-danger-500/5">
-          <AlertTriangle className="w-8 h-8 text-danger-400" />
-          <p className="text-danger-300 text-sm">{errorMsg}</p>
-          <Button onClick={() => window.location.reload()} variant="secondary" size="sm">
-            重试
-          </Button>
-        </Card>
-      </div>
+      </Card>,
     );
   }
 
   if (reports.length === 0) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PageHeader
-          title="报告中心"
-          subtitle="查看和管理 AI Scientist 生成的研究报告"
+    return shell(
+      <Card>
+        <EmptyState
+          icon={<FileText className="w-8 h-8" />}
+          title="暂无研究报告"
+          description="请先创建项目并通过工作流生成研究报告"
+          action={{ label: '前往项目列表', onClick: () => navigate('/') }}
         />
-        <Card className="flex flex-col items-center justify-center py-12 gap-3">
-          <FileText className="w-10 h-10 text-bp-muted" />
-          <p className="text-bp-muted text-sm">暂无研究报告</p>
-          <p className="text-xs text-bp-muted/80">
-            请先创建项目并通过工作流生成研究报告
-          </p>
-          <Link to="/">
-            <Button variant="secondary" size="sm">
-              前往项目列表
-            </Button>
-          </Link>
-        </Card>
-      </div>
+      </Card>,
     );
   }
 

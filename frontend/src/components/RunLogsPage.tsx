@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Terminal, Loader2 } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
 import { RunLogDetail } from './RunLogDetail';
 import { RunLogStageStream } from './RunLogStageStream';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
+import { EmptyState } from '@/components/EmptyState';
 import { pipelineService } from '@/services';
 import type { RunLog, PipelineRunSummary, PipelineStageExecutionSummary } from '@/types';
 
@@ -92,6 +95,7 @@ export function RunLogsPage({
   const [selectedLog, setSelectedLog] = useState<RunLog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   // 加载运行日志
   useEffect(() => {
@@ -140,57 +144,54 @@ export function RunLogsPage({
         setIsLoading(false);
       }
     })();
-  }, [projectId, _revalidateKey, _latestRunId]);
+  }, [projectId, _revalidateKey, _latestRunId, reloadTick]);
 
   const handleSelect = useCallback((log: RunLog) => {
     setSelectedLog(log);
   }, []);
 
-  // 加载中
+  const pageHeader = (
+    <div className="mb-6">
+      <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
+      <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
-          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
-        </div>
-        <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
-          <span className="text-bp-muted">正在加载运行日志...</span>
+        {pageHeader}
+        <Card>
+          <LoadingState message="正在加载运行日志..." />
         </Card>
       </div>
     );
   }
 
-  // 错误
   if (errorMsg) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
-          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
-        </div>
-        <Card className="py-12 text-center">
-          <Terminal className="w-12 h-12 text-red-400/50 mx-auto mb-4" />
-          <p className="text-red-400 text-sm mb-1">加载失败</p>
-          <p className="text-bp-muted text-xs">{errorMsg}</p>
+        {pageHeader}
+        <Card>
+          <ErrorState
+            message={errorMsg}
+            onRetry={() => setReloadTick((t) => t + 1)}
+          />
         </Card>
       </div>
     );
   }
 
-  // 无数据
   if (logs.length === 0) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
-          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
-        </div>
-        <Card className="py-12 text-center">
-          <Terminal className="w-12 h-12 text-bp-muted mx-auto mb-4" />
-          <p className="text-bp-muted text-sm">暂无运行日志</p>
-          <p className="text-bp-muted text-xs mt-1">运行一次 Pipeline 后这里会显示日志</p>
+        {pageHeader}
+        <Card>
+          <EmptyState
+            icon={<Terminal className="w-8 h-8" />}
+            title="暂无运行日志"
+            description="运行一次 Pipeline 后这里会显示日志"
+          />
         </Card>
       </div>
     );
@@ -198,11 +199,7 @@ export function RunLogsPage({
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 页面标题 */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
-        <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
-      </div>
+      {pageHeader}
 
       {/* 三栏布局：左列表 · 中详情 · 右阶段流 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">

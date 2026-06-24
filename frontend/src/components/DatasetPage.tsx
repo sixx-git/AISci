@@ -14,6 +14,9 @@ import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { DataCatalogPanel } from '@/components/DataCatalogPanel';
 import { PageSubTabNav } from '@/components/workspace/PageSubTabNav';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
+import { EmptyState } from '@/components/EmptyState';
 import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
 import { useToast } from '@/hooks/useToast';
 import type { BackendDataset, DatasetSummary } from '@/types';
@@ -700,48 +703,37 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
-          <p className="text-sm">加载数据集...</p>
-        </div>
+        <Card>
+          <LoadingState message="加载数据集..." />
+        </Card>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <AlertCircle className="w-8 h-8 mb-3 text-danger-400" />
-          <p className="text-sm text-danger-400 mb-2">{error}</p>
-        </div>
+        <Card>
+          <ErrorState message={error} onRetry={refreshAll} />
+        </Card>
       )}
 
-      {/* 空状态 */}
       {!loading && !error && datasets.length === 0 && (
-        <Card className="p-12">
-          <div className="flex flex-col items-center justify-center text-center">
-            <Database className="w-14 h-14 text-bp-muted mb-5" />
-            <h3 className="text-lg font-semibold text-bp-text mb-3">暂无数据集</h3>
-            <p className="text-sm text-bp-muted max-w-lg mb-4">
-              请上传 CSV、Excel、JSON、图像或时间序列数据，以增强假设生成的可验证性。
-            </p>
-            <p className="text-xs text-bp-muted mb-5">支持格式: {SUPPORTED_FORMATS}</p>
-            <label>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav"
-                className="hidden"
-                onChange={handleUpload}
-                disabled={uploading}
-              />
-              <Button
-                variant="primary"
-                size="md"
-                icon={uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-              >
-                {uploading ? '上传中...' : '上传数据集'}
-              </Button>
-            </label>
-          </div>
+        <Card>
+          <EmptyState
+            icon={<Database className="w-8 h-8" />}
+            title="暂无数据集"
+            description={`请上传 CSV、Excel、JSON、图像或时间序列数据。支持格式: ${SUPPORTED_FORMATS}`}
+            action={{
+              label: uploading ? '上传中...' : '上传数据集',
+              onClick: () => fileInputRef.current?.click(),
+            }}
+          />
+          <label className="sr-only">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav"
+              onChange={handleUpload}
+              disabled={uploading}
+            />
+          </label>
         </Card>
       )}
 

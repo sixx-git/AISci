@@ -391,7 +391,7 @@ export function KnowledgeGraphPage({
       <div className="rounded-bp border border-bp-cyan-dim bg-bp-panel p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-bp bg-bp-green/15 border border-bp-green/30 flex items-center justify-center">
-            <Network className="w-5 h-5 text-bp-green" />
+            <Network className="w-5 h-5 text-bp-cyan" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-bp-text">科研知识图谱</h2>
@@ -430,7 +430,7 @@ export function KnowledgeGraphPage({
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-danger-400 text-sm bg-danger-500/10 border border-danger-500/30 rounded-bp px-3 py-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
@@ -440,7 +440,7 @@ export function KnowledgeGraphPage({
         {/* 左侧筛选 + 查询 */}
         <div className="xl:col-span-1 space-y-4">
           <Card className="border-bp-border bg-bp-panel">
-            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-green">
+            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-cyan">
               <Search className="w-4 h-4" />
               图谱查询
             </div>
