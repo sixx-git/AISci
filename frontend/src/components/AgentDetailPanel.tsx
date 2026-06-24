@@ -46,7 +46,7 @@ function JsonBlock({ data }: { data: unknown }) {
   }
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   return (
-    <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-lg p-3 max-h-48 overflow-y-auto">
+    <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-bp p-3 max-h-48 overflow-y-auto">
       {text}
     </pre>
   );
@@ -300,7 +300,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
   if (!node) {
     return (
       <Card className="h-full flex flex-col items-center justify-center text-center py-16">
-        <Cpu className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+        <Cpu className="w-16 h-16 text-bp-border mx-auto mb-4" />
         <p className="text-bp-muted">点击左侧智能体节点查看详情</p>
       </Card>
     );
@@ -315,7 +315,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
       <Card>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-bp bg-bp-cyan-tint border border-bp-cyan/20 flex items-center justify-center">
               <node.icon className="w-5 h-5 text-bp-cyan" />
             </div>
             <div>
@@ -344,15 +344,15 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
 
         {/* 失败 / 需人工审查 提示 */}
         {isFailed && node.error_message && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300 whitespace-pre-wrap">{node.error_message}</p>
+          <div className="p-3 bg-danger-500/10 border border-danger-500/30 rounded-bp flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-danger-300 whitespace-pre-wrap">{node.error_message}</p>
           </div>
         )}
         {showHumanReview && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-300">此阶段需要人工审查确认后方可继续。</p>
+          <div className="p-3 bg-bp-yellow/10 border border-bp-yellow/30 rounded-bp flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
+            <p className="text-xs text-bp-yellow">此阶段需要人工审查确认后方可继续。</p>
           </div>
         )}
       </Card>
@@ -362,7 +362,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
         {hasRealData && node.input_data ? (
           <JsonBlock data={node.input_data} />
         ) : (
-          <div className="p-3 bg-bp-base/70 border border-bp-border rounded-lg">
+          <div className="p-3 bg-bp-base/70 border border-bp-border rounded-bp">
             <p className="text-sm text-bp-text whitespace-pre-wrap">{node.inputSummary}</p>
           </div>
         )}
@@ -371,10 +371,10 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
       {/* ────── 输出结果 ────── */}
       <Card title="输出结果" subtitle="智能体处理后的结构化输出">
         <div className={cn(
-          'p-3 rounded-lg border',
-          isFailed ? 'bg-red-500/5 border-red-500/20' :
-          node.status === 'completed' ? 'bg-green-500/5 border-green-500/20' :
-          node.status === 'running' ? 'bg-blue-500/5 border-blue-500/20' :
+          'p-3 rounded-bp border',
+          isFailed ? 'bg-danger-500/5 border-danger-500/20' :
+          node.status === 'completed' ? 'bg-bp-green/5 border-bp-green/20' :
+          node.status === 'running' ? 'bg-bp-cyan-tint border-bp-cyan/20' :
           'bg-bp-base/70 border-bp-border',
         )}>
           {hasRealData && node.output_data ? (
@@ -383,7 +383,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             <p className={cn(
               'text-sm whitespace-pre-wrap',
               node.status === 'completed' ? 'text-bp-text' :
-              node.status === 'running' ? 'text-blue-300' :
+              node.status === 'running' ? 'text-bp-cyan' :
               'text-bp-muted italic',
             )}>
               {node.outputSummary}
@@ -392,23 +392,25 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
         </div>
       </Card>
 
-      {/* ────── 运行日志 ────── */}
-      <Card title="运行日志" subtitle="实时执行记录">
-        {node.logs.length === 0 ? (
-          <p className="text-sm text-bp-muted italic">暂无日志</p>
-        ) : (
-          <div className="space-y-0.5 max-h-48 overflow-y-auto">
-            {node.logs.map((log, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-2 p-1.5 rounded text-xs font-mono"
-              >
-                <span className="text-gray-700 shrink-0">{idx + 1}</span>
-                <span className="text-bp-muted">{log}</span>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* ────── 运行日志（默认折叠） ────── */}
+      <Card>
+        <CollapsibleSection title={`运行日志 (${node.logs.length})`} defaultOpen={false}>
+          {node.logs.length === 0 ? (
+            <p className="text-sm text-bp-muted italic">暂无日志</p>
+          ) : (
+            <div className="space-y-0.5 max-h-48 overflow-y-auto">
+              {node.logs.map((log, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2 p-1.5 rounded text-xs font-mono hover:bg-bp-panel/50"
+                >
+                  <span className="text-bp-muted shrink-0 w-4">{idx + 1}</span>
+                  <span className="text-bp-text">{log}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
       </Card>
 
       {/* ────── Skill 输出 ────── */}
@@ -416,8 +418,9 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
         <SkillOutputsCard skillOutputs={(node.output_data as Record<string, unknown>).skill_outputs as Record<string, unknown> | undefined} />
       )}
 
-      {/* ────── 技术信息 ────── */}
+      {/* ────── 技术信息（默认折叠） ────── */}
       <Card>
+        <CollapsibleSection title="技术信息 · Prompt / 模型参数" defaultOpen={false}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-bp-muted" />
@@ -449,14 +452,14 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
           <div className="mt-4 pt-4 border-t border-bp-border space-y-3">
             {node.prompt_used && (
               <CollapsibleSection title="Prompt 内容" defaultOpen={false}>
-                <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-lg p-3 max-h-64 overflow-y-auto">
+                <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-bp p-3 max-h-64 overflow-y-auto">
                   {node.prompt_used}
                 </pre>
               </CollapsibleSection>
             )}
             {node.model_parameters && (
               <CollapsibleSection title="模型参数" defaultOpen={false}>
-                <div className="p-3 bg-bp-base/60 border border-bp-border rounded-lg space-y-1.5">
+                <div className="p-3 bg-bp-base/60 border border-bp-border rounded-bp space-y-1.5">
                   {Object.entries(node.model_parameters).map(([k, v]) => (
                     <div key={k} className="flex items-baseline gap-2 text-xs">
                       <span className="text-bp-muted shrink-0">{k}:</span>
@@ -468,6 +471,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             )}
           </div>
         )}
+        </CollapsibleSection>
       </Card>
     </div>
   );

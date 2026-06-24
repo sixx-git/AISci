@@ -387,17 +387,11 @@ export function KnowledgeGraphPage({
 
   return (
     <div className="space-y-4">
-      {/* Neo4j 风格顶栏 */}
-      <div
-        className="rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3"
-        style={{ background: NEO4J_BG, borderColor: NEO4J_BORDER }}
-      >
+      {/* KG Top Bar — Blueprint 外壳 + 图谱区 Neo4j 画布 */}
+      <div className="rounded-bp border border-bp-cyan-dim bg-bp-panel p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ background: `${NEO4J_GREEN}22`, border: `1px solid ${NEO4J_GREEN}55` }}
-          >
-            <Network className="w-5 h-5" style={{ color: NEO4J_GREEN }} />
+          <div className="w-10 h-10 rounded-bp bg-bp-green/15 border border-bp-green/30 flex items-center justify-center">
+            <Network className="w-5 h-5 text-bp-green" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-bp-text">科研知识图谱</h2>
@@ -415,8 +409,7 @@ export function KnowledgeGraphPage({
           <Button
             onClick={handleBuild}
             disabled={loading}
-            className="border-0 text-black font-medium"
-            style={{ background: NEO4J_GREEN }}
+            variant="primary"
           >
             {loading && action === 'build' ? (
               <Loader2 className="w-4 h-4 animate-spin mr-1" />
@@ -446,20 +439,20 @@ export function KnowledgeGraphPage({
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         {/* 左侧筛选 + 查询 */}
         <div className="xl:col-span-1 space-y-4">
-          <Card className="border-[#30363d] bg-[#161b22]">
-            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-[#00dc82]">
+          <Card className="border-bp-border bg-bp-panel">
+            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-green">
               <Search className="w-4 h-4" />
               图谱查询
             </div>
             <textarea
-              className="w-full rounded-lg bg-[#0d1117] border border-[#30363d] text-sm text-bp-text p-2 min-h-[72px] focus:outline-none focus:border-[#00dc82]"
+              className="input-field text-sm min-h-[72px] resize-none"
               placeholder="例如：哪些方法可以缓解 Non-IID？ / 该领域研究概览"
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
             />
             <div className="grid grid-cols-2 gap-2 mt-2">
               <select
-                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-bp-text p-2 col-span-2"
+                className="input-field text-xs py-2 col-span-2"
                 value={educationLevel}
                 onChange={(e) => setEducationLevel(e.target.value as EducationLevel)}
               >
@@ -470,11 +463,11 @@ export function KnowledgeGraphPage({
                 <option value="researcher">科研工作者 · 科研视图</option>
               </select>
               <p className="col-span-2 text-[10px] text-bp-muted flex items-start gap-1">
-                <Layers className="w-3 h-3 shrink-0 mt-0.5 text-[#00dc82]" />
+                <Layers className="w-3 h-3 shrink-0 mt-0.5 text-bp-green" />
                 {viewPreset.label}：{viewPreset.hint}
               </p>
               <select
-                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-bp-text p-2"
+                className="input-field text-xs py-2"
                 value={retrievalMode}
                 onChange={(e) => setRetrievalMode(e.target.value as RetrievalMode)}
               >
@@ -484,8 +477,8 @@ export function KnowledgeGraphPage({
               </select>
             </div>
             <Button
-              className="w-full mt-2 border-0 text-black"
-              style={{ background: NEO4J_GREEN }}
+              className="w-full mt-2"
+              variant="primary"
               onClick={handleQuery}
               disabled={loading || !graph}
             >
@@ -496,7 +489,7 @@ export function KnowledgeGraphPage({
             </Button>
             {queryResult && (
               <div className="mt-3 text-xs text-bp-text space-y-2">
-                <p className="text-[#00dc82] font-medium">{queryResult.answer}</p>
+                <p className="text-bp-green font-medium">{queryResult.answer}</p>
                 {queryResult.retrieval_mode && (
                   <p className="text-bp-muted">
                     模式: {queryResult.retrieval_mode}
@@ -510,8 +503,8 @@ export function KnowledgeGraphPage({
                       <GitBranch className="w-3 h-3" /> 推理链
                     </p>
                     {queryResult.reasoning_chain.slice(0, 4).map((step) => (
-                      <div key={step.step} className="bg-[#0d1117] rounded p-2 border border-[#30363d]">
-                        <span className="text-[#00dc82]">#{step.step}</span> {step.inference || step.content}
+                      <div key={step.step} className="bg-bp-base rounded-bp p-2 border border-bp-border">
+                        <span className="text-bp-green">#{step.step}</span> {step.inference || step.content}
                         {step.source_title && (
                           <p className="text-bp-muted mt-0.5 flex items-center gap-1">
                             <BookOpen className="w-3 h-3" /> {step.source_title}
@@ -530,7 +523,7 @@ export function KnowledgeGraphPage({
                   </div>
                 )}
                 {queryResult.graph_paths?.slice(0, 3).map((p, i) => (
-                  <div key={i} className="bg-[#0d1117] rounded p-2 border border-[#30363d]">
+                  <div key={i} className="bg-bp-base rounded-bp p-2 border border-bp-border">
                     {Array.isArray(p) ? p.join(' → ') : String(p)}
                   </div>
                 ))}
@@ -538,9 +531,9 @@ export function KnowledgeGraphPage({
             )}
           </Card>
 
-          <Card className="border-[#30363d] bg-[#161b22]">
+          <Card className="border-bp-border bg-bp-panel">
             <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-text">
-              <Filter className="w-4 h-4 text-[#00dc82]" />
+              <Filter className="w-4 h-4 text-bp-green" />
               节点类型
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -562,9 +555,9 @@ export function KnowledgeGraphPage({
             </div>
           </Card>
 
-          <Card className="border-[#30363d] bg-[#161b22]">
+          <Card className="border-bp-border bg-bp-panel">
             <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-text">
-              <Filter className="w-4 h-4 text-[#00dc82]" />
+              <Filter className="w-4 h-4 text-bp-green" />
               关系类型
             </div>
             <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
@@ -587,10 +580,10 @@ export function KnowledgeGraphPage({
           </Card>
 
           {showQuality && qr && (
-            <Card className="border-[#30363d] bg-[#161b22]">
+            <Card className="border-bp-border bg-bp-panel">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
-                  <BarChart3 className="w-4 h-4 text-[#00dc82]" />
+                  <BarChart3 className="w-4 h-4 text-bp-green" />
                   质量报告
                 </div>
                 <button type="button" onClick={() => setShowQuality(false)} className="text-bp-muted hover:text-bp-text">
@@ -598,7 +591,7 @@ export function KnowledgeGraphPage({
                 </button>
               </div>
               <div className="text-xs text-bp-muted space-y-1">
-                <p>综合得分: <span className="text-[#00dc82]">{qr.overall_score ?? '-'}</span></p>
+                <p>综合得分: <span className="text-bp-green">{qr.overall_score ?? '-'}</span></p>
                 <p>孤立节点: {qr.isolated_count ?? 0}</p>
                 <p>低置信边: {qr.low_confidence_count ?? 0}</p>
                 <p>缺失来源: {qr.missing_sources_count ?? 0}</p>
@@ -614,7 +607,7 @@ export function KnowledgeGraphPage({
           )}
 
           {(graph?.communities?.length ?? 0) > 0 && (
-            <Card className="border-[#30363d] bg-[#161b22]">
+            <Card className="border-bp-border bg-bp-panel">
               <div className="text-sm font-medium text-bp-text mb-2">主题社区 (GraphRAG)</div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {graph!.communities!.slice(0, viewPreset.mode === 'research' ? 6 : 4).map((c) => (
@@ -622,9 +615,9 @@ export function KnowledgeGraphPage({
                     key={c.community_id}
                     type="button"
                     onClick={() => handleFocusCommunity(c.community_id)}
-                    className="w-full text-left text-xs bg-[#0d1117] rounded p-2 border border-[#30363d] hover:border-[#00dc82]/50 transition-colors"
+                    className="w-full text-left text-xs bg-bp-base rounded-bp p-2 border border-bp-border hover:border-bp-green/50 transition-colors"
                   >
-                    <span className="text-[#00dc82]">
+                    <span className="text-bp-green">
                       {TYPE_LABELS_ZH[c.dominant_type] || c.dominant_type}
                     </span>
                     <span className="text-bp-muted ml-2">{c.node_count} 节点</span>
@@ -655,7 +648,7 @@ export function KnowledgeGraphPage({
               <>
                 <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 max-w-[55%]">
                   <span
-                    className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md bg-[#161b22]/92 border border-[#30363d] text-[#00dc82]"
+                    className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-bp bg-bp-panel/92 border border-bp-border text-bp-green"
                   >
                     <Layers className="w-3 h-3" />
                     {viewPreset.label}
@@ -669,21 +662,21 @@ export function KnowledgeGraphPage({
                     type="button"
                     title="适应画布"
                     onClick={handleFit}
-                    className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]"
+                    className="p-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-bp-text hover:text-bp-cyan"
                   >
                     <Maximize2 className="w-4 h-4" />
                   </button>
-                  <button type="button" title="放大" onClick={handleZoomIn} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]">
+                  <button type="button" title="放大" onClick={handleZoomIn} className="p-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-bp-text hover:text-bp-cyan">
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <button type="button" title="缩小" onClick={handleZoomOut} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]">
+                  <button type="button" title="缩小" onClick={handleZoomOut} className="p-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-bp-text hover:text-bp-cyan">
                     <ZoomOut className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     title={`标签: ${labelModeHint}`}
                     onClick={cycleLabelMode}
-                    className="px-2 py-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-[10px] text-bp-text hover:text-[#00dc82] flex items-center gap-1"
+                    className="px-2 py-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-[10px] text-bp-text hover:text-bp-cyan flex items-center gap-1"
                   >
                     <Tag className="w-3.5 h-3.5" />
                     {labelMode === 'auto' ? '自动' : labelMode === 'always' ? '全显' : '隐藏'}
@@ -693,7 +686,7 @@ export function KnowledgeGraphPage({
                       type="button"
                       title="导出 PNG"
                       onClick={handleExportPng}
-                      className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]"
+                      className="p-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-bp-text hover:text-bp-cyan"
                     >
                       <Download className="w-4 h-4" />
                     </button>
@@ -704,7 +697,7 @@ export function KnowledgeGraphPage({
                     {legendTypes.map((t) => (
                       <span
                         key={t}
-                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-[#161b22]/92 border border-[#30363d] text-bp-muted"
+                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-bp-panel/92 border border-bp-border text-bp-muted"
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -730,15 +723,12 @@ export function KnowledgeGraphPage({
           </div>
 
           {(selectedNode || selectedEdge) && (
-            <Card className="border-[#30363d] bg-[#161b22]">
+            <Card className="border-bp-border bg-bp-panel">
               {selectedNode && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#00dc82]">节点详情</h3>
-                    <span
-                      className="text-xs px-2 py-0.5 rounded"
-                      style={{ background: `${NODE_COLORS[selectedNode.type] || NODE_COLORS.default}33` }}
-                    >
+                    <h3 className="text-sm font-semibold text-bp-cyan">节点详情</h3>
+                    <span className="bp-chip bp-chip-cyan text-xs">
                       {selectedNode.type}
                     </span>
                   </div>
@@ -755,7 +745,7 @@ export function KnowledgeGraphPage({
               {selectedEdge && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#00dc82]">边 / 证据</h3>
+                    <h3 className="text-sm font-semibold text-bp-cyan">边 / 证据</h3>
                     <span className="text-xs text-bp-muted">{selectedEdge.relation}</span>
                   </div>
                   <p className="text-sm text-bp-text">{selectedEdge.evidence || '—'}</p>
@@ -766,7 +756,7 @@ export function KnowledgeGraphPage({
                   <p className="text-xs text-bp-muted">
                     置信度: {selectedEdge.confidence ?? '—'}
                     {selectedEdge.human_verified && (
-                      <span className="ml-2 text-[#00dc82] inline-flex items-center gap-1">
+                      <span className="ml-2 text-bp-green inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> 已人工确认
                       </span>
                     )}

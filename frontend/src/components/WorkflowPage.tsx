@@ -16,6 +16,7 @@ import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
+import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
@@ -1374,41 +1375,53 @@ export function WorkflowPage({
           <AgentDetailPanel node={selectedNode} onRerun={() => handleRerun()} />
 
           {ensembleReview && (
-            <EnsembleReviewPanel
-              review={ensembleReview}
-              onRerunFromReview={currentRunId ? handleRerunFromReview : undefined}
-            />
+            <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel" defaultOpen={false}>
+              <EnsembleReviewPanel
+                review={ensembleReview}
+                onRerunFromReview={currentRunId ? handleRerunFromReview : undefined}
+              />
+            </CollapsiblePanel>
           )}
 
           {plotQualityData && selectedNode && (selectedNode.id === 'validation' || selectedNode.id === 'report') && (
-            <PlotCritiquePanel plotQuality={plotQualityData} />
+            <CollapsiblePanel title="图表质量评审" subtitle="PlotCritiquePanel" defaultOpen={false}>
+              <PlotCritiquePanel plotQuality={plotQualityData} />
+            </CollapsiblePanel>
           )}
 
           {projectId && currentRunId && selectedNode && (
-            <StageHumanLoopPanel
-              projectId={projectId}
-              runId={currentRunId}
-              nodeId={selectedNode.id}
-              researchQuestion={researchQuestion}
-              inputData={selectedNode.input_data}
-              outputData={selectedNode.output_data}
-              humanModifiedOutput={selectedNode.human_modified_output}
-              humanReviewed={selectedNode.human_reviewed}
-              humanFeedback={selectedNode.human_feedback}
-              editedAt={selectedNode.edited_at}
-              revisionHistory={selectedNode.revision_history}
-              onUpdated={() => refreshFromRunDetail(currentRunId)}
-              onRerunStarted={(newRunId) => {
-                setCurrentRunId(newRunId);
-                currentRunIdRef.current = newRunId;
-                if (projectId) setActiveRunId(projectId, newRunId);
-                startPolling(newRunId);
-              }}
-            />
+            <CollapsiblePanel
+              title="阶段人工介入"
+              subtitle={selectedNode.name}
+              defaultOpen={selectedNode.status === 'human_review_required' || selectedNode.status === 'human_review'}
+            >
+              <StageHumanLoopPanel
+                projectId={projectId}
+                runId={currentRunId}
+                nodeId={selectedNode.id}
+                researchQuestion={researchQuestion}
+                inputData={selectedNode.input_data}
+                outputData={selectedNode.output_data}
+                humanModifiedOutput={selectedNode.human_modified_output}
+                humanReviewed={selectedNode.human_reviewed}
+                humanFeedback={selectedNode.human_feedback}
+                editedAt={selectedNode.edited_at}
+                revisionHistory={selectedNode.revision_history}
+                onUpdated={() => refreshFromRunDetail(currentRunId)}
+                onRerunStarted={(newRunId) => {
+                  setCurrentRunId(newRunId);
+                  currentRunIdRef.current = newRunId;
+                  if (projectId) setActiveRunId(projectId, newRunId);
+                  startPolling(newRunId);
+                }}
+              />
+            </CollapsiblePanel>
           )}
 
           {selectedNode && selectedNode.status === 'human_review_required' && (
-            <HumanInLoopCard />
+            <CollapsiblePanel title="人工确认" defaultOpen>
+              <HumanInLoopCard />
+            </CollapsiblePanel>
           )}
         </div>
       </div>

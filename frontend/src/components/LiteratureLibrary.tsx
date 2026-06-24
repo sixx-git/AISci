@@ -67,7 +67,7 @@ const typeConfig: Record<LiteratureItem['type'], { label: string; className: str
 
 // ============ 解析状态映射 ============
 const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; className: string }> = {
-  pending:   { label: '待解析', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' },
+  pending:   { label: '待解析', className: 'bg-bp-panel text-bp-muted border-bp-border' },
   parsing:   { label: '解析中', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
   completed: { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
   error:     { label: '失败',   className: 'bg-red-500/15 text-red-400 border-red-500/25' },
@@ -84,7 +84,7 @@ const sourceTypeConfig: Record<string, { label: string; className: string }> = {
 
 // ============ import_status 标签映射 ============
 const importStatusConfig: Record<string, { label: string; className: string }> = {
-  discovered:      { label: '已发现', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' },
+  discovered:      { label: '已发现', className: 'bg-bp-panel text-bp-muted border-bp-border' },
   imported:        { label: '已导入', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
   pdf_downloaded:  { label: 'PDF已下载', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
   parsed:          { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
@@ -568,7 +568,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
                     uploading ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
                   )}
                 >
-                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-primary-500/25' : 'bg-bp-surface')}>
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-bp-cyan-tint' : 'bg-bp-surface')}>
                     {uploading ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <Upload className="w-4 h-4 text-bp-text" />}
                   </div>
                   <div className="min-w-0">
@@ -593,7 +593,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
                     buildingIndex ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
                   )}
                 >
-                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-primary-500/25' : 'bg-bp-surface')}>
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-bp-cyan-tint' : 'bg-bp-surface')}>
                     {buildingIndex ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <BrainCircuit className="w-4 h-4 text-bp-text" />}
                   </div>
                   <div className="min-w-0">
@@ -606,10 +606,10 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
 
             {/* 统计卡片 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <StatCard label="已上传文献" value={stats.uploaded} icon={<Database className="w-5 h-5" />} colorClass="text-blue-400" />
-              <StatCard label="已解析文献" value={stats.parsed} icon={<FileText className="w-5 h-5" />} colorClass="text-green-400" />
-              <StatCard label="知识片段" value={stats.snippets} icon={<Layers className="w-5 h-5" />} colorClass="text-purple-400" />
-              <StatCard label="已提取事实" value={stats.facts} icon={<Sparkles className="w-5 h-5" />} colorClass="text-amber-400" />
+              <StatCard label="已上传文献" value={stats.uploaded} icon={<Database className="w-5 h-5" />} colorClass="text-bp-cyan" />
+              <StatCard label="已解析文献" value={stats.parsed} icon={<FileText className="w-5 h-5" />} colorClass="text-bp-green" />
+              <StatCard label="知识片段" value={stats.snippets} icon={<Layers className="w-5 h-5" />} colorClass="text-bp-purple" />
+              <StatCard label="已提取事实" value={stats.facts} icon={<Sparkles className="w-5 h-5" />} colorClass="text-bp-yellow" />
             </div>
 
             {/* 搜索 + 结果 */}
@@ -619,7 +619,7 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
                 <input
                   type="text" placeholder="搜索论文标题或作者…" value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-bp-base border border-bp-border rounded-lg text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan transition-colors"
+                  className="w-full pl-10 pr-4 py-2 input-field"
                 />
               </div>
               <span className="text-sm text-bp-muted">{loading ? '加载中…' : `共 ${filtered.length} 篇文献`}</span>
@@ -767,7 +767,7 @@ function ArxivTabContent({
   return (
     <div>
       {/* 研究问题推荐区 */}
-      <Card className="mb-4 border-bp-cyan/15 bg-primary-500/[0.02]">
+      <Card className="mb-4 border-bp-cyan/15 bg-bp-cyan-tint">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles className="w-4 h-4 text-bp-cyan" />
           <h3 className="text-sm font-semibold text-bp-text">从研究问题检索 arXiv 文献</h3>
@@ -810,7 +810,7 @@ function ArxivTabContent({
                 {recommendInfo.keywords.map((kw, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded text-[11px] bg-primary-500/15 text-bp-cyan border border-bp-cyan/25"
+                    className="px-2 py-0.5 rounded text-[11px] bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/25"
                   >
                     {kw}
                   </span>
@@ -1027,8 +1027,8 @@ function LibraryTabContent({
     <div className="space-y-4">
       <div className="text-sm text-bp-muted mb-2">共 {docs.length} 篇文献</div>
       {docs.map((doc) => {
-        const sConf = sourceTypeConfig[doc.source_type ?? ''] ?? { label: doc.source_type ?? '—', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' };
-        const iConf = importStatusConfig[doc.import_status ?? ''] ?? { label: doc.import_status ?? '—', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' };
+        const sConf = sourceTypeConfig[doc.source_type ?? ''] ?? { label: doc.source_type ?? '—', className: 'bg-bp-panel text-bp-muted border-bp-border' };
+        const iConf = importStatusConfig[doc.import_status ?? ''] ?? { label: doc.import_status ?? '—', className: 'bg-bp-panel text-bp-muted border-bp-border' };
 
         return (
           <Card key={doc.id}>
@@ -1134,12 +1134,11 @@ function LibraryTabContent({
 
     {/* ========== Chunk 查看器 Modal ========== */}
       {chunkViewer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCloseChunks}>
-          <div className="bg-bp-base border border-bp-border rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-bp-border">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bp-base/80 backdrop-blur-sm" onClick={onCloseChunks}>
+          <div className="bg-bp-base border border-bp-cyan-dim rounded-bp w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-bp-glow-strong" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-bp-cyan-dim bg-bp-panel/50">
               <div className="flex items-center gap-2">
-                <FileSearch className="w-4 h-4 text-purple-400" />
+                <FileSearch className="w-4 h-4 text-bp-purple" />
                 <h3 className="text-sm font-semibold text-bp-text truncate max-w-md">
                   切片预览: {chunkViewer.title}
                 </h3>
@@ -1165,9 +1164,9 @@ function LibraryTabContent({
               ) : (
                 <div className="space-y-3">
                   {chunkList.map((chunk: any, i: number) => (
-                    <div key={chunk.id || i} className="p-3 rounded-lg bg-bp-panel/50 border border-bp-border">
+                    <div key={chunk.id || i} className="p-3 rounded-bp bg-bp-panel-glass border border-bp-border">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono">
+                        <span className="text-xs px-1.5 py-0.5 rounded-bp bg-bp-purple/15 text-bp-purple font-mono">
                           #{chunk.chunk_index ?? i + 1}
                         </span>
                         {chunk.page_number && (
@@ -1227,10 +1226,10 @@ function LiteratureTable({
               const psConf = parseStatusConfig[item.parseStatus];
               const isDeleting = deleting === item.id;
               return (
-                <tr key={item.id} className={cn('border-b border-dark-800 hover:bg-bp-panel/30 transition-colors', isDeleting && 'opacity-50')}>
+                <tr key={item.id} className={cn('border-b border-bp-border hover:bg-bp-panel/30 transition-colors', isDeleting && 'opacity-50')}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded bg-primary-500/15 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded bg-bp-cyan-tint flex items-center justify-center shrink-0">
                         <FileText className="w-3.5 h-3.5 text-bp-cyan" />
                       </div>
                       <span className="text-bp-text text-sm font-medium line-clamp-1">{item.title}</span>
