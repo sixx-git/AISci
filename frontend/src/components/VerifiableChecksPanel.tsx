@@ -12,7 +12,7 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
 
   return (
     <div className="mb-4 p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
-      <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-emerald-400" />
         可验证 spec 对照
         {passed != null && (
@@ -21,7 +21,7 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
           </span>
         )}
       </h3>
-      {spec?.claim && <p className="text-xs text-gray-400 mb-2 line-clamp-2">{spec.claim}</p>}
+      {spec?.claim && <p className="text-xs text-bp-muted mb-2 line-clamp-2">{spec.claim}</p>}
       <ul className="space-y-1.5">
         {(checks || []).map((c) => (
           <li key={c.check_id} className="flex items-start gap-2 text-[11px]">
@@ -31,9 +31,9 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
               <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
             )}
             <div>
-              <span className="text-gray-300">{c.description || c.check_id}</span>
+              <span className="text-bp-text">{c.description || c.check_id}</span>
               {c.actual && (
-                <span className="text-gray-500 ml-1">· 实际: {c.actual}</span>
+                <span className="text-bp-muted ml-1">· 实际: {c.actual}</span>
               )}
             </div>
           </li>

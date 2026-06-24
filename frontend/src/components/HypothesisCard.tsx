@@ -22,9 +22,9 @@ interface HypothesisCardProps {
 }
 
 function overallColor(score: number) {
-  if (score >= 85) return { bar: 'bg-green-500', text: 'text-green-400', bg: 'bg-green-500/10' };
-  if (score >= 75) return { bar: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/10' };
-  return { bar: 'bg-amber-500', text: 'text-amber-400', bg: 'bg-amber-500/10' };
+  if (score >= 85) return { bar: 'bg-bp-green', text: 'text-bp-green', bg: 'bg-bp-green/10' };
+  if (score >= 75) return { bar: 'bg-bp-cyan', text: 'text-bp-cyan', bg: 'bg-bp-cyan-tint' };
+  return { bar: 'bg-bp-yellow', text: 'text-bp-yellow', bg: 'bg-bp-yellow/10' };
 }
 
 export function HypothesisCard({
@@ -105,7 +105,7 @@ export function HypothesisCard({
       {/* ===== 关键信息标签行 ===== */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         {hypothesis.question_alignment && (
-          <span className="text-[11px] text-bp-cyan/80 bg-primary-500/5 border border-bp-cyan/15 rounded px-2 py-0.5 max-w-[320px] truncate"
+          <span className="text-[11px] text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-2 py-0.5 max-w-[320px] truncate"
             title={hypothesis.question_alignment}>
             {hypothesis.question_alignment}
           </span>
@@ -116,7 +116,7 @@ export function HypothesisCard({
           </span>
         )}
         {hypothesis.expected_measurable_effect && (
-          <span className="text-[11px] text-blue-300/80 bg-blue-500/5 border border-blue-500/15 rounded px-1.5 py-0.5 max-w-[260px] truncate"
+          <span className="text-[11px] text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-1.5 py-0.5 max-w-[260px] truncate"
             title={hypothesis.expected_measurable_effect}>
             {hypothesis.expected_measurable_effect}
           </span>
@@ -134,7 +134,7 @@ export function HypothesisCard({
           <span className="text-[11px] text-amber-300/80">反对 {hypothesis.counterEvidenceCount}</span>
         )}
         {hypothesis.citationReliability != null && (
-          <span className="text-[11px] text-blue-300/80 flex items-center gap-0.5">
+          <span className="text-[11px] text-bp-cyan/80 flex items-center gap-0.5">
             <ShieldCheck className="w-3 h-3" />
             引用 {(hypothesis.citationReliability * 100).toFixed(0)}%
           </span>
@@ -181,7 +181,7 @@ export function HypothesisCard({
               onClick={() => setDetailTab('provenance')}
               className={cn(
                 'text-xs px-2.5 py-1 rounded transition-colors flex items-center gap-1',
-                detailTab === 'provenance' ? 'bg-primary-500/20 text-bp-cyan' : 'text-bp-muted hover:text-bp-text',
+                detailTab === 'provenance' ? 'bg-bp-cyan-tint text-bp-cyan' : 'text-bp-muted hover:text-bp-text',
               )}
             >
               <GitBranch className="w-3 h-3" />
@@ -252,7 +252,7 @@ export function HypothesisCard({
 
           {/* 文献 fact 溯源 */}
           {(hypothesis.supporting_fact_ids?.length ?? 0) > 0 && (
-            <div className="p-2.5 rounded-lg border border-bp-cyan/15 bg-primary-500/5">
+            <div className="p-2.5 rounded-bp border border-bp-cyan/15 bg-bp-cyan-tint">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Link2 className="w-3.5 h-3.5 text-bp-cyan" />
                 <span className="text-xs font-medium text-bp-cyan">文献 fact 溯源</span>
@@ -294,7 +294,7 @@ export function HypothesisCard({
 
           {/* 关键词信息 */}
           {(hypothesis.matched_keywords || hypothesis.missing_keywords) && (
-            <div className="p-2.5 rounded-lg border border-bp-cyan/15 bg-primary-500/5">
+            <div className="p-2.5 rounded-bp border border-bp-cyan/15 bg-bp-cyan-tint">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Target className="w-3.5 h-3.5 text-bp-cyan" />
                 <span className="text-xs font-medium text-bp-cyan">关键词分析</span>

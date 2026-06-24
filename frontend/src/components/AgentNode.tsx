@@ -123,7 +123,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             : isRunning ? 'text-bp-cyan'
             : isFailed ? 'text-red-400'
             : node.status === 'human_review' || node.status === 'human_review_required' ? 'text-amber-400'
-            : 'text-gray-600',
+            : 'text-bp-muted',
           )} />
         </div>
         {!isLast && (

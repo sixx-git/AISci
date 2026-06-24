@@ -58,6 +58,18 @@
 - **圆角**：`rounded-bp` = 2px · **面板内边距**：`p-bp-panel` = 14px
 - **字体**：`font-bp` = JetBrains Mono（Blueprint 默认正文字体）
 
+### 2.2 语义色（Phase B-3）
+
+| 语义 | Token / 类 | 场景 |
+|------|------------|------|
+| 成功 / 已完成 | `text-bp-green` · `bg-bp-green/10` | Pipeline 完成、Run 成功、支持证据 |
+| 运行中 / 主强调 | `text-bp-cyan` · `bg-bp-cyan-tint` | 激活 Tab、Pipeline 运行、选中行 |
+| 警告 / HITL | `text-bp-yellow` · `bg-bp-yellow/10` | 暂停、低证据、完备性提醒 |
+| 失败 / 偏题 | `text-danger-400` · `bg-danger-500/10` | 错误、偏题假设 |
+| 发现 / 证据链 | `text-bp-purple` | Discovery 模式、图谱高亮 |
+
+**避免**：在新代码中使用 `text-blue-400`、`bg-primary-500/10`、`bg-gray-850`（非 Tailwind 类）等遗留色；运行态统一 `bp-cyan` 而非 `blue-*`。
+
 ---
 
 ## 3. 可复用组件（Component Library）

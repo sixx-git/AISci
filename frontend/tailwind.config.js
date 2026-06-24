@@ -104,6 +104,7 @@ export default {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'fade-in': 'fadeIn 0.5s ease-in-out',
         glow: 'glow 2s ease-in-out infinite alternate',
+        'slide-in-right': 'slideInRight 0.25s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -113,6 +114,10 @@ export default {
         glow: {
           '0%': { boxShadow: '0 0 5px rgba(56, 189, 248, 0.1)' },
           '100%': { boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)' },
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(100%)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
         },
       },
     },

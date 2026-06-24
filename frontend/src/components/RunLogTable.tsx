@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Eye, ChevronDown, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RUN_LOG_STATUS_BADGE } from '@/lib/runLogStatus';
 import type { RunLog, RunLogStatus, RunLogStage } from '@/types';
 
 interface RunLogTableProps {
@@ -10,12 +11,7 @@ interface RunLogTableProps {
   className?: string;
 }
 
-const statusBadge: Record<RunLogStatus, { label: string; className: string }> = {
-  success: { label: '成功', className: 'text-green-400 bg-green-500/10 border-green-500/20' },
-  running: { label: '运行中', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20 animate-pulse' },
-  failed:  { label: '失败', className: 'text-red-400 bg-red-500/10 border-red-500/20' },
-  pending: { label: '等待中', className: 'text-bp-muted bg-gray-500/10 border-gray-500/20' },
-};
+const statusBadge = RUN_LOG_STATUS_BADGE;
 
 const ALL_STAGES: RunLogStage[] = ['问题理解', '文献挖掘', '假设生成', '实验设计', '实验执行', '报告生成'];
 const ALL_STATUSES: RunLogStatus[] = ['success', 'running', 'failed', 'pending'];
@@ -157,7 +153,7 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
                     <td className="py-3 px-4 text-xs text-bp-muted font-mono">{log.duration}</td>
                     <td className="py-3 px-4">
                       <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1', sc.className)}>
-                        {log.status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
+                        {log.status === 'running' && <span className={cn('w-1.5 h-1.5 rounded-full animate-pulse', sc.dotClass)} />}
                         {sc.label}
                       </span>
                     </td>
@@ -167,7 +163,7 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
                         className={cn(
                           'p-1.5 rounded-lg transition-colors',
                           isSelected
-                            ? 'bg-primary-500/20 text-bp-cyan'
+                            ? 'bg-bp-cyan-tint text-bp-cyan'
                             : 'hover:bg-bp-panel text-bp-muted hover:text-bp-text',
                         )}
                         title="查看详情"

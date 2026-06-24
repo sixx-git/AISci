@@ -39,7 +39,19 @@ $files = @(
   'src/components/PlotCritiquePanel.tsx',
   'src/components/PromptStageEditor.tsx',
   'src/components/PromptPresetBar.tsx',
-  'src/components/MarkdownPreview.tsx'
+  'src/components/MarkdownPreview.tsx',
+  'src/components/ScoreBar.tsx',
+  'src/components/VerifiableChecksPanel.tsx',
+  'src/components/ExecutionTierBadge.tsx',
+  'src/components/FederatedPareto3DPanel.tsx',
+  'src/components/ExportActions.tsx',
+  'src/components/EvidenceChainQualityCard.tsx',
+  'src/components/HumanInLoopCard.tsx',
+  'src/components/PromptConsole.tsx',
+  'src/components/EvidenceLevelBadge.tsx',
+  'src/components/HypothesisTreePanel.tsx',
+  'src/components/AgentNode.tsx',
+  'src/components/HypothesesPage.tsx'
 )
 
 $pairs = @(
@@ -74,7 +86,15 @@ $pairs = @(
   @('ring-offset-dark-900', 'ring-offset-bp-base'),
   @('rounded-lg border border-gray-700', 'rounded-bp border border-bp-border'),
   @('placeholder-gray-500', 'placeholder:text-bp-muted'),
-  @('placeholder:text-gray-600', 'placeholder:text-bp-muted')
+  @('placeholder:text-gray-600', 'placeholder:text-bp-muted'),
+  @('text-blue-400', 'text-bp-cyan'),
+  @('text-blue-300', 'text-bp-cyan'),
+  @('bg-blue-500/10', 'bg-bp-cyan-tint'),
+  @('bg-blue-500/20', 'bg-bp-cyan-tint'),
+  @('border-blue-500/20', 'border-bp-cyan/20'),
+  @('border-blue-500/30', 'border-bp-cyan/30'),
+  @('bg-gray-850', 'bg-bp-panel'),
+  @('bg-gray-950', 'bg-bp-base')
 )
 
 foreach ($rel in $files) {

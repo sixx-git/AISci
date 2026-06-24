@@ -10,10 +10,10 @@ interface ScoreBarProps {
 }
 
 const colorMap = {
-  blue:   { bar: 'bg-blue-500',   bg: 'bg-blue-500/20',   text: 'text-blue-400' },
-  green:  { bar: 'bg-green-500',  bg: 'bg-green-500/20',  text: 'text-green-400' },
-  amber:  { bar: 'bg-amber-500',  bg: 'bg-amber-500/20',  text: 'text-amber-400' },
-  purple: { bar: 'bg-purple-500', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  blue:   { bar: 'bg-bp-cyan',   bg: 'bg-bp-cyan-tint',   text: 'text-bp-cyan' },
+  green:  { bar: 'bg-bp-green',  bg: 'bg-bp-green/20',  text: 'text-bp-green' },
+  amber:  { bar: 'bg-bp-yellow',  bg: 'bg-bp-yellow/20',  text: 'text-bp-yellow' },
+  purple: { bar: 'bg-bp-purple', bg: 'bg-bp-purple/20', text: 'text-bp-purple' },
 };
 
 export function ScoreBar({
@@ -29,14 +29,14 @@ export function ScoreBar({
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 w-16 shrink-0">{label}</span>
-        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <span className="text-xs text-bp-muted w-16 shrink-0">{label}</span>
+        <div className="flex-1 h-1.5 bg-bp-surface rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full', c.bar)}
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="text-xs text-gray-400 font-mono w-6 text-right">{score}</span>
+        <span className={cn('text-xs font-mono w-6 text-right', c.text)}>{score}</span>
       </div>
     );
   }
@@ -44,10 +44,10 @@ export function ScoreBar({
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
-        <span className="text-gray-400">{label}</span>
+        <span className="text-bp-muted">{label}</span>
         <span className={cn('font-mono font-medium', c.text)}>{score}</span>
       </div>
-      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+      <div className="h-2 bg-bp-panel rounded-full overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all duration-700', c.bar)}
           style={{ width: `${pct}%` }}

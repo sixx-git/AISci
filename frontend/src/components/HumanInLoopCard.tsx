@@ -14,7 +14,7 @@ export function HumanInLoopCard({ className }: HumanInLoopCardProps) {
         </div>
         <div>
           <h4 className="text-sm font-semibold text-amber-400">人在回路</h4>
-          <p className="text-xs text-gray-500">人类科学家可在关键节点介入决策</p>
+          <p className="text-xs text-bp-muted">人类科学家可在关键节点介入决策</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -29,8 +29,8 @@ export function HumanInLoopCard({ className }: HumanInLoopCardProps) {
           >
             <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
             <div>
-              <div className="text-sm font-medium text-gray-200">{item.label}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{item.desc}</div>
+              <div className="text-sm font-medium text-bp-text">{item.label}</div>
+              <div className="text-xs text-bp-muted mt-0.5">{item.desc}</div>
             </div>
           </button>
         ))}

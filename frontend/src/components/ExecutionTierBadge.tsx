@@ -7,8 +7,8 @@ const TIER_STYLES: Record<string, string> = {
   csv_real: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   csv_simulation: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   gate_blocked: 'bg-red-500/15 text-red-400 border-red-500/30',
-  skipped: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
-  unknown: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+  skipped: 'bg-gray-500/15 text-bp-muted border-gray-500/30',
+  unknown: 'bg-gray-500/15 text-bp-muted border-gray-500/30',
 };
 
 interface ExecutionTierBadgeProps {
@@ -36,7 +36,7 @@ export function ExecutionTierBadge({
         </span>
       )}
       {dataAuthenticity && (
-        <span className="text-[10px] px-2 py-1 rounded border border-dark-600 bg-dark-900 text-gray-300">
+        <span className="text-[10px] px-2 py-1 rounded border border-bp-border bg-bp-base text-bp-text">
           数据来源: {dataAuthenticityLabel || dataAuthenticity}
         </span>
       )}

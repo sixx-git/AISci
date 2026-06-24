@@ -50,8 +50,8 @@ export function EvidenceChainQualityCard({
     <Card className={cn(className)}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-white">证据链质量</h3>
-          <p className="text-xs text-gray-500 mt-0.5">文献事实 · 假设支撑 · 引用真实性</p>
+          <h3 className="text-sm font-semibold text-bp-text">证据链质量</h3>
+          <p className="text-xs text-bp-muted mt-0.5">文献事实 · 假设支撑 · 引用真实性</p>
         </div>
       </div>
 
@@ -62,11 +62,11 @@ export function EvidenceChainQualityCard({
           return (
             <div
               key={m.label}
-              className="p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50"
+              className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50"
             >
               <div className="flex items-center gap-1.5 mb-1">
                 <Icon className={cn('w-3.5 h-3.5', m.color)} />
-                <span className="text-[10px] text-gray-500">{m.label}</span>
+                <span className="text-[10px] text-bp-muted">{m.label}</span>
               </div>
               <p className={cn('text-lg font-mono font-bold', m.color)}>{m.value}</p>
             </div>

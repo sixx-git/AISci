@@ -3,6 +3,7 @@ import { Terminal, Loader2 } from 'lucide-react';
 import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
 import { RunLogDetail } from './RunLogDetail';
+import { RunLogStageStream } from './RunLogStageStream';
 import { pipelineService } from '@/services';
 import type { RunLog, PipelineRunSummary, PipelineStageExecutionSummary } from '@/types';
 
@@ -203,28 +204,29 @@ export function RunLogsPage({
         <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
       </div>
 
-      {/* 表格区域 */}
-      <RunLogTable
-        logs={logs}
-        selectedId={selectedLog?.id || null}
-        onSelect={handleSelect}
-      />
-
-      {/* 详情面板 */}
-      <div className="mt-6">
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Terminal className="w-4 h-4 text-bp-cyan" />
-            <div>
-              <h3 className="text-sm font-semibold text-bp-text">运行详情</h3>
-              <p className="text-xs text-bp-muted">输入摘要 · 输出快照 · 模型参数 · 错误信息</p>
-            </div>
-          </div>
-          <RunLogDetail
-            log={selectedLog}
-            onClose={() => {}}
+      {/* 三栏布局：左列表 · 中详情 · 右阶段流 */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        <div className="xl:col-span-5">
+          <RunLogTable
+            logs={logs}
+            selectedId={selectedLog?.id || null}
+            onSelect={handleSelect}
           />
-        </Card>
+        </div>
+
+        <div className="xl:col-span-4">
+          <Card className="min-h-[520px]">
+            <RunLogDetail log={selectedLog} />
+          </Card>
+        </div>
+
+        <div className="xl:col-span-3">
+          <RunLogStageStream
+            logs={logs}
+            selectedLog={selectedLog}
+            onSelect={handleSelect}
+          />
+        </div>
       </div>
     </div>
   );

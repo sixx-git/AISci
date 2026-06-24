@@ -19,7 +19,7 @@ const actions: { type: ExportType; icon: typeof FileText; label: string }[] = [
 export function ExportActions({ onAction, className }: ExportActionsProps) {
   return (
     <Card className={className}>
-      <h3 className="text-sm font-semibold text-white mb-3">报告操作</h3>
+      <h3 className="text-sm font-semibold text-bp-text mb-3">报告操作</h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {actions.map((act) => {
           const Icon = act.icon;
@@ -29,11 +29,11 @@ export function ExportActions({ onAction, className }: ExportActionsProps) {
               onClick={() => onAction(act.type)}
               className={`
                 flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                border border-gray-700 hover:border-gray-600
+                border border-bp-border hover:border-bp-border
                 transition-colors duration-150
                 ${act.type === 'generate'
-                  ? 'bg-primary-500/10 text-primary-400 border-primary-500/30 hover:bg-primary-500/20'
-                  : 'bg-gray-900/70 text-gray-300 hover:bg-gray-800'}
+                  ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30 hover:bg-primary-500/20'
+                  : 'bg-bp-base/70 text-bp-text hover:bg-bp-panel'}
               `}
             >
               <Icon className="w-3.5 h-3.5" />
