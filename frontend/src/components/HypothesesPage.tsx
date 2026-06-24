@@ -1,11 +1,15 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Lightbulb, Loader2, AlertCircle, AlertTriangle,
+  Lightbulb, AlertTriangle,
   GitBranch, ChevronDown, ChevronUp,
   Star, Database, Target, ShieldAlert, FileText, BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import hypothesisService from '@/services/hypothesisService';
@@ -24,6 +28,13 @@ interface HypothesesPageProps {
   revalidateKey?: number;
   latestRunId?: string | null;
 }
+
+const SCORING_DIMS = [
+  { label: '对齐度', desc: '假设与研究问题的语义相关程度；分数越高越贴合研究方向。', icon: '🎯' },
+  { label: '证据等级', desc: 'high 有充足文献/数据支撑, medium 有部分支撑, low 支持不足。', icon: '📚' },
+  { label: '可验证性', desc: '假设是否可以通过实验或观测进行检验，验证条件是否明确可操作。', icon: '✅' },
+  { label: '偏题标记', desc: '当 alignment_score < 40 或存在领域冲突关键词时标记为偏题。', icon: '⚠️' },
+] as const;
 
 function applyEvidenceChainToHypothesis(h: DetailedHypothesis, chain: EvidenceChain | null): DetailedHypothesis {
   if (!chain) return h;
@@ -58,6 +69,7 @@ export function HypothesesPage({
   const [currentEvidenceChain, setCurrentEvidenceChain] = useState<EvidenceChain | null>(null);
   const [iteratingId, setIteratingId] = useState<string | null>(null);
   const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
     if (!_projectId) {
@@ -95,7 +107,7 @@ export function HypothesesPage({
         setError(getErrorMessage(err, '获取假设列表失败，请检查后端服务是否启动'));
       })
       .finally(() => setLoading(false));
-  }, [_projectId, _revalidateKey, _latestRunId]);
+  }, [_projectId, _revalidateKey, _latestRunId, retryTick]);
 
   useEffect(() => {
     if (!_projectId) {
@@ -312,47 +324,40 @@ export function HypothesesPage({
       {/* ===== 加载中 / 错误 / 空状态 ===== */}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
-          <p className="text-sm">正在加载假设列表...</p>
-        </div>
+        <Card>
+          <LoadingState message="正在加载假设列表..." />
+        </Card>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
-          <p className="text-sm text-red-400 mb-2">加载假设失败</p>
-          <p className="text-xs text-bp-muted">{error}</p>
-        </div>
+        <Card>
+          <ErrorState
+            title="加载假设失败"
+            message={error}
+            onRetry={() => setRetryTick((t) => t + 1)}
+          />
+        </Card>
       )}
 
       {!loading && !error && hypotheses.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Lightbulb className="w-10 h-10 mb-3 text-bp-muted" />
-          <p className="text-base text-bp-text mb-2">暂无候选假设</p>
-          <p className="text-sm text-bp-muted mb-6">
-            请先完成工作流中的假设生成阶段
-          </p>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<GitBranch className="w-4 h-4" />}
-            onClick={handleGoWorkflow}
-          >
-            前往工作流
-          </Button>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<Lightbulb className="w-8 h-8" />}
+            title="暂无候选假设"
+            description="请先完成工作流中的假设生成阶段"
+            action={{ label: '前往工作流', onClick: handleGoWorkflow }}
+          />
+        </Card>
       )}
 
       {!loading && !error && hypotheses.length > 0 && (
         <>
-          {/* ===== 全部偏题警告 ===== */}
           {allOffTopic && (
-            <div className="mb-5 p-4 rounded-lg border border-red-500/30 bg-red-500/5">
+            <div className="mb-5 p-4 rounded-bp border border-danger-500/30 bg-danger-500/5">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-danger-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-red-300 mb-2">
+                  <p className="text-sm font-semibold text-danger-300 mb-2">
                     当前生成结果与研究问题关联不足
                   </p>
                   <p className="text-xs text-bp-muted mb-3">
@@ -375,146 +380,153 @@ export function HypothesesPage({
             </div>
           )}
 
-          {/* ===== 假设决策面板 ===== */}
-          <div className="mb-5 p-4 rounded-lg border border-bp-border bg-bp-panel/30">
-            <h2 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-bp-cyan" />
-              假设决策面板
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <DecisionStat label="假设总数" value={hypotheses.length} icon={Lightbulb} color="text-bp-cyan" />
-              <DecisionStat label="当前主假设" value={primaryHypothesis ? 1 : 0} icon={Star} color="text-amber-400" />
-              <DecisionStat label="有证据支撑" value={withEvidenceCount} icon={Database} color="text-blue-400" />
-              <DecisionStat label="平均对齐分" value={`${avgAlignment}%`} icon={Target} color="text-green-400" />
-              <DecisionStat label="偏题/低证据" value={atRiskCount} icon={ShieldAlert} color="text-red-400" />
-            </div>
-          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+            {/* 左栏：假设树 + 决策指标 */}
+            <aside className="xl:col-span-3 space-y-4 xl:sticky xl:top-4">
+              {hypothesisTree && (
+                <Card>
+                  <HypothesisTreePanel tree={hypothesisTree} embedded />
+                </Card>
+              )}
+              <Card title="假设决策" subtitle="五维概览">
+                <div className="space-y-2">
+                  <DecisionStat label="假设总数" value={hypotheses.length} icon={Lightbulb} color="text-bp-cyan" />
+                  <DecisionStat label="当前主假设" value={primaryHypothesis ? 1 : 0} icon={Star} color="text-bp-yellow" />
+                  <DecisionStat label="有证据支撑" value={withEvidenceCount} icon={Database} color="text-bp-cyan" />
+                  <DecisionStat label="平均对齐分" value={`${avgAlignment}%`} icon={Target} color="text-bp-green" />
+                  <DecisionStat label="偏题/低证据" value={atRiskCount} icon={ShieldAlert} color="text-danger-400" />
+                </div>
+              </Card>
+            </aside>
 
-          {hypothesisTree && <HypothesisTreePanel tree={hypothesisTree} />}
+            {/* 中栏：主假设 + 候选列表 */}
+            <div className="xl:col-span-6 space-y-4 min-w-0">
+              {primaryHypothesis && (
+                <div>
+                  <div className="text-xs text-bp-yellow/80 mb-1.5 flex items-center gap-1">
+                    <Star className="w-3 h-3" /> 当前主假设 — 实验设计的入口
+                  </div>
+                  <HypothesisCard
+                    hypothesis={primaryHypothesis}
+                    onViewEvidence={handleViewEvidence}
+                    onSetPrimary={handleSetPrimary}
+                    onEnterExperiment={handleEnterExperiment}
+                    onIterateEvidence={handleIterateEvidence}
+                    onNavigateToLiterature={handleNavigateToLiterature}
+                    iterating={iteratingId === primaryHypothesis.id}
+                  />
+                </div>
+              )}
 
-          {/* ===== 当前主假设（置顶高亮） ===== */}
-          {primaryHypothesis && (
-            <div className="mb-5">
-              <div className="text-xs text-amber-400/70 mb-1.5 flex items-center gap-1">
-                <Star className="w-3 h-3" /> 当前主假设 — 实验设计的入口
-              </div>
-              <HypothesisCard
-                hypothesis={primaryHypothesis}
-                onViewEvidence={handleViewEvidence}
-                onSetPrimary={handleSetPrimary}
-                onEnterExperiment={handleEnterExperiment}
-                onIterateEvidence={handleIterateEvidence}
-                onNavigateToLiterature={handleNavigateToLiterature}
-                iterating={iteratingId === primaryHypothesis.id}
-              />
-            </div>
-          )}
+              {nonOffTopicHypotheses.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3 xl:hidden">
+                    <h3 className="text-sm font-semibold text-bp-text">
+                      候选假设 · {nonOffTopicHypotheses.length} 条
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setScoringExpanded(!scoringExpanded)}
+                      className="flex items-center gap-1 text-xs text-bp-muted hover:text-bp-text transition-colors"
+                    >
+                      {scoringExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      评分说明
+                    </button>
+                  </div>
+                  <h3 className="text-sm font-semibold text-bp-text mb-3 hidden xl:block">
+                    候选假设 · {nonOffTopicHypotheses.filter((h) => !h.isPrimary).length} 条
+                  </h3>
 
-          {/* ===== 候选假设列表（非 off_topic） ===== */}
-          {nonOffTopicHypotheses.length > 0 && (
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-bp-text">
-                  候选假设 · {nonOffTopicHypotheses.length} 条
-                </h3>
-                <button
-                  onClick={() => setScoringExpanded(!scoringExpanded)}
-                  className="flex items-center gap-1 text-xs text-bp-muted hover:text-bp-text transition-colors"
-                >
-                  {scoringExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  评分说明
-                </button>
-              </div>
+                  {scoringExpanded && (
+                    <div className="mb-4 p-4 rounded-bp border border-bp-border bg-bp-panel/30 animate-fade-in xl:hidden">
+                      <ScoringGuide />
+                    </div>
+                  )}
 
-              {scoringExpanded && (
-                <div className="mb-4 p-4 rounded-lg border border-bp-border bg-bp-panel/30 animate-fade-in">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {[
-                      { label: '对齐度', desc: '假设与研究问题的语义相关程度；分数越高越贴合研究方向。', color: 'primary', icon: '🎯' },
-                      { label: '证据等级', desc: 'high 有充足文献/数据支撑, medium 有部分支撑, low 支持不足。', color: 'blue', icon: '📚' },
-                      { label: '可验证性', desc: '假设是否可以通过实验或观测进行检验，验证条件是否明确可操作。', color: 'green', icon: '✅' },
-                      { label: '偏题标记', desc: '当 alignment_score < 40 或存在领域冲突关键词时标记为偏题。', color: 'red', icon: '⚠️' },
-                    ].map((dim) => (
-                      <div key={dim.label} className="flex items-start gap-2">
-                        <span className="text-sm shrink-0">{dim.icon}</span>
-                        <div>
-                          <p className="text-xs font-semibold text-bp-text mb-0.5">{dim.label}</p>
-                          <p className="text-[11px] text-bp-muted leading-relaxed">{dim.desc}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    {nonOffTopicHypotheses
+                      .filter((h) => !h.isPrimary)
+                      .map((h) => (
+                        <HypothesisCard
+                          key={h.id}
+                          hypothesis={h}
+                          onViewEvidence={handleViewEvidence}
+                          onSetPrimary={handleSetPrimary}
+                          onEnterExperiment={handleEnterExperiment}
+                          onIterateEvidence={handleIterateEvidence}
+                          onNavigateToLiterature={handleNavigateToLiterature}
+                          iterating={iteratingId === h.id}
+                        />
+                      ))}
                   </div>
                 </div>
               )}
 
-              <div className="space-y-3">
-                {nonOffTopicHypotheses
-                  .filter((h) => !h.isPrimary)
-                  .map((h) => (
-                    <HypothesisCard
-                      key={h.id}
-                      hypothesis={h}
-                      onViewEvidence={handleViewEvidence}
-                      onSetPrimary={handleSetPrimary}
-                      onEnterExperiment={handleEnterExperiment}
-                      onIterateEvidence={handleIterateEvidence}
-                      onNavigateToLiterature={handleNavigateToLiterature}
-                      iterating={iteratingId === h.id}
-                    />
-                  ))}
-              </div>
-            </div>
-          )}
+              {offTopicHypotheses.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setOffTopicExpanded(!offTopicExpanded)}
+                    className="flex items-center gap-2 text-sm font-semibold text-bp-muted hover:text-bp-text transition-colors w-full text-left mb-2"
+                  >
+                    <ShieldAlert className="w-4 h-4 text-danger-400" />
+                    低相关/偏题假设 · {offTopicHypotheses.length} 条
+                    {offTopicExpanded
+                      ? <ChevronUp className="w-4 h-4" />
+                      : <ChevronDown className="w-4 h-4" />
+                    }
+                  </button>
 
-          {/* ===== 偏题/低相关假设（折叠区） ===== */}
-          {offTopicHypotheses.length > 0 && (
-            <div className="mb-5">
-              <button
-                onClick={() => setOffTopicExpanded(!offTopicExpanded)}
-                className="flex items-center gap-2 text-sm font-semibold text-bp-muted hover:text-bp-text transition-colors w-full text-left mb-2"
-              >
-                <ShieldAlert className="w-4 h-4 text-red-400" />
-                低相关/偏题假设 · {offTopicHypotheses.length} 条
-                {offTopicExpanded
-                  ? <ChevronUp className="w-4 h-4" />
-                  : <ChevronDown className="w-4 h-4" />
-                }
-              </button>
-
-              {offTopicExpanded && (
-                <div className="space-y-3 animate-fade-in pl-4 border-l-2 border-red-500/20">
-                  {offTopicHypotheses.map((h) => (
-                    <HypothesisCard
-                      key={h.id}
-                      hypothesis={h}
-                      onViewEvidence={handleViewEvidence}
-                      onEnterExperiment={undefined}
-                      onIterateEvidence={handleIterateEvidence}
-                      onNavigateToLiterature={handleNavigateToLiterature}
-                      iterating={iteratingId === h.id}
-                    />
-                  ))}
+                  {offTopicExpanded && (
+                    <div className="space-y-3 animate-fade-in pl-4 border-l-2 border-danger-500/20">
+                      {offTopicHypotheses.map((h) => (
+                        <HypothesisCard
+                          key={h.id}
+                          hypothesis={h}
+                          onViewEvidence={handleViewEvidence}
+                          onEnterExperiment={undefined}
+                          onIterateEvidence={handleIterateEvidence}
+                          onNavigateToLiterature={handleNavigateToLiterature}
+                          iterating={iteratingId === h.id}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ===== 无候选假设但存在主假设 ===== */}
-          {nonOffTopicHypotheses.length === 0 && !primaryHypothesis && (
-            <div className="flex flex-col items-center justify-center py-12 text-bp-muted">
-              <AlertTriangle className="w-6 h-6 mb-2 text-amber-400" />
-              <p className="text-sm text-bp-muted mb-1">所有假设均被标记为偏题</p>
-              <p className="text-xs text-bp-muted mb-4">请补充文献/数据后重新运行假设生成</p>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />} onClick={handleGoDatasets}>
-                  前往数据集
-                </Button>
-                <Button variant="secondary" size="sm" icon={<GitBranch className="w-3.5 h-3.5" />} onClick={handleGoWorkflow}>
-                  重新运行工作流
-                </Button>
-              </div>
+              {nonOffTopicHypotheses.length === 0 && !primaryHypothesis && (
+                <Card>
+                  <EmptyState
+                    icon={<AlertTriangle className="w-8 h-8 text-bp-yellow" />}
+                    title="所有假设均被标记为偏题"
+                    description="请补充文献/数据后重新运行假设生成"
+                    action={{ label: '重新运行工作流', onClick: handleGoWorkflow }}
+                  />
+                </Card>
+              )}
             </div>
-          )}
+
+            {/* 右栏：评分说明 + 快捷操作 */}
+            <aside className="xl:col-span-3 space-y-4 xl:sticky xl:top-4 hidden xl:block">
+              <Card title="评分说明" subtitle="五维解读">
+                <ScoringGuide />
+              </Card>
+              <Card title="快捷操作">
+                <div className="flex flex-col gap-2">
+                  <Button variant="secondary" size="sm" icon={<GitBranch className="w-3.5 h-3.5" />} onClick={handleGoWorkflow}>
+                    运行 Pipeline
+                  </Button>
+                  <Button variant="secondary" size="sm" icon={<BookOpen className="w-3.5 h-3.5" />} onClick={handleGoLiterature}>
+                    文献库
+                  </Button>
+                  <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />} onClick={handleGoDatasets}>
+                    数据集
+                  </Button>
+                </div>
+              </Card>
+            </aside>
+          </div>
         </>
       )}
 
@@ -532,6 +544,22 @@ export function HypothesesPage({
   );
 }
 
+function ScoringGuide() {
+  return (
+    <div className="space-y-3">
+      {SCORING_DIMS.map((dim) => (
+        <div key={dim.label} className="flex items-start gap-2">
+          <span className="text-sm shrink-0">{dim.icon}</span>
+          <div>
+            <p className="text-xs font-semibold text-bp-text mb-0.5">{dim.label}</p>
+            <p className="text-[11px] text-bp-muted leading-relaxed">{dim.desc}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DecisionStat({ label, value, icon: Icon, color }: {
   label: string;
   value: number | string;
@@ -539,7 +567,7 @@ function DecisionStat({ label, value, icon: Icon, color }: {
   color: string;
 }) {
   return (
-    <div className="p-3 rounded-lg border border-bp-border bg-bp-base/50">
+    <div className="p-2.5 rounded-bp border border-bp-border bg-bp-base/50">
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className={color} style={{ width: 15, height: 15 }} />
         <span className="text-[11px] text-bp-muted">{label}</span>
