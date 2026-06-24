@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import type { StatusType } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
+import { RecentPipelineSection } from '@/components/workspace/RecentPipelineSection';
 import type { ProjectOverview } from '@/types';
 
 const STATUS_OPTIONS = [
@@ -156,6 +157,10 @@ export function Home() {
           <div className="text-bp-muted text-sm">草稿</div>
         </div>
       </div>
+
+      {!loading && !error && projects.length > 0 && (
+        <RecentPipelineSection projects={projects} />
+      )}
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

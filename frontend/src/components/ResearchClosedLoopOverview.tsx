@@ -11,10 +11,12 @@ import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
+import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { pipelineService } from '@/services/pipelineService';
 import hypothesisService, { type BackendHypothesis } from '@/services/hypothesisService';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import type {
   DiscoveryLoopData,
   PipelineRunExtraMetadata,
@@ -51,6 +53,20 @@ function stageStatus(
   if (run.status === 'completed') return 'completed';
   return 'pending';
 }
+
+const STEP_STATUS_CLASS: Record<string, string> = {
+  completed: 'border-bp-green/40 bg-bp-green/10 text-bp-green',
+  failed: 'border-danger-500/40 bg-danger-500/10 text-danger-300',
+  running: 'border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan',
+  pending: 'border-bp-border bg-bp-panel/50 text-bp-muted',
+};
+
+const RUN_STATUS_LABEL: Record<string, string> = {
+  completed: '已完成',
+  running: '运行中',
+  failed: '失败',
+  pending: '等待中',
+};
 
 export function ResearchClosedLoopOverview({
   projectId,
@@ -167,10 +183,16 @@ export function ResearchClosedLoopOverview({
     Boolean(teachingRefinementData) ||
     versionSnapshots.length >= 2;
 
+  const hasTimeline = Boolean(
+    extra?.closed_loop_events?.length ||
+    extra?.quality_trend?.length ||
+    extra?.closed_loop_decisions?.length,
+  );
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-bp-muted">
-        <Loader2 className="w-8 h-8 animate-spin mb-3" />
+        <Loader2 className="w-8 h-8 animate-spin text-bp-cyan mb-3" />
         <span className="text-sm">正在加载科研闭环数据...</span>
       </div>
     );
@@ -178,10 +200,10 @@ export function ResearchClosedLoopOverview({
 
   if (error) {
     return (
-      <Card className="border-red-500/30 bg-red-500/5">
+      <Card className="border-danger-500/30 bg-danger-500/5">
         <div className="flex flex-col items-center py-8 text-center">
-          <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
-          <p className="text-red-300 text-sm mb-4">{error}</p>
+          <AlertTriangle className="w-10 h-10 text-danger-400 mb-3" />
+          <p className="text-danger-300 text-sm mb-4">{error}</p>
           <Button variant="secondary" onClick={loadRuns}>重试</Button>
         </div>
       </Card>
@@ -189,7 +211,7 @@ export function ResearchClosedLoopOverview({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card
         title="科研闭环总览"
         subtitle="问题理解 → 知识整合 → 假设生成 → 证据梳理 → 研究计划 → 反馈修正"
@@ -197,21 +219,15 @@ export function ResearchClosedLoopOverview({
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {FLOW_STEPS.map((step, idx) => {
             const status = stageStatus(runDetail, step.key);
-            const color =
-              status === 'completed'
-                ? 'border-green-500/40 bg-green-500/10 text-green-300'
-                : status === 'failed'
-                  ? 'border-red-500/40 bg-red-500/10 text-red-300'
-                  : status === 'running'
-                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                    : 'border-bp-border bg-bp-panel/50 text-bp-muted';
-
             return (
               <div key={step.key} className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => navigateToProjectTab(navigate, projectId, step.tab)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors hover:opacity-90 ${color}`}
+                  className={cn(
+                    'px-3 py-1.5 rounded-bp border text-xs font-medium transition-colors hover:opacity-90',
+                    STEP_STATUS_CLASS[status],
+                  )}
                 >
                   {step.label}
                 </button>
@@ -223,35 +239,53 @@ export function ResearchClosedLoopOverview({
           })}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 p-4 rounded-bp bg-bp-panel/30 border border-bp-cyan-dim">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 min-w-0">
             {runs.length > 0 ? (
-              <label className="flex items-center gap-2 text-bp-muted">
-                <Orbit className="w-4 h-4 text-bp-cyan" />
-                运行记录
+              <label className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-bp-muted">
+                <span className="inline-flex items-center gap-2 shrink-0">
+                  <Orbit className="w-4 h-4 text-bp-cyan" />
+                  运行记录
+                </span>
                 <select
                   value={selectedRunId || ''}
                   onChange={(e) => setSelectedRunId(e.target.value || null)}
-                  className="px-2 py-1 bg-bp-panel border border-bp-border rounded text-bp-text text-xs"
+                  className="input-field py-1.5 text-xs min-w-[200px]"
                 >
-                  {runs.map((r) => (
-                    <option key={r.run_id || r.id} value={r.run_id || r.id}>
-                      {(r.run_id || r.id).slice(0, 8)} · {r.status} · {new Date(r.created_at).toLocaleDateString('zh-CN')}
-                    </option>
-                  ))}
+                  {runs.map((r) => {
+                    const id = r.run_id || r.id;
+                    const label = RUN_STATUS_LABEL[r.status] ?? r.status;
+                    return (
+                      <option key={id} value={id}>
+                        {id.slice(0, 8)}… · {label} · {new Date(r.created_at).toLocaleDateString('zh-CN')}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
             ) : (
               <span className="text-bp-muted text-sm">尚未运行 Pipeline</span>
             )}
             {runDetail && (
-              <span className="text-xs text-bp-muted">
-                状态：{runDetail.status}
-                {runDetail.failed_stage ? ` · 失败阶段 ${runDetail.failed_stage}` : ''}
-              </span>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={cn(
+                  'px-2 py-0.5 rounded-bp border',
+                  STEP_STATUS_CLASS[runDetail.status] ?? STEP_STATUS_CLASS.pending,
+                )}>
+                  {RUN_STATUS_LABEL[runDetail.status] ?? runDetail.status}
+                </span>
+                {runDetail.failed_stage && (
+                  <span className="text-danger-300">失败阶段：{runDetail.failed_stage}</span>
+                )}
+                {runDetail.total_duration != null && (
+                  <span className="text-bp-muted font-mono">
+                    耗时 {runDetail.total_duration.toFixed(1)}s
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 shrink-0">
             <Button
               size="sm"
               variant="secondary"
@@ -276,38 +310,22 @@ export function ResearchClosedLoopOverview({
         <Card title="当前主假设与依据" subtitle="假设来源、证据引用与验证目标">
           <div className="space-y-3 text-sm">
             <p className="text-bp-text leading-relaxed">{primaryHypothesis.hypothesis}</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric label="文献 fact" value={String(primaryHypothesis.supporting_fact_ids?.length ?? 0)} />
               <Metric label="数据字段引用" value={String(primaryHypothesis.dataset_field_refs?.length ?? 0)} />
               <Metric label="证据级别" value={primaryHypothesis.evidence_level || '—'} />
               <Metric label="验证目标" value={primaryHypothesis.validation_target || '—'} />
             </div>
             {primaryHypothesis.rationale && (
-              <p className="text-bp-muted text-xs border-t border-bp-border pt-3">
+              <p className="text-bp-muted text-xs border-t border-bp-cyan-dim pt-3">
                 依据：{primaryHypothesis.rationale}
               </p>
             )}
             <div className="flex flex-wrap gap-2 pt-1">
-              <QuickLink
-                icon={BookOpen}
-                label="文献库"
-                onClick={() => navigateToProjectTab(navigate, projectId, 'literature')}
-              />
-              <QuickLink
-                icon={Database}
-                label="数据集"
-                onClick={() => navigateToProjectTab(navigate, projectId, 'datasets')}
-              />
-              <QuickLink
-                icon={FlaskConical}
-                label="实验设计"
-                onClick={() => navigateToProjectTab(navigate, projectId, 'experiments')}
-              />
-              <QuickLink
-                icon={FileText}
-                label="研究报告"
-                onClick={() => navigateToProjectTab(navigate, projectId, 'reports')}
-              />
+              <QuickLink icon={BookOpen} label="文献库" onClick={() => navigateToProjectTab(navigate, projectId, 'literature')} />
+              <QuickLink icon={Database} label="数据集" onClick={() => navigateToProjectTab(navigate, projectId, 'datasets')} />
+              <QuickLink icon={FlaskConical} label="实验设计" onClick={() => navigateToProjectTab(navigate, projectId, 'experiments')} />
+              <QuickLink icon={FileText} label="研究报告" onClick={() => navigateToProjectTab(navigate, projectId, 'reports')} />
             </div>
           </div>
         </Card>
@@ -331,36 +349,48 @@ export function ResearchClosedLoopOverview({
         </Card>
       )}
 
-      {(extra?.closed_loop_events?.length
-        || extra?.quality_trend?.length
-        || extra?.closed_loop_decisions?.length) ? (
-        <ClosedLoopTimeline
-          events={extra?.closed_loop_events}
-          qualityTrend={extra?.quality_trend}
-          decisions={extra?.closed_loop_decisions}
-          runId={selectedRunId}
-        />
-      ) : null}
+      {hasTimeline && (
+        <CollapsiblePanel
+          title="闭环时间线"
+          subtitle="质量趋势 · 决策事件"
+          defaultOpen
+        >
+          <ClosedLoopTimeline
+            events={extra?.closed_loop_events}
+            qualityTrend={extra?.quality_trend}
+            decisions={extra?.closed_loop_decisions}
+            runId={selectedRunId}
+          />
+        </CollapsiblePanel>
+      )}
 
-      <DiscoveryLoopPanel
-        discoveryLoop={discoveryLoopData}
-        teachingRefinement={teachingRefinementData}
-        qualityAcceptance={qualityAcceptance}
-      />
+      {(discoveryLoopData || teachingRefinementData || qualityAcceptance) && (
+        <CollapsiblePanel title="Discovery / Teaching 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
+          <DiscoveryLoopPanel
+            discoveryLoop={discoveryLoopData}
+            teachingRefinement={teachingRefinementData}
+            qualityAcceptance={qualityAcceptance}
+          />
+        </CollapsiblePanel>
+      )}
 
       {versionSnapshots.length >= 2 && (
-        <>
-          <VersionComparePanel snapshots={versionSnapshots} />
-          <EvidenceDiffPanel snapshots={versionSnapshots} />
-        </>
+        <CollapsiblePanel title="版本对比与证据 Diff" subtitle="VersionCompare · EvidenceDiff" defaultOpen={false}>
+          <div className="space-y-4">
+            <VersionComparePanel snapshots={versionSnapshots} />
+            <EvidenceDiffPanel snapshots={versionSnapshots} />
+          </div>
+        </CollapsiblePanel>
       )}
 
       {verifiableValidation && (
-        <VerifiableChecksPanel
-          checks={verifiableValidation.checks}
-          passed={verifiableValidation.passed ?? null}
-          spec={verifiableValidation.spec}
-        />
+        <CollapsiblePanel title="可验证性检查" subtitle="VerifiableChecksPanel" defaultOpen={false}>
+          <VerifiableChecksPanel
+            checks={verifiableValidation.checks}
+            passed={verifiableValidation.passed ?? null}
+            spec={verifiableValidation.spec}
+          />
+        </CollapsiblePanel>
       )}
 
       {!hasClosedLoopData && runDetail && (
@@ -371,16 +401,18 @@ export function ResearchClosedLoopOverview({
         </Card>
       )}
 
-      <FeedbackHubPanel projectId={projectId} />
+      <CollapsiblePanel title="反馈中心" subtitle="FeedbackHubPanel" defaultOpen={false}>
+        <FeedbackHubPanel projectId={projectId} />
+      </CollapsiblePanel>
     </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-3 rounded-lg bg-bp-panel/50 border border-bp-border">
-      <div className="text-bp-muted mb-1">{label}</div>
-      <div className="text-bp-text font-medium truncate" title={value}>{value}</div>
+    <div className="bp-metric-box text-center !items-stretch">
+      <div className="text-bp-metric font-bold text-bp-cyan truncate" title={value}>{value}</div>
+      <div className="text-bp-muted text-xs">{label}</div>
     </div>
   );
 }
@@ -398,7 +430,7 @@ function QuickLink({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-bp-cyan border border-bp-cyan/20 bg-primary-500/5 hover:bg-bp-cyan-tint transition-colors"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-bp text-xs text-bp-cyan border border-bp-cyan/20 bg-bp-cyan-tint hover:border-bp-cyan/40 transition-colors"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
