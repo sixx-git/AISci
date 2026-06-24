@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
+import { LoadingState } from '@/components/workspace/LoadingState';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
@@ -483,10 +484,9 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
           <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
           <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
         </div>
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Loader2 className="w-8 h-8 animate-spin mb-4 text-bp-cyan" />
-          <p className="text-sm">正在加载文献库...</p>
-        </div>
+        <Card>
+          <LoadingState message="正在加载文献库..." />
+        </Card>
       </div>
     );
   }
@@ -1010,12 +1010,7 @@ function LibraryTabContent({
   onCloseChunks: () => void;
 }) {
   if (loading) {
-    return (
-      <div className="py-16 text-center text-bp-muted">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
-        <p className="text-sm">加载已入库文献…</p>
-      </div>
-    );
+    return <LoadingState message="加载已入库文献…" compact />;
   }
 
   if (docs.length === 0) {
@@ -1316,10 +1311,10 @@ function StatusBar({ msg }: { msg: StatusToastMessage | null }) {
   if (!msg || dismissed) return null;
 
   const config = {
-    loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-bp-text' },
-    success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-bp-text' },
-    error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-bp-text' },
-    info:    { bg: 'bg-bp-panel',  icon: Info,     text: 'text-bp-text' },
+    loading: { bg: 'bg-bp-cyan/90', icon: Loader2, text: 'text-bp-text' },
+    success: { bg: 'bg-bp-green/90', icon: CheckCircle, text: 'text-bp-text' },
+    error:   { bg: 'bg-danger-500/90', icon: XCircle, text: 'text-bp-text' },
+    info:    { bg: 'bg-bp-panel', icon: Info, text: 'text-bp-text' },
   }[msg.type];
 
   const Icon = config.icon;

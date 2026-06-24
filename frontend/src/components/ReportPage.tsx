@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, XCircle, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare } from 'lucide-react';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare } from 'lucide-react';
 import { Card } from './Card';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
+import { EmptyState } from '@/components/EmptyState';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
@@ -37,6 +40,7 @@ export function ReportPage({
   const [report, setReport] = useState<ReportData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
   const [reviseMessage, setReviseMessage] = useState('');
   const [reviseBusy, setReviseBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -64,7 +68,14 @@ export function ReportPage({
         setIsLoading(false);
       }
     })();
-  }, [projectId, _revalidateKey, _latestRunId]);
+  }, [projectId, _revalidateKey, _latestRunId, reloadTick]);
+
+  const reportPageHeader = (
+    <div className="mb-6">
+      <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
+      <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
+    </div>
+  );
 
   const revisionHistory = (report?.extraMetadata?.revision_history as Array<Record<string, unknown>> | undefined) || [];
   const chatHistory = (report?.extraMetadata?.chat_history as Array<Record<string, unknown>> | undefined) || [];
@@ -178,13 +189,9 @@ export function ReportPage({
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
-          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
-        </div>
-        <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
-          <span className="text-bp-muted">正在加载报告...</span>
+        {reportPageHeader}
+        <Card>
+          <LoadingState message="正在加载报告..." />
         </Card>
       </div>
     );
@@ -193,26 +200,12 @@ export function ReportPage({
   if (errorMsg) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
-          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
-        </div>
-        <Card className="flex flex-col items-center justify-center py-12 gap-4">
-          <XCircle className="w-10 h-10 text-danger-400" />
-          <p className="text-danger-300 text-sm">{errorMsg}</p>
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              setIsLoading(true);
-              reportService.getLatest(projectId)
-                .then(setReport)
-                .catch((e) => setErrorMsg(e instanceof Error ? e.message : '加载失败'))
-                .finally(() => setIsLoading(false));
-            }}
-            className="px-4 py-2 rounded-bp bg-bp-cyan-tint border border-bp-cyan/30 text-bp-cyan text-xs hover:bg-bp-cyan/20 transition-colors"
-          >
-            重试
-          </button>
+        {reportPageHeader}
+        <Card>
+          <ErrorState
+            message={errorMsg}
+            onRetry={() => setReloadTick((t) => t + 1)}
+          />
         </Card>
       </div>
     );
@@ -221,14 +214,13 @@ export function ReportPage({
   if (!report) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
-          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
-        </div>
-        <Card className="flex flex-col items-center justify-center py-12 gap-3">
-          <FileText className="w-10 h-10 text-bp-muted" />
-          <p className="text-bp-muted text-sm">暂无研究报告</p>
-          <p className="text-xs text-bp-muted">请先通过工作流触发报告生成</p>
+        {reportPageHeader}
+        <Card>
+          <EmptyState
+            icon={<FileText className="w-8 h-8" />}
+            title="暂无研究报告"
+            description="请先通过工作流触发报告生成"
+          />
         </Card>
       </div>
     );
@@ -253,7 +245,7 @@ export function ReportPage({
           <p className="text-bp-muted text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
           <span className={`text-[11px] px-2 py-0.5 rounded border ${
             projectMode === 'federated_learning'
-              ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+              ? 'border-bp-cyan/30 bg-bp-cyan-tint text-bp-cyan'
               : 'border-bp-border bg-bp-panel text-bp-muted'
           }`}>
             {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
@@ -261,7 +253,7 @@ export function ReportPage({
           <button
             type="button"
             onClick={() => navigate(`/projects/${projectId}?tab=knowledge_graph`)}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-[#00dc82]/40 bg-[#00dc82]/10 text-[#00dc82] hover:bg-[#00dc82]/20 transition-colors"
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-bp border border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan hover:bg-bp-cyan/20 transition-colors"
           >
             <Network className="w-3 h-3" />
             查看知识图谱

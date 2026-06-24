@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   HelpCircle,
   BookOpen, Lightbulb, FlaskConical,
   FileText, TrendingUp, Play,
-  Loader2, AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -28,6 +28,9 @@ import { researchQuestionKey } from '@/lib/storageKeys';
 import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
 import { ProjectWorkspaceHeader } from '@/components/workspace/ProjectWorkspaceHeader';
 import { ProjectTabNav } from '@/components/workspace/ProjectTabNav';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
+import { EmptyState } from '@/components/EmptyState';
 
 // ============ localStorage 研究问题读取 ============
 /**
@@ -289,6 +292,7 @@ export function ProjectWorkspace() {
   const [project, setProject] = useState<ProjectOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -315,7 +319,7 @@ export function ProjectWorkspace() {
 
     loadProject();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, reloadTick]);
 
   // --- 研究领域 ---
   const resolvedProjectMode = project?.project_mode || 'general';
@@ -448,10 +452,9 @@ export function ProjectWorkspace() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <BackToProjectsLink />
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Loader2 className="w-8 h-8 animate-spin mb-3" />
-          <span>正在加载项目信息...</span>
-        </div>
+        <Card>
+          <LoadingState message="正在加载项目信息..." />
+        </Card>
       </div>
     );
   }
@@ -461,14 +464,11 @@ export function ProjectWorkspace() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <BackToProjectsLink />
         <Card className="border-danger-500/30 bg-danger-500/5">
-          <div className="flex flex-col items-center py-8 text-center">
-            <AlertTriangle className="w-10 h-10 text-danger-400 mb-3" />
-            <h3 className="text-lg font-semibold text-danger-300 mb-2">加载失败</h3>
-            <p className="text-bp-muted mb-4 max-w-md">{error}</p>
-            <Button onClick={() => window.location.reload()} variant="secondary">
-              重新加载
-            </Button>
-          </div>
+          <ErrorState
+            title="加载失败"
+            message={error}
+            onRetry={() => setReloadTick((t) => t + 1)}
+          />
         </Card>
       </div>
     );
@@ -479,15 +479,11 @@ export function ProjectWorkspace() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <BackToProjectsLink />
         <Card>
-          <div className="flex flex-col items-center py-8 text-center">
-            <h3 className="text-lg font-semibold text-bp-text mb-2">项目不存在</h3>
-            <p className="text-bp-muted mb-4">
-              未找到项目 {id}，请检查项目 ID 是否正确
-            </p>
-            <Link to="/">
-              <Button variant="primary">返回项目列表</Button>
-            </Link>
-          </div>
+          <EmptyState
+            title="项目不存在"
+            description={`未找到项目 ${id}，请检查项目 ID 是否正确`}
+            action={{ label: '返回项目列表', onClick: () => navigate('/') }}
+          />
         </Card>
       </div>
     );

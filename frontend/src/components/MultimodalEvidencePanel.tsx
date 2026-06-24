@@ -4,6 +4,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { EmptyState } from '@/components/EmptyState';
 import multimodalService, { type MultimodalAsset } from '@/services/multimodalService';
 
 interface MultimodalEvidencePanelProps {
@@ -101,21 +103,22 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
       </div>
 
       {error && (
-        <p className="text-xs text-red-400 mb-3 flex items-center gap-1">
+        <p className="text-xs text-danger-400 mb-3 flex items-center gap-1">
           <AlertTriangle className="w-3 h-3" /> {error}
         </p>
       )}
 
       {loading && assets.length === 0 && (
-        <p className="text-sm text-bp-muted flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> 加载中…
-        </p>
+        <LoadingState message="加载多模态资产…" compact />
       )}
 
       {!loading && assets.length === 0 && (
-        <p className="text-sm text-bp-muted">
-          暂无多模态资产。可上传论文图表、实验截图或会议录音（音频需后续接入转写模型）。
-        </p>
+        <EmptyState
+          className="!py-8"
+          icon={<Image className="w-8 h-8" />}
+          title="暂无多模态资产"
+          description="可上传论文图表、实验截图或会议录音（音频需后续接入转写模型）。"
+        />
       )}
 
       <div className="space-y-3">

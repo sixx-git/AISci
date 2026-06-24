@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import {
   FlaskConical, CheckCircle, XCircle, Database,
   BarChart3, ListChecks, Target, BookOpen,
   AlertTriangle, Lightbulb, FileText, Play,
-  Sparkles, Loader2, AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import experimentService from '@/services/experimentService';
@@ -82,6 +85,7 @@ export function ExperimentDesignPage({
   const [experiment, setExperiment] = useState<DetailedExperimentDesign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const selectedHypothesisId = _selectedHypothesisId
     || (() => {
@@ -113,7 +117,7 @@ export function ExperimentDesignPage({
         setExperiment(null);
       })
       .finally(() => setLoading(false));
-  }, [_projectId, _revalidateKey, _latestRunId]);
+  }, [_projectId, _revalidateKey, _latestRunId, reloadTick]);
 
   const handleGenerate = useCallback(() => {
     showAlert('请先在工作流页面运行 Pipeline，完成 experiment_design 阶段后返回查看');
@@ -173,48 +177,34 @@ export function ExperimentDesignPage({
       )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
-          <p className="text-sm">正在加载实验设计...</p>
-        </div>
+        <Card>
+          <LoadingState message="正在加载实验设计..." />
+        </Card>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
-          <p className="text-sm text-red-400 mb-2">加载实验设计失败</p>
-          <p className="text-xs text-bp-muted">{error}</p>
-        </div>
+        <Card>
+          <ErrorState
+            title="加载实验设计失败"
+            message={error}
+            onRetry={() => setReloadTick((t) => t + 1)}
+          />
+        </Card>
       )}
 
       {!loading && !error && !experiment && (
-        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          {selectedHypothesisId ? (
-            <>
-              <Lightbulb className="w-8 h-8 mb-3 text-amber-400" />
-              <p className="text-base text-bp-text mb-2">当前主假设尚未生成实验设计</p>
-              <p className="text-xs text-bp-muted mb-4">
-                请在候选假设页面选择主假设后，运行工作流中的实验设计阶段。
-              </p>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
-              <p className="text-sm text-bp-muted mb-2">暂无实验设计</p>
-              <p className="text-xs text-bp-muted mb-4">
-                请先在候选假设页面选择一个主假设，然后运行 Pipeline 的实验设计阶段。
-              </p>
-            </>
-          )}
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<FlaskConical className="w-4 h-4" />}
-            onClick={() => showAlert('请前往工作流页面运行 Pipeline')}
-          >
-            前往工作流
-          </Button>
-        </div>
+        <Card>
+          <EmptyState
+            icon={selectedHypothesisId
+              ? <Lightbulb className="w-8 h-8 text-bp-yellow" />
+              : <AlertTriangle className="w-8 h-8 text-bp-yellow" />}
+            title={selectedHypothesisId ? '当前主假设尚未生成实验设计' : '暂无实验设计'}
+            description={selectedHypothesisId
+              ? '请在候选假设页面选择主假设后，运行工作流中的实验设计阶段。'
+              : '请先在候选假设页面选择一个主假设，然后运行 Pipeline 的实验设计阶段。'}
+            action={{ label: '前往工作流', onClick: handleGenerate }}
+          />
+        </Card>
       )}
 
       {experiment && (
@@ -222,7 +212,7 @@ export function ExperimentDesignPage({
           <div className="mb-6">
             <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Lightbulb className="w-5 h-5 text-amber-400" />
+                <Lightbulb className="w-5 h-5 text-bp-yellow" />
                 <div>
                   <span className="text-xs text-bp-muted">当前主假设</span>
                   <p className="text-sm text-bp-text font-medium mt-0.5">{experiment.hypothesisTitle}</p>
