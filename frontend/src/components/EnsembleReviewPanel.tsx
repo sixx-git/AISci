@@ -17,19 +17,19 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
   return (
     <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
-        <ShieldCheck className="w-4 h-4 text-blue-400" />
+        <ShieldCheck className="w-4 h-4 text-bp-cyan" />
         集成评审（Ensemble Review）
       </h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <StatBox label="综合分" value={overall != null ? Number(overall).toFixed(1) : '—'} accent="text-amber-400" />
+        <StatBox label="综合分" value={overall != null ? Number(overall).toFixed(1) : '—'} accent="text-bp-yellow" />
         <StatBox
           label="决策"
           value={decision || '—'}
-          accent={decision === 'Accept' ? 'text-green-400' : decision === 'Reject' ? 'text-red-400' : 'text-bp-muted'}
+          accent={decision === 'Accept' ? 'text-bp-green' : decision === 'Reject' ? 'text-danger-400' : 'text-bp-muted'}
         />
         <StatBox label="评审者" value={String(members.length || 4)} accent="text-bp-cyan" />
-        <StatBox label="需人工复核" value={needsHuman ? '是' : '否'} accent={needsHuman ? 'text-yellow-400' : 'text-bp-muted'} />
+        <StatBox label="需人工复核" value={needsHuman ? '是' : '否'} accent={needsHuman ? 'text-bp-yellow' : 'text-bp-muted'} />
       </div>
 
       {members.length > 0 && (
@@ -52,7 +52,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
       {flags.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {flags.map((f) => (
-            <span key={f} className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+            <span key={f} className="text-[10px] px-2 py-0.5 rounded bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20">
               {f}
             </span>
           ))}
@@ -65,7 +65,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
           <ul className="space-y-1">
             {review.weaknesses!.slice(0, 5).map((w, i) => (
               <li key={i} className="text-xs text-bp-muted flex gap-1.5">
-                <AlertTriangle className="w-3 h-3 text-red-400/70 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-3 h-3 text-danger-400/70 shrink-0 mt-0.5" />
                 {w}
               </li>
             ))}

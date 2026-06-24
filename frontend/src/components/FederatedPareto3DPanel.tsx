@@ -93,7 +93,7 @@ export function FederatedPareto3DPanel({ data }: FederatedPareto3DPanelProps) {
               onClick={() => setView(k)}
               className={`px-2 py-0.5 rounded text-[10px] ${
                 view === k
-                  ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                  ? 'bg-bp-purple/20 text-bp-purple border border-bp-purple/30'
                   : 'text-bp-muted border border-bp-border'
               }`}
             >
@@ -145,19 +145,19 @@ export function FederatedPareto3DPanel({ data }: FederatedPareto3DPanelProps) {
 
       {hoveredPoint && (
         <div className="mt-2 p-2 rounded bg-bp-panel/80 text-[10px] text-bp-muted font-mono">
-          <span className="text-violet-300">{hoveredPoint.method}</span>
+          <span className="text-bp-purple">{hoveredPoint.method}</span>
           {' · '}acc={hoveredPoint.accuracy?.toFixed(4)}
           {' · '}comm={hoveredPoint.communication_cost}
           {' · '}privacy={hoveredPoint.privacy_risk?.toFixed(4)}
           {frontier.has(hoveredPoint.method || '') && (
-            <span className="text-green-400 ml-2">Pareto 前沿</span>
+            <span className="text-bp-green ml-2">Pareto 前沿</span>
           )}
         </div>
       )}
 
       {data?.best_tradeoff_method && (
         <p className="text-[10px] text-bp-muted mt-1">
-          三维推荐权衡点：<span className="text-violet-300">{data.best_tradeoff_method}</span>
+          三维推荐权衡点：<span className="text-bp-purple">{data.best_tradeoff_method}</span>
         </p>
       )}
     </div>

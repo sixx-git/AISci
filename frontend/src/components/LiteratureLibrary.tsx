@@ -912,7 +912,7 @@ function ArxivTabContent({
                       <h4 className="text-base font-semibold text-bp-text leading-snug">{paper.title}</h4>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 font-mono">
+                      <span className="text-xs px-2 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/25 font-mono">
                         {paper.external_id}
                       </span>
                       {paper.categories && paper.categories.split(',').map((cat) => (
@@ -1269,7 +1269,7 @@ function LiteratureTable({
                         <button
                           type="button"
                           onClick={onOpenDataFinder}
-                          className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300"
+                          className="inline-flex items-center gap-1 text-[11px] text-bp-cyan hover:text-bp-cyan/80"
                           title="跳转 Data Finder 详情"
                         >
                           <Database className="w-3 h-3" />

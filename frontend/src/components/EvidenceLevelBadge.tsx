@@ -10,8 +10,8 @@ export function evidenceLevelLabel(level: string | undefined): string {
 
 export function evidenceLevelBadgeCls(level: string | undefined): string {
   switch (level) {
-    case 'high': return 'bg-green-500/15 text-green-400 border-green-500/30';
-    case 'medium': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+    case 'high': return 'bg-bp-green/15 text-bp-green border-bp-green/30';
+    case 'medium': return 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30';
     default: return 'bg-bp-panel text-bp-muted border-bp-border';
   }
 }

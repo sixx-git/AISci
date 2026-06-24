@@ -13,12 +13,12 @@ interface ExternalCandidateTodoPanelProps {
 }
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  pending_download: { text: '待下载', cls: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
-  pending_auto: { text: '待自动导入', cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
-  processing: { text: '处理中', cls: 'text-blue-400 border-blue-500/30 bg-blue-500/10' },
-  merged: { text: '已纳入合并', cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
-  auto_imported: { text: '已自动导入', cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
-  failed: { text: '处理失败', cls: 'text-red-400 border-red-500/30 bg-red-500/10' },
+  pending_download: { text: '待下载', cls: 'text-bp-yellow border-bp-yellow/30 bg-bp-yellow/10' },
+  pending_auto: { text: '待自动导入', cls: 'text-bp-cyan border-bp-cyan/30 bg-bp-cyan/10' },
+  processing: { text: '处理中', cls: 'text-bp-cyan border-bp-cyan/30 bg-bp-cyan/10' },
+  merged: { text: '已纳入合并', cls: 'text-bp-green border-bp-green/30 bg-bp-green/10' },
+  auto_imported: { text: '已自动导入', cls: 'text-bp-green border-bp-green/30 bg-bp-green/10' },
+  failed: { text: '处理失败', cls: 'text-danger-400 border-danger-500/30 bg-danger-500/10' },
 };
 
 function needsManualUpload(c: ExternalCandidateItem): boolean {
@@ -60,8 +60,8 @@ export function ExternalCandidateTodoPanel({
   };
 
   return (
-    <Card className="p-4 border-amber-500/20 bg-amber-500/5">
-      <h4 className="text-sm font-semibold text-amber-200 mb-1 flex items-center gap-1.5">
+    <Card className="p-4 border-bp-yellow/20 bg-bp-yellow/5">
+      <h4 className="text-sm font-semibold text-bp-yellow mb-1 flex items-center gap-1.5">
         <Database className="w-4 h-4" />
         外部数据待办 · 下载后上传 ({manualList.length})
       </h4>
@@ -70,7 +70,7 @@ export function ExternalCandidateTodoPanel({
       </p>
 
       {error && (
-        <p className="text-xs text-red-400 mb-2 flex items-center gap-1">
+        <p className="text-xs text-danger-400 mb-2 flex items-center gap-1">
           <AlertCircle className="w-3.5 h-3.5" /> {error}
         </p>
       )}
@@ -145,12 +145,12 @@ export function ExternalCandidateTodoPanel({
                 <p className="text-[10px] text-bp-muted mt-2">
                   文件: {String(c.user_upload_filename)}
                   {c.linked_table_id && (
-                    <span className="text-green-400/80 ml-2">→ {String(c.linked_table_id)}</span>
+                    <span className="text-bp-green/80 ml-2">→ {String(c.linked_table_id)}</span>
                   )}
                 </p>
               )}
               {c.user_upload_error && statusKey === 'failed' && (
-                <p className="text-[10px] text-red-400/90 mt-1">{String(c.user_upload_error)}</p>
+                <p className="text-[10px] text-danger-400/90 mt-1">{String(c.user_upload_error)}</p>
               )}
             </div>
           );

@@ -185,7 +185,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               )}
 
               {warnings.length > 0 && (
-                <ul className="text-[10px] text-yellow-500/90 mb-2 list-disc list-inside">
+                <ul className="text-[10px] text-bp-yellow/90 mb-2 list-disc list-inside">
                   {warnings.map((w) => (
                     <li key={w}>{w}</li>
                   ))}

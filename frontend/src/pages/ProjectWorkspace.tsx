@@ -164,13 +164,13 @@ function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCo
   return (
     <div className="space-y-4">
       {researchQuestion && questionSource === 'localStorage' && (
-        <div className="px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300 flex items-center gap-2">
+        <div className="px-4 py-2 rounded-bp bg-bp-yellow/10 border border-bp-yellow/20 text-sm text-bp-yellow flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           研究问题来自本地草稿，建议保存到后端
         </div>
       )}
       {researchQuestion && questionSource === 'backend' && (
-        <div className="px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-300 flex items-center gap-2">
+        <div className="px-4 py-2 rounded-bp bg-bp-green/10 border border-bp-green/20 text-sm text-bp-green flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
           研究问题已从项目配置读取
         </div>

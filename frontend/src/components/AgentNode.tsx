@@ -17,12 +17,12 @@ const statusConfig: Record<AgentStatus, {
 }> = {
   completed: {
     label: '已完成',
-    ringClass: 'border-green-500 bg-green-500/10',
-    dotClass: 'bg-green-400',
-    cardBg: 'bg-green-500/5',
-    cardBorder: 'border-green-500/20',
-    cardBorderLeft: 'border-l-green-500',
-    textClass: 'text-green-400',
+    ringClass: 'border-bp-green bg-bp-green/10',
+    dotClass: 'bg-bp-green',
+    cardBg: 'bg-bp-green/5',
+    cardBorder: 'border-bp-green/20',
+    cardBorderLeft: 'border-l-bp-green',
+    textClass: 'text-bp-green',
   },
   running: {
     label: '运行中',
@@ -44,42 +44,42 @@ const statusConfig: Record<AgentStatus, {
   },
   failed: {
     label: '失败',
-    ringClass: 'border-red-500 bg-red-500/10',
-    dotClass: 'bg-red-400',
-    cardBg: 'bg-red-500/5',
-    cardBorder: 'border-red-500/30',
-    cardBorderLeft: 'border-l-red-500',
-    textClass: 'text-red-400',
+    ringClass: 'border-danger-500 bg-danger-500/10',
+    dotClass: 'bg-danger-400',
+    cardBg: 'bg-danger-500/5',
+    cardBorder: 'border-danger-500/30',
+    cardBorderLeft: 'border-l-danger-500',
+    textClass: 'text-danger-400',
   },
   human_review: {
     label: '需人工确认',
-    ringClass: 'border-amber-500 bg-amber-500/10',
-    dotClass: 'bg-amber-400',
-    cardBg: 'bg-amber-500/5',
-    cardBorder: 'border-amber-500/20',
-    cardBorderLeft: 'border-l-amber-500',
-    textClass: 'text-amber-400',
+    ringClass: 'border-bp-yellow bg-bp-yellow/10',
+    dotClass: 'bg-bp-yellow',
+    cardBg: 'bg-bp-yellow/5',
+    cardBorder: 'border-bp-yellow/20',
+    cardBorderLeft: 'border-l-bp-yellow',
+    textClass: 'text-bp-yellow',
   },
   human_review_required: {
     label: '需人工确认',
-    ringClass: 'border-amber-500 bg-amber-500/10',
-    dotClass: 'bg-amber-400',
-    cardBg: 'bg-amber-500/5',
-    cardBorder: 'border-amber-500/20',
-    cardBorderLeft: 'border-l-amber-500',
-    textClass: 'text-amber-400',
+    ringClass: 'border-bp-yellow bg-bp-yellow/10',
+    dotClass: 'bg-bp-yellow',
+    cardBg: 'bg-bp-yellow/5',
+    cardBorder: 'border-bp-yellow/20',
+    cardBorderLeft: 'border-l-bp-yellow',
+    textClass: 'text-bp-yellow',
   },
 };
 
 function StatusIcon({ status, className }: { status: AgentStatus; className?: string }) {
   const cls = cn('w-4 h-4 shrink-0', className);
   switch (status) {
-    case 'completed':             return <CheckCircle className={cn(cls, 'text-green-400')} />;
+    case 'completed':             return <CheckCircle className={cn(cls, 'text-bp-green')} />;
     case 'running':               return <Loader2 className={cn(cls, 'text-bp-cyan animate-spin')} />;
     case 'pending':               return <Clock className={cn(cls, 'text-bp-muted')} />;
-    case 'failed':                return <XCircle className={cn(cls, 'text-red-400')} />;
+    case 'failed':                return <XCircle className={cn(cls, 'text-danger-400')} />;
     case 'human_review':
-    case 'human_review_required': return <AlertTriangle className={cn(cls, 'text-amber-400')} />;
+    case 'human_review_required': return <AlertTriangle className={cn(cls, 'text-bp-yellow')} />;
   }
 }
 
@@ -114,24 +114,24 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
           'w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300',
           sc.ringClass,
           isRunning && 'shadow-lg shadow-bp-cyan/30',
-          isFailed && 'shadow-lg shadow-red-500/30',
+          isFailed && 'shadow-lg shadow-danger-500/30',
           isSelected && 'ring-2 ring-bp-cyan/50 ring-offset-1 ring-offset-bp-base',
         )}>
           <Icon className={cn(
             'w-3.5 h-3.5',
-            isCompleted ? 'text-green-400'
+            isCompleted ? 'text-bp-green'
             : isRunning ? 'text-bp-cyan'
-            : isFailed ? 'text-red-400'
-            : node.status === 'human_review' || node.status === 'human_review_required' ? 'text-amber-400'
+            : isFailed ? 'text-danger-400'
+            : node.status === 'human_review' || node.status === 'human_review_required' ? 'text-bp-yellow'
             : 'text-bp-muted',
           )} />
         </div>
         {!isLast && (
           <div className={cn(
             'w-0.5 flex-1 min-h-[8px] rounded-full transition-all duration-300',
-            isCompleted ? 'bg-green-500/40'
+            isCompleted ? 'bg-bp-green/40'
             : isRunning ? 'bg-bp-cyan/40 animate-pulse'
-            : isFailed ? 'bg-red-500/40'
+            : isFailed ? 'bg-danger-500/40'
             : 'bg-bp-border',
           )} />
         )}
@@ -153,10 +153,10 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             isSelected
               ? 'border border-bp-cyan bg-bp-cyan-tint shadow-lg shadow-bp-cyan/5 border-l-2 border-l-bp-cyan'
               : 'border border-transparent hover:shadow-md',
-            isFailed && !isSelected && 'hover:bg-red-500/10 hover:border-red-500/40',
+            isFailed && !isSelected && 'hover:bg-danger-500/10 hover:border-danger-500/40',
             isPending && !isSelected && 'hover:bg-bp-panel/40 hover:border-bp-border/50',
             isRunning && !isSelected && 'hover:bg-bp-cyan-tint hover:border-bp-cyan/30',
-            isCompleted && !isSelected && 'hover:bg-green-500/10 hover:border-green-500/30',
+            isCompleted && !isSelected && 'hover:bg-bp-green/10 hover:border-bp-green/30',
           )}
         >
           <div className="flex items-start justify-between gap-2">
@@ -169,8 +169,8 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 <span className={cn(
                   'text-sm font-medium truncate',
                   isSelected ? 'text-bp-cyan'
-                  : isFailed ? 'text-red-300'
-                  : isCompleted ? 'text-green-300'
+                  : isFailed ? 'text-danger-300'
+                  : isCompleted ? 'text-bp-green'
                   : isRunning ? 'text-bp-cyan'
                   : 'text-bp-muted',
                 )}>
@@ -179,11 +179,11 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 {/* 状态角标 */}
                 <span className={cn(
                   'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
-                  isCompleted && 'bg-green-500/15 text-green-400 border border-green-500/30',
+                  isCompleted && 'bg-bp-green/15 text-bp-green border border-bp-green/30',
                   isRunning && 'bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/30',
                   isPending && 'bg-bp-surface/50 text-bp-muted border border-bp-border',
-                  isFailed && 'bg-red-500/15 text-red-400 border border-red-500/30',
-                  (node.status === 'human_review' || node.status === 'human_review_required') && 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+                  isFailed && 'bg-danger-500/15 text-danger-400 border border-danger-500/30',
+                  (node.status === 'human_review' || node.status === 'human_review_required') && 'bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30',
                 )}>
                   <StatusIcon status={node.status} className="w-3 h-3" />
                   {sc.label}
@@ -193,7 +193,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               {/* 描述 */}
               <p className={cn(
                 'text-xs mt-1 ml-6 line-clamp-1',
-                isFailed ? 'text-red-400/70' : isPending ? 'text-bp-muted' : 'text-bp-muted',
+                isFailed ? 'text-danger-400/70' : isPending ? 'text-bp-muted' : 'text-bp-muted',
               )}>
                 {node.shortDesc}
               </p>
@@ -210,28 +210,28 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               {/* 失败错误信息 */}
               {hasError && (
                 <div className="relative group ml-6 mt-2">
-                  <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
-                    <XCircle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-red-400/80 leading-relaxed line-clamp-2">
+                  <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-danger-500/10 border border-danger-500/20">
+                    <XCircle className="w-3 h-3 text-danger-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-danger-400/80 leading-relaxed line-clamp-2">
                       {node.error_message}
                     </p>
                   </div>
                   {/* Tooltip */}
                   <div className={cn(
                     'absolute left-0 bottom-full mb-2 w-64 p-3 rounded-lg',
-                    'bg-bp-base border border-red-500/30 shadow-xl shadow-red-500/10',
+                    'bg-bp-base border border-danger-500/30 shadow-xl shadow-danger-500/10',
                     'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
                     'transition-all duration-200 z-50',
                   )}>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                      <span className="text-[11px] font-semibold text-red-300">错误详情</span>
+                      <AlertTriangle className="w-3.5 h-3.5 text-danger-400" />
+                      <span className="text-[11px] font-semibold text-danger-300">错误详情</span>
                     </div>
-                    <p className="text-[11px] text-red-400/90 leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-[11px] text-danger-400/90 leading-relaxed whitespace-pre-wrap break-words">
                       {node.error_message}
                     </p>
                     {/* Tooltip arrow */}
-                    <div className="absolute left-4 top-full -mt-px w-3 h-3 bg-bp-base border-r border-b border-red-500/30 rotate-45" />
+                    <div className="absolute left-4 top-full -mt-px w-3 h-3 bg-bp-base border-r border-b border-danger-500/30 rotate-45" />
                   </div>
                 </div>
               )}
@@ -260,8 +260,8 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             <ChevronRight className={cn(
               'w-4 h-4 shrink-0 mt-1 transition-colors',
               isSelected ? 'text-bp-cyan'
-              : isFailed ? 'text-red-500/50'
-              : isCompleted ? 'text-green-500/50'
+              : isFailed ? 'text-danger-500/50'
+              : isCompleted ? 'text-bp-green/50'
               : 'text-bp-border',
             )} />
           </div>

@@ -132,7 +132,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
 
     return (
       <div className="mb-2">
-        <p className="text-[10px] text-purple-400/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 分析输出</p>
+        <p className="text-[10px] text-bp-purple/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 分析输出</p>
         <div className="space-y-1">
           {items.map((item, i) => (
             <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-bp-base/50 border border-bp-border/50">
@@ -180,7 +180,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
 
     return (
       <div className="mb-2">
-        <p className="text-[10px] text-emerald-400/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 图表输出</p>
+        <p className="text-[10px] text-bp-green/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 图表输出</p>
         <div className="space-y-1">
           {items.map((item, i) => (
             <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-bp-base/50 border border-bp-border/50">
@@ -196,8 +196,8 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
   return (
     <Card>
       <div className="flex items-center gap-2 mb-3">
-        <Puzzle className="w-4 h-4 text-purple-400" />
-        <h4 className="text-sm font-semibold text-purple-300">Skill 适配层输出</h4>
+        <Puzzle className="w-4 h-4 text-bp-purple" />
+        <h4 className="text-sm font-semibold text-bp-purple">Skill 适配层输出</h4>
       </div>
       <div className="space-y-2">
         {entries.map(([skillName, skillData]) => {
@@ -223,8 +223,8 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                         <span className="text-[10px] text-bp-muted">{k}</span>
                         <span className={cn(
                           'text-[10px] font-medium',
-                          vd?.success === true ? 'text-green-400' :
-                          vd?.success === false ? 'text-red-400' : 'text-bp-muted',
+                          vd?.success === true ? 'text-bp-green' :
+                          vd?.success === false ? 'text-danger-400' : 'text-bp-muted',
                         )}>
                           {vd?.success === true ? '✓' : vd?.success === false ? '✗' : '—'}
                         </span>
@@ -242,7 +242,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'text-[10px] px-1.5 py-0.5 rounded font-medium',
-                    sSuccess === true ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400',
+                    sSuccess === true ? 'bg-bp-green/10 text-bp-green' : 'bg-danger-500/10 text-danger-400',
                   )}>
                     {sSuccess === true ? '成功' : sSuccess === false ? '失败' : '未知'}
                   </span>
@@ -255,8 +255,8 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                   <div className="space-y-0.5">
                     {sWarnings.map((w, i) => (
                       <div key={i} className="flex items-start gap-1.5 text-[10px]">
-                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-                        <span className="text-amber-400/80">{w}</span>
+                        <AlertTriangle className="w-3 h-3 text-bp-yellow shrink-0 mt-0.5" />
+                        <span className="text-bp-yellow/80">{w}</span>
                       </div>
                     ))}
                   </div>
@@ -265,8 +265,8 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                   <div className="space-y-0.5">
                     {sErrors.map((e, i) => (
                       <div key={i} className="flex items-start gap-1.5 text-[10px]">
-                        <AlertTriangle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
-                        <span className="text-red-400/80">{e}</span>
+                        <AlertTriangle className="w-3 h-3 text-danger-400 shrink-0 mt-0.5" />
+                        <span className="text-danger-400/80">{e}</span>
                       </div>
                     ))}
                   </div>

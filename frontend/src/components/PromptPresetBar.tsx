@@ -128,13 +128,13 @@ export function PromptPresetBar({
   return (
     <div className="rounded-lg border border-bp-border bg-bp-base/40 p-3 space-y-3">
       <div className="flex items-center gap-2 text-xs font-medium text-bp-text">
-        <LayoutTemplate className="w-4 h-4 text-violet-400" />
+        <LayoutTemplate className="w-4 h-4 text-bp-purple" />
         范式模板库
         <span className="text-bp-muted font-normal">（AISci v1 / v2 / 默认{selectedPack?.requires_federated ? '' : '；联邦包仅联邦项目可见'}）</span>
       </div>
 
       {presetLocked ? (
-        <p className="text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded px-3 py-2">
+        <p className="text-xs text-bp-yellow/90 bg-bp-yellow/5 border border-bp-yellow/20 rounded px-3 py-2">
           {hint}
         </p>
       ) : (
@@ -222,7 +222,7 @@ export function PromptPresetBar({
         </>
       )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-danger-400">{error}</p>}
     </div>
   );
 }

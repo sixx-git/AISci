@@ -9,11 +9,11 @@ export function HumanInLoopCard({ className }: HumanInLoopCardProps) {
   return (
     <Card className={className}>
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
+        <div className="w-8 h-8 rounded-lg bg-bp-yellow/15 flex items-center justify-center">
+          <AlertTriangle className="w-4 h-4 text-bp-yellow" />
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-amber-400">人在回路</h4>
+          <h4 className="text-sm font-semibold text-bp-yellow">人在回路</h4>
           <p className="text-xs text-bp-muted">人类科学家可在关键节点介入决策</p>
         </div>
       </div>
@@ -25,9 +25,9 @@ export function HumanInLoopCard({ className }: HumanInLoopCardProps) {
         ].map((item) => (
           <button
             key={item.label}
-            className="w-full flex items-start gap-2 p-2.5 rounded-lg border border-amber-500/15 bg-amber-500/5 hover:border-amber-500/30 hover:bg-amber-500/10 transition-all text-left"
+            className="w-full flex items-start gap-2 p-2.5 rounded-lg border border-bp-yellow/15 bg-bp-yellow/5 hover:border-bp-yellow/30 hover:bg-bp-yellow/10 transition-all text-left"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+            <div className="w-1.5 h-1.5 rounded-full bg-bp-yellow mt-1.5 shrink-0" />
             <div>
               <div className="text-sm font-medium text-bp-text">{item.label}</div>
               <div className="text-xs text-bp-muted mt-0.5">{item.desc}</div>

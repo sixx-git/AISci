@@ -58,12 +58,12 @@ export function QualityCheckCard({
             <p className="text-xs text-bp-muted mt-0.5">赛题规范 · 完整性 · 真实性</p>
           </div>
         </div>
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-bp-yellow/10 border border-bp-yellow/20 mb-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-amber-300">质量检查未完成</p>
-              <p className="text-[11px] text-amber-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-bp-yellow">质量检查未完成</p>
+              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
                 {String(qc.error || '未知错误')}
               </p>
             </div>
@@ -84,8 +84,8 @@ export function QualityCheckCard({
   const hasRealPlots = !!qcData.has_real_data_plots;
   const hasActualOrSimulated = !!qcData.has_actual_or_simulated_results;
 
-  const scoreColor = score >= 80 ? 'text-green-400' : score >= 60 ? 'text-amber-400' : 'text-red-400';
-  const scoreBg = score >= 80 ? 'bg-green-500/10 border-green-500/20' : score >= 60 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
+  const scoreColor = score >= 80 ? 'text-bp-green' : score >= 60 ? 'text-bp-yellow' : 'text-danger-400';
+  const scoreBg = score >= 80 ? 'bg-bp-green/10 border-bp-green/20' : score >= 60 ? 'bg-bp-yellow/10 border-bp-yellow/20' : 'bg-danger-500/10 border-danger-500/20';
   const scoreLabel = score >= 80 ? '良好' : score >= 60 ? '待改进' : '不合格';
 
   return (
@@ -104,55 +104,55 @@ export function QualityCheckCard({
             <span className={cn('text-xl font-bold', scoreColor)}>{score}</span>
             <span className="text-xs text-bp-muted">/ 100</span>
           </div>
-          <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', passed ? 'bg-green-500/20 text-green-400' : score >= 60 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400')}>
+          <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', passed ? 'bg-bp-green/20 text-bp-green' : score >= 60 ? 'bg-bp-yellow/20 text-bp-yellow' : 'bg-danger-500/20 text-danger-400')}>
             {passed ? '✓ 合格' : scoreLabel}
           </span>
         </div>
         {!passed && score >= 60 && (
-          <p className="text-[10px] text-amber-300/70">存在关键问题需整改后重新检查</p>
+          <p className="text-[10px] text-bp-yellow/70">存在关键问题需整改后重新检查</p>
         )}
         {!passed && score < 60 && (
-          <p className="text-[10px] text-red-300/70">报告质量未达标，建议补充文献、数据或实验结果。</p>
+          <p className="text-[10px] text-danger-300/70">报告质量未达标，建议补充文献、数据或实验结果。</p>
         )}
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
-            <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <BookOpen className="w-3.5 h-3.5 text-bp-cyan" />
             <span className="text-[10px] text-bp-muted">已验证引用</span>
           </div>
-          <p className={cn('text-lg font-mono font-bold', refsVerified > 0 ? 'text-cyan-400' : 'text-red-400')}>
+          <p className={cn('text-lg font-mono font-bold', refsVerified > 0 ? 'text-bp-cyan' : 'text-danger-400')}>
             {refsVerified}
           </p>
         </div>
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
-            <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+            <BarChart3 className="w-3.5 h-3.5 text-bp-green" />
             <span className="text-[10px] text-bp-muted">真实图表</span>
           </div>
-          <p className={cn('text-sm font-mono font-bold', hasRealPlots ? 'text-emerald-400' : 'text-red-400')}>
+          <p className={cn('text-sm font-mono font-bold', hasRealPlots ? 'text-bp-green' : 'text-danger-400')}>
             {hasRealPlots ? '是' : '否'}
           </p>
         </div>
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
-            <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+            <FlaskConical className="w-3.5 h-3.5 text-bp-purple" />
             <span className="text-[10px] text-bp-muted">实验结果</span>
           </div>
-          <p className={cn('text-sm font-mono font-bold', hasActualOrSimulated ? 'text-purple-400' : 'text-red-400')}>
+          <p className={cn('text-sm font-mono font-bold', hasActualOrSimulated ? 'text-bp-purple' : 'text-danger-400')}>
             {hasActualOrSimulated ? '是' : '否'}
           </p>
         </div>
       </div>
 
       {refsVerified === 0 && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20 mb-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-red-300">参考文献未验证</p>
-              <p className="text-[11px] text-red-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-danger-300">参考文献未验证</p>
+              <p className="text-[11px] text-danger-300/70 mt-0.5">
                 参考文献未验证，不符合赛题要求。
               </p>
             </div>
@@ -161,12 +161,12 @@ export function QualityCheckCard({
       )}
 
       {!hasRealPlots && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-bp-yellow/10 border border-bp-yellow/20 mb-3">
           <div className="flex items-start gap-2">
-            <BarChart3 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <BarChart3 className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-amber-300">缺少真实数据图表</p>
-              <p className="text-[11px] text-amber-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-bp-yellow">缺少真实数据图表</p>
+              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
                 当前报告缺少真实数据图表。
               </p>
             </div>
@@ -175,12 +175,12 @@ export function QualityCheckCard({
       )}
 
       {score < 60 && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20 mb-3">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-red-300">报告质量未达标</p>
-              <p className="text-[11px] text-red-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-danger-300">报告质量未达标</p>
+              <p className="text-[11px] text-danger-300/70 mt-0.5">
                 报告质量未达标，建议补充文献、数据或实验结果。
               </p>
             </div>
@@ -189,17 +189,17 @@ export function QualityCheckCard({
       )}
 
       {criticalIssues.length > 0 && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20 mb-3">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-red-300 mb-1">关键问题 ({criticalIssues.length})</p>
-              <ul className="list-disc list-inside text-[11px] text-red-300/70 space-y-0.5">
+              <p className="text-xs font-semibold text-danger-300 mb-1">关键问题 ({criticalIssues.length})</p>
+              <ul className="list-disc list-inside text-[11px] text-danger-300/70 space-y-0.5">
                 {criticalIssues.slice(0, 4).map((issue, i) => (
                   <li key={i}>{issue}</li>
                 ))}
                 {criticalIssues.length > 4 && (
-                  <li className="text-red-400/50">...及其他 {criticalIssues.length - 4} 个问题</li>
+                  <li className="text-danger-400/50">...及其他 {criticalIssues.length - 4} 个问题</li>
                 )}
               </ul>
             </div>
@@ -208,12 +208,12 @@ export function QualityCheckCard({
       )}
 
       {missingFields.length > 0 && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
+        <div className="p-3 rounded-lg bg-bp-yellow/10 border border-bp-yellow/20 mb-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-amber-300 mb-1">缺失字段 ({missingFields.length})</p>
-              <p className="text-[11px] text-amber-300/70">
+              <p className="text-xs font-semibold text-bp-yellow mb-1">缺失字段 ({missingFields.length})</p>
+              <p className="text-[11px] text-bp-yellow/70">
                 {missingFields.join('、')}
               </p>
             </div>
@@ -238,12 +238,12 @@ export function QualityCheckCard({
       )}
 
       {recommendations.length > 0 && (
-        <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+        <div className="p-3 rounded-lg bg-bp-cyan/10 border border-bp-cyan/20">
           <div className="flex items-start gap-2">
-            <CheckCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+            <CheckCircle className="w-4 h-4 text-bp-cyan shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-blue-300 mb-1">改进建议</p>
-              <ul className="list-disc list-inside text-[11px] text-blue-300/70 space-y-0.5">
+              <p className="text-xs font-semibold text-bp-cyan mb-1">改进建议</p>
+              <ul className="list-disc list-inside text-[11px] text-bp-cyan/70 space-y-0.5">
                 {recommendations.slice(0, 4).map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}

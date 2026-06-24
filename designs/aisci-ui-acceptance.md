@@ -85,7 +85,7 @@
 | 字体 | JetBrains Mono | `font-bp` | ✅ |
 | 圆角 | 2px | `rounded-bp` | 🟡 部分 `rounded-lg` 残留（低优先级） |
 | 工作台外壳 | Navbar→MetaBar→Tabs→Body | 全局 Navbar + `ProjectWorkspaceHeader` | 🟡 结构略异 |
-| 品牌 | `[AISci]` | Navbar / Footer / 主要文案 | ✅ |
+| 品牌 | `[AISci]` | Navbar / Footer / README / package.json | ✅ |
 
 ---
 
@@ -139,11 +139,11 @@
 
 **Dat8t** — ✅ 客户端汇总各项目文档数 + 跳转；🟡 无后端单 API 合并浏览全部文献条目
 
-### 8.4 B-3 扫尾（低优先级）
+### 8.4 B-3 扫尾
 
-以下组件仍含部分 Tailwind 原色，不影响主流程 Tab：
+主 Tab 与闭环/假设/工作流相关 **22+ 组件** 已统一 `bp-*` / `danger-*`；可复用 `frontend/scripts/bp-color-sweep.mjs`。
 
-- `HypothesisCard.tsx`、`AgentNode.tsx`、`QualityCheckCard.tsx`、`MarkdownPreview.tsx` blockquote 等
+仍有意保留：**知识图谱画布节点** Neo4j 科研色板（非 Tailwind utility）。
 
 ---
 
@@ -163,7 +163,8 @@
 | 实验设计侧栏 | `ExperimentDesignPage.tsx` |
 | 跨项目文献 | `Documents.tsx` / `CrossProjectLiteratureSummary.tsx` |
 | 闭环 Teaching/Quality 拆分 | `DiscoveryLoopPanel.tsx` / `ResearchClosedLoopOverview.tsx` |
-| AISci 文案 | `Reports` / `CreateProject` / `PromptPresetBar` 等 |
+| AISci 品牌 | `Navbar` / `README.md` / `package.json` / 各页面文案 |
+| B-3 组件色扫尾 | `frontend/scripts/bp-color-sweep.mjs` + 22 个组件 |
 
 ### 可选后续（P4）
 
@@ -172,7 +173,6 @@
 | `/design-system` 预览路由 | 展示 `Ktnbv` 组件库 |
 | 工作台 Navbar 结构 | 隐藏全局 Navbar 或双模式外壳 |
 | `rounded-lg` 全站 → `rounded-bp` | 视觉统一 |
-| `HypothesisCard` 等深扫尾 | B-3 剩余文件 |
 | 跨项目文献后端聚合 API | 单页合并列表 |
 
 ---

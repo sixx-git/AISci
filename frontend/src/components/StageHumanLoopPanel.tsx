@@ -187,11 +187,11 @@ export function StageHumanLoopPanel({
         </div>
 
         {humanReviewed && (
-          <p className="text-xs text-amber-300 mb-2">
+          <p className="text-xs text-bp-yellow mb-2">
             已人工审阅 {editedAt ? `· ${editedAt}` : ''}
           </p>
         )}
-        {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+        {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
         <CollapsibleBlock title="输入 input_data" data={inputData} defaultOpen={false} />
         <CollapsibleBlock title="原始 output_data" data={outputData} defaultOpen={false} />
@@ -231,12 +231,12 @@ export function StageHumanLoopPanel({
             {busy === 'chat' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
             发送并应用修改
           </Button>
-          {chatReply && <p className="text-xs text-emerald-300 mt-2">{chatReply}</p>}
+          {chatReply && <p className="text-xs text-bp-green mt-2">{chatReply}</p>}
         </div>
 
         {mentorReview && (
           <div className="mt-4 pt-4 border-t border-bp-border space-y-2">
-            <p className="text-xs font-medium text-emerald-400">导师评审结果</p>
+            <p className="text-xs font-medium text-bp-green">导师评审结果</p>
             <ReviewList title="优点" items={mentorReview.strengths} />
             <ReviewList title="不足" items={mentorReview.weaknesses} />
             <ReviewList title="修改建议" items={mentorReview.revision_suggestions} />

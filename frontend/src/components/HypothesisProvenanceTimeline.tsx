@@ -54,7 +54,7 @@ export function HypothesisProvenanceTimeline({
   }
 
   if (error) {
-    return <p className="text-xs text-amber-400/80 py-2">{error}</p>;
+    return <p className="text-xs text-bp-yellow/80 py-2">{error}</p>;
   }
 
   if (timeline.length === 0) {
@@ -131,8 +131,8 @@ function TimelineItem({
 
   if (step === 'multimodal') {
     return (
-      <div className="p-2 rounded border border-purple-500/15 bg-purple-500/5">
-        <p className="text-[10px] font-mono text-purple-300">{String(item.evidence_id || item.asset_id || '')}</p>
+      <div className="p-2 rounded border border-bp-purple/15 bg-bp-purple/5">
+        <p className="text-[10px] font-mono text-bp-purple">{String(item.evidence_id || item.asset_id || '')}</p>
         {item.content ? <p className="text-xs text-bp-text mt-0.5 line-clamp-2">{String(item.content)}</p> : null}
       </div>
     );
@@ -140,8 +140,8 @@ function TimelineItem({
 
   if (step === 'dataset') {
     return (
-      <div className="p-2 rounded border border-green-500/15 bg-green-500/5">
-        <p className="text-[10px] font-mono text-green-300">{String(item.ref || item.data_citation_id || '')}</p>
+      <div className="p-2 rounded border border-bp-green/15 bg-bp-green/5">
+        <p className="text-[10px] font-mono text-bp-green">{String(item.ref || item.data_citation_id || '')}</p>
         {item.table_row_id ? (
           <p className="text-[10px] text-bp-muted mt-0.5">行 ID: {String(item.table_row_id)}</p>
         ) : null}
@@ -154,10 +154,10 @@ function TimelineItem({
 
   if (step === 'verifiable_spec') {
     return (
-      <div className="p-2 rounded border border-emerald-500/15 bg-emerald-500/5">
+      <div className="p-2 rounded border border-bp-green/15 bg-bp-green/5">
         {item.claim ? <p className="text-xs text-bp-text">{String(item.claim)}</p> : null}
         {item.primary_metric ? (
-          <p className="text-[10px] font-mono text-emerald-300 mt-1">指标: {String(item.primary_metric)}</p>
+          <p className="text-[10px] font-mono text-bp-green mt-1">指标: {String(item.primary_metric)}</p>
         ) : null}
       </div>
     );

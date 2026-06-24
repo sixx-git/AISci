@@ -304,13 +304,13 @@ KG Top Bar（构建/增量重建/缩放/标签/导出）、Graph Canvas、Relati
 | 验收清单 + 23 帧 PNG + §8 差异 | ✅ |
 | P1–P3 布局/色/TOC/跨项目文献 | ✅ |
 | 闭环 Teaching/Quality 独立 Collapsible | ✅ |
-| B-3 主 Tab 色扫尾（文献/DataFinder/多模态） | ✅ |
+| B-3 组件色扫尾 + 品牌统一 | `bp-color-sweep.mjs` + README / package.json |
 
 ### 后续可选（P4）
 
 - `/design-system` 预览路由（`Ktnbv`）
 - 工作台隐藏全局 Navbar / 双模式外壳
-- `HypothesisCard` / `AgentNode` 等深扫尾 + `rounded-lg` → `rounded-bp`
+- `rounded-lg` → `rounded-bp` 全站统一
 - 跨项目文献后端聚合 API
 
 ---

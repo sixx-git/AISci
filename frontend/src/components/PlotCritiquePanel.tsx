@@ -13,21 +13,21 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
   return (
     <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
-        <Image className="w-4 h-4 text-cyan-400" />
+        <Image className="w-4 h-4 text-bp-cyan" />
         VLM 图表质量评审
       </h3>
 
       <div className="flex flex-wrap gap-3 mb-3 text-xs">
         {avg != null && (
-          <span className="font-mono text-amber-300">平均分 {Number(avg).toFixed(1)}</span>
+          <span className="font-mono text-bp-yellow">平均分 {Number(avg).toFixed(1)}</span>
         )}
         {plotQuality.redraw_count != null && plotQuality.redraw_count > 0 && (
-          <span className="flex items-center gap-1 text-green-400">
+          <span className="flex items-center gap-1 text-bp-green">
             <RefreshCw className="w-3 h-3" /> 已自动重绘 {plotQuality.redraw_count} 次
           </span>
         )}
         {plotQuality.needs_human_review && (
-          <span className="flex items-center gap-1 text-yellow-400">
+          <span className="flex items-center gap-1 text-bp-yellow">
             <AlertTriangle className="w-3 h-3" /> 需人工复核
           </span>
         )}
@@ -51,7 +51,7 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
                 reviewer: {String(c.reviewer ?? '—')} · misleading: {String(c.misleading_risk ?? '—')}
               </div>
               {(c.issues as string[] | undefined)?.slice(0, 2).map((issue, i) => (
-                <p key={i} className="text-[10px] text-red-400/80 mt-0.5">• {issue}</p>
+                <p key={i} className="text-[10px] text-danger-400/80 mt-0.5">• {issue}</p>
               ))}
             </div>
           ))}

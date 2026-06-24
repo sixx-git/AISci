@@ -130,14 +130,14 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
           {decisions.slice(-5).reverse().map((d, idx) => (
             <div
               key={`${d.trigger}-${d.at ?? idx}`}
-              className="flex items-start gap-2 p-2 rounded border border-violet-500/20 bg-violet-500/5"
+              className="flex items-start gap-2 p-2 rounded border border-bp-purple/20 bg-bp-purple/5"
             >
-              <GitCommitHorizontal className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
+              <GitCommitHorizontal className="w-3.5 h-3.5 text-bp-purple shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-bp-text">{d.trigger}</span>
                   {d.action && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-violet-300">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-purple">
                       {DECISION_LABELS[d.action] || d.action}
                     </span>
                   )}
@@ -179,15 +179,15 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                       <span
                         className={`text-[10px] px-1.5 py-0.5 rounded ${
                           evt.decision === 'Accept'
-                            ? 'bg-green-500/10 text-green-400'
-                            : 'bg-red-500/10 text-red-400'
+                            ? 'bg-bp-green/10 text-bp-green'
+                            : 'bg-danger-500/10 text-danger-400'
                         }`}
                       >
                         {evt.decision}
                       </span>
                     )}
                     {evt.overall != null && (
-                      <span className="text-[10px] font-mono text-amber-400">
+                      <span className="text-[10px] font-mono text-bp-yellow">
                         综合 {formatScore(Number(evt.overall))}
                       </span>
                     )}

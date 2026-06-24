@@ -26,7 +26,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
   return (
     <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
-        <GitCompare className="w-4 h-4 text-violet-400" />
+        <GitCompare className="w-4 h-4 text-bp-purple" />
         {title}
       </h3>
 
@@ -52,7 +52,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
                 <span className="text-bp-text">{after.label || `R${after.round}`}</span>
                 {scoreDelta != null && (
                   <span
-                    className={`font-mono ${scoreDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                    className={`font-mono ${scoreDelta >= 0 ? 'text-bp-green' : 'text-danger-400'}`}
                   >
                     评审分 {scoreDelta >= 0 ? '+' : ''}{scoreDelta.toFixed(1)}
                   </span>
@@ -81,9 +81,9 @@ function CompareRow({ label, changed, text }: { label: string; changed: boolean;
     <div>
       <p className="text-[10px] text-bp-muted mb-0.5">
         {label}
-        {changed && <span className="ml-1 text-amber-400">已变更</span>}
+        {changed && <span className="ml-1 text-bp-yellow">已变更</span>}
       </p>
-      <p className={`text-bp-text line-clamp-3 ${changed ? 'border-l-2 border-amber-500/50 pl-2' : ''}`}>
+      <p className={`text-bp-text line-clamp-3 ${changed ? 'border-l-2 border-bp-yellow/50 pl-2' : ''}`}>
         {text}
       </p>
     </div>
@@ -104,7 +104,7 @@ function EvidenceCompareRow({ before, after }: { before: IterationSnapshot; afte
     <div>
       <p className="text-[10px] text-bp-muted mb-0.5">
         证据 / 可验证 spec
-        {changed && <span className="ml-1 text-emerald-400">已变更</span>}
+        {changed && <span className="ml-1 text-bp-green">已变更</span>}
       </p>
       <p className="text-bp-muted text-[11px]">
         fact {countBefore}→{countAfter}
@@ -113,7 +113,7 @@ function EvidenceCompareRow({ before, after }: { before: IterationSnapshot; afte
           : ''}
       </p>
       {after.verifiable_primary_metric && (
-        <p className="text-emerald-400/80 text-[10px] font-mono mt-0.5">
+        <p className="text-bp-green/80 text-[10px] font-mono mt-0.5">
           主指标 {after.verifiable_primary_metric}
         </p>
       )}

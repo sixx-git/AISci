@@ -463,7 +463,7 @@ export function DataFinderPanel({
       )}
 
       {result?.coverage_report && (
-        <Card className="p-4 border-cyan-500/20 bg-cyan-500/5">
+        <Card className="p-4 border-bp-cyan/20 bg-bp-cyan/5">
           <h4 className="text-sm font-semibold text-cyan-300 mb-2 flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4" />
             数据发现完备性 · {result.coverage_report.completeness_score ?? '—'}/100

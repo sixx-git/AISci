@@ -24,25 +24,25 @@ export function EvidenceChainQualityCard({
       label: '文献数量',
       value: literatureCount ?? '—',
       icon: Layers,
-      color: 'text-blue-400',
+      color: 'text-bp-cyan',
     },
     {
       label: 'Evidence 事实',
       value: cc?.evidence_fact_count ?? '—',
       icon: Link2,
-      color: 'text-purple-400',
+      color: 'text-bp-purple',
     },
     {
       label: '有证据假设',
       value: cc?.hypothesis_with_evidence_count ?? '—',
       icon: CheckCircle,
-      color: 'text-green-400',
+      color: 'text-bp-green',
     },
     {
       label: '已验证引用',
       value: cc?.references_verified ?? '—',
       icon: CheckCircle,
-      color: 'text-cyan-400',
+      color: 'text-bp-cyan',
     },
   ];
 
@@ -76,12 +76,12 @@ export function EvidenceChainQualityCard({
 
       {/* 虚构引用风险 */}
       {hasNoRefs && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+        <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-red-300">虚构引用风险</p>
-              <p className="text-[11px] text-red-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-danger-300">虚构引用风险</p>
+              <p className="text-[11px] text-danger-300/70 mt-0.5">
                 当前报告没有任何经过文献库验证的真实引用。所有引用均由 LLM 编造，不符合比赛规范。
               </p>
             </div>
@@ -90,12 +90,12 @@ export function EvidenceChainQualityCard({
       )}
 
       {!hasNoRefs && hasSuspicious && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+        <div className="p-3 rounded-lg bg-bp-yellow/10 border border-bp-yellow/20">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-amber-300">部分引用存疑</p>
-              <p className="text-[11px] text-amber-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-bp-yellow">部分引用存疑</p>
+              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
                 发现 {cc?.references_suspicious} 条引用未在文献库中找到匹配，建议核实后补充。
               </p>
             </div>
@@ -104,12 +104,12 @@ export function EvidenceChainQualityCard({
       )}
 
       {!hasNoRefs && !hasSuspicious && (
-        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+        <div className="p-3 rounded-lg bg-bp-green/10 border border-bp-green/20">
           <div className="flex items-start gap-2">
-            <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+            <CheckCircle className="w-4 h-4 text-bp-green shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-green-300">引用验证通过</p>
-              <p className="text-[11px] text-green-300/70 mt-0.5">
+              <p className="text-xs font-semibold text-bp-green">引用验证通过</p>
+              <p className="text-[11px] text-bp-green/70 mt-0.5">
                 全部 {cc?.references_verified} 条引用均可追溯至文献库中的真实文献。
               </p>
             </div>

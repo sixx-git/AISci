@@ -107,7 +107,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
 
         {/* Skill 评估指标 */}
         {cc && (cc.novelty_score != null || cc.experiment_sanity_check) && (
-          <div className="mb-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/15">
+          <div className="mb-3 p-3 rounded-lg bg-bp-purple/5 border border-bp-purple/15">
             <p className="text-[10px] text-bp-purple font-semibold mb-2 uppercase tracking-wide">
               Skill 评估
             </p>

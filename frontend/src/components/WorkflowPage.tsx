@@ -1149,13 +1149,13 @@ export function WorkflowPage({
 
       {/* 错误提示 */}
       {errorMessage && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-          <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center shrink-0 mt-0.5">
-            <span className="text-red-400 text-xs font-bold">!</span>
+        <div className="mb-6 p-4 bg-danger-500/10 border border-danger-500/30 rounded-lg flex items-start gap-3">
+          <div className="w-5 h-5 rounded-full bg-danger-500/30 flex items-center justify-center shrink-0 mt-0.5">
+            <span className="text-danger-400 text-xs font-bold">!</span>
           </div>
           <div className="flex-1">
-            <p className="text-sm text-red-300 font-medium">执行错误</p>
-            <p className="text-sm text-red-400/80 mt-0.5 whitespace-pre-wrap">{errorMessage}</p>
+            <p className="text-sm text-danger-300 font-medium">执行错误</p>
+            <p className="text-sm text-danger-400/80 mt-0.5 whitespace-pre-wrap">{errorMessage}</p>
           </div>
           <button
             onClick={() => setErrorMessage(null)}
@@ -1210,7 +1210,7 @@ export function WorkflowPage({
             )}
             {staleWarning && (
               <div className="mt-3">
-                <p className="text-xs text-yellow-400/80 mb-2">
+                <p className="text-xs text-bp-yellow/80 mb-2">
                   {statusMessage}
                 </p>
                 <Button
@@ -1242,14 +1242,14 @@ export function WorkflowPage({
 
       {/* 失败时显示 failed stage 信息 */}
       {failedCount > 0 && runState === 'idle' && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+        <div className="mb-6 p-4 bg-danger-500/10 border border-danger-500/30 rounded-lg flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-danger-400 shrink-0" />
           <div>
-            <p className="text-sm text-red-300 font-medium">
+            <p className="text-sm text-danger-300 font-medium">
               执行失败{failedStageName ? `于: ${failedStageName}` : ''}
             </p>
             {errorMessage && (
-              <p className="text-xs text-red-400/80 mt-1">{errorMessage}</p>
+              <p className="text-xs text-danger-400/80 mt-1">{errorMessage}</p>
             )}
             <div className="mt-2">
               <Button

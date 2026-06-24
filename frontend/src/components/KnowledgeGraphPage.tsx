@@ -597,7 +597,7 @@ export function KnowledgeGraphPage({
                 <p>缺失来源: {qr.missing_sources_count ?? 0}</p>
               </div>
               {(qr.isolated_nodes?.length ?? 0) > 0 && (
-                <ul className="mt-2 text-xs text-amber-400/90 space-y-1 max-h-24 overflow-y-auto">
+                <ul className="mt-2 text-xs text-bp-yellow/90 space-y-1 max-h-24 overflow-y-auto">
                   {qr.isolated_nodes?.slice(0, 5).map((n) => (
                     <li key={n.id}>· [{n.type}] {n.label}</li>
                   ))}
@@ -772,7 +772,7 @@ export function KnowledgeGraphPage({
                     </Button>
                     <Button
                       variant="secondary"
-                      className="text-xs text-red-400"
+                      className="text-xs text-danger-400"
                       onClick={() => handleDeleteEdge(selectedEdge)}
                     >
                       <Trash2 className="w-3 h-3 mr-1" />

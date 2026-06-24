@@ -52,13 +52,13 @@ export function HitlGatePanel({
   };
 
   return (
-    <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+    <Card className="mb-4 border-bp-yellow/30 bg-bp-yellow/5">
       <div className="flex items-start gap-3 mb-3">
-        <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-          <AlertTriangle className="w-5 h-5 text-amber-400" />
+        <div className="w-9 h-9 rounded-lg bg-bp-yellow/15 flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-5 h-5 text-bp-yellow" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-amber-300">Teaching HITL Gate · 等待人工确认</h3>
+          <h3 className="text-sm font-semibold text-bp-yellow">Teaching HITL Gate · 等待人工确认</h3>
           <p className="text-xs text-bp-muted mt-1">
             阶段「{gate?.stage_label || gate?.stage || '—'}」已完成。请审阅结果后选择继续、从本阶段重跑或终止。
           </p>
@@ -75,7 +75,7 @@ export function HitlGatePanel({
         onChange={(e) => setFeedback(e.target.value)}
       />
 
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+      {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -102,7 +102,7 @@ export function HitlGatePanel({
           variant="secondary"
           disabled={loading}
           onClick={() => handleAction('abort')}
-          className="gap-1.5 text-red-400 hover:text-red-300"
+          className="gap-1.5 text-danger-400 hover:text-danger-300"
         >
           <XCircle className="w-3.5 h-3.5" />
           终止运行

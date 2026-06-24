@@ -174,10 +174,10 @@ function renderBlock(block: Block, key: number) {
           <div key={key} className={cn(
             'my-4 p-3 rounded-lg border text-sm',
             isWarning
-              ? 'bg-amber-500/5 border-amber-500/20 text-amber-300/90'
+              ? 'bg-bp-yellow/5 border-bp-yellow/20 text-bp-yellow/90'
               : 'bg-bp-base/70 border-bp-border text-bp-muted italic',
           )}>
-            {isWarning && <AlertTriangle className="w-4 h-4 text-amber-400 inline-block mr-1.5 -mt-0.5" />}
+            {isWarning && <AlertTriangle className="w-4 h-4 text-bp-yellow inline-block mr-1.5 -mt-0.5" />}
             {inlineMarkup(text)}
           </div>
         );

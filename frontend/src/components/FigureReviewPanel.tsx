@@ -57,8 +57,8 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
   };
 
   return (
-    <Card className="p-4 border-amber-500/20 bg-amber-500/5">
-      <h4 className="text-sm font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
+    <Card className="p-4 border-bp-yellow/20 bg-bp-yellow/5">
+      <h4 className="text-sm font-semibold text-bp-yellow mb-2 flex items-center gap-1.5">
         <Image className="w-4 h-4" />
         图表数据复核 · {pending.length} 待确认
       </h4>
@@ -66,7 +66,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
         L1 元信息 → L2 caption 数值 → L3 VLM 结构化 → L4 点列数字化（复核后写入 CSV 并自动 re-merge）
       </p>
 
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+      {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
       <div className="space-y-3 max-h-80 overflow-y-auto">
         {(figures as FigureItem[]).slice(0, 8).map((fig) => {
@@ -81,23 +81,23 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
                   {fig.extraction_tier || fig.extraction_method || 'rule'}
                 </span>
-                <span className="text-[10px] text-amber-400">
+                <span className="text-[10px] text-bp-yellow">
                   conf={String(fig.extraction_confidence ?? '—')}
                 </span>
                 {fig.included_in_csv && (
-                  <span className="text-[10px] text-green-400 flex items-center gap-0.5">
+                  <span className="text-[10px] text-bp-green flex items-center gap-0.5">
                     <CheckCircle2 className="w-3 h-3" /> 已入 CSV
                   </span>
                 )}
               </div>
               <p className="text-[10px] text-bp-muted line-clamp-2 mb-2">{fig.caption}</p>
               {fig.extraction_manifest?.extraction?.limitations && fig.extraction_manifest.extraction.limitations.length > 0 && (
-                <p className="text-[10px] text-amber-500/80 mb-2">
+                <p className="text-[10px] text-bp-yellow/80 mb-2">
                   {fig.extraction_manifest.extraction.limitations[0]}
                 </p>
               )}
               {fig.image_path && (
-                <p className="text-[10px] text-cyan-500/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
+                <p className="text-[10px] text-bp-cyan/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
               )}
               {preview.length > 0 && (
                 <div className="text-[10px] text-bp-muted mb-2 font-mono">
