@@ -141,8 +141,8 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
                     {asset.modality}
                   </span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    asset.parse_status === 'completed' ? 'bg-green-500/10 text-green-400'
-                      : asset.parse_status === 'warning' ? 'bg-yellow-500/10 text-yellow-400'
+                    asset.parse_status === 'completed' ? 'bg-bp-green/10 text-bp-green'
+                      : asset.parse_status === 'warning' ? 'bg-bp-yellow/10 text-bp-yellow'
                         : 'bg-bp-panel text-bp-muted'
                   }`}>
                     {asset.parse_status}
@@ -155,7 +155,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
                   title={asset.use_for_hypothesis ? '用于假设生成' : '不参与假设生成'}
                 >
                   {asset.use_for_hypothesis ? (
-                    <ToggleRight className="w-5 h-5 text-green-400" />
+                    <ToggleRight className="w-5 h-5 text-bp-green" />
                   ) : (
                     <ToggleLeft className="w-5 h-5" />
                   )}

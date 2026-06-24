@@ -21,6 +21,7 @@ interface RunLogsPageProps {
 const STAGE_CN: Record<string, string> = {
   problem_understanding: '问题理解',
   literature_mining: '文献挖掘',
+  data_acquisition: '数据采集',
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',

@@ -1,119 +1,180 @@
 # AISci UI 设计验收清单
 
 > 设计稿：`designs/aisci-ui.pen` · 规范：`designs/aisci-ui-spec.md`  
-> 导出目录：`designs/exports/`（Pencil `export_nodes` 或手动导出 PNG）  
-> 画布标准：**1440 × 960 px**
+> PNG 导出：`designs/exports/`（**23 帧**，2026-06 全量导出）  
+> 画布标准：**1440 × 960 px**  
+> **最后同步**：2026-06 · Phase C 验收修复轮次
+
+**图例**：`✅` 通过 · `🟡` 部分差异 · `❌` 待修 · `—` 未测 / 不适用
 
 ---
 
 ## 1. 验收流程
 
-1. 在 Pencil 中打开 `aisci-ui.pen`，按下方表格导出对应 Frame PNG 至 `designs/exports/`。
-2. 启动现网：`cd frontend && pnpm dev`，按「现网 URL」逐屏对照。
-3. 检查项：布局结构、Blueprint 令牌（背景/描边/字体）、语义色、Loading/Error/Empty 三态、页内 Tab 文案。
-4. 在「验收」列打勾：`✅` 通过 · `🟡` 部分 · `❌` 待修 · `—` 未测。
-
-### Pencil MCP 导出示例
-
-```text
-export_nodes
-  filePath: designs/aisci-ui.pen
-  outputDir: designs/exports
-  format: png
-  nodeIds: [qS1FU, YVENb, ...]
-```
-
-若 MCP 报路径错误，可在 Pencil 内手动导出，或使用已成功路径 `designs/exports`（相对仓库根）。
+1. 打开 `designs/exports/<节点ID>.png` 与现网逐屏对照。
+2. 启动现网：`cd frontend && pnpm dev`。
+3. 按下方表格「现网 URL」访问，核对布局、令牌、三态、文案。
+4. 差异详情见 **§8**；剩余项见 **§9**。
 
 ---
 
 ## 2. 全局路由页
 
-| 验收 | Frame | 节点 ID | 现网 URL | 主组件 | PNG 文件名 |
-|------|-------|---------|----------|--------|------------|
-| ☐ | `00-Design System` | `Ktnbv` | — | `tailwind.blueprint.js` / `index.css` | `Ktnbv.png` |
-| ☐ | `01-Home 首页` | `qS1FU` | `/` | `pages/Home.tsx` | `qS1FU.png` |
-| ☐ | `14-文献中心` | `Dat8t` | `/documents` | `pages/Documents.tsx` | `Dat8t.png` |
-| ☐ | `15-报告中心` | `adKkL` | `/reports` | `pages/Reports.tsx` | `adKkL.png` |
-| ☐ | `16-设置` | `YVENb` | `/settings` | `pages/Settings.tsx` | `YVENb.png` |
-| ☐ | `17-创建项目` | `YBU0r` | `/projects/new` | `pages/CreateProject.tsx` | `YBU0r.png` |
-| ☐ | `18-UI States` | `D2Ym9` | — | `LoadingState` / `ErrorState` / `EmptyState` | `D2Ym9.png` |
+| 验收 | Frame | 节点 ID | 现网 URL | 主组件 | PNG | 差异摘要 |
+|------|-------|---------|----------|--------|-----|----------|
+| 🟡 | `00-Design System` | `Ktnbv` | — | `tailwind.blueprint.js` / `index.css` | ✅ | 令牌已落地；无独立 `/design-system` 预览路由 |
+| ✅ | `01-Home 首页` | `qS1FU` | `/` | `Home.tsx` | ✅ | 指标 + RecentPipeline + 项目网格 + Footer；三态 + `[AISci]` 品牌 |
+| ✅ | `14-文献中心` | `Dat8t` | `/documents` | `Documents.tsx` | ✅ | PageHeader + 项目范围 + 跨项目汇总 / 单项目 LiteratureLibrary |
+| ✅ | `15-报告中心` | `adKkL` | `/reports` | `Reports.tsx` | ✅ | PageHeader + 列表 + 三态 |
+| ✅ | `16-设置` | `YVENb` | `/settings` | `Settings.tsx` | ✅ | LLM 配置 + 环境变量说明 |
+| 🟡 | `17-创建项目` | `YBU0r` | `/projects/new` | `CreateProject.tsx` | ✅ | 模式双选 + 表单；`max-w-3xl` 略窄于 Frame 全宽 |
+| ✅ | `18-UI States` | `D2Ym9` | — | `LoadingState` / `ErrorState` / `EmptyState` | ✅ | 已推广至主要 Tab + 首页 |
 
 ---
 
 ## 3. 项目工作台（12 Tab）
 
-路由模板：`/projects/:id?tab=<tabId>`
+路由：`/projects/:id?tab=<tabId>`
 
-| 验收 | Tab # | Tab ID | Frame | 节点 ID | 主组件 |
-|------|-------|--------|-------|---------|--------|
-| ☐ | 1 | `overview` | `02-Project Overview` | `DMGHL` | `ProjectWorkspace` 概览 |
-| ☐ | 2 | `closed_loop` | `03-Closed Loop` | `z5gmo` | `ResearchClosedLoopOverview` |
-| ☐ | 3 | `questions` | `05-研究问题` | `uBzbD` | `ResearchQuestionPage` |
-| ☐ | 4 | `literature` | `06-文献库` | `o2Fc4r` | `LiteratureLibrary` |
-| ☐ | 5 | `knowledge_graph` | `07-知识图谱` | `Kjsvn` | `KnowledgeGraphPage` |
-| ☐ | 6 | `datasets` | `08-数据集` | `JH3Wy` | `DatasetPage` |
-| ☐ | 7 | `workflow` | `04-Workflow` | `mL1IE` | `WorkflowPage` |
-| ☐ | 8 | `prompts` | `09-Prompt管理` | `tNuCp` | `PromptManagementPage` |
-| ☐ | 9 | `hypotheses` | `10-候选假设` | `Cf9pk` | `HypothesesPage` |
-| ☐ | 10 | `experiments` | `11-实验设计` | `sCy53` | `ExperimentDesignPage` |
-| ☐ | 11 | `reports` | `12-研究报告` | `N7Jsj` | `ReportPage` |
-| ☐ | 12 | `logs` | `13-运行日志` | `AFcII` | `RunLogsPage` |
+| 验收 | Tab | Tab ID | Frame | 节点 ID | 主组件 | PNG | 差异摘要 |
+|------|-----|--------|-------|---------|--------|-----|----------|
+| 🟡 | 1 | `overview` | `02-Project Overview` | `DMGHL` | `ProjectWorkspace` | ✅ | 6 指标 + 8 阶段 + CTA「查看科研闭环总览 →」✅；外壳仍为全局 Navbar + 返回链 |
+| ✅ | 2 | `closed_loop` | `03-Closed Loop` | `z5gmo` | `ResearchClosedLoopOverview` | ✅ | 质量验收 / Teaching / Discovery 独立 Collapsible；时间线 defaultOpen |
+| ✅ | 3 | `questions` | `05-研究问题` | `uBzbD` | `ResearchQuestionPage` | ✅ | 双栏 + DataSpec + 三态 |
+| ✅ | 4 | `literature` | `06-文献库` | `o2Fc4r` | `LiteratureLibrary` | ✅ | 三 Tab + StatCards + ChunkViewer；import_status 与操作区 bp 色 |
+| 🟡 | 5 | `knowledge_graph` | `07-知识图谱` | `Kjsvn` | `KnowledgeGraphPage` | ✅ | 功能齐全；节点 Neo4j 科研色板（ intentional ） |
+| ✅ | 6 | `datasets` | `08-数据集` | `JH3Wy` | `DatasetPage` | ✅ | Tab 顺序已对齐 spec §4.3 |
+| ✅ | 7 | `workflow` | `04-Workflow` | `mL1IE` | `WorkflowPage` | ✅ | 辅助面板收进右侧 Detail Collapsible |
+| ✅ | 8 | `prompts` | `09-Prompt管理` | `tNuCp` | `PromptManagementPage` | ✅ | 左列表 + 右编辑器 + PresetBar |
+| ✅ | 9 | `hypotheses` | `10-候选假设` | `Cf9pk` | `HypothesesPage` | ✅ | xl 三栏；窄屏右栏评分说明折叠 |
+| ✅ | 10 | `experiments` | `11-实验设计` | `sCy53` | `ExperimentDesignPage` | ✅ | 侧栏 FL 计划 + Primary Hypothesis Actions + bp 色 |
+| ✅ | 11 | `reports` | `12-研究报告` | `N7Jsj` | `ReportPage` | ✅ | 左 TOC + Markdown 预览 + 右 Checklist/HITL |
+| ✅ | 12 | `logs` | `13-运行日志` | `AFcII` | `RunLogsPage` | ✅ | 三栏 + 三态；含 `data_acquisition` 中文映射 |
 
 ---
 
 ## 4. 数据集页内 Tab（5）
 
-路由：`/projects/:id?tab=datasets&subtab=<subtab>`
-
-| 验收 | Frame | 节点 ID | `subtab` / 页内 Tab | 主组件 |
-|------|-------|---------|---------------------|--------|
-| ☐ | `08-数据集` | `JH3Wy` | `datasets` / 项目数据集 | `DatasetPage` 主面板 |
-| ☐ | `08b-反馈中心` | `cV3ID` | `feedback` | `FeedbackHubPanel` |
-| ☐ | `08c-数据目录` | `jUtjv` | `catalog` | `DataCatalogPanel` |
-| ☐ | `08d-多模态` | `t6ReB` | `multimodal` | `MultimodalEvidencePanel` |
-| ☐ | `08e-DataFinder` | `ianyJ` | `data-finder` | `DataFinderPanel` |
+| 验收 | Frame | 节点 ID | subtab | 主组件 | PNG | 差异摘要 |
+|------|-------|---------|--------|--------|-----|----------|
+| ✅ | `08-数据集` | `JH3Wy` | `datasets` | `DatasetPage` | ✅ | 见 §3 Tab 6 |
+| ✅ | `08b-反馈中心` | `cV3ID` | `feedback` | `FeedbackHubPanel` | ✅ | `bp-purple` 外壳 |
+| ✅ | `08c-数据目录` | `jUtjv` | `catalog` | `DataCatalogPanel` | ✅ | 三态完整 |
+| ✅ | `08d-多模态` | `t6ReB` | `multimodal` | `MultimodalEvidencePanel` | ✅ | bp 解析状态色 |
+| ✅ | `08e-DataFinder` | `ianyJ` | `data-finder` | `DataFinderPanel` 等 | ✅ | bp 语义色扫尾 |
 
 ---
 
-## 5. UI 三态（现网组件）
+## 5. UI 三态覆盖
 
-| 状态 | 组件路径 | 已接入页面（2026-06） |
-|------|----------|----------------------|
-| Loading | `workspace/LoadingState.tsx` | 假设、运行日志、报告、数据集、文献、闭环、实验、报告中心、工作台、Prompt、研究问题、数据目录 |
-| Error | `workspace/ErrorState.tsx` | 同上 + 多模态（行内） |
-| Empty | `EmptyState.tsx` | 假设、运行日志、报告、数据集、首页、报告中心、数据目录、多模态 |
-
-参考设计 Frame：`18-UI States`（`D2Ym9`）
+| 状态 | 组件 | 已接入 |
+|------|------|--------|
+| Loading | `LoadingState` | 首页、假设、日志、报告、数据集、文献、闭环、实验、报告中心、工作台、Prompt、研究问题、数据目录 |
+| Error | `ErrorState` | 同上 |
+| Empty | `EmptyState` | 假设、日志、报告、数据集、首页空项目、报告中心、数据目录、多模态 |
 
 ---
 
-## 6. 关键对照点（逐屏速查）
+## 6. 令牌速查（全站）
 
-| 区域 | 设计约定 | 现网检查 |
-|------|----------|----------|
-| 背景 | `#0A1628` · `bg-bp-base` | 全站 `App.tsx` 外壳 |
-| 卡片 | `#1E293B` · `bg-bp-surface` / `.card` | Card 组件 |
-| 主强调 | `#38BDF8` · `text-bp-cyan` | Tab 激活、链接、主按钮 |
-| 成功 | `#22C55E` · `text-bp-green` | Pipeline 完成、Run 成功 |
-| 警告 | `#FACC15` · `text-bp-yellow` | HITL、低证据 |
-| 失败 | `text-danger-400` | 错误、偏题 |
-| 字体 | JetBrains Mono · `font-bp` | `index.css` body |
-| 圆角 | 2px · `rounded-bp` | 按钮、输入框、面板 |
-| 工作台外壳 | Navbar → MetaBar → Tabs → Body | `ProjectWorkspaceHeader` + `ProjectTabNav` |
+| 区域 | 设计 | 现网 | 验收 |
+|------|------|------|------|
+| 背景 | `#0A1628` | `bg-bp-base` | ✅ |
+| 卡片 | `#1E293B` | `.card` / `bg-bp-surface` | ✅ |
+| 主强调 | `#38BDF8` | `text-bp-cyan` | ✅ |
+| 字体 | JetBrains Mono | `font-bp` | ✅ |
+| 圆角 | 2px | `rounded-bp` | 🟡 部分 `rounded-lg` 残留（低优先级） |
+| 工作台外壳 | Navbar→MetaBar→Tabs→Body | 全局 Navbar + `ProjectWorkspaceHeader` | 🟡 结构略异 |
+| 品牌 | `[AISci]` | Navbar / Footer / 主要文案 | ✅ |
 
 ---
 
-## 7. 导出批次建议
+## 7. PNG 导出索引（23 帧）
 
-| 批次 | 节点 ID 列表 | 用途 |
-|------|--------------|------|
-| A · 全局 | `Ktnbv`, `qS1FU`, `Dat8t`, `adKkL`, `YVENb`, `YBU0r`, `D2Ym9` | 首页/设置/三态 |
-| B · 工作台 1 | `DMGHL`, `z5gmo`, `uBzbD`, `o2Fc4r`, `Kjsvn` | Tab 1–5 |
-| C · 工作台 2 | `JH3Wy`, `mL1IE`, `tNuCp`, `Cf9pk`, `sCy53` | Tab 6–10 |
-| D · 工作台 3 | `N7Jsj`, `AFcII` | Tab 11–12 |
-| E · 数据集子 Tab | `cV3ID`, `jUtjv`, `t6ReB`, `ianyJ` | 数据集 5 Tab |
+| PNG | Frame |
+|-----|-------|
+| `Ktnbv.png` | Design System |
+| `qS1FU.png` | Home |
+| `Dat8t.png` | 文献中心 |
+| `adKkL.png` | 报告中心 |
+| `YVENb.png` | 设置 |
+| `YBU0r.png` | 创建项目 |
+| `D2Ym9.png` | UI States |
+| `DMGHL.png` | 项目概览 |
+| `z5gmo.png` | 科研闭环 |
+| `uBzbD.png` | 研究问题 |
+| `o2Fc4r.png` | 文献库 |
+| `Kjsvn.png` | 知识图谱 |
+| `JH3Wy.png` | 数据集 |
+| `mL1IE.png` | 工作流 |
+| `tNuCp.png` | Prompt 管理 |
+| `Cf9pk.png` | 候选假设 |
+| `sCy53.png` | 实验设计 |
+| `N7Jsj.png` | 研究报告 |
+| `AFcII.png` | 运行日志 |
+| `cV3ID.png` | 数据集·反馈 |
+| `jUtjv.png` | 数据集·目录 |
+| `t6ReB.png` | 数据集·多模态 |
+| `ianyJ.png` | 数据集·DataFinder |
 
 ---
 
-*与 `aisci-ui-spec.md` 同步维护；Phase C 验收完成后更新各 Frame「验收」列为 ✅。*
+## 8. 逐项差异标注（剩余）
+
+### 8.1 全局
+
+**Ktnbv** — 🟡 无 `/design-system` 预览页（令牌已在 CSS/Tailwind）
+
+**YBU0r** — 🟡 表单区 `max-w-3xl`，Frame 为全宽
+
+### 8.2 工作台
+
+**DMGHL** — 🟡 全局 Navbar + 返回链，非设计稿内嵌工作台 Navbar
+
+**Kjsvn** — 🟡 节点色 Neo4j 色板（有意保留）
+
+**Cf9pk** — 🟡 窄屏三栏 → 两栏 + 折叠评分说明（响应式兜底）
+
+### 8.3 跨项目文献
+
+**Dat8t** — ✅ 客户端汇总各项目文档数 + 跳转；🟡 无后端单 API 合并浏览全部文献条目
+
+### 8.4 B-3 扫尾（低优先级）
+
+以下组件仍含部分 Tailwind 原色，不影响主流程 Tab：
+
+- `HypothesisCard.tsx`、`AgentNode.tsx`、`QualityCheckCard.tsx`、`MarkdownPreview.tsx` blockquote 等
+
+---
+
+## 9. 修复记录与待办
+
+### 已完成（P1–P3 + 文档同步轮）
+
+| 项 | 文件 |
+|----|------|
+| 报告 TOC | `ReportTableOfContents.tsx` / `ReportPage.tsx` |
+| 数据集 Tab 顺序 | `DatasetPage.tsx` |
+| Feedback / DataFinder / 文献 bp 色 | `FeedbackHubPanel` / `DataFinderPanel` / `LiteratureLibrary` |
+| 首页三态 + 品牌 | `Home.tsx` / `Navbar.tsx` |
+| 概览 CTA | `ProjectWorkspace.tsx` |
+| 运行日志 stage | `RunLogsPage.tsx` |
+| 工作流面板收拢 | `WorkflowPage.tsx` |
+| 实验设计侧栏 | `ExperimentDesignPage.tsx` |
+| 跨项目文献 | `Documents.tsx` / `CrossProjectLiteratureSummary.tsx` |
+| 闭环 Teaching/Quality 拆分 | `DiscoveryLoopPanel.tsx` / `ResearchClosedLoopOverview.tsx` |
+| AISci 文案 | `Reports` / `CreateProject` / `PromptPresetBar` 等 |
+
+### 可选后续（P4）
+
+| 项 | 说明 |
+|----|------|
+| `/design-system` 预览路由 | 展示 `Ktnbv` 组件库 |
+| 工作台 Navbar 结构 | 隐藏全局 Navbar 或双模式外壳 |
+| `rounded-lg` 全站 → `rounded-bp` | 视觉统一 |
+| `HypothesisCard` 等深扫尾 | B-3 剩余文件 |
+| 跨项目文献后端聚合 API | 单页合并列表 |
+
+---
+
+*与 `aisci-ui-spec.md` §10 同步维护*

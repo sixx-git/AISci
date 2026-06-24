@@ -1265,76 +1265,6 @@ export function WorkflowPage({
         </div>
       )}
 
-      {/* 闭环质量趋势 */}
-      {(runExtraMetadata?.closed_loop_events?.length
-        || runExtraMetadata?.quality_trend?.length
-        || runExtraMetadata?.closed_loop_decisions?.length) ? (
-        <ClosedLoopTimeline
-          events={runExtraMetadata?.closed_loop_events}
-          qualityTrend={runExtraMetadata?.quality_trend}
-          decisions={runExtraMetadata?.closed_loop_decisions}
-          runId={currentRunId}
-        />
-      ) : null}
-
-      {projectId && currentRunId && (
-        <HitlGatePanel
-          projectId={projectId}
-          runId={currentRunId}
-          gate={hitlGateInfo}
-          runStatus={hitlGateInfo?.paused ? 'human_review_required' : undefined}
-          onResumed={(newRunId) => {
-            const rid = newRunId || currentRunId;
-            setCurrentRunId(rid);
-            currentRunIdRef.current = rid;
-            if (projectId) setActiveRunId(projectId, rid);
-            startPolling(rid);
-          }}
-        />
-      )}
-
-      {validationExecutionMeta && (
-        <div className="mb-4 px-1">
-          <ExecutionTierBadge {...validationExecutionMeta} />
-        </div>
-      )}
-
-      {federatedCampaignData && (
-        <FederatedCampaignPanel
-          federatedPilot={federatedCampaignData.pilot}
-          replanActions={federatedCampaignData.replanActions}
-          events={runExtraMetadata?.closed_loop_events}
-          snapshots={
-            federatedCampaignRefinement?.version_snapshots ||
-            runExtraMetadata?.version_snapshots ||
-            federatedCampaignData.snapshots
-          }
-          campaignRefinement={federatedCampaignRefinement}
-        />
-      )}
-
-      <DiscoveryLoopPanel
-        discoveryLoop={discoveryLoopData}
-        teachingRefinement={teachingRefinementData}
-        qualityAcceptance={qualityAcceptance}
-      />
-
-      {versionSnapshots.length >= 2 && (
-        <EvidenceDiffPanel snapshots={versionSnapshots} />
-      )}
-
-      {verifiableValidation && (
-        <VerifiableChecksPanel
-          checks={verifiableValidation.checks}
-          passed={verifiableValidation.passed ?? null}
-          spec={verifiableValidation.spec}
-        />
-      )}
-
-      {ideationData && (
-        <IdeationNoveltyPanel ideation={ideationData} />
-      )}
-
       {/* 操作栏 */}
       <div className="mb-6">
         <WorkflowActionBar
@@ -1370,9 +1300,112 @@ export function WorkflowPage({
           </Card>
         </div>
 
-        {/* 右侧：详情 */}
+        {/* 右侧：详情 + 收拢辅助面板 */}
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={() => handleRerun()} />
+
+          {(runExtraMetadata?.closed_loop_events?.length
+            || runExtraMetadata?.quality_trend?.length
+            || runExtraMetadata?.closed_loop_decisions?.length) ? (
+            <CollapsiblePanel title="闭环质量趋势" subtitle="ClosedLoopTimeline" defaultOpen={false}>
+              <ClosedLoopTimeline
+                events={runExtraMetadata?.closed_loop_events}
+                qualityTrend={runExtraMetadata?.quality_trend}
+                decisions={runExtraMetadata?.closed_loop_decisions}
+                runId={currentRunId}
+              />
+            </CollapsiblePanel>
+          ) : null}
+
+          {projectId && currentRunId && (
+            <CollapsiblePanel
+              title="HITL 门禁"
+              subtitle="HitlGatePanel"
+              defaultOpen={!!hitlGateInfo?.paused}
+            >
+              <HitlGatePanel
+                projectId={projectId}
+                runId={currentRunId}
+                gate={hitlGateInfo}
+                runStatus={hitlGateInfo?.paused ? 'human_review_required' : undefined}
+                onResumed={(newRunId) => {
+                  const rid = newRunId || currentRunId;
+                  setCurrentRunId(rid);
+                  currentRunIdRef.current = rid;
+                  if (projectId) setActiveRunId(projectId, rid);
+                  startPolling(rid);
+                }}
+              />
+            </CollapsiblePanel>
+          )}
+
+          {validationExecutionMeta && (
+            <CollapsiblePanel title="执行层级" subtitle="ExecutionTierBadge" defaultOpen={false}>
+              <ExecutionTierBadge {...validationExecutionMeta} />
+            </CollapsiblePanel>
+          )}
+
+          {federatedCampaignData && (
+            <CollapsiblePanel title="联邦实验战役" subtitle="FederatedCampaignPanel" defaultOpen={false}>
+              <FederatedCampaignPanel
+                federatedPilot={federatedCampaignData.pilot}
+                replanActions={federatedCampaignData.replanActions}
+                events={runExtraMetadata?.closed_loop_events}
+                snapshots={
+                  federatedCampaignRefinement?.version_snapshots ||
+                  runExtraMetadata?.version_snapshots ||
+                  federatedCampaignData.snapshots
+                }
+                campaignRefinement={federatedCampaignRefinement}
+              />
+            </CollapsiblePanel>
+          )}
+
+          {(discoveryLoopData || teachingRefinementData || qualityAcceptance) && (
+            <>
+              {qualityAcceptance && (
+                <CollapsiblePanel title="质量验收" subtitle="QualityAcceptancePanel" defaultOpen={false}>
+                  <DiscoveryLoopPanel qualityAcceptance={qualityAcceptance} sections={['quality']} />
+                </CollapsiblePanel>
+              )}
+              {teachingRefinementData?.reran && (
+                <CollapsiblePanel title="Teaching 自动精化" subtitle="TeachingAutoRefinement" defaultOpen={false}>
+                  <DiscoveryLoopPanel teachingRefinement={teachingRefinementData} sections={['teaching']} />
+                </CollapsiblePanel>
+              )}
+              {discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
+                <CollapsiblePanel title="Discovery 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
+                  <DiscoveryLoopPanel
+                    discoveryLoop={discoveryLoopData}
+                    teachingRefinement={teachingRefinementData}
+                    sections={['discovery', 'versions']}
+                  />
+                </CollapsiblePanel>
+              )}
+            </>
+          )}
+
+          {versionSnapshots.length >= 2 && (
+            <CollapsiblePanel title="证据版本对比" subtitle="EvidenceDiffPanel" defaultOpen={false}>
+              <EvidenceDiffPanel snapshots={versionSnapshots} />
+            </CollapsiblePanel>
+          )}
+
+          {verifiableValidation && (
+            <CollapsiblePanel title="可验证性检查" subtitle="VerifiableChecksPanel" defaultOpen={false}>
+              <VerifiableChecksPanel
+                checks={verifiableValidation.checks}
+                passed={verifiableValidation.passed ?? null}
+                spec={verifiableValidation.spec}
+              />
+            </CollapsiblePanel>
+          )}
+
+          {ideationData && (
+            <CollapsiblePanel title="Ideation 新颖性" subtitle="IdeationNoveltyPanel" defaultOpen={false}>
+              <IdeationNoveltyPanel ideation={ideationData} />
+            </CollapsiblePanel>
+          )}
 
           {ensembleReview && (
             <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel" defaultOpen={false}>

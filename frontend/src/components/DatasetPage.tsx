@@ -59,10 +59,10 @@ const BYTES_MB = 1024 * 1024;
 
 const DATASET_PAGE_TABS = [
   { id: 'datasets', label: '项目数据集' },
-  { id: 'data-finder', label: '多源数据查找与整合' },
-  { id: 'multimodal', label: '多模态证据' },
-  { id: 'catalog', label: '数据目录' },
   { id: 'feedback', label: '反馈中心' },
+  { id: 'catalog', label: '数据目录' },
+  { id: 'multimodal', label: '多模态证据' },
+  { id: 'data-finder', label: '多源数据查找与整合' },
 ] as const;
 
 function parseJsonSafe(raw: string | undefined): unknown {

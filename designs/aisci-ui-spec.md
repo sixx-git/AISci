@@ -291,24 +291,27 @@ KG Top Bar（构建/增量重建/缩放/标签/导出）、Graph Canvas、Relati
 | P0 | Tab 文案、Pipeline 8 阶段、核心 5 屏 | ✅ |
 | P1 | MetaBar、Navbar 双按钮、图谱/日志/假设/数据集主视图 | ✅ |
 | P2 | 数据集 5 Tab、工作流 Detail 收拢、报告中心、UI States | ✅ |
-| Phase C | 设置页、UI 三态推广、假设三栏、验收清单 | 🟡 |
+| Phase C | 设置页、UI 三态、假设三栏、验收清单、P1–P3 修复 | ✅ |
 
 ### Phase C 进度（2026-06）
 
 | 项 | 状态 |
 |----|------|
 | `/settings` LLM 配置页 | ✅ |
-| `LoadingState` / `ErrorState` / `EmptyState` 主要 Tab | ✅ |
+| `LoadingState` / `ErrorState` / `EmptyState` 主要 Tab + 首页 | ✅ |
 | 候选假设三栏（`Cf9pk`） | ✅ |
 | 知识图谱 Blueprint 画布 | ✅ |
-| 验收清单 | ✅ `designs/aisci-ui-acceptance.md` |
-| Pencil PNG 批量导出 | 🟡 MCP 路径受限，见验收清单 §1 |
+| 验收清单 + 23 帧 PNG + §8 差异 | ✅ |
+| P1–P3 布局/色/TOC/跨项目文献 | ✅ |
+| 闭环 Teaching/Quality 独立 Collapsible | ✅ |
+| B-3 主 Tab 色扫尾（文献/DataFinder/多模态） | ✅ |
 
-### 后续可选
+### 后续可选（P4）
 
-- Pencil `export_nodes` 全量 PNG 至 `designs/exports/`
-- 图谱节点色与 Neo4j 科研色板微调
-- 各 Tab 像素级逐块对照（MetaBar 高度、Tab 间距）
+- `/design-system` 预览路由（`Ktnbv`）
+- 工作台隐藏全局 Navbar / 双模式外壳
+- `HypothesisCard` / `AgentNode` 等深扫尾 + `rounded-lg` → `rounded-bp`
+- 跨项目文献后端聚合 API
 
 ---
 

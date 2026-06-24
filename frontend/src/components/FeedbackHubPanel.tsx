@@ -59,8 +59,8 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
   };
 
   return (
-    <Card className="p-4 border-violet-500/20 bg-violet-500/5">
-      <h4 className="text-sm font-semibold text-violet-300 mb-2 flex items-center gap-1.5">
+    <Card className="p-4 border-bp-purple/20 bg-bp-purple/5">
+      <h4 className="text-sm font-semibold text-bp-purple mb-2 flex items-center gap-1.5">
         <MessageSquarePlus className="w-4 h-4" />
         统一反馈中心
       </h4>
@@ -99,7 +99,7 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
         className="w-full text-xs input-field min-h-[72px] mb-2"
       />
 
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+      {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
       <Button
         variant="secondary"

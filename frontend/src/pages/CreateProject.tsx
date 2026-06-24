@@ -12,7 +12,7 @@ import type { ProjectMode } from '@/types';
 const MODE_OPTIONS: { value: ProjectMode; label: string; desc: string; icon: typeof Cpu }[] = [
   {
     value: 'general',
-    label: '通用 AI Scientist 模式',
+    label: '通用 AISci 模式',
     desc: '文献挖掘 → 假设生成 → 实验设计 → 小样验证 → 报告，适用于通用科研场景',
     icon: Cpu,
   },

@@ -358,13 +358,32 @@ export function ResearchClosedLoopOverview({
       )}
 
       {(discoveryLoopData || teachingRefinementData || qualityAcceptance) && (
-        <CollapsiblePanel title="Discovery / Teaching 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
-          <DiscoveryLoopPanel
-            discoveryLoop={discoveryLoopData}
-            teachingRefinement={teachingRefinementData}
-            qualityAcceptance={qualityAcceptance}
-          />
-        </CollapsiblePanel>
+        <>
+          {qualityAcceptance && (
+            <CollapsiblePanel title="质量验收" subtitle="QualityAcceptancePanel" defaultOpen>
+              <DiscoveryLoopPanel
+                qualityAcceptance={qualityAcceptance}
+                sections={['quality']}
+              />
+            </CollapsiblePanel>
+          )}
+          {teachingRefinementData?.reran && (
+            <CollapsiblePanel title="Teaching 自动精化" subtitle="TeachingAutoRefinement" defaultOpen={false}>
+              <DiscoveryLoopPanel
+                teachingRefinement={teachingRefinementData}
+                sections={['teaching']}
+              />
+            </CollapsiblePanel>
+          )}
+          {discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
+            <CollapsiblePanel title="Discovery 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
+              <DiscoveryLoopPanel
+                discoveryLoop={discoveryLoopData}
+                sections={['discovery', 'versions']}
+              />
+            </CollapsiblePanel>
+          )}
+        </>
       )}
 
       {versionSnapshots.length >= 2 && (

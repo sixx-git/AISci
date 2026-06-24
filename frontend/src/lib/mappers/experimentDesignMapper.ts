@@ -15,8 +15,8 @@ const categoryLabel: Record<string, string> = {
 
 const categoryColor: Record<string, string> = {
   traditional: 'bg-bp-panel text-bp-muted border-bp-border',
-  deep: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  sota: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  deep: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30',
+  sota: 'bg-bp-purple/15 text-bp-purple border-bp-purple/30',
 };
 
 function parseBaselines(raw: string): ExperimentBaseline[] {

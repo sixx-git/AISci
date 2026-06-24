@@ -67,7 +67,7 @@ export function Reports() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
         title="报告中心"
-        subtitle="查看和管理 AI Scientist 生成的研究报告"
+        subtitle="查看和管理 AISci 生成的研究报告"
       />
       {children}
     </div>

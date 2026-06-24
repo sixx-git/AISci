@@ -16,6 +16,8 @@ import { reportService } from '@/services/reportService';
 import humanLoopService, { type MentorReview } from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
 import { REPORT_SECTION_OPTIONS } from '@/config/reportSections';
+import { ReportTableOfContents } from '@/components/ReportTableOfContents';
+import type { ReportSection } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface ReportPageProps {
@@ -227,6 +229,13 @@ export function ReportPage({
   }
 
   const sections = report.sections || [];
+  const tocSections: ReportSection[] = sections.length > 0
+    ? sections
+    : REPORT_SECTION_OPTIONS.map((opt) => ({
+        key: opt.key,
+        label: opt.label,
+        status: 'missing' as const,
+      }));
   const complianceCheck = report.complianceCheck;
   const hasNoRefs = complianceCheck && !complianceCheck.has_references;
   const hasOnlyExpected = complianceCheck?.result_type === 'expected_result' || complianceCheck?.result_type === 'none';
@@ -406,22 +415,30 @@ export function ReportPage({
         </Card>
       </div>
 
-      {/* 主体：左侧预览 + 右侧检查 */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* 左侧：Markdown 预览 */}
-        <div className="lg:col-span-3">
-          <Card>
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-4 h-4 text-bp-cyan" />
-              <div>
-                <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
-                <p className="text-xs text-bp-muted">Markdown 格式 · 科学假设与研究计划</p>
+      {/* 主体：左侧 TOC + 预览 + 右侧检查 */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <ReportTableOfContents
+              sections={tocSections}
+              className="md:w-52 shrink-0"
+            />
+            <Card className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-4 h-4 text-bp-cyan" />
+                <div>
+                  <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
+                  <p className="text-xs text-bp-muted">Markdown 格式 · 科学假设与研究计划</p>
+                </div>
               </div>
-            </div>
-            <div className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]">
-              <MarkdownPreview content={report.markdownContent} />
-            </div>
-          </Card>
+              <div
+                id="report-markdown-preview"
+                className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]"
+              >
+                <MarkdownPreview content={report.markdownContent} />
+              </div>
+            </Card>
+          </div>
 
           {/* ── 数据图表区域 ── */}
           {report.plots && report.plots.length > 0 && (
@@ -521,7 +538,7 @@ export function ReportPage({
         </div>
 
         {/* 右侧：比赛规范检查 + 证据链质量 + 操作 */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-4">
           <div className="overflow-y-auto max-h-[calc(100vh-320px)] space-y-4 pr-1 scrollbar-thin scrollbar-thumb-bp-muted scrollbar-track-transparent">
             <ReportChecklist
               sections={sections}

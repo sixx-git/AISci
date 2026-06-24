@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, AlertTriangle,
+  Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX,
 } from 'lucide-react';
 import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
@@ -11,6 +11,8 @@ import { StatusBadge } from '@/components/StatusBadge';
 import type { StatusType } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import { RecentPipelineSection } from '@/components/workspace/RecentPipelineSection';
 import type { ProjectOverview } from '@/types';
 
@@ -171,23 +173,15 @@ export function Home() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <div className="h-4 bg-bp-surface rounded w-3/4 mb-2" />
-                <div className="h-3 bg-bp-surface rounded w-1/2" />
-                <div className="h-3 bg-bp-surface rounded w-1/4 mt-4" />
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <LoadingState message="正在加载项目列表..." />
+          </Card>
         ) : error ? (
-          <Card className="border-danger-500/30 bg-danger-500/5">
-            <div className="text-center py-8">
-              <AlertTriangle className="w-10 h-10 text-danger-400 mx-auto mb-3" />
-              <p className="text-danger-300 mb-2">加载失败</p>
-              <p className="text-bp-muted text-sm mb-4">{error}</p>
-              <Button onClick={() => window.location.reload()} variant="secondary">重试</Button>
-            </div>
+          <Card>
+            <ErrorState
+              message={error}
+              onRetry={() => window.location.reload()}
+            />
           </Card>
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -250,7 +244,7 @@ export function Home() {
       </div>
 
       <footer className="mt-12 pt-6 border-t border-bp-cyan-dim text-center text-bp-muted text-xs">
-        AI Scientist · Blueprint UI · 多智能体科研工作台
+        [AISci] · Blueprint UI · 多智能体科研工作台
       </footer>
     </div>
   );

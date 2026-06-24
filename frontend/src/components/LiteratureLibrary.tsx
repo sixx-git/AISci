@@ -86,11 +86,11 @@ const sourceTypeConfig: Record<string, { label: string; className: string }> = {
 // ============ import_status 标签映射 ============
 const importStatusConfig: Record<string, { label: string; className: string }> = {
   discovered:      { label: '已发现', className: 'bg-bp-panel text-bp-muted border-bp-border' },
-  imported:        { label: '已导入', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
-  pdf_downloaded:  { label: 'PDF已下载', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-  parsed:          { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
-  indexed:         { label: '已索引', className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
-  failed:          { label: '失败', className: 'bg-red-500/15 text-red-400 border-red-500/25' },
+  imported:        { label: '已导入', className: 'bg-bp-green/15 text-bp-green border-bp-green/25' },
+  pdf_downloaded:  { label: 'PDF已下载', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  parsed:          { label: '已解析', className: 'bg-bp-green/15 text-bp-green border-bp-green/25' },
+  indexed:         { label: '已索引', className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
+  failed:          { label: '失败', className: 'bg-danger-500/15 text-danger-400 border-danger-500/25' },
 };
 
 // ============ 表格列定义 ============
@@ -120,9 +120,15 @@ function computeStats(items: LiteratureItem[]): LiteratureStats {
 interface LiteratureLibraryProps {
   projectId?: string;
   compact?: boolean;
+  /** 全局文献中心页由 PageHeader 提供标题时设为 false */
+  showHeader?: boolean;
 }
 
-export function LiteratureLibrary({ projectId = 'default', compact: _compact = false }: LiteratureLibraryProps) {
+export function LiteratureLibrary({
+  projectId = 'default',
+  compact: _compact = false,
+  showHeader = true,
+}: LiteratureLibraryProps) {
   const navigate = useNavigate();
   // ========== Tab 状态 ==========
   const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'library'>('upload');
@@ -480,10 +486,12 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     return (
       <div className="max-w-7xl mx-auto">
         <StatusBar msg={statusMsg} />
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
-          <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
-        </div>
+        {showHeader && (
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+            <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+          </div>
+        )}
         <Card>
           <LoadingState message="正在加载文献库..." />
         </Card>
@@ -497,10 +505,12 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       <div className="max-w-7xl mx-auto">
         <StatusBar msg={statusMsg} />
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
-          <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
-        </div>
+        {showHeader && (
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+            <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+          </div>
+        )}
 
         {/* Tabs */}
         <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as typeof activeTab)} />
@@ -538,11 +548,12 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
     <div className="max-w-7xl mx-auto">
       <StatusBar msg={statusMsg} />
 
-      {/* ========== 头部 ========== */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
-        <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
-      </div>
+      {showHeader && (
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+          <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+        </div>
+      )}
 
       {/* ========== Tabs ========== */}
       <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as typeof activeTab)} />
@@ -893,7 +904,7 @@ function ArxivTabContent({
             const isImported = imported[paper.external_id];
 
             return (
-              <Card key={paper.external_id} className={cn(isImported && 'border-green-500/20')}>
+              <Card key={paper.external_id} className={cn(isImported && 'border-bp-green/20')}>
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     {/* 标题 + arXiv ID */}
@@ -942,7 +953,7 @@ function ArxivTabContent({
                   {/* 导入按钮 */}
                   <div className="shrink-0">
                     {isImported ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-sm font-medium border border-green-500/25">
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-bp bg-bp-green/15 text-bp-green text-sm font-medium border border-bp-green/25">
                         <CheckCircle className="w-3.5 h-3.5" /> 已导入
                       </span>
                     ) : (
@@ -1050,9 +1061,9 @@ function LibraryTabContent({
                     </span>
                   )}
                   {doc.is_personal ? (
-                    <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/25">个人</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/25">个人</span>
                   ) : (
-                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/25">基础库</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/25">基础库</span>
                   )}
                 </div>
 
@@ -1083,7 +1094,7 @@ function LibraryTabContent({
                   <button title="下载 PDF"
                           disabled={downloadingDoc === doc.id}
                           onClick={() => onDownloadPdf(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-blue-400 hover:text-bp-text hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+                          className="p-1.5 rounded-bp text-bp-cyan hover:text-bp-text hover:bg-bp-cyan/20 transition-colors disabled:opacity-50">
                     {downloadingDoc === doc.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
@@ -1097,7 +1108,7 @@ function LibraryTabContent({
                   <button title="解析并索引"
                           disabled={parsingDoc === doc.id}
                           onClick={() => onParseAndIndex(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-green-400 hover:text-bp-text hover:bg-green-500/30 transition-colors disabled:opacity-50">
+                          className="p-1.5 rounded-bp text-bp-green hover:text-bp-text hover:bg-bp-green/20 transition-colors disabled:opacity-50">
                     {parsingDoc === doc.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
@@ -1110,7 +1121,7 @@ function LibraryTabContent({
                 {(doc.import_status === 'parsed' || doc.import_status === 'indexed') && (
                   <button title="查看切片"
                           onClick={() => onViewChunks(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-purple-400 hover:text-bp-text hover:bg-purple-500/30 transition-colors">
+                          className="p-1.5 rounded-bp text-bp-purple hover:text-bp-text hover:bg-bp-purple/20 transition-colors">
                     <FileSearch className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1171,7 +1182,7 @@ function LibraryTabContent({
                         )}
                         <span className={cn(
                           'text-xs px-1.5 py-0.5 rounded',
-                          chunk.status === 'ready' ? 'bg-green-500/15 text-green-400' : 'bg-bp-surface text-bp-muted',
+                          chunk.status === 'ready' ? 'bg-bp-green/15 text-bp-green' : 'bg-bp-surface text-bp-muted',
                         )}>
                           {chunk.status || 'pending'}
                         </span>
@@ -1246,7 +1257,7 @@ function LiteratureTable({
                   </td>
                   <td className="px-4 py-3 text-center text-bp-text">{item.snippetCount}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-bp-muted'}>{item.factCount}</span>
+                    <span className={item.factCount > 0 ? 'text-bp-yellow font-medium' : 'text-bp-muted'}>{item.factCount}</span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     {(() => {
@@ -1280,7 +1291,7 @@ function LiteratureTable({
                       </button>
                       <button title="删除" disabled={isDeleting} onClick={() => onDelete(item.id)}
                               className={cn('p-1.5 rounded-md transition-colors',
-                                isDeleting ? 'text-bp-muted cursor-not-allowed' : 'text-bp-muted hover:text-red-400 hover:bg-red-500/10',
+                                isDeleting ? 'text-bp-muted cursor-not-allowed' : 'text-bp-muted hover:text-danger-400 hover:bg-danger-500/10',
                               )}>
                         {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </button>

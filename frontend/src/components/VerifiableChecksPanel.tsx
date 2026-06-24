@@ -11,12 +11,12 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
   if (!checks?.length && !spec) return null;
 
   return (
-    <div className="mb-4 p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+    <div className="mb-4 p-4 rounded-bp border border-bp-green/20 bg-bp-green/5">
       <h3 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-2">
-        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+        <ShieldCheck className="w-4 h-4 text-bp-green" />
         可验证 spec 对照
         {passed != null && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${passed ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-bp ${passed ? 'bg-bp-green/15 text-bp-green' : 'bg-danger-500/15 text-danger-400'}`}>
             {passed ? '通过' : '未通过'}
           </span>
         )}
@@ -26,9 +26,9 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
         {(checks || []).map((c) => (
           <li key={c.check_id} className="flex items-start gap-2 text-[11px]">
             {c.passed ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-bp-green shrink-0 mt-0.5" />
             ) : (
-              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              <XCircle className="w-3.5 h-3.5 text-danger-400 shrink-0 mt-0.5" />
             )}
             <div>
               <span className="text-bp-text">{c.description || c.check_id}</span>

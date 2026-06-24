@@ -63,6 +63,7 @@ function getStoredResearchDomain(projectId: string): string {
 const STAGE_CN_MAP: Record<string, string> = {
   problem_understanding: '问题理解',
   literature_mining: '文献挖掘',
+  data_acquisition: '数据采集',
   knowledge_graph: '知识图谱',
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
@@ -107,7 +108,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
             icon={<Play className="w-4 h-4" />}
             onClick={() => navigate(`/projects/${project.id}?tab=closed_loop`)}
           >
-            查看闭环
+            查看科研闭环总览 →
           </Button>
         </div>
       </Card>
@@ -326,7 +327,7 @@ export function ProjectWorkspace() {
   const projectModeLabel =
     resolvedProjectMode === 'federated_learning'
       ? 'Federated Learning Scientist'
-      : 'General AI Scientist';
+      : 'General AISci';
 
   const resolvedResearchField = useMemo(() => {
     if (project?.research_field) return project.research_field;
