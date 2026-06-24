@@ -311,7 +311,7 @@ print(f"检查完成:  {PASS} PASS  {WARNING} WARN  {FAIL} FAIL")
 print("=" * 60)
 
 if FAIL > 0:
-    print("\n⚠️  存在失败项，请检查后端服务和配置。")
+    print("\n[WARN] 存在失败项，请检查后端服务和配置。")
     print("   常见排查步骤:")
     print("   1. 确认后端已启动: cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000")
     print("   2. 确认前端已构建: cd frontend && npm run build")
@@ -319,5 +319,5 @@ if FAIL > 0:
     print("   4. 检查 /health/llm 接口确认 QWEN_API_KEY 是否已加载")
     sys.exit(1)
 else:
-    print("\n✓ 端到端检查通过！所有核心接口可达。")
+    print("\n[OK] 端到端检查通过！所有核心接口可达。")
     sys.exit(0)

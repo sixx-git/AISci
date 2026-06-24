@@ -29,11 +29,11 @@ pytest tests/ --cov=app --cov-report=html
 ### 基础测试
 
 - 健康检查 API
-- 数据库 CRUD
 - 文档解析（PDF / TXT / DOCX）
 - 向量检索
-- Agent 单元测试（Mock，不消耗 LLM Token）
+- Agent 单元测试（`test_agents.py`，Mock，不消耗 LLM Token）
 - Pipeline 服务测试
+- 独立 Pipeline Mock 验收：`python scripts/pipeline_e2e.py`（非 pytest）
 
 ### A 级优化批次回归（test_batch1–7）
 

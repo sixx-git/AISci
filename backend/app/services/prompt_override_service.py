@@ -38,7 +38,18 @@ class PromptOverrideService:
 
     def get_prompt_info(self, project_id: str, stage: str) -> Dict[str, Any]:
         stage_enum = _parse_stage(stage)
-        template_name = STAGE_TEMPLATE_MAP[stage_enum]
+        template_name = STAGE_TEMPLATE_MAP.get(stage_enum)
+        if template_name is None:
+            return {
+                "project_id": project_id,
+                "stage": stage,
+                "template_name": None,
+                "default_template": "",
+                "override_template": None,
+                "effective_template": "",
+                "has_override": False,
+                "updated_at": None,
+            }
         default_template = self.loader.load_template(template_name)
         override = self._get_override(project_id, stage_enum)
         return {
@@ -54,6 +65,8 @@ class PromptOverrideService:
 
     def save_override(self, project_id: str, stage: str, prompt_template: str, editor: str = "user") -> Dict[str, Any]:
         stage_enum = _parse_stage(stage)
+        if stage_enum not in STAGE_TEMPLATE_MAP:
+            raise ValueError(f"阶段 {stage} 不支持 Prompt 覆盖")
         override = self._get_override(project_id, stage_enum)
         now = datetime.now(CHINA_TZ)
         if override:
