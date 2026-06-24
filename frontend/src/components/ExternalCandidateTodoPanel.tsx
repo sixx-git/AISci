@@ -65,7 +65,7 @@ export function ExternalCandidateTodoPanel({
         <Database className="w-4 h-4" />
         外部数据待办 · 下载后上传 ({manualList.length})
       </h4>
-      <p className="text-[10px] text-gray-500 mb-3">
+      <p className="text-[10px] text-bp-muted mb-3">
         Kaggle / GEO / OpenAlex 等来源仅提供链接；下载 CSV 或表格文件后在本列表上传，系统将自动解析并纳入合并 CSV。
       </p>
 
@@ -86,14 +86,14 @@ export function ExternalCandidateTodoPanel({
           return (
             <div
               key={cid || String(c.dataset_name)}
-              className="p-3 rounded-lg border border-dark-700 bg-dark-900/40 text-xs"
+              className="p-3 rounded-lg border border-bp-border bg-bp-base/40 text-xs"
             >
               <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-gray-200 truncate">
+                  <div className="font-medium text-bp-text truncate">
                     {String(c.dataset_name || '未命名数据集')}
                   </div>
-                  <div className="text-gray-500 truncate">{String(c.source_platform || '')}</div>
+                  <div className="text-bp-muted truncate">{String(c.source_platform || '')}</div>
                 </div>
                 <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded border flex items-center gap-1 ${status.cls}`}>
                   {statusKey === 'processing' && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -105,7 +105,7 @@ export function ExternalCandidateTodoPanel({
               </div>
 
               {c.description && (
-                <p className="text-[10px] text-gray-500 line-clamp-2 mb-2">{String(c.description)}</p>
+                <p className="text-[10px] text-bp-muted line-clamp-2 mb-2">{String(c.description)}</p>
               )}
 
               <div className="flex flex-wrap items-center gap-2">
@@ -114,7 +114,7 @@ export function ExternalCandidateTodoPanel({
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[10px] text-primary-400 hover:text-primary-300"
+                    className="inline-flex items-center gap-1 text-[10px] text-bp-cyan hover:text-bp-cyan"
                   >
                     <ExternalLink className="w-3 h-3" /> 打开数据源
                   </a>
@@ -142,7 +142,7 @@ export function ExternalCandidateTodoPanel({
               </div>
 
               {c.user_upload_filename && (
-                <p className="text-[10px] text-gray-500 mt-2">
+                <p className="text-[10px] text-bp-muted mt-2">
                   文件: {String(c.user_upload_filename)}
                   {c.linked_table_id && (
                     <span className="text-green-400/80 ml-2">→ {String(c.linked_table_id)}</span>

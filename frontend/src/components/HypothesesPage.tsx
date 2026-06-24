@@ -288,8 +288,8 @@ export function HypothesesPage({
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">候选假设</h1>
-          <p className="text-gray-400">
+          <h1 className="text-3xl font-bold text-bp-text mb-2">候选假设</h1>
+          <p className="text-bp-muted">
             选择一个主假设作为研究方向，查看证据链，进入实验设计
           </p>
         </div>
@@ -304,7 +304,7 @@ export function HypothesesPage({
       </div>
 
       {alertMsg && (
-        <div className="mb-4 px-4 py-2.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-300 animate-pulse">
+        <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan animate-pulse">
           {alertMsg}
         </div>
       )}
@@ -312,25 +312,25 @@ export function HypothesesPage({
       {/* ===== 加载中 / 错误 / 空状态 ===== */}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary-400" />
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
+          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
           <p className="text-sm">正在加载假设列表...</p>
         </div>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
           <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
           <p className="text-sm text-red-400 mb-2">加载假设失败</p>
-          <p className="text-xs text-gray-500">{error}</p>
+          <p className="text-xs text-bp-muted">{error}</p>
         </div>
       )}
 
       {!loading && !error && hypotheses.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Lightbulb className="w-10 h-10 mb-3 text-gray-600" />
-          <p className="text-base text-gray-300 mb-2">暂无候选假设</p>
-          <p className="text-sm text-gray-500 mb-6">
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
+          <Lightbulb className="w-10 h-10 mb-3 text-bp-muted" />
+          <p className="text-base text-bp-text mb-2">暂无候选假设</p>
+          <p className="text-sm text-bp-muted mb-6">
             请先完成工作流中的假设生成阶段
           </p>
           <Button
@@ -355,7 +355,7 @@ export function HypothesesPage({
                   <p className="text-sm font-semibold text-red-300 mb-2">
                     当前生成结果与研究问题关联不足
                   </p>
-                  <p className="text-xs text-gray-400 mb-3">
+                  <p className="text-xs text-bp-muted mb-3">
                     所有 {hypotheses.length} 条假设均被标记为偏题（平均对齐分数 {avgAlignment}/100），
                     建议补充文献/数据后重新运行假设生成。
                   </p>
@@ -376,13 +376,13 @@ export function HypothesesPage({
           )}
 
           {/* ===== 假设决策面板 ===== */}
-          <div className="mb-5 p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-            <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-primary-400" />
+          <div className="mb-5 p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+            <h2 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-bp-cyan" />
               假设决策面板
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <DecisionStat label="假设总数" value={hypotheses.length} icon={Lightbulb} color="text-primary-400" />
+              <DecisionStat label="假设总数" value={hypotheses.length} icon={Lightbulb} color="text-bp-cyan" />
               <DecisionStat label="当前主假设" value={primaryHypothesis ? 1 : 0} icon={Star} color="text-amber-400" />
               <DecisionStat label="有证据支撑" value={withEvidenceCount} icon={Database} color="text-blue-400" />
               <DecisionStat label="平均对齐分" value={`${avgAlignment}%`} icon={Target} color="text-green-400" />
@@ -414,12 +414,12 @@ export function HypothesesPage({
           {nonOffTopicHypotheses.length > 0 && (
             <div className="mb-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-white">
+                <h3 className="text-sm font-semibold text-bp-text">
                   候选假设 · {nonOffTopicHypotheses.length} 条
                 </h3>
                 <button
                   onClick={() => setScoringExpanded(!scoringExpanded)}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  className="flex items-center gap-1 text-xs text-bp-muted hover:text-bp-text transition-colors"
                 >
                   {scoringExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   评分说明
@@ -427,7 +427,7 @@ export function HypothesesPage({
               </div>
 
               {scoringExpanded && (
-                <div className="mb-4 p-4 rounded-lg border border-dark-700 bg-dark-800/30 animate-fade-in">
+                <div className="mb-4 p-4 rounded-lg border border-bp-border bg-bp-panel/30 animate-fade-in">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
                       { label: '对齐度', desc: '假设与研究问题的语义相关程度；分数越高越贴合研究方向。', color: 'primary', icon: '🎯' },
@@ -438,8 +438,8 @@ export function HypothesesPage({
                       <div key={dim.label} className="flex items-start gap-2">
                         <span className="text-sm shrink-0">{dim.icon}</span>
                         <div>
-                          <p className="text-xs font-semibold text-white mb-0.5">{dim.label}</p>
-                          <p className="text-[11px] text-gray-400 leading-relaxed">{dim.desc}</p>
+                          <p className="text-xs font-semibold text-bp-text mb-0.5">{dim.label}</p>
+                          <p className="text-[11px] text-bp-muted leading-relaxed">{dim.desc}</p>
                         </div>
                       </div>
                     ))}
@@ -471,7 +471,7 @@ export function HypothesesPage({
             <div className="mb-5">
               <button
                 onClick={() => setOffTopicExpanded(!offTopicExpanded)}
-                className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-gray-200 transition-colors w-full text-left mb-2"
+                className="flex items-center gap-2 text-sm font-semibold text-bp-muted hover:text-bp-text transition-colors w-full text-left mb-2"
               >
                 <ShieldAlert className="w-4 h-4 text-red-400" />
                 低相关/偏题假设 · {offTopicHypotheses.length} 条
@@ -501,10 +501,10 @@ export function HypothesesPage({
 
           {/* ===== 无候选假设但存在主假设 ===== */}
           {nonOffTopicHypotheses.length === 0 && !primaryHypothesis && (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-12 text-bp-muted">
               <AlertTriangle className="w-6 h-6 mb-2 text-amber-400" />
-              <p className="text-sm text-gray-400 mb-1">所有假设均被标记为偏题</p>
-              <p className="text-xs text-gray-500 mb-4">请补充文献/数据后重新运行假设生成</p>
+              <p className="text-sm text-bp-muted mb-1">所有假设均被标记为偏题</p>
+              <p className="text-xs text-bp-muted mb-4">请补充文献/数据后重新运行假设生成</p>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />} onClick={handleGoDatasets}>
                   前往数据集
@@ -539,12 +539,12 @@ function DecisionStat({ label, value, icon: Icon, color }: {
   color: string;
 }) {
   return (
-    <div className="p-3 rounded-lg border border-dark-700 bg-dark-900/50">
+    <div className="p-3 rounded-lg border border-bp-border bg-bp-base/50">
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className={color} style={{ width: 15, height: 15 }} />
-        <span className="text-[11px] text-gray-500">{label}</span>
+        <span className="text-[11px] text-bp-muted">{label}</span>
       </div>
-      <span className="text-xl font-bold font-mono text-white">{value}</span>
+      <span className="text-xl font-bold font-mono text-bp-text">{value}</span>
     </div>
   );
 }

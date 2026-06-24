@@ -23,32 +23,32 @@ const statusLabel: Record<PipelineProgressNode['status'], string> = {
 
 function nodeRingStyle(s: PipelineProgressNode['status']) {
   switch (s) {
-    case 'completed': return 'bg-green-500/15 border-green-500 text-green-400';
-    case 'running':   return 'bg-blue-500/15 border-blue-500 text-blue-400';
-    case 'error':     return 'bg-red-500/15 border-red-500 text-red-400';
-    default:          return 'bg-gray-800 border-gray-700 text-gray-500';
+    case 'completed': return 'bg-bp-green/15 border-bp-green text-bp-green';
+    case 'running':   return 'bg-bp-cyan-tint border-bp-cyan text-bp-cyan';
+    case 'error':     return 'bg-danger-500/15 border-danger-500 text-danger-400';
+    default:          return 'bg-bp-panel border-bp-border text-bp-muted';
   }
 }
 
 function statusBadge(s: PipelineProgressNode['status']) {
   switch (s) {
     case 'completed': return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-[10px] font-medium bg-bp-green/20 text-bp-green">
         <CheckCircle className="w-3 h-3" />{statusLabel[s]}
       </span>
     );
     case 'running': return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/20 text-blue-400">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-[10px] font-medium bg-bp-cyan-tint text-bp-cyan">
         <Loader2 className="w-3 h-3 animate-spin" />{statusLabel[s]}
       </span>
     );
     case 'error': return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-[10px] font-medium bg-danger-500/20 text-danger-400">
         <XCircle className="w-3 h-3" />{statusLabel[s]}
       </span>
     );
     default: return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-700 text-gray-500">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-[10px] font-medium bg-bp-surface text-bp-muted">
         <Clock className="w-3 h-3" />{statusLabel[s]}
       </span>
     );
@@ -56,17 +56,16 @@ function statusBadge(s: PipelineProgressNode['status']) {
 }
 
 function connectorStyle(prev: PipelineProgressNode['status'], next: PipelineProgressNode['status']) {
-  if (prev === 'completed' && next === 'completed') return 'bg-green-500';
-  if (prev === 'completed' && next === 'running')   return 'bg-gradient-to-r from-green-500 to-blue-500';
-  if (prev === 'completed' && next === 'pending')    return 'bg-gradient-to-r from-green-500 to-gray-700';
-  if (prev === 'running'   && next === 'pending')    return 'bg-gradient-to-r from-blue-500 to-gray-700';
-  return 'bg-gray-700';
+  if (prev === 'completed' && next === 'completed') return 'bg-bp-green';
+  if (prev === 'completed' && next === 'running')   return 'bg-gradient-to-r from-bp-green to-bp-cyan';
+  if (prev === 'completed' && next === 'pending')    return 'bg-gradient-to-r from-bp-green to-bp-border';
+  if (prev === 'running'   && next === 'pending')    return 'bg-gradient-to-r from-bp-cyan to-bp-border';
+  return 'bg-bp-border';
 }
 
 export function PipelineProgress({ nodes, className }: PipelineProgressProps) {
   return (
     <div className={cn('space-y-4', className)}>
-      {/* 横向进度条（桌面端） */}
       <div className="hidden md:block overflow-x-auto">
         <div className="flex items-center min-w-max py-3">
           {nodes.map((node, idx) => {
@@ -81,18 +80,18 @@ export function PipelineProgress({ nodes, className }: PipelineProgressProps) {
                     node.status === 'running' && 'animate-pulse',
                   )}>
                     {node.status === 'running'
-                      ? <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                      ? <Loader2 className="w-5 h-5 animate-spin text-bp-cyan" />
                       : <Icon className={cn(
                           'w-5 h-5',
-                          node.status === 'completed' ? 'text-green-400'
-                          : node.status === 'error' ? 'text-red-400'
-                          : 'text-gray-600'
+                          node.status === 'completed' ? 'text-bp-green'
+                          : node.status === 'error' ? 'text-danger-400'
+                          : 'text-bp-muted'
                         )} />
                     }
                   </div>
                   <span className={cn(
                     'text-xs font-medium whitespace-nowrap',
-                    node.status === 'pending' ? 'text-gray-500' : 'text-gray-200',
+                    node.status === 'pending' ? 'text-bp-muted' : 'text-bp-text',
                   )}>
                     {node.label}
                   </span>
@@ -111,7 +110,6 @@ export function PipelineProgress({ nodes, className }: PipelineProgressProps) {
         </div>
       </div>
 
-      {/* 纵向时间线（移动端） */}
       <div className="md:hidden space-y-0">
         {nodes.map((node, idx) => {
           const Icon = node.icon;
@@ -124,11 +122,11 @@ export function PipelineProgress({ nodes, className }: PipelineProgressProps) {
                   nodeRingStyle(node.status),
                 )}>
                   {node.status === 'running'
-                    ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                    ? <Loader2 className="w-4 h-4 animate-spin text-bp-cyan" />
                     : <Icon className={cn('w-4 h-4',
-                        node.status === 'completed' ? 'text-green-400'
-                        : node.status === 'error' ? 'text-red-400'
-                        : 'text-gray-600'
+                        node.status === 'completed' ? 'text-bp-green'
+                        : node.status === 'error' ? 'text-danger-400'
+                        : 'text-bp-muted'
                       )} />
                   }
                 </div>
@@ -140,7 +138,7 @@ export function PipelineProgress({ nodes, className }: PipelineProgressProps) {
               </div>
               <div className="pb-4">
                 <span className={cn('text-sm font-medium',
-                  node.status === 'pending' ? 'text-gray-500' : 'text-gray-200',
+                  node.status === 'pending' ? 'text-bp-muted' : 'text-bp-text',
                 )}>{node.label}</span>
                 <div className="mt-1">{statusBadge(node.status)}</div>
               </div>

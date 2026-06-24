@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Cpu, Network } from 'lucide-react';
+import { Plus, Cpu, Network } from 'lucide-react';
 import { projectService } from '@/services';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
+import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
+import { cn } from '@/lib/utils';
 import type { ProjectMode } from '@/types';
 
 const MODE_OPTIONS: { value: ProjectMode; label: string; desc: string; icon: typeof Cpu }[] = [
@@ -81,10 +83,7 @@ export function CreateProject() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-6 transition-colors">
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        返回项目列表
-      </Link>
+      <BackToProjectsLink className="mb-6" />
 
       <PageHeader
         title="创建新项目"
@@ -94,8 +93,8 @@ export function CreateProject() {
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
-              项目模式 <span className="text-red-400">*</span>
+            <label className="block text-sm font-medium text-bp-text mb-3">
+              项目模式 <span className="text-danger-400">*</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {MODE_OPTIONS.map((opt) => {
@@ -106,19 +105,20 @@ export function CreateProject() {
                     key={opt.value}
                     type="button"
                     onClick={() => setProjectMode(opt.value)}
-                    className={`text-left p-4 rounded-lg border transition-all ${
+                    className={cn(
+                      'text-left p-4 rounded-bp border transition-all',
                       selected
-                        ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/30'
-                        : 'border-dark-700 bg-dark-900/50 hover:border-gray-600'
-                    }`}
+                        ? 'border-bp-cyan bg-bp-cyan-tint ring-1 ring-bp-cyan/30'
+                        : 'border-bp-border bg-bp-panel/50 hover:border-bp-muted',
+                    )}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <Icon className={`w-4 h-4 ${selected ? 'text-primary-400' : 'text-gray-500'}`} />
-                      <span className={`text-sm font-semibold ${selected ? 'text-white' : 'text-gray-300'}`}>
+                      <Icon className={cn('w-4 h-4', selected ? 'text-bp-cyan' : 'text-bp-muted')} />
+                      <span className={cn('text-sm font-semibold', selected ? 'text-bp-text' : 'text-bp-muted')}>
                         {opt.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">{opt.desc}</p>
+                    <p className="text-xs text-bp-muted leading-relaxed">{opt.desc}</p>
                   </button>
                 );
               })}
@@ -126,8 +126,8 @@ export function CreateProject() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              项目名称 <span className="text-red-400">*</span>
+            <label className="block text-sm font-medium text-bp-text mb-2">
+              项目名称 <span className="text-danger-400">*</span>
             </label>
             <input
               type="text"
@@ -144,7 +144,7 @@ export function CreateProject() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-bp-text mb-2">
               项目描述
             </label>
             <textarea
@@ -157,13 +157,13 @@ export function CreateProject() {
           </div>
 
           {projectMode === 'federated_learning' && (
-            <div className="p-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 text-xs text-cyan-300/90">
+            <div className="p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint text-xs text-bp-cyan">
               创建后将预填联邦学习研究问题模板（FedAvg/FedProx/SCAFFOLD、Non-IID、client drift 等关键词）。
               请上传含 method、global_accuracy、f1_score 等列的 CSV 以启用联邦数据识别。
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-4 pt-4 border-t border-dark-700">
+          <div className="flex items-center justify-end gap-4 pt-4 border-t border-bp-cyan-dim">
             <Link to="/">
               <Button variant="secondary" type="button">
                 取消

@@ -24,8 +24,8 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
   }
 
   return (
-    <div className="p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-      <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+    <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+      <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <GitCompare className="w-4 h-4 text-violet-400" />
         {title}
       </h3>
@@ -44,12 +44,12 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
           return (
             <div
               key={`${before.label}-${after.label}`}
-              className="p-3 rounded border border-dark-700/80 bg-dark-900/40"
+              className="p-3 rounded border border-bp-border/80 bg-bp-base/40"
             >
               <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
-                <span className="text-gray-400">{before.label || `R${before.round}`}</span>
-                <span className="text-gray-600">→</span>
-                <span className="text-gray-300">{after.label || `R${after.round}`}</span>
+                <span className="text-bp-muted">{before.label || `R${before.round}`}</span>
+                <span className="text-bp-muted">→</span>
+                <span className="text-bp-text">{after.label || `R${after.round}`}</span>
                 {scoreDelta != null && (
                   <span
                     className={`font-mono ${scoreDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}
@@ -63,7 +63,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
                 <CompareRow label="假设" changed={hypo.changed} text={hypo.preview} />
                 <CompareRow label="实验步骤" changed={steps.changed} text={steps.preview} />
                 <EvidenceCompareRow before={before} after={after} />
-                <div className="flex gap-4 text-[10px] text-gray-500">
+                <div className="flex gap-4 text-[10px] text-bp-muted">
                   <span>沙箱: {String(before.sandbox_success ?? '—')} → {String(after.sandbox_success ?? '—')}</span>
                   <span>决策: {before.ensemble_decision || '—'} → {after.ensemble_decision || '—'}</span>
                 </div>
@@ -79,11 +79,11 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
 function CompareRow({ label, changed, text }: { label: string; changed: boolean; text: string }) {
   return (
     <div>
-      <p className="text-[10px] text-gray-500 mb-0.5">
+      <p className="text-[10px] text-bp-muted mb-0.5">
         {label}
         {changed && <span className="ml-1 text-amber-400">已变更</span>}
       </p>
-      <p className={`text-gray-300 line-clamp-3 ${changed ? 'border-l-2 border-amber-500/50 pl-2' : ''}`}>
+      <p className={`text-bp-text line-clamp-3 ${changed ? 'border-l-2 border-amber-500/50 pl-2' : ''}`}>
         {text}
       </p>
     </div>
@@ -102,11 +102,11 @@ function EvidenceCompareRow({ before, after }: { before: IterationSnapshot; afte
 
   return (
     <div>
-      <p className="text-[10px] text-gray-500 mb-0.5">
+      <p className="text-[10px] text-bp-muted mb-0.5">
         证据 / 可验证 spec
         {changed && <span className="ml-1 text-emerald-400">已变更</span>}
       </p>
-      <p className="text-gray-400 text-[11px]">
+      <p className="text-bp-muted text-[11px]">
         fact {countBefore}→{countAfter}
         {before.evidence_level || after.evidence_level
           ? ` · 等级 ${before.evidence_level || '—'}→${after.evidence_level || '—'}`

@@ -162,10 +162,10 @@ export function ApiManagementPanel() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+          'flex items-center gap-2 px-3 py-2 rounded-bp text-sm font-medium border transition-colors',
           open
-            ? 'bg-primary-600/20 text-primary-400 border-primary-600/30'
-            : 'text-gray-400 border-transparent hover:text-gray-200 hover:bg-dark-700 hover:border-gray-600',
+            ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30'
+            : 'text-bp-muted border-transparent hover:text-bp-text hover:bg-bp-surface hover:border-bp-border',
         )}
         title="API 与模型配置"
       >
@@ -185,33 +185,33 @@ export function ApiManagementPanel() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,22rem)] z-[60] rounded-xl border border-gray-700 bg-dark-800 shadow-2xl shadow-black/40">
-          <div className="px-4 py-3 border-b border-gray-700/80">
-            <h3 className="text-sm font-semibold text-white">API 配置</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">
+        <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,22rem)] z-[60] rounded-bp border border-bp-border bg-bp-panel shadow-bp-glow-strong">
+          <div className="px-4 py-3 border-b border-bp-border/80">
+            <h3 className="text-sm font-semibold text-bp-text">API 配置</h3>
+            <p className="text-[11px] text-bp-muted mt-0.5">
               Qwen 全模态模型，文本与视觉共用同一配置
             </p>
           </div>
 
           <div className="px-4 py-3 space-y-3 max-h-[65vh] overflow-y-auto">
             {loading && !config ? (
-              <div className="flex items-center justify-center py-6 text-gray-500 text-sm gap-2">
+              <div className="flex items-center justify-center py-6 text-bp-muted text-sm gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 加载中…
               </div>
             ) : (
               <>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1.5">API Key 来源</p>
-                  <div className="grid grid-cols-2 gap-1.5 p-0.5 rounded-lg bg-dark-900 border border-gray-700">
+                  <p className="text-xs text-bp-muted mb-1.5">API Key 来源</p>
+                  <div className="grid grid-cols-2 gap-1.5 p-0.5 rounded-bp bg-bp-base border border-bp-border">
                     <button
                       type="button"
                       onClick={() => setUseEnvApiKey(true)}
                       className={cn(
                         'text-xs py-1.5 px-2 rounded-md transition-colors',
                         useEnvApiKey
-                          ? 'bg-primary-600/25 text-primary-300 font-medium'
-                          : 'text-gray-400 hover:text-gray-200',
+                          ? 'bg-bp-cyan-tint text-bp-cyan font-medium'
+                          : 'text-bp-muted hover:text-bp-text',
                       )}
                     >
                       .env 环境变量
@@ -222,8 +222,8 @@ export function ApiManagementPanel() {
                       className={cn(
                         'text-xs py-1.5 px-2 rounded-md transition-colors',
                         !useEnvApiKey
-                          ? 'bg-primary-600/25 text-primary-300 font-medium'
-                          : 'text-gray-400 hover:text-gray-200',
+                          ? 'bg-bp-cyan-tint text-bp-cyan font-medium'
+                          : 'text-bp-muted hover:text-bp-text',
                       )}
                     >
                       自定义密钥
@@ -245,9 +245,9 @@ export function ApiManagementPanel() {
                   ) : (
                     <div className="mt-2 space-y-1.5">
                       {config?.custom_api_key_configured && config.api_key_source === 'custom' && !apiKeyInput && (
-                        <p className="text-[11px] text-gray-500">
-                          当前密钥：<span className="font-mono text-gray-400">{config.api_key_masked}</span>
-                          <span className="text-gray-600"> · 留空则保持不变</span>
+                        <p className="text-[11px] text-bp-muted">
+                          当前密钥：<span className="font-mono text-bp-text">{config.api_key_masked}</span>
+                          <span className="text-bp-muted/70"> · 留空则保持不变</span>
                         </p>
                       )}
                       <div className="relative">
@@ -256,12 +256,12 @@ export function ApiManagementPanel() {
                           value={apiKeyInput}
                           onChange={(e) => setApiKeyInput(e.target.value)}
                           placeholder="输入 DashScope API Key（sk-...）"
-                          className="w-full bg-dark-900 border border-gray-700 rounded-lg px-3 py-2 pr-9 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-primary-500/50"
+                          className="input-field py-2 pr-9 text-sm"
                         />
                         <button
                           type="button"
                           onClick={() => setShowKey((v) => !v)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-bp-muted hover:text-bp-text"
                           aria-label={showKey ? '隐藏密钥' : '显示密钥'}
                         >
                           {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -285,14 +285,14 @@ export function ApiManagementPanel() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1" htmlFor="llm-qwen-model">
+                  <label className="text-xs text-bp-muted block mb-1" htmlFor="llm-qwen-model">
                     Qwen 模型
                   </label>
                   <select
                     id="llm-qwen-model"
                     value={modelSelect}
                     onChange={(e) => setModelSelect(e.target.value)}
-                    className="w-full bg-dark-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-primary-500/50"
+                    className="input-field py-2 text-sm"
                   >
                     {QWEN_MODEL_GROUPS.map((group) => (
                       <optgroup key={group.label} label={group.label}>
@@ -318,7 +318,7 @@ export function ApiManagementPanel() {
                       value={customModel}
                       onChange={(e) => setCustomModel(e.target.value)}
                       placeholder="输入百炼模型 ID，如 qwen3.7-plus"
-                      className="mt-1.5 w-full bg-dark-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-primary-500/50"
+                      className="mt-1.5 input-field py-2 text-sm"
                     />
                   )}
                 </div>
@@ -326,15 +326,15 @@ export function ApiManagementPanel() {
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300"
+                  className="flex items-center gap-1.5 text-xs text-bp-muted hover:text-bp-text"
                 >
                   <Settings2 className="w-3.5 h-3.5" />
                   {showAdvanced ? '收起高级设置' : '高级设置'}
                 </button>
                 {showAdvanced && (
-                  <div className="space-y-3 pl-1 border-l border-gray-700/60 ml-1">
+                  <div className="space-y-3 pl-1 border-l border-bp-border/60 ml-1">
                     <div>
-                      <label className="text-xs text-gray-500 block mb-1" htmlFor="llm-base-url">
+                      <label className="text-xs text-bp-muted block mb-1" htmlFor="llm-base-url">
                         API Base URL
                       </label>
                       <input
@@ -343,7 +343,7 @@ export function ApiManagementPanel() {
                         value={baseUrl}
                         onChange={(e) => setBaseUrl(e.target.value)}
                         placeholder={config?.env_base_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}
-                        className="w-full bg-dark-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-primary-500/50"
+                        className="input-field py-2 text-sm"
                       />
                     </div>
                   </div>
@@ -359,7 +359,7 @@ export function ApiManagementPanel() {
             )}
           </div>
 
-          <div className="px-4 py-3 border-t border-gray-700/80">
+          <div className="px-4 py-3 border-t border-bp-border/80">
             <Button
               size="sm"
               className="w-full"

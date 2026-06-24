@@ -75,10 +75,10 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
   if (events.length === 0 && qualityTrend.length === 0 && decisions.length === 0) return null;
 
   return (
-    <div className="mb-6 p-4 rounded-lg border border-dark-700 bg-dark-800/30">
+    <div className="mb-6 p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <div className="flex items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary-400" />
+        <h2 className="text-sm font-semibold text-bp-text flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-bp-cyan" />
           科研闭环 · 迭代质量趋势
         </h2>
         {runId && (
@@ -86,7 +86,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
             type="button"
             onClick={handleExportAudit}
             disabled={exporting}
-            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-primary-300 disabled:opacity-50"
+            className="flex items-center gap-1 text-[11px] text-bp-muted hover:text-bp-cyan disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
             {exporting ? '导出中…' : '导出审计链'}
@@ -96,7 +96,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {qualityTrend.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-gray-500 mb-2">综合质量分 CQS（0–100，越高越好）</p>
+          <p className="text-[11px] text-bp-muted mb-2">综合质量分 CQS（0–100，越高越好）</p>
           <div className="flex flex-wrap items-end gap-2">
             {qualityTrend.map((entry, idx) => {
               const score = entry.cqs ?? entry.score ?? 0;
@@ -105,13 +105,13 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
               const rawHint = entry.raw_score != null ? ` raw=${entry.raw_score}` : '';
               return (
                 <div key={`${label}-${idx}`} className="flex flex-col items-center gap-1 min-w-[52px]">
-                  <span className="text-[10px] font-mono text-primary-300">{formatScore(score)}</span>
+                  <span className="text-[10px] font-mono text-bp-cyan">{formatScore(score)}</span>
                   <div
-                    className="w-8 rounded-t bg-primary-500/40 border border-primary-500/30"
+                    className="w-8 rounded-t bg-primary-500/40 border border-bp-cyan/30"
                     style={{ height: `${height}px` }}
                     title={`${label}: CQS ${formatScore(score)}${rawHint}`}
                   />
-                  <span className="text-[9px] text-gray-500 text-center leading-tight max-w-[64px] truncate">
+                  <span className="text-[9px] text-bp-muted text-center leading-tight max-w-[64px] truncate">
                     {label}
                   </span>
                 </div>
@@ -123,7 +123,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {decisions.length > 0 && (
         <div className="mb-4 space-y-2">
-          <p className="text-[11px] text-gray-500 flex items-center gap-1">
+          <p className="text-[11px] text-bp-muted flex items-center gap-1">
             <GitCommitHorizontal className="w-3 h-3" />
             闭环决策记录
           </p>
@@ -135,21 +135,21 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
               <GitCommitHorizontal className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-300">{d.trigger}</span>
+                  <span className="text-xs font-medium text-bp-text">{d.trigger}</span>
                   {d.action && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-violet-300">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-violet-300">
                       {DECISION_LABELS[d.action] || d.action}
                     </span>
                   )}
                   {d.round != null && (
-                    <span className="text-[10px] text-gray-600">R{d.round}</span>
+                    <span className="text-[10px] text-bp-muted">R{d.round}</span>
                   )}
                 </div>
                 {d.reason && (
-                  <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{d.reason}</p>
+                  <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">{d.reason}</p>
                 )}
                 {d.next_stage && (
-                  <p className="text-[10px] text-gray-600 mt-0.5">下一步: {d.next_stage}</p>
+                  <p className="text-[10px] text-bp-muted mt-0.5">下一步: {d.next_stage}</p>
                 )}
               </div>
             </div>
@@ -159,21 +159,21 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {events.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] text-gray-500">闭环事件</p>
+          <p className="text-[11px] text-bp-muted">闭环事件</p>
           {events.slice(-6).reverse().map((evt, idx) => {
             const Icon = EVENT_ICONS[evt.type] || TrendingUp;
             const label = EVENT_LABELS[evt.type] || evt.type;
             return (
               <div
                 key={`${evt.type}-${evt.at ?? idx}`}
-                className="flex items-start gap-2 p-2 rounded border border-dark-700/80 bg-dark-900/40"
+                className="flex items-start gap-2 p-2 rounded border border-bp-border/80 bg-bp-base/40"
               >
-                <Icon className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
+                <Icon className="w-3.5 h-3.5 text-bp-muted shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-gray-300">{label}</span>
+                    <span className="text-xs font-medium text-bp-text">{label}</span>
                     {evt.at && (
-                      <span className="text-[10px] text-gray-600">{String(evt.at).slice(0, 19)}</span>
+                      <span className="text-[10px] text-bp-muted">{String(evt.at).slice(0, 19)}</span>
                     )}
                     {evt.decision && (
                       <span
@@ -193,24 +193,24 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                     )}
                   </div>
                   {evt.summary && (
-                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{String(evt.summary)}</p>
+                    <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">{String(evt.summary)}</p>
                   )}
                   {evt.success != null && evt.type === 'sandbox_validation' && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-[11px] text-bp-muted mt-0.5">
                       沙箱执行: {evt.success ? '成功' : '失败'}
                       {evt.experiment_id ? ` · ${evt.experiment_id}` : ''}
                     </p>
                   )}
                   {evt.type === 'quality_acceptance' && evt.summary && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">{String(evt.summary)}</p>
+                    <p className="text-[11px] text-bp-muted mt-0.5">{String(evt.summary)}</p>
                   )}
                   {evt.type === 'teaching_auto_refinement' && Array.isArray(evt.reasons) && (
-                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">
+                    <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">
                       {(evt.reasons as string[]).join('；')}
                     </p>
                   )}
                   {evt.type === 'discovery_literature_refresh' && evt.new_facts != null && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-[11px] text-bp-muted mt-0.5">
                       文献刷新 +{String(evt.new_facts)} 条 fact
                       {evt.search_query ? ` · ${String(evt.search_query).slice(0, 60)}` : ''}
                     </p>

@@ -60,7 +60,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
 
   return (
     <div className="mb-4">
-      <p className="text-[11px] text-gray-500 mb-2 flex items-center gap-1">
+      <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
         <TrendingUp className="w-3 h-3" />
         精度—通信 Pareto 前沿
         {pareto.best_tradeoff_method && (
@@ -74,7 +74,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
           const onFrontier = frontierMethods.has(p.method);
           return (
             <div key={p.method} className="text-[10px]">
-              <div className="flex justify-between text-gray-500 mb-0.5">
+              <div className="flex justify-between text-bp-muted mb-0.5">
                 <span className={onFrontier ? 'text-violet-300 font-medium' : ''}>{p.method}</span>
                 <span>
                   acc={(p.accuracy ?? 0).toFixed(3)} · comm={p.communication_cost ?? 0}
@@ -96,7 +96,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
           );
         })}
       </div>
-      <p className="text-[9px] text-gray-600 mt-1">绿=精度归一化 · 琥珀=通信成本（越低越好）</p>
+      <p className="text-[9px] text-bp-muted mt-1">绿=精度归一化 · 琥珀=通信成本（越低越好）</p>
     </div>
   );
 }
@@ -130,7 +130,7 @@ export function FederatedCampaignPanel({
 
   return (
     <div className="mb-6 p-4 rounded-lg border border-violet-500/20 bg-violet-500/5">
-      <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+      <h2 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <FlaskConical className="w-4 h-4 text-violet-400" />
         联邦 Campaign · 可验证迭代闭环
       </h2>
@@ -141,10 +141,10 @@ export function FederatedCampaignPanel({
             自动 Campaign R{campaignRefinement?.round ?? refineEvt?.round ?? 2}
           </span>
           {campaignRefinement?.improvement?.summary && (
-            <p className="text-gray-500 mt-0.5">{campaignRefinement.improvement.summary}</p>
+            <p className="text-bp-muted mt-0.5">{campaignRefinement.improvement.summary}</p>
           )}
           {(campaignRefinement?.reasons || (refineEvt?.reasons as string[])) && (
-            <p className="text-gray-600 mt-0.5">
+            <p className="text-bp-muted mt-0.5">
               触发：{(campaignRefinement?.reasons || (refineEvt?.reasons as string[]) || []).join('；')}
             </p>
           )}
@@ -152,24 +152,24 @@ export function FederatedCampaignPanel({
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs">
-        <div className="p-2 rounded border border-dark-700 bg-dark-900/40">
-          <span className="text-gray-500">Pilot 模式</span>
-          <p className="text-white font-mono mt-0.5">{mode}</p>
+        <div className="p-2 rounded border border-bp-border bg-bp-base/40">
+          <span className="text-bp-muted">Pilot 模式</span>
+          <p className="text-bp-text font-mono mt-0.5">{mode}</p>
           {(federatedPilot?.runtime_engine as string) && (
             <p className="text-[10px] text-cyan-500/80 mt-0.5">
               engine: {String(federatedPilot?.runtime_engine)}
             </p>
           )}
         </div>
-        <div className="p-2 rounded border border-dark-700 bg-dark-900/40">
-          <span className="text-gray-500">当前最优方法</span>
+        <div className="p-2 rounded border border-bp-border bg-bp-base/40">
+          <span className="text-bp-muted">当前最优方法</span>
           <p className="text-violet-300 font-mono mt-0.5">{best}</p>
         </div>
-        <div className="p-2 rounded border border-dark-700 bg-dark-900/40">
-          <span className="text-gray-500">VFL 对齐 Gate</span>
+        <div className="p-2 rounded border border-bp-border bg-bp-base/40">
+          <span className="text-bp-muted">VFL 对齐 Gate</span>
           <p className="mt-0.5 flex items-center gap-1">
             {gate == null ? (
-              <span className="text-gray-500">—</span>
+              <span className="text-bp-muted">—</span>
             ) : gatePassed ? (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
@@ -193,7 +193,7 @@ export function FederatedCampaignPanel({
 
       {actions.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-gray-500 mb-2 flex items-center gap-1">
+          <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
             <Target className="w-3 h-3" />
             结构化 Replan Actions（含 expected_check，可验收）
           </p>
@@ -201,7 +201,7 @@ export function FederatedCampaignPanel({
             {actions.slice(0, 6).map((act, idx) => (
               <div
                 key={act.action_id || idx}
-                className="p-2 rounded border border-dark-700/80 bg-dark-900/40 text-[11px]"
+                className="p-2 rounded border border-bp-border/80 bg-bp-base/40 text-[11px]"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span
@@ -210,22 +210,22 @@ export function FederatedCampaignPanel({
                         ? 'bg-red-500/10 text-red-400'
                         : act.priority === 'high'
                           ? 'bg-amber-500/10 text-amber-400'
-                          : 'bg-gray-500/10 text-gray-400'
+                          : 'bg-gray-500/10 text-bp-muted'
                     }`}
                   >
                     {act.priority || 'medium'}
                   </span>
                   <span className="font-mono text-violet-300">{act.action_id}</span>
-                  <span className="text-gray-400">
+                  <span className="text-bp-muted">
                     {act.parameter} → {String(act.to_value ?? '—')}
                   </span>
                 </div>
-                <p className="text-gray-500">
-                  <span className="text-gray-400">验收：</span>
+                <p className="text-bp-muted">
+                  <span className="text-bp-muted">验收：</span>
                   {act.expected_check}
                 </p>
                 {act.rationale && (
-                  <p className="text-gray-600 mt-0.5">{act.rationale}</p>
+                  <p className="text-bp-muted mt-0.5">{act.rationale}</p>
                 )}
               </div>
             ))}
@@ -235,7 +235,7 @@ export function FederatedCampaignPanel({
 
       {snapshots.length > 0 && (
         <div>
-          <p className="text-[11px] text-gray-500 mb-2 flex items-center gap-1">
+          <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
             <RefreshCw className="w-3 h-3" />
             Campaign 快照
           </p>
@@ -243,14 +243,14 @@ export function FederatedCampaignPanel({
             {snapshots.slice(-6).map((snap, idx) => (
               <div
                 key={`${snap.label}-${idx}`}
-                className="px-2 py-1.5 rounded border border-dark-700 bg-dark-900/30 text-[10px] max-w-xs"
+                className="px-2 py-1.5 rounded border border-bp-border bg-bp-base/30 text-[10px] max-w-xs"
               >
                 <span className="text-violet-300 font-medium">{snap.label || `R${snap.round}`}</span>
                 {snap.federated_best_method && (
-                  <span className="text-gray-500 ml-2">best={snap.federated_best_method}</span>
+                  <span className="text-bp-muted ml-2">best={snap.federated_best_method}</span>
                 )}
                 {snap.federated_execution_mode && (
-                  <span className="text-gray-600 ml-1">({snap.federated_execution_mode})</span>
+                  <span className="text-bp-muted ml-1">({snap.federated_execution_mode})</span>
                 )}
               </div>
             ))}

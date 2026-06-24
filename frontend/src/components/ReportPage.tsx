@@ -179,12 +179,12 @@ export function ReportPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
-          <p className="text-gray-400 text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
+          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
         </div>
         <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-primary-400 animate-spin mr-3" />
-          <span className="text-gray-400">正在加载报告...</span>
+          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
+          <span className="text-bp-muted">正在加载报告...</span>
         </Card>
       </div>
     );
@@ -194,8 +194,8 @@ export function ReportPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
-          <p className="text-gray-400 text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
+          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
         </div>
         <Card className="flex flex-col items-center justify-center py-12 gap-4">
           <XCircle className="w-10 h-10 text-red-400" />
@@ -209,7 +209,7 @@ export function ReportPage({
                 .catch((e) => setErrorMsg(e instanceof Error ? e.message : '加载失败'))
                 .finally(() => setIsLoading(false));
             }}
-            className="px-4 py-2 rounded-lg bg-primary-500/20 border border-primary-500/30 text-primary-300 text-xs hover:bg-primary-500/30 transition-colors"
+            className="px-4 py-2 rounded-lg bg-primary-500/20 border border-bp-cyan/30 text-bp-cyan text-xs hover:bg-primary-500/30 transition-colors"
           >
             重试
           </button>
@@ -222,13 +222,13 @@ export function ReportPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
-          <p className="text-gray-400 text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
+          <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
         </div>
         <Card className="flex flex-col items-center justify-center py-12 gap-3">
-          <FileText className="w-10 h-10 text-gray-600" />
-          <p className="text-gray-500 text-sm">暂无研究报告</p>
-          <p className="text-xs text-gray-600">请先通过工作流触发报告生成</p>
+          <FileText className="w-10 h-10 text-bp-muted" />
+          <p className="text-bp-muted text-sm">暂无研究报告</p>
+          <p className="text-xs text-bp-muted">请先通过工作流触发报告生成</p>
         </Card>
       </div>
     );
@@ -248,13 +248,13 @@ export function ReportPage({
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-1">研究报告</h1>
+        <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
         <div className="flex flex-wrap items-center gap-2 mb-1">
-          <p className="text-gray-400 text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
+          <p className="text-bp-muted text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
           <span className={`text-[11px] px-2 py-0.5 rounded border ${
             projectMode === 'federated_learning'
               ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-              : 'border-gray-600 bg-gray-800 text-gray-400'
+              : 'border-bp-border bg-bp-panel text-bp-muted'
           }`}>
             {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
           </span>
@@ -389,12 +389,12 @@ export function ReportPage({
       <div className="mb-6">
         <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-primary-400" />
+            <div className="w-9 h-9 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-bp-cyan" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">{report.title}</p>
-              <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500">
+              <p className="text-sm font-medium text-bp-text">{report.title}</p>
+              <div className="flex items-center gap-1 mt-0.5 text-xs text-bp-muted">
                 <Clock className="w-3 h-3" />
                 <span>生成于 {report.generatedAt}</span>
               </div>
@@ -403,7 +403,7 @@ export function ReportPage({
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/documents')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-panel border border-bp-border text-xs text-bp-muted hover:text-bp-text hover:border-bp-border transition-colors"
               title="前往文献库导入文献"
             >
               <BookOpen className="w-3.5 h-3.5" />
@@ -420,13 +420,13 @@ export function ReportPage({
         <div className="lg:col-span-3">
           <Card>
             <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-4 h-4 text-primary-400" />
+              <FileText className="w-4 h-4 text-bp-cyan" />
               <div>
-                <h3 className="text-sm font-semibold text-white">报告预览</h3>
-                <p className="text-xs text-gray-500">Markdown 格式 · 科学假设与研究计划</p>
+                <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
+                <p className="text-xs text-bp-muted">Markdown 格式 · 科学假设与研究计划</p>
               </div>
             </div>
-            <div className="bg-gray-950/80 rounded-lg border border-gray-800 p-6 overflow-auto max-h-[calc(100vh-320px)]">
+            <div className="bg-gray-950/80 rounded-lg border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]">
               <MarkdownPreview content={report.markdownContent} />
             </div>
           </Card>
@@ -437,8 +437,8 @@ export function ReportPage({
               <div className="flex items-center gap-2 mb-4">
                 <BarChart3 className="w-4 h-4 text-emerald-400" />
                 <div>
-                  <h3 className="text-sm font-semibold text-white">数据可视化</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="text-sm font-semibold text-bp-text">数据可视化</h3>
+                  <p className="text-xs text-bp-muted">
                     共 {report.plots.length} 张图表 · 
                     {report.plots.filter(p => p.is_generated_from_real_data).length} 张基于真实数据
                   </p>
@@ -448,15 +448,15 @@ export function ReportPage({
                 {report.plots.map((plot: ReportPlot) => (
                   <div
                     key={plot.plot_id}
-                    className="rounded-lg border border-gray-700 bg-gray-950/60 overflow-hidden"
+                    className="rounded-lg border border-bp-border bg-gray-950/60 overflow-hidden"
                   >
-                    <div className="px-3 py-2 border-b border-gray-700/60 bg-gray-900/50">
-                      <p className="text-xs font-medium text-gray-200 truncate">{plot.title}</p>
+                    <div className="px-3 py-2 border-b border-bp-border/60 bg-bp-base/50">
+                      <p className="text-xs font-medium text-bp-text truncate">{plot.title}</p>
                       {plot.description && (
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{plot.description}</p>
+                        <p className="text-xs text-bp-muted mt-0.5 line-clamp-1">{plot.description}</p>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-700/50 text-gray-400">
+                        <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-bp-surface/50 text-bp-muted">
                           {plot.type}
                         </span>
                         {plot.is_generated_from_real_data ? (
@@ -492,12 +492,12 @@ export function ReportPage({
                           className="max-w-full max-h-[300px] object-contain rounded"
                         />
                       ) : (
-                        <span className="text-xs text-gray-600">图表不可用</span>
+                        <span className="text-xs text-bp-muted">图表不可用</span>
                       )}
                     </div>
                     {plot.markdown_embed && (
-                      <div className="px-3 py-1.5 border-t border-gray-700/60 bg-gray-900/30">
-                        <code className="text-[10px] text-gray-500 break-all">{plot.markdown_embed}</code>
+                      <div className="px-3 py-1.5 border-t border-bp-border/60 bg-bp-base/30">
+                        <code className="text-[10px] text-bp-muted break-all">{plot.markdown_embed}</code>
                       </div>
                     )}
                   </div>
@@ -555,7 +555,7 @@ export function ReportPage({
                 导师式评审
               </button>
               <textarea
-                className="w-full min-h-[48px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2 mb-2"
+                className="w-full min-h-[48px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2 mb-2"
                 placeholder="导师评审补充说明（可选）"
                 value={mentorNotes}
                 onChange={(e) => setMentorNotes(e.target.value)}
@@ -566,20 +566,20 @@ export function ReportPage({
                     <p className="text-amber-200/90">{mentorReview.overall_assessment}</p>
                   )}
                   {mentorReview.readiness_score != null && (
-                    <p className="text-gray-400">就绪度：{mentorReview.readiness_score}/10</p>
+                    <p className="text-bp-muted">就绪度：{mentorReview.readiness_score}/10</p>
                   )}
                   {mentorReview.weaknesses?.length > 0 && (
                     <div>
-                      <p className="text-gray-500 mb-0.5">不足</p>
-                      <ul className="list-disc pl-4 text-gray-300">
+                      <p className="text-bp-muted mb-0.5">不足</p>
+                      <ul className="list-disc pl-4 text-bp-text">
                         {mentorReview.weaknesses.slice(0, 4).map((w) => <li key={w}>{w}</li>)}
                       </ul>
                     </div>
                   )}
                   {mentorReview.revision_suggestions?.length > 0 && (
                     <div>
-                      <p className="text-gray-500 mb-0.5">修订建议</p>
-                      <ul className="list-disc pl-4 text-gray-300">
+                      <p className="text-bp-muted mb-0.5">修订建议</p>
+                      <ul className="list-disc pl-4 text-bp-text">
                         {mentorReview.revision_suggestions.slice(0, 4).map((s) => <li key={s}>{s}</li>)}
                       </ul>
                     </div>
@@ -594,8 +594,8 @@ export function ReportPage({
                   className={cn(
                     'flex-1 text-[11px] py-1.5 rounded-lg border',
                     reviseScope === 'full'
-                      ? 'border-primary-500/40 bg-primary-500/10 text-primary-300'
-                      : 'border-gray-700 text-gray-400',
+                      ? 'border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan'
+                      : 'border-bp-border text-bp-muted',
                   )}
                 >
                   整份报告
@@ -606,8 +606,8 @@ export function ReportPage({
                   className={cn(
                     'flex-1 text-[11px] py-1.5 rounded-lg border',
                     reviseScope === 'section'
-                      ? 'border-primary-500/40 bg-primary-500/10 text-primary-300'
-                      : 'border-gray-700 text-gray-400',
+                      ? 'border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan'
+                      : 'border-bp-border text-bp-muted',
                   )}
                 >
                   选定章节
@@ -617,7 +617,7 @@ export function ReportPage({
               {reviseScope === 'section' && (
                 <div className="mb-2 max-h-28 overflow-y-auto grid grid-cols-1 gap-1">
                   {REPORT_SECTION_OPTIONS.map((opt) => (
-                    <label key={opt.key} className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                    <label key={opt.key} className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedSections.includes(opt.key)}
@@ -628,7 +628,7 @@ export function ReportPage({
                               : prev.filter((k) => k !== opt.key),
                           );
                         }}
-                        className="rounded border-gray-600"
+                        className="rounded border-bp-border"
                       />
                       {opt.label}
                     </label>
@@ -636,12 +636,12 @@ export function ReportPage({
                 </div>
               )}
 
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+              <div className="flex items-center gap-1.5 text-xs text-bp-muted mb-1">
                 <MessageSquare className="w-3.5 h-3.5" />
                 追问修改
               </div>
               <textarea
-                className="w-full min-h-[72px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2 mb-2"
+                className="w-full min-h-[72px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2 mb-2"
                 placeholder="例如：加强 Methods 部分 / 结论更保守 / 补充 VFL 约束"
                 value={reviseMessage}
                 onChange={(e) => setReviseMessage(e.target.value)}
@@ -650,7 +650,7 @@ export function ReportPage({
                 type="button"
                 onClick={handleReviseReport}
                 disabled={reviseBusy || !reviseMessage.trim()}
-                className="w-full text-xs py-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-white disabled:opacity-50"
+                className="w-full text-xs py-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-bp-text disabled:opacity-50"
               >
                 {reviseBusy ? '修改中…' : reviseScope === 'section' ? '修改选定章节' : '根据反馈修改报告'}
               </button>
@@ -663,16 +663,16 @@ export function ReportPage({
 
               {chatHistory.length > 0 && (
                 <div className="mt-3 space-y-1.5 max-h-44 overflow-y-auto">
-                  <p className="text-[11px] text-gray-500">对话记录 ({chatHistory.length})</p>
+                  <p className="text-[11px] text-bp-muted">对话记录 ({chatHistory.length})</p>
                   {chatHistory.slice().reverse().map((h) => (
-                    <div key={String(h.id || h.at)} className="text-[10px] border border-gray-800 rounded p-2 space-y-1">
-                      <div className="text-gray-500">{String(h.at || '')}</div>
-                      <div className="text-primary-300/90">你：{String(h.user_message || '')}</div>
+                    <div key={String(h.id || h.at)} className="text-[10px] border border-bp-border rounded p-2 space-y-1">
+                      <div className="text-bp-muted">{String(h.at || '')}</div>
+                      <div className="text-bp-cyan/90">你：{String(h.user_message || '')}</div>
                       {h.assistant_explanation ? (
-                        <div className="text-gray-400">助手：{String(h.assistant_explanation)}</div>
+                        <div className="text-bp-muted">助手：{String(h.assistant_explanation)}</div>
                       ) : null}
                       {Array.isArray(h.section_keys) && (h.section_keys as string[]).length > 0 && (
-                        <div className="text-gray-600">章节：{(h.section_keys as string[]).join(', ')}</div>
+                        <div className="text-bp-muted">章节：{(h.section_keys as string[]).join(', ')}</div>
                       )}
                     </div>
                   ))}
@@ -684,16 +684,16 @@ export function ReportPage({
                   <button
                     type="button"
                     onClick={() => setShowHistory(!showHistory)}
-                    className="text-[11px] text-gray-500 hover:text-gray-300"
+                    className="text-[11px] text-bp-muted hover:text-bp-text"
                   >
                     {showHistory ? '隐藏' : '查看'}修订快照 ({revisionHistory.length})
                   </button>
                   {showHistory && (
                     <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                       {revisionHistory.slice().reverse().map((h) => (
-                        <div key={String(h.id || h.at)} className="text-[10px] text-gray-500 border border-gray-800 rounded p-2">
-                          <div className="text-gray-400">{String(h.at || '')}</div>
-                          <div className="text-gray-300 mt-0.5">{String(h.user_message || '')}</div>
+                        <div key={String(h.id || h.at)} className="text-[10px] text-bp-muted border border-bp-border rounded p-2">
+                          <div className="text-bp-muted">{String(h.at || '')}</div>
+                          <div className="text-bp-text mt-0.5">{String(h.user_message || '')}</div>
                         </div>
                       ))}
                     </div>
@@ -707,7 +707,7 @@ export function ReportPage({
 
       {/* Toast */}
       {alertMsg && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-white shadow-lg animate-fade-in z-50">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-lg bg-bp-panel border border-bp-border text-sm text-bp-text shadow-lg animate-fade-in z-50">
           {alertMsg}
         </div>
       )}

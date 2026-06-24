@@ -14,7 +14,7 @@ const statusBadge: Record<RunLogStatus, { label: string; className: string }> = 
   success: { label: '成功', className: 'text-green-400 bg-green-500/10 border-green-500/20' },
   running: { label: '运行中', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20 animate-pulse' },
   failed:  { label: '失败', className: 'text-red-400 bg-red-500/10 border-red-500/20' },
-  pending: { label: '等待中', className: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
+  pending: { label: '等待中', className: 'text-bp-muted bg-gray-500/10 border-gray-500/20' },
 };
 
 const ALL_STAGES: RunLogStage[] = ['问题理解', '文献挖掘', '假设生成', '实验设计', '实验执行', '报告生成'];
@@ -52,7 +52,7 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
     <div className={cn('space-y-4', className)}>
       {/* 筛选器 */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-bp-muted">
           <Filter className="w-3.5 h-3.5" />
           <span>筛选：</span>
         </div>
@@ -93,22 +93,22 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
         {hasFilters && (
           <button
             onClick={clearFilters}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="text-xs text-bp-muted hover:text-bp-text transition-colors"
           >
             清除筛选
           </button>
         )}
 
-        <span className="text-xs text-gray-600 ml-auto">
+        <span className="text-xs text-bp-muted ml-auto">
           {filtered.length} / {logs.length} 条记录
         </span>
       </div>
 
       {/* 表格 */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
+      <div className="overflow-x-auto rounded-lg border border-bp-border">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="bg-gray-900/60 border-b border-gray-800">
+            <tr className="bg-bp-base/60 border-b border-bp-border">
               <Th>Run ID</Th>
               <Th>运行时间</Th>
               <Th>项目名称</Th>
@@ -123,7 +123,7 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-gray-500 text-xs">
+                <td colSpan={9} className="py-12 text-center text-bp-muted text-xs">
                   无匹配记录
                 </td>
               </tr>
@@ -136,25 +136,25 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
                     key={log.id}
                     onClick={() => onSelect(log)}
                     className={cn(
-                      'border-b border-gray-800/50 last:border-0 cursor-pointer transition-colors',
+                      'border-b border-bp-border/50 last:border-0 cursor-pointer transition-colors',
                       isSelected
-                        ? 'bg-primary-500/10'
-                        : 'hover:bg-gray-900/40',
+                        ? 'bg-bp-cyan-tint'
+                        : 'hover:bg-bp-base/40',
                     )}
                   >
                     <td className="py-3 px-4">
-                      <span className="font-mono text-xs text-primary-400">{log.id}</span>
+                      <span className="font-mono text-xs text-bp-cyan">{log.id}</span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-gray-400 font-mono whitespace-nowrap">{log.runTime}</td>
-                    <td className="py-3 px-4 text-xs text-gray-300 whitespace-nowrap">{log.projectName}</td>
+                    <td className="py-3 px-4 text-xs text-bp-muted font-mono whitespace-nowrap">{log.runTime}</td>
+                    <td className="py-3 px-4 text-xs text-bp-text whitespace-nowrap">{log.projectName}</td>
                     <td className="py-3 px-4">
-                      <span className="text-xs text-gray-300">{log.stage}</span>
+                      <span className="text-xs text-bp-text">{log.stage}</span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-gray-400 font-mono">{log.model}</td>
+                    <td className="py-3 px-4 text-xs text-bp-muted font-mono">{log.model}</td>
                     <td className="py-3 px-4">
-                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{log.promptVersion}</span>
+                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">{log.promptVersion}</span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-gray-500 font-mono">{log.duration}</td>
+                    <td className="py-3 px-4 text-xs text-bp-muted font-mono">{log.duration}</td>
                     <td className="py-3 px-4">
                       <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1', sc.className)}>
                         {log.status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
@@ -167,8 +167,8 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
                         className={cn(
                           'p-1.5 rounded-lg transition-colors',
                           isSelected
-                            ? 'bg-primary-500/20 text-primary-400'
-                            : 'hover:bg-gray-800 text-gray-500 hover:text-gray-300',
+                            ? 'bg-primary-500/20 text-bp-cyan'
+                            : 'hover:bg-bp-panel text-bp-muted hover:text-bp-text',
                         )}
                         title="查看详情"
                       >
@@ -188,7 +188,7 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn('py-3 px-4 text-xs text-gray-500 font-medium', className)}>
+    <th className={cn('py-3 px-4 text-xs text-bp-muted font-medium', className)}>
       {children}
     </th>
   );
@@ -213,15 +213,15 @@ function Dropdown({ label: _l, value, options, onChange }: {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-900/70 border border-gray-700 text-xs text-gray-300 hover:border-gray-600 transition-colors"
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text hover:border-bp-border transition-colors"
       >
         <span className="max-w-[120px] truncate">{value}</span>
-        <ChevronDown className={cn('w-3 h-3 text-gray-500 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('w-3 h-3 text-bp-muted transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20 py-1 max-h-60 overflow-auto">
+          <div className="absolute top-full left-0 mt-1 w-40 bg-bp-panel border border-bp-border rounded-lg shadow-xl z-20 py-1 max-h-60 overflow-auto">
             {options.map((opt) => (
               <button
                 key={opt.value}
@@ -229,8 +229,8 @@ function Dropdown({ label: _l, value, options, onChange }: {
                 className={cn(
                   'w-full text-left px-3 py-1.5 text-xs transition-colors',
                   opt.value === value
-                    ? 'text-primary-400 bg-primary-500/10'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700',
+                    ? 'text-bp-cyan bg-bp-cyan-tint'
+                    : 'text-bp-muted hover:text-bp-text hover:bg-bp-surface',
                 )}
               >
                 {opt.label}

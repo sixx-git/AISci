@@ -32,10 +32,10 @@ export function Card({
       {(title || subtitle) && (
         <div className="mb-4">
           {title && (
-            <h3 className="text-lg font-semibold text-[#F8FAFC]">{title}</h3>
+            <h3 className="text-lg font-semibold text-bp-text">{title}</h3>
           )}
           {subtitle && (
-            <p className="text-sm text-[#94A3B8] mt-1">{subtitle}</p>
+            <p className="text-sm text-bp-muted mt-1">{subtitle}</p>
           )}
         </div>
       )}

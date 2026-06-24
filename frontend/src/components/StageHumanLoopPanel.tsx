@@ -197,16 +197,16 @@ export function StageHumanLoopPanel({
         <CollapsibleBlock title="原始 output_data" data={outputData} defaultOpen={false} />
 
         <div className="mt-3">
-          <div className="flex items-center gap-2 mb-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
             <Edit3 className="w-3.5 h-3.5" /> 编辑 output_data（保存为人工修改）
           </div>
           <textarea
-            className="w-full min-h-[180px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs font-mono text-gray-200 p-3"
+            className="w-full min-h-[180px] rounded-lg bg-bp-base/70 border border-bp-border text-xs font-mono text-bp-text p-3"
             value={editJson}
             onChange={(e) => setEditJson(e.target.value)}
           />
           <input
-            className="w-full mt-2 rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-300 p-2"
+            className="w-full mt-2 rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2"
             placeholder="修改说明 / human_feedback"
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
@@ -217,12 +217,12 @@ export function StageHumanLoopPanel({
           </Button>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-800">
-          <div className="flex items-center gap-2 mb-2 text-xs text-gray-400">
+        <div className="mt-4 pt-4 border-t border-bp-border">
+          <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
             <MessageSquare className="w-3.5 h-3.5" /> 多轮追问修改
           </div>
           <textarea
-            className="w-full min-h-[64px] rounded-lg bg-gray-900/70 border border-gray-800 text-xs text-gray-200 p-2"
+            className="w-full min-h-[64px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2"
             placeholder="例如：重新生成更具体 / 加入 VFL 约束 / 加强数据集部分"
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)}
@@ -235,7 +235,7 @@ export function StageHumanLoopPanel({
         </div>
 
         {mentorReview && (
-          <div className="mt-4 pt-4 border-t border-gray-800 space-y-2">
+          <div className="mt-4 pt-4 border-t border-bp-border space-y-2">
             <p className="text-xs font-medium text-emerald-400">导师评审结果</p>
             <ReviewList title="优点" items={mentorReview.strengths} />
             <ReviewList title="不足" items={mentorReview.weaknesses} />
@@ -243,20 +243,20 @@ export function StageHumanLoopPanel({
             <ReviewList title="风险点" items={mentorReview.risk_points} />
             <ReviewList title="需补充证据" items={mentorReview.required_additional_evidence} />
             {mentorReview.overall_assessment && (
-              <p className="text-xs text-gray-400">{mentorReview.overall_assessment}</p>
+              <p className="text-xs text-bp-muted">{mentorReview.overall_assessment}</p>
             )}
           </div>
         )}
 
         {revisionHistory.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-800">
-            <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+          <div className="mt-4 pt-4 border-t border-bp-border">
+            <div className="flex items-center gap-2 text-xs text-bp-muted mb-2">
               <History className="w-3.5 h-3.5" /> 修改历史 ({revisionHistory.length})
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {revisionHistory.slice().reverse().slice(0, 5).map((h) => (
-                <div key={String(h.id || h.at)} className="text-[11px] text-gray-500 border border-gray-800 rounded p-2">
-                  <span className="text-gray-400">{String(h.at || '')}</span>
+                <div key={String(h.id || h.at)} className="text-[11px] text-bp-muted border border-bp-border rounded p-2">
+                  <span className="text-bp-muted">{String(h.at || '')}</span>
                   {h.feedback ? ` · ${String(h.feedback)}` : ''}
                 </div>
               ))}
@@ -288,11 +288,11 @@ function CollapsibleBlock({
   if (!data) return null;
   return (
     <div className="mb-2">
-      <button type="button" onClick={() => setOpen(!open)} className="text-xs text-gray-500 hover:text-gray-300">
+      <button type="button" onClick={() => setOpen(!open)} className="text-xs text-bp-muted hover:text-bp-text">
         {open ? '▼' : '▶'} {title}
       </button>
       {open && (
-        <pre className="mt-1 text-[11px] text-gray-400 font-mono bg-gray-900/60 border border-gray-800 rounded p-2 max-h-40 overflow-y-auto">
+        <pre className="mt-1 text-[11px] text-bp-muted font-mono bg-bp-base/60 border border-bp-border rounded p-2 max-h-40 overflow-y-auto">
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
@@ -304,8 +304,8 @@ function ReviewList({ title, items }: { title: string; items?: string[] }) {
   if (!items?.length) return null;
   return (
     <div>
-      <p className="text-[11px] text-gray-500 mb-1">{title}</p>
-      <ul className="text-xs text-gray-300 space-y-0.5 list-disc list-inside">
+      <p className="text-[11px] text-bp-muted mb-1">{title}</p>
+      <ul className="text-xs text-bp-text space-y-0.5 list-disc list-inside">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}

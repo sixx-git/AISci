@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FileText, Clock, Loader2, ArrowRight, FlaskConical, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
 import { projectService } from '@/services/projectService';
 import { reportService } from '@/services/reportService';
 import type { ProjectOverview, ReportData } from '@/types';
@@ -66,8 +67,8 @@ export function Reports() {
           subtitle="查看和管理 AI Scientist 生成的研究报告"
         />
         <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-primary-400 animate-spin mr-3" />
-          <span className="text-gray-400">正在加载报告...</span>
+          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
+          <span className="text-bp-muted">正在加载报告...</span>
         </Card>
       </div>
     );
@@ -80,15 +81,12 @@ export function Reports() {
           title="报告中心"
           subtitle="查看和管理 AI Scientist 生成的研究报告"
         />
-        <Card className="flex flex-col items-center justify-center py-12 gap-3">
-          <AlertTriangle className="w-8 h-8 text-red-400" />
-          <p className="text-red-300 text-sm">{errorMsg}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 rounded-lg bg-primary-500/20 border border-primary-500/30 text-primary-300 text-xs hover:bg-primary-500/30 transition-colors"
-          >
+        <Card className="flex flex-col items-center justify-center py-12 gap-3 border-danger-500/30 bg-danger-500/5">
+          <AlertTriangle className="w-8 h-8 text-danger-400" />
+          <p className="text-danger-300 text-sm">{errorMsg}</p>
+          <Button onClick={() => window.location.reload()} variant="secondary" size="sm">
             重试
-          </button>
+          </Button>
         </Card>
       </div>
     );
@@ -102,16 +100,15 @@ export function Reports() {
           subtitle="查看和管理 AI Scientist 生成的研究报告"
         />
         <Card className="flex flex-col items-center justify-center py-12 gap-3">
-          <FileText className="w-10 h-10 text-gray-600" />
-          <p className="text-gray-500 text-sm">暂无研究报告</p>
-          <p className="text-xs text-gray-600">
+          <FileText className="w-10 h-10 text-bp-muted" />
+          <p className="text-bp-muted text-sm">暂无研究报告</p>
+          <p className="text-xs text-bp-muted/80">
             请先创建项目并通过工作流生成研究报告
           </p>
-          <Link
-            to="/"
-            className="px-4 py-2 rounded-lg bg-primary-500/20 border border-primary-500/30 text-primary-300 text-xs hover:bg-primary-500/30 transition-colors"
-          >
-            前往项目列表
+          <Link to="/">
+            <Button variant="secondary" size="sm">
+              前往项目列表
+            </Button>
           </Link>
         </Card>
       </div>
@@ -131,17 +128,17 @@ export function Reports() {
             to={`/projects/${entry.projectId}?tab=reports`}
             className="block"
           >
-            <Card className="hover:border-primary-500/30 transition-colors cursor-pointer group">
+            <Card className="hover:border-bp-cyan/30 transition-colors cursor-pointer group">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-10 h-10 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-primary-400" />
+                  <div className="w-10 h-10 rounded-bp bg-bp-cyan-tint border border-bp-cyan/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-bp-cyan" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-medium text-white truncate group-hover:text-primary-400 transition-colors">
+                    <h3 className="text-sm font-medium text-bp-text truncate group-hover:text-bp-cyan transition-colors">
                       {entry.report.title}
                     </h3>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 mt-1 text-xs text-bp-muted">
                       <span className="flex items-center gap-1">
                         <FlaskConical className="w-3 h-3" />
                         {entry.projectName}
@@ -153,7 +150,7 @@ export function Reports() {
                     </div>
                   </div>
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-primary-400 shrink-0 transition-colors" />
+                <ArrowRight className="w-4 h-4 text-bp-muted group-hover:text-bp-cyan shrink-0 transition-colors" />
               </div>
             </Card>
           </Link>

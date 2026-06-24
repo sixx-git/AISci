@@ -16,7 +16,7 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <div className="min-h-screen bg-dark-900">
+      <div className="min-h-screen bg-bp-base">
         <Navbar />
         <main className="pb-12">
           <Routes>

@@ -25,8 +25,8 @@ export function DiscoveryLoopPanel({
   return (
     <div className="mb-6 space-y-4">
       {qualityAcceptance && (
-        <div className="p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-          <h2 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+          <h2 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-2">
             {qualityAcceptance.verdict === 'pass' ? (
               <CheckCircle2 className="w-4 h-4 text-green-400" />
             ) : (
@@ -34,7 +34,7 @@ export function DiscoveryLoopPanel({
             )}
             闭环质量验收
           </h2>
-          <p className="text-xs text-gray-400 mb-2">{qualityAcceptance.summary}</p>
+          <p className="text-xs text-bp-muted mb-2">{qualityAcceptance.summary}</p>
           <div className="flex flex-wrap gap-3 text-[11px]">
             <Stat label="Accept" value={qualityAcceptance.accepted ? '是' : '否'} />
             <Stat
@@ -68,7 +68,7 @@ export function DiscoveryLoopPanel({
             <RefreshCw className="w-4 h-4" />
             Teaching 自动闭环 · 第 {teachingRefinement.round} 轮
           </h3>
-          <ul className="text-xs text-gray-400 list-disc list-inside">
+          <ul className="text-xs text-bp-muted list-disc list-inside">
             {(teachingRefinement.reasons || []).map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -77,9 +77,9 @@ export function DiscoveryLoopPanel({
       )}
 
       {discoveryLoop && history.length > 0 && (
-        <div className="p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-          <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-primary-400" />
+        <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+          <h2 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-bp-cyan" />
             Discovery 迭代历史 · {discoveryLoop.rounds_executed ?? history.length + 1} 轮
           </h2>
 
@@ -92,16 +92,16 @@ export function DiscoveryLoopPanel({
               return (
                 <div
                   key={`discovery-r${entry.round}`}
-                  className="p-3 rounded border border-dark-700/80 bg-dark-900/40 text-xs"
+                  className="p-3 rounded border border-bp-border/80 bg-bp-base/40 text-xs"
                 >
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    <span className="font-medium text-gray-200">R{entry.round}</span>
-                    <span className="text-gray-500">{entry.status}</span>
+                    <span className="font-medium text-bp-text">R{entry.round}</span>
+                    <span className="text-bp-muted">{entry.status}</span>
                     {entry.overall != null && (
                       <span className="font-mono text-amber-300">{Number(entry.overall).toFixed(1)}</span>
                     )}
                     {entry.decision && (
-                      <span className="text-gray-400">· {entry.decision}</span>
+                      <span className="text-bp-muted">· {entry.decision}</span>
                     )}
                     {fedAccept && (
                       <span
@@ -142,7 +142,7 @@ export function DiscoveryLoopPanel({
                   )}
 
                   {litRefresh && (
-                    <p className="text-[10px] text-gray-500 flex items-center gap-1 mb-1">
+                    <p className="text-[10px] text-bp-muted flex items-center gap-1 mb-1">
                       <BookOpen className="w-3 h-3" />
                       文献刷新 new_facts={String(litRefresh.new_facts ?? '—')}
                       {litRefresh.data_finder_rerun ? ' · Data Finder 已重跑' : ''}
@@ -150,7 +150,7 @@ export function DiscoveryLoopPanel({
                   )}
 
                   {entry.driven_by && (
-                    <p className="text-[10px] text-primary-400/90 mb-1">
+                    <p className="text-[10px] text-bp-cyan/90 mb-1">
                       驱动: {entry.driven_by}
                     </p>
                   )}
@@ -171,7 +171,7 @@ export function DiscoveryLoopPanel({
                   )}
 
                   {(entry.refinement_notes || []).slice(0, 2).map((note) => (
-                    <p key={note} className="text-[10px] text-gray-500 line-clamp-1">• {note}</p>
+                    <p key={note} className="text-[10px] text-bp-muted line-clamp-1">• {note}</p>
                   ))}
                 </div>
               );
@@ -188,8 +188,8 @@ export function DiscoveryLoopPanel({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span className="px-2 py-1 rounded bg-dark-900 border border-dark-700 text-gray-400">
-      {label}: <span className="text-gray-200">{value}</span>
+    <span className="px-2 py-1 rounded bg-bp-base border border-bp-border text-bp-muted">
+      {label}: <span className="text-bp-text">{value}</span>
     </span>
   );
 }

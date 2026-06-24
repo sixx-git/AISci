@@ -42,8 +42,8 @@ function VerifiabilityChecklist({ exp }: { exp: DetailedExperimentDesign }) {
   return (
     <Card>
       <div className="flex items-center gap-2 mb-4">
-        <ListChecks className="w-4 h-4 text-primary-400" />
-        <h3 className="text-sm font-semibold text-white">可验证性检查</h3>
+        <ListChecks className="w-4 h-4 text-bp-cyan" />
+        <h3 className="text-sm font-semibold text-bp-text">可验证性检查</h3>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
@@ -53,7 +53,7 @@ function VerifiabilityChecklist({ exp }: { exp: DetailedExperimentDesign }) {
             ) : (
               <XCircle className="w-4 h-4 text-red-400 shrink-0" />
             )}
-            <span className={item.ok ? 'text-gray-300' : 'text-red-300'}>
+            <span className={item.ok ? 'text-bp-text' : 'text-red-300'}>
               {item.label}
             </span>
           </div>
@@ -126,8 +126,8 @@ export function ExperimentDesignPage({
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">实验设计</h1>
-        <p className="text-gray-400">
+        <h1 className="text-3xl font-bold text-bp-text mb-2">实验设计</h1>
+        <p className="text-bp-muted">
           为选定科学假设生成可执行、可复现的验证方案
           {projectMode === 'federated_learning' && (
             <span className="ml-2 text-cyan-400 text-sm">· 联邦学习模式</span>
@@ -140,68 +140,68 @@ export function ExperimentDesignPage({
           <h3 className="text-sm font-semibold text-cyan-300 mb-3">联邦实验计划</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
-              <p className="text-gray-500 mb-1">Baselines</p>
+              <p className="text-bp-muted mb-1">Baselines</p>
               <div className="flex flex-wrap gap-1">
                 {experiment.baselines.map((b) => (
-                  <span key={b.name} className="px-1.5 py-0.5 rounded bg-dark-800 text-gray-300 border border-dark-700">
+                  <span key={b.name} className="px-1.5 py-0.5 rounded bg-bp-panel text-bp-text border border-bp-border">
                     {b.name}
                   </span>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-gray-500 mb-1">Metrics</p>
+              <p className="text-bp-muted mb-1">Metrics</p>
               <div className="flex flex-wrap gap-1">
                 {experiment.metrics.map((m) => (
-                  <span key={m.name} className="px-1.5 py-0.5 rounded bg-dark-800 text-gray-300 border border-dark-700">
+                  <span key={m.name} className="px-1.5 py-0.5 rounded bg-bp-panel text-bp-text border border-bp-border">
                     {m.name}
                   </span>
                 ))}
               </div>
             </div>
           </div>
-          <p className="text-[11px] text-gray-500 mt-3">
+          <p className="text-[11px] text-bp-muted mt-3">
             隐私机制建议：DP、Secure Aggregation、PSI（垂直联邦）— 详见 Pipeline 生成的 federated_plan
           </p>
         </Card>
       )}
 
       {alertMsg && (
-        <div className="mb-4 px-4 py-2.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-300 animate-pulse">
+        <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan animate-pulse">
           {alertMsg}
         </div>
       )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary-400" />
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
+          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
           <p className="text-sm">正在加载实验设计...</p>
         </div>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
           <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
           <p className="text-sm text-red-400 mb-2">加载实验设计失败</p>
-          <p className="text-xs text-gray-500">{error}</p>
+          <p className="text-xs text-bp-muted">{error}</p>
         </div>
       )}
 
       {!loading && !error && !experiment && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
           {selectedHypothesisId ? (
             <>
               <Lightbulb className="w-8 h-8 mb-3 text-amber-400" />
-              <p className="text-base text-gray-300 mb-2">当前主假设尚未生成实验设计</p>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-base text-bp-text mb-2">当前主假设尚未生成实验设计</p>
+              <p className="text-xs text-bp-muted mb-4">
                 请在候选假设页面选择主假设后，运行工作流中的实验设计阶段。
               </p>
             </>
           ) : (
             <>
               <AlertTriangle className="w-8 h-8 mb-3 text-amber-400" />
-              <p className="text-sm text-gray-400 mb-2">暂无实验设计</p>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-sm text-bp-muted mb-2">暂无实验设计</p>
+              <p className="text-xs text-bp-muted mb-4">
                 请先在候选假设页面选择一个主假设，然后运行 Pipeline 的实验设计阶段。
               </p>
             </>
@@ -224,8 +224,8 @@ export function ExperimentDesignPage({
               <div className="flex items-center gap-2">
                 <Lightbulb className="w-5 h-5 text-amber-400" />
                 <div>
-                  <span className="text-xs text-gray-500">当前主假设</span>
-                  <p className="text-sm text-white font-medium mt-0.5">{experiment.hypothesisTitle}</p>
+                  <span className="text-xs text-bp-muted">当前主假设</span>
+                  <p className="text-sm text-bp-text font-medium mt-0.5">{experiment.hypothesisTitle}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -252,50 +252,50 @@ export function ExperimentDesignPage({
                 <div className="flex items-center gap-2 mb-4">
                   <Target className="w-4 h-4 text-blue-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">实验目标</h3>
-                    <p className="text-xs text-gray-500">Objective</p>
+                    <h3 className="text-sm font-semibold text-bp-text">实验目标</h3>
+                    <p className="text-xs text-bp-muted">Objective</p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed">{experiment.objective}</p>
+                <p className="text-sm text-bp-text leading-relaxed">{experiment.objective}</p>
               </Card>
 
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <FlaskConical className="w-4 h-4 text-purple-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">实验方法</h3>
-                    <p className="text-xs text-gray-500">Methods</p>
+                    <h3 className="text-sm font-semibold text-bp-text">实验方法</h3>
+                    <p className="text-xs text-bp-muted">Methods</p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed">{experiment.methods}</p>
+                <p className="text-sm text-bp-text leading-relaxed">{experiment.methods}</p>
               </Card>
 
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <Database className="w-4 h-4 text-green-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">数据集</h3>
-                    <p className="text-xs text-gray-500">Datasets</p>
+                    <h3 className="text-sm font-semibold text-bp-text">数据集</h3>
+                    <p className="text-xs text-bp-muted">Datasets</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-3 bg-gray-900/70 rounded-lg border border-gray-800">
+                  <div className="p-3 bg-bp-base/70 rounded-lg border border-bp-border">
                     <div className="flex items-center gap-1.5 mb-2">
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20 font-medium">
                         Source
                       </span>
-                      <span className="text-sm font-medium text-white">{experiment.sourceDataset}</span>
+                      <span className="text-sm font-medium text-bp-text">{experiment.sourceDataset}</span>
                     </div>
-                    <p className="text-xs text-gray-400 leading-relaxed">{experiment.sourceDescription}</p>
+                    <p className="text-xs text-bp-muted leading-relaxed">{experiment.sourceDescription}</p>
                   </div>
-                  <div className="p-3 bg-gray-900/70 rounded-lg border border-gray-800">
+                  <div className="p-3 bg-bp-base/70 rounded-lg border border-bp-border">
                     <div className="flex items-center gap-1.5 mb-2">
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium">
                         Target
                       </span>
-                      <span className="text-sm font-medium text-white">{experiment.targetDataset}</span>
+                      <span className="text-sm font-medium text-bp-text">{experiment.targetDataset}</span>
                     </div>
-                    <p className="text-xs text-gray-400 leading-relaxed">{experiment.targetDescription}</p>
+                    <p className="text-xs text-bp-muted leading-relaxed">{experiment.targetDescription}</p>
                   </div>
                 </div>
               </Card>
@@ -304,24 +304,24 @@ export function ExperimentDesignPage({
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="w-4 h-4 text-amber-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Baselines</h3>
-                    <p className="text-xs text-gray-500">{experiment.baselines.length} 个基线方法</p>
+                    <h3 className="text-sm font-semibold text-bp-text">Baselines</h3>
+                    <p className="text-xs text-bp-muted">{experiment.baselines.length} 个基线方法</p>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="pb-2 text-xs text-gray-500 font-medium w-1/3">方法名称</th>
-                        <th className="pb-2 text-xs text-gray-500 font-medium">描述</th>
-                        <th className="pb-2 text-xs text-gray-500 font-medium w-24">类别</th>
+                      <tr className="border-b border-bp-border">
+                        <th className="pb-2 text-xs text-bp-muted font-medium w-1/3">方法名称</th>
+                        <th className="pb-2 text-xs text-bp-muted font-medium">描述</th>
+                        <th className="pb-2 text-xs text-bp-muted font-medium w-24">类别</th>
                       </tr>
                     </thead>
                     <tbody>
                       {experiment.baselines.map((bl, idx) => (
-                        <tr key={bl.name + idx} className="border-b border-gray-800/50 last:border-0">
-                          <td className="py-2.5 pr-3 text-gray-200 font-medium font-mono text-xs">{bl.name}</td>
-                          <td className="py-2.5 pr-3 text-gray-400 text-xs">{bl.description}</td>
+                        <tr key={bl.name + idx} className="border-b border-bp-border/50 last:border-0">
+                          <td className="py-2.5 pr-3 text-bp-text font-medium font-mono text-xs">{bl.name}</td>
+                          <td className="py-2.5 pr-3 text-bp-muted text-xs">{bl.description}</td>
                           <td className="py-2.5">
                             <span className={cn('text-[11px] px-1.5 py-0.5 rounded border', categoryColor[bl.category] || categoryColor.traditional)}>
                               {categoryLabel[bl.category] || categoryLabel.traditional}
@@ -338,24 +338,24 @@ export function ExperimentDesignPage({
                 <div className="flex items-center gap-2 mb-4">
                   <Target className="w-4 h-4 text-green-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Metrics</h3>
-                    <p className="text-xs text-gray-500">{experiment.metrics.length} 项评估指标</p>
+                    <h3 className="text-sm font-semibold text-bp-text">Metrics</h3>
+                    <p className="text-xs text-bp-muted">{experiment.metrics.length} 项评估指标</p>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="pb-2 text-xs text-gray-500 font-medium w-1/4">指标名称</th>
-                        <th className="pb-2 text-xs text-gray-500 font-medium">描述</th>
-                        <th className="pb-2 text-xs text-gray-500 font-medium w-40">目标值</th>
+                      <tr className="border-b border-bp-border">
+                        <th className="pb-2 text-xs text-bp-muted font-medium w-1/4">指标名称</th>
+                        <th className="pb-2 text-xs text-bp-muted font-medium">描述</th>
+                        <th className="pb-2 text-xs text-bp-muted font-medium w-40">目标值</th>
                       </tr>
                     </thead>
                     <tbody>
                       {experiment.metrics.map((m, idx) => (
-                        <tr key={m.name + idx} className="border-b border-gray-800/50 last:border-0">
-                          <td className="py-2.5 pr-3 text-gray-200 font-medium font-mono text-xs">{m.name}</td>
-                          <td className="py-2.5 pr-3 text-gray-400 text-xs">{m.description}</td>
+                        <tr key={m.name + idx} className="border-b border-bp-border/50 last:border-0">
+                          <td className="py-2.5 pr-3 text-bp-text font-medium font-mono text-xs">{m.name}</td>
+                          <td className="py-2.5 pr-3 text-bp-muted text-xs">{m.description}</td>
                           <td className="py-2.5">
                             <span className="text-xs font-mono text-green-400 bg-green-500/10 px-2 py-0.5 rounded">
                               {m.target}
@@ -372,24 +372,24 @@ export function ExperimentDesignPage({
                 <div className="flex items-center gap-2 mb-4">
                   <ListChecks className="w-4 h-4 text-blue-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Experimental Steps</h3>
-                    <p className="text-xs text-gray-500">{experiment.steps.length} 个步骤</p>
+                    <h3 className="text-sm font-semibold text-bp-text">Experimental Steps</h3>
+                    <p className="text-xs text-bp-muted">{experiment.steps.length} 个步骤</p>
                   </div>
                 </div>
                 <div className="space-y-0">
                   {experiment.steps.map((s, idx) => (
                     <div key={s.step + '-' + idx} className="flex gap-3">
                       <div className="flex flex-col items-center shrink-0 w-8">
-                        <div className="w-8 h-8 rounded-full bg-primary-500/20 border border-primary-500/30 flex items-center justify-center">
-                          <span className="text-xs font-bold text-primary-400">{s.step}</span>
+                        <div className="w-8 h-8 rounded-full bg-primary-500/20 border border-bp-cyan/30 flex items-center justify-center">
+                          <span className="text-xs font-bold text-bp-cyan">{s.step}</span>
                         </div>
                         {idx < experiment.steps.length - 1 && (
-                          <div className="w-0.5 flex-1 min-h-[12px] bg-gray-700 rounded-full my-1" />
+                          <div className="w-0.5 flex-1 min-h-[12px] bg-bp-surface rounded-full my-1" />
                         )}
                       </div>
                       <div className={cn(idx < experiment.steps.length - 1 && 'pb-4')}>
-                        <h4 className="text-sm font-semibold text-white mb-1">{s.title}</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed mb-2">{s.description}</p>
+                        <h4 className="text-sm font-semibold text-bp-text mb-1">{s.title}</h4>
+                        <p className="text-xs text-bp-muted leading-relaxed mb-2">{s.description}</p>
                         <div className="flex items-start gap-1.5">
                           <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 shrink-0" />
                           <span className="text-xs text-green-400/80">{s.expected}</span>
@@ -404,19 +404,19 @@ export function ExperimentDesignPage({
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="w-4 h-4 text-green-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Expected Results</h3>
-                    <p className="text-xs text-gray-500">初步分析预期</p>
+                    <h3 className="text-sm font-semibold text-bp-text">Expected Results</h3>
+                    <p className="text-xs text-bp-muted">初步分析预期</p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed">{experiment.expectedResults}</p>
+                <p className="text-sm text-bp-text leading-relaxed">{experiment.expectedResults}</p>
               </Card>
 
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Limitations</h3>
-                    <p className="text-xs text-gray-500">{experiment.limitations.length} 项潜在限制</p>
+                    <h3 className="text-sm font-semibold text-bp-text">Limitations</h3>
+                    <p className="text-xs text-bp-muted">{experiment.limitations.length} 项潜在限制</p>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -435,26 +435,26 @@ export function ExperimentDesignPage({
                 <VerifiabilityChecklist exp={experiment} />
 
                 <Card>
-                  <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-blue-400" />
                     实验概览
                   </h4>
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">基线方法</span>
-                      <span className="text-white font-mono">{experiment.baselines.length}</span>
+                      <span className="text-bp-muted">基线方法</span>
+                      <span className="text-bp-text font-mono">{experiment.baselines.length}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">评估指标</span>
-                      <span className="text-white font-mono">{experiment.metrics.length}</span>
+                      <span className="text-bp-muted">评估指标</span>
+                      <span className="text-bp-text font-mono">{experiment.metrics.length}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">实验步骤</span>
-                      <span className="text-white font-mono">{experiment.steps.length}</span>
+                      <span className="text-bp-muted">实验步骤</span>
+                      <span className="text-bp-text font-mono">{experiment.steps.length}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">潜在限制</span>
-                      <span className="text-white font-mono">{experiment.limitations.length}</span>
+                      <span className="text-bp-muted">潜在限制</span>
+                      <span className="text-bp-text font-mono">{experiment.limitations.length}</span>
                     </div>
                   </div>
                 </Card>

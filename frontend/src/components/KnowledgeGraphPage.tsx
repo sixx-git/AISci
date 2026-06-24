@@ -400,14 +400,14 @@ export function KnowledgeGraphPage({
             <Network className="w-5 h-5" style={{ color: NEO4J_GREEN }} />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">科研知识图谱</h2>
-            <p className="text-xs text-gray-400">
+            <h2 className="text-lg font-semibold text-bp-text">科研知识图谱</h2>
+            <p className="text-xs text-bp-muted">
               GraphRAG · LightRAG · KAG 融合 — 查询 · 推理 · 溯源 · 解释
               {graph ? ` · ${graph.nodes?.length || 0} 节点 / ${graph.edges?.length || 0} 边` : ''}
               {graph?.communities?.length ? ` · ${graph.communities.length} 主题社区` : ''}
             </p>
             {scenarioHint && (
-              <p className="text-[11px] text-gray-500 mt-1 max-w-xl">{scenarioHint}</p>
+              <p className="text-[11px] text-bp-muted mt-1 max-w-xl">{scenarioHint}</p>
             )}
           </div>
         </div>
@@ -452,14 +452,14 @@ export function KnowledgeGraphPage({
               图谱查询
             </div>
             <textarea
-              className="w-full rounded-lg bg-[#0d1117] border border-[#30363d] text-sm text-gray-200 p-2 min-h-[72px] focus:outline-none focus:border-[#00dc82]"
+              className="w-full rounded-lg bg-[#0d1117] border border-[#30363d] text-sm text-bp-text p-2 min-h-[72px] focus:outline-none focus:border-[#00dc82]"
               placeholder="例如：哪些方法可以缓解 Non-IID？ / 该领域研究概览"
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
             />
             <div className="grid grid-cols-2 gap-2 mt-2">
               <select
-                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-gray-300 p-2 col-span-2"
+                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-bp-text p-2 col-span-2"
                 value={educationLevel}
                 onChange={(e) => setEducationLevel(e.target.value as EducationLevel)}
               >
@@ -469,12 +469,12 @@ export function KnowledgeGraphPage({
                 <option value="graduate">研究生 · 科研视图</option>
                 <option value="researcher">科研工作者 · 科研视图</option>
               </select>
-              <p className="col-span-2 text-[10px] text-gray-500 flex items-start gap-1">
+              <p className="col-span-2 text-[10px] text-bp-muted flex items-start gap-1">
                 <Layers className="w-3 h-3 shrink-0 mt-0.5 text-[#00dc82]" />
                 {viewPreset.label}：{viewPreset.hint}
               </p>
               <select
-                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-gray-300 p-2"
+                className="text-xs rounded-lg bg-[#0d1117] border border-[#30363d] text-bp-text p-2"
                 value={retrievalMode}
                 onChange={(e) => setRetrievalMode(e.target.value as RetrievalMode)}
               >
@@ -495,10 +495,10 @@ export function KnowledgeGraphPage({
               执行推理
             </Button>
             {queryResult && (
-              <div className="mt-3 text-xs text-gray-300 space-y-2">
+              <div className="mt-3 text-xs text-bp-text space-y-2">
                 <p className="text-[#00dc82] font-medium">{queryResult.answer}</p>
                 {queryResult.retrieval_mode && (
-                  <p className="text-gray-500">
+                  <p className="text-bp-muted">
                     模式: {queryResult.retrieval_mode}
                     {queryResult.local_hit?.node_count != null && ` · 局部 ${queryResult.local_hit.node_count} 节点`}
                     {queryResult.global_hit?.community_count != null && ` · 全局 ${queryResult.global_hit.community_count} 社区`}
@@ -506,14 +506,14 @@ export function KnowledgeGraphPage({
                 )}
                 {queryResult.reasoning_chain && queryResult.reasoning_chain.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-gray-400 flex items-center gap-1">
+                    <p className="text-bp-muted flex items-center gap-1">
                       <GitBranch className="w-3 h-3" /> 推理链
                     </p>
                     {queryResult.reasoning_chain.slice(0, 4).map((step) => (
                       <div key={step.step} className="bg-[#0d1117] rounded p-2 border border-[#30363d]">
                         <span className="text-[#00dc82]">#{step.step}</span> {step.inference || step.content}
                         {step.source_title && (
-                          <p className="text-gray-500 mt-0.5 flex items-center gap-1">
+                          <p className="text-bp-muted mt-0.5 flex items-center gap-1">
                             <BookOpen className="w-3 h-3" /> {step.source_title}
                           </p>
                         )}
@@ -523,9 +523,9 @@ export function KnowledgeGraphPage({
                 )}
                 {queryResult.provenance?.citation_spans && queryResult.provenance.citation_spans.length > 0 && (
                   <div>
-                    <p className="text-gray-400 mb-1">溯源 ({queryResult.provenance.source_count})</p>
+                    <p className="text-bp-muted mb-1">溯源 ({queryResult.provenance.source_count})</p>
                     {queryResult.provenance.citation_spans.slice(0, 3).map((c, i) => (
-                      <p key={i} className="text-gray-500 truncate">· {c.source_title}</p>
+                      <p key={i} className="text-bp-muted truncate">· {c.source_title}</p>
                     ))}
                   </div>
                 )}
@@ -539,7 +539,7 @@ export function KnowledgeGraphPage({
           </Card>
 
           <Card className="border-[#30363d] bg-[#161b22]">
-            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-200">
+            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-text">
               <Filter className="w-4 h-4 text-[#00dc82]" />
               节点类型
             </div>
@@ -563,7 +563,7 @@ export function KnowledgeGraphPage({
           </Card>
 
           <Card className="border-[#30363d] bg-[#161b22]">
-            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-200">
+            <div className="flex items-center gap-2 mb-3 text-sm font-medium text-bp-text">
               <Filter className="w-4 h-4 text-[#00dc82]" />
               关系类型
             </div>
@@ -589,15 +589,15 @@ export function KnowledgeGraphPage({
           {showQuality && qr && (
             <Card className="border-[#30363d] bg-[#161b22]">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
+                <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
                   <BarChart3 className="w-4 h-4 text-[#00dc82]" />
                   质量报告
                 </div>
-                <button type="button" onClick={() => setShowQuality(false)} className="text-gray-500 hover:text-gray-300">
+                <button type="button" onClick={() => setShowQuality(false)} className="text-bp-muted hover:text-bp-text">
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="text-xs text-gray-400 space-y-1">
+              <div className="text-xs text-bp-muted space-y-1">
                 <p>综合得分: <span className="text-[#00dc82]">{qr.overall_score ?? '-'}</span></p>
                 <p>孤立节点: {qr.isolated_count ?? 0}</p>
                 <p>低置信边: {qr.low_confidence_count ?? 0}</p>
@@ -615,7 +615,7 @@ export function KnowledgeGraphPage({
 
           {(graph?.communities?.length ?? 0) > 0 && (
             <Card className="border-[#30363d] bg-[#161b22]">
-              <div className="text-sm font-medium text-gray-200 mb-2">主题社区 (GraphRAG)</div>
+              <div className="text-sm font-medium text-bp-text mb-2">主题社区 (GraphRAG)</div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {graph!.communities!.slice(0, viewPreset.mode === 'research' ? 6 : 4).map((c) => (
                   <button
@@ -627,11 +627,11 @@ export function KnowledgeGraphPage({
                     <span className="text-[#00dc82]">
                       {TYPE_LABELS_ZH[c.dominant_type] || c.dominant_type}
                     </span>
-                    <span className="text-gray-500 ml-2">{c.node_count} 节点</span>
+                    <span className="text-bp-muted ml-2">{c.node_count} 节点</span>
                     {viewPreset.mode === 'research' && (
-                      <span className="text-gray-600 ml-2">· 点击定位</span>
+                      <span className="text-bp-muted ml-2">· 点击定位</span>
                     )}
-                    <p className="text-gray-400 mt-1 line-clamp-2">{c.summary}</p>
+                    <p className="text-bp-muted mt-1 line-clamp-2">{c.summary}</p>
                   </button>
                 ))}
               </div>
@@ -646,7 +646,7 @@ export function KnowledgeGraphPage({
             style={{ background: NEO4J_BG, borderColor: NEO4J_BORDER, minHeight: 520 }}
           >
             {!graph && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 z-10">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-bp-muted z-10">
                 <Network className="w-12 h-12 mb-3 opacity-40" style={{ color: NEO4J_GREEN }} />
                 <p className="text-sm">上传文献后点击「构建图谱」</p>
               </div>
@@ -661,7 +661,7 @@ export function KnowledgeGraphPage({
                     {viewPreset.label}
                   </span>
                   {visibleNodeHint && (
-                    <span className="text-[10px] text-gray-500 px-1">{visibleNodeHint}</span>
+                    <span className="text-[10px] text-bp-muted px-1">{visibleNodeHint}</span>
                   )}
                 </div>
                 <div className="absolute top-3 right-3 z-20 flex gap-1.5">
@@ -669,21 +669,21 @@ export function KnowledgeGraphPage({
                     type="button"
                     title="适应画布"
                     onClick={handleFit}
-                    className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]"
+                    className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]"
                   >
                     <Maximize2 className="w-4 h-4" />
                   </button>
-                  <button type="button" title="放大" onClick={handleZoomIn} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]">
+                  <button type="button" title="放大" onClick={handleZoomIn} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]">
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <button type="button" title="缩小" onClick={handleZoomOut} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]">
+                  <button type="button" title="缩小" onClick={handleZoomOut} className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]">
                     <ZoomOut className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     title={`标签: ${labelModeHint}`}
                     onClick={cycleLabelMode}
-                    className="px-2 py-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-[10px] text-gray-300 hover:text-[#00dc82] flex items-center gap-1"
+                    className="px-2 py-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-[10px] text-bp-text hover:text-[#00dc82] flex items-center gap-1"
                   >
                     <Tag className="w-3.5 h-3.5" />
                     {labelMode === 'auto' ? '自动' : labelMode === 'always' ? '全显' : '隐藏'}
@@ -693,7 +693,7 @@ export function KnowledgeGraphPage({
                       type="button"
                       title="导出 PNG"
                       onClick={handleExportPng}
-                      className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-gray-300 hover:text-[#00dc82]"
+                      className="p-1.5 rounded-md bg-[#161b22]/90 border border-[#30363d] text-bp-text hover:text-[#00dc82]"
                     >
                       <Download className="w-4 h-4" />
                     </button>
@@ -704,7 +704,7 @@ export function KnowledgeGraphPage({
                     {legendTypes.map((t) => (
                       <span
                         key={t}
-                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-[#161b22]/92 border border-[#30363d] text-gray-400"
+                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-[#161b22]/92 border border-[#30363d] text-bp-muted"
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -717,7 +717,7 @@ export function KnowledgeGraphPage({
                     ))}
                   </div>
                 )}
-                <p className="absolute bottom-3 right-3 z-20 text-[10px] text-gray-600">
+                <p className="absolute bottom-3 right-3 z-20 text-[10px] text-bp-muted">
                   {viewPreset.mode === 'simplified'
                     ? '点击节点查看详情 · 社区摘要见左侧'
                     : viewPreset.mode === 'research'
@@ -742,28 +742,28 @@ export function KnowledgeGraphPage({
                       {selectedNode.type}
                     </span>
                   </div>
-                  <p className="text-white font-medium">{selectedNode.label}</p>
+                  <p className="text-bp-text font-medium">{selectedNode.label}</p>
                   {selectedNode.description && (
-                    <p className="text-sm text-gray-400">{selectedNode.description}</p>
+                    <p className="text-sm text-bp-muted">{selectedNode.description}</p>
                   )}
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-bp-muted">
                     来源: {(selectedNode.source_ids || []).join(', ') || '—'}
                   </p>
-                  <p className="text-xs text-gray-500">置信度: {selectedNode.confidence ?? '—'}</p>
+                  <p className="text-xs text-bp-muted">置信度: {selectedNode.confidence ?? '—'}</p>
                 </div>
               )}
               {selectedEdge && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-[#00dc82]">边 / 证据</h3>
-                    <span className="text-xs text-gray-400">{selectedEdge.relation}</span>
+                    <span className="text-xs text-bp-muted">{selectedEdge.relation}</span>
                   </div>
-                  <p className="text-sm text-gray-300">{selectedEdge.evidence || '—'}</p>
-                  <p className="text-xs text-gray-500">来源论文: {selectedEdge.source_title || '—'}</p>
+                  <p className="text-sm text-bp-text">{selectedEdge.evidence || '—'}</p>
+                  <p className="text-xs text-bp-muted">来源论文: {selectedEdge.source_title || '—'}</p>
                   {selectedEdge.page != null && (
-                    <p className="text-xs text-gray-500">页码: {selectedEdge.page}</p>
+                    <p className="text-xs text-bp-muted">页码: {selectedEdge.page}</p>
                   )}
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-bp-muted">
                     置信度: {selectedEdge.confidence ?? '—'}
                     {selectedEdge.human_verified && (
                       <span className="ml-2 text-[#00dc82] inline-flex items-center gap-1">

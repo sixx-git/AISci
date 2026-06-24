@@ -119,18 +119,18 @@ export function PromptPresetBar({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+      <div className="flex items-center gap-2 text-xs text-bp-muted py-2">
         <Loader2 className="w-3.5 h-3.5 animate-spin" /> 加载范式模板库…
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-dark-700 bg-dark-900/40 p-3 space-y-3">
-      <div className="flex items-center gap-2 text-xs font-medium text-gray-300">
+    <div className="rounded-lg border border-bp-border bg-bp-base/40 p-3 space-y-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-bp-text">
         <LayoutTemplate className="w-4 h-4 text-violet-400" />
         范式模板库
-        <span className="text-gray-600 font-normal">（AI Scientist v1 / v2 / AISci 默认{selectedPack?.requires_federated ? '' : '；联邦包仅联邦项目可见'}）</span>
+        <span className="text-bp-muted font-normal">（AI Scientist v1 / v2 / AISci 默认{selectedPack?.requires_federated ? '' : '；联邦包仅联邦项目可见'}）</span>
       </div>
 
       {presetLocked ? (
@@ -141,11 +141,11 @@ export function PromptPresetBar({
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <label className="block">
-              <span className="text-[10px] text-gray-500 mb-1 block">范式包</span>
+              <span className="text-[10px] text-bp-muted mb-1 block">范式包</span>
               <select
                 value={packId}
                 onChange={(e) => setPackId(e.target.value)}
-                className="w-full px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-xs text-gray-200"
+                className="w-full px-2 py-1.5 bg-bp-base border border-bp-border rounded text-xs text-bp-text"
               >
                 {(catalog?.packs ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
@@ -155,12 +155,12 @@ export function PromptPresetBar({
               </select>
             </label>
             <label className="block sm:col-span-2">
-              <span className="text-[10px] text-gray-500 mb-1 block">当前阶段变体</span>
+              <span className="text-[10px] text-bp-muted mb-1 block">当前阶段变体</span>
               <select
                 value={variantId}
                 onChange={(e) => setVariantId(e.target.value)}
                 disabled={stageVariants.length === 0}
-                className="w-full px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-xs text-gray-200 disabled:opacity-50"
+                className="w-full px-2 py-1.5 bg-bp-base border border-bp-border rounded text-xs text-bp-text disabled:opacity-50"
               >
                 {stageVariants.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -184,7 +184,7 @@ export function PromptPresetBar({
           </div>
 
           {selectedPack?.reference && (
-            <p className="text-[10px] text-gray-600">
+            <p className="text-[10px] text-bp-muted">
               参考：{selectedPack.reference}
               {selectedPack.recommended_pipeline_mode && (
                 <span> · 推荐运行模式 {selectedPack.recommended_pipeline_mode}</span>
@@ -192,7 +192,7 @@ export function PromptPresetBar({
             </p>
           )}
 
-          {hint && <p className="text-[11px] text-gray-500 leading-relaxed">{hint}</p>}
+          {hint && <p className="text-[11px] text-bp-muted leading-relaxed">{hint}</p>}
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -215,7 +215,7 @@ export function PromptPresetBar({
           </div>
 
           {preview && (
-            <pre className="text-[10px] text-gray-400 font-mono bg-dark-950 border border-dark-700 rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">
+            <pre className="text-[10px] text-bp-muted font-mono bg-dark-950 border border-bp-border rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">
               {preview.slice(0, 2000)}{preview.length > 2000 ? '\n…' : ''}
             </pre>
           )}

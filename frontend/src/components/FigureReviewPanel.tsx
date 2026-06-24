@@ -62,7 +62,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
         <Image className="w-4 h-4" />
         图表数据复核 · {pending.length} 待确认
       </h4>
-      <p className="text-[10px] text-gray-500 mb-3">
+      <p className="text-[10px] text-bp-muted mb-3">
         L1 元信息 → L2 caption 数值 → L3 VLM 结构化 → L4 点列数字化（复核后写入 CSV 并自动 re-merge）
       </p>
 
@@ -74,11 +74,11 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
           return (
             <div
               key={fig.figure_id}
-              className="p-3 rounded border border-dark-700 bg-dark-900/40 text-xs"
+              className="p-3 rounded border border-bp-border bg-bp-base/40 text-xs"
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="font-medium text-gray-200">Fig {fig.figure_number || '—'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-gray-400">
+                <span className="font-medium text-bp-text">Fig {fig.figure_number || '—'}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
                   {fig.extraction_tier || fig.extraction_method || 'rule'}
                 </span>
                 <span className="text-[10px] text-amber-400">
@@ -90,7 +90,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-gray-500 line-clamp-2 mb-2">{fig.caption}</p>
+              <p className="text-[10px] text-bp-muted line-clamp-2 mb-2">{fig.caption}</p>
               {fig.extraction_manifest?.extraction?.limitations && fig.extraction_manifest.extraction.limitations.length > 0 && (
                 <p className="text-[10px] text-amber-500/80 mb-2">
                   {fig.extraction_manifest.extraction.limitations[0]}
@@ -100,7 +100,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
                 <p className="text-[10px] text-cyan-500/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
               )}
               {preview.length > 0 && (
-                <div className="text-[10px] text-gray-400 mb-2 font-mono">
+                <div className="text-[10px] text-bp-muted mb-2 font-mono">
                   {preview.slice(0, 3).map((row, i) => (
                     <div key={i}>
                       {String(row.series)}

@@ -68,26 +68,26 @@ export function DataCatalogPanel({ projectId }: DataCatalogPanelProps) {
       </div>
 
       {catalog?.generated_at && (
-        <p className="text-[10px] text-gray-500 mb-3">生成于 {catalog.generated_at.slice(0, 19)}</p>
+        <p className="text-[10px] text-bp-muted mb-3">生成于 {catalog.generated_at.slice(0, 19)}</p>
       )}
 
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {(catalog?.assets || []).map((asset) => (
           <div
             key={asset.asset_id}
-            className="p-3 rounded border border-dark-700 bg-dark-900/40 text-xs"
+            className="p-3 rounded border border-bp-border bg-bp-base/40 text-xs"
           >
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className="font-medium text-gray-200">{asset.asset_id}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-indigo-300">
+              <span className="font-medium text-bp-text">{asset.asset_id}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-indigo-300">
                 {asset.type}
               </span>
             </div>
             {asset.filename && (
-              <p className="text-[10px] text-gray-500 truncate">{asset.filename}</p>
+              <p className="text-[10px] text-bp-muted truncate">{asset.filename}</p>
             )}
             {(asset.used_by_stages || []).length > 0 && (
-              <p className="text-[10px] text-gray-600 mt-1">
+              <p className="text-[10px] text-bp-muted mt-1">
                 用于: {(asset.used_by_stages || []).join(', ')}
               </p>
             )}
@@ -101,7 +101,7 @@ export function DataCatalogPanel({ projectId }: DataCatalogPanelProps) {
       </div>
 
       {!loading && (catalog?.assets || []).length === 0 && (
-        <p className="text-xs text-gray-500 text-center py-6">暂无数据资产，请上传数据集或运行 Data Finder</p>
+        <p className="text-xs text-bp-muted text-center py-6">暂无数据资产，请上传数据集或运行 Data Finder</p>
       )}
     </Card>
   );

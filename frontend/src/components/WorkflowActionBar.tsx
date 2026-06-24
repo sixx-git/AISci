@@ -48,23 +48,23 @@ export function WorkflowActionBar({ nodes, isRunning, onRunAll, onPause, onReset
 
       <div className="flex items-center gap-4 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-green-400" />
-          <span className="text-gray-400">已完成</span>
-          <span className="text-green-400 font-mono font-bold">{completed}</span>
+          <span className="w-2 h-2 rounded-full bg-bp-green" />
+          <span className="text-bp-muted">已完成</span>
+          <span className="text-bp-green font-mono font-bold">{completed}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-          <span className="text-gray-400">运行中</span>
-          <span className="text-blue-400 font-mono font-bold">{running}</span>
+          <span className="w-2 h-2 rounded-full bg-bp-cyan animate-pulse" />
+          <span className="text-bp-muted">运行中</span>
+          <span className="text-bp-cyan font-mono font-bold">{running}</span>
         </div>
         {failed > 0 && (
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-400" />
-            <span className="text-gray-400">失败</span>
-            <span className="text-red-400 font-mono font-bold">{failed}</span>
+            <span className="w-2 h-2 rounded-full bg-danger-400" />
+            <span className="text-bp-muted">失败</span>
+            <span className="text-danger-400 font-mono font-bold">{failed}</span>
           </div>
         )}
-        <div className="text-gray-600">
+        <div className="text-bp-muted/70">
           {completed}/{total}
         </div>
       </div>

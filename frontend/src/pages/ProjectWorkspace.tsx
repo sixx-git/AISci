@@ -1,14 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Calendar, HelpCircle,
+  HelpCircle,
   BookOpen, Lightbulb, FlaskConical,
-  FileText, Tag, TrendingUp, Play,
+  FileText, TrendingUp, Play,
   Loader2, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import { StatusBadge } from '@/components/StatusBadge';
 import { PipelineProgress } from '@/components/PipelineProgress';
 import { ResearchQuestionPage } from '@/components/ResearchQuestionPage';
 import { LiteratureLibrary } from '@/components/LiteratureLibrary';
@@ -24,9 +23,11 @@ import { PromptManagementPage } from '@/components/PromptManagementPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
-import { cn } from '@/lib/utils';
-import { PROJECT_TABS, VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
 import { researchQuestionKey } from '@/lib/storageKeys';
+import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
+import { ProjectWorkspaceHeader } from '@/components/workspace/ProjectWorkspaceHeader';
+import { ProjectTabNav } from '@/components/workspace/ProjectTabNav';
 
 // ============ localStorage 研究问题读取 ============
 /**
@@ -80,19 +81,16 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
     <div className="space-y-6">
       <Card title="研究数据概览" subtitle="当前项目的关键指标">
         {stats.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
+          <div className="text-center py-8 text-bp-muted">
             <TrendingUp className="w-8 h-8 mx-auto mb-3 opacity-50" />
             <p>暂无统计数据</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {stats.map((stat, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-lg bg-dark-800/50 border border-dark-700 text-center"
-              >
-                <div className="max-w-full truncate text-2xl font-bold text-primary-400" title={stat.value}>{stat.value}</div>
-                <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
+              <div key={idx} className="bp-metric-box text-center">
+                <div className="max-w-full truncate text-2xl font-bold text-bp-cyan" title={stat.value}>{stat.value}</div>
+                <div className="text-sm text-bp-muted mt-1">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -449,11 +447,8 @@ export function ProjectWorkspace() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          <span className="text-sm">返回项目列表</span>
-        </Link>
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <BackToProjectsLink />
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
           <Loader2 className="w-8 h-8 animate-spin mb-3" />
           <span>正在加载项目信息...</span>
         </div>
@@ -464,15 +459,12 @@ export function ProjectWorkspace() {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          <span className="text-sm">返回项目列表</span>
-        </Link>
-        <Card className="border-red-500/30 bg-red-500/5">
+        <BackToProjectsLink />
+        <Card className="border-danger-500/30 bg-danger-500/5">
           <div className="flex flex-col items-center py-8 text-center">
-            <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
-            <h3 className="text-lg font-semibold text-red-300 mb-2">加载失败</h3>
-            <p className="text-gray-400 mb-4 max-w-md">{error}</p>
+            <AlertTriangle className="w-10 h-10 text-danger-400 mb-3" />
+            <h3 className="text-lg font-semibold text-danger-300 mb-2">加载失败</h3>
+            <p className="text-bp-muted mb-4 max-w-md">{error}</p>
             <Button onClick={() => window.location.reload()} variant="secondary">
               重新加载
             </Button>
@@ -485,14 +477,11 @@ export function ProjectWorkspace() {
   if (!project) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          <span className="text-sm">返回项目列表</span>
-        </Link>
+        <BackToProjectsLink />
         <Card>
           <div className="flex flex-col items-center py-8 text-center">
-            <h3 className="text-lg font-semibold text-gray-300 mb-2">项目不存在</h3>
-            <p className="text-gray-400 mb-4">
+            <h3 className="text-lg font-semibold text-bp-text mb-2">项目不存在</h3>
+            <p className="text-bp-muted mb-4">
               未找到项目 {id}，请检查项目 ID 是否正确
             </p>
             <Link to="/">
@@ -572,90 +561,22 @@ export function ProjectWorkspace() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* ========== 项目头部 ========== */}
-      <div className="mb-8">
-        <Link to="/" className="inline-flex items-center text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          <span className="text-sm">返回项目列表</span>
-        </Link>
+      <BackToProjectsLink />
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-white truncate">
-                {project.name}
-              </h1>
-              <StatusBadge status={(project.status as any) || 'draft'} />
-            </div>
+      <ProjectWorkspaceHeader
+        projectName={project.name}
+        status={(project.status as any) || 'draft'}
+        researchField={resolvedResearchField}
+        projectModeLabel={projectModeLabel}
+        currentStage={resolvedCurrentStage}
+        description={project.description}
+        createdAtLabel={formatDate(project.created_at)}
+        onUploadLiterature={() => navigate(`/projects/${project.id}?tab=literature`)}
+        onRunPipeline={() => navigate(`/projects/${project.id}?tab=workflow`)}
+      />
 
-            {/* 研究领域 + 当前阶段 */}
-            <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary-500/10 border border-primary-500/20 text-primary-400">
-                <Tag className="w-3.5 h-3.5" />
-                {resolvedResearchField}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-500/10 border border-violet-500/20 text-violet-300">
-                {projectModeLabel}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                <TrendingUp className="w-3.5 h-3.5" />
-                当前阶段：{resolvedCurrentStage}
-              </span>
-            </div>
+      <ProjectTabNav activeTab={activeTab} onTabChange={handleTabChange} />
 
-            {project.description && (
-              <p className="text-[#94A3B8] max-w-2xl">{project.description}</p>
-            )}
-            <div className="flex items-center gap-2 mt-3 text-sm text-[#94A3B8]">
-              <Calendar className="w-4 h-4" />
-              <span>创建于 {formatDate(project.created_at)}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <Button
-              variant="secondary"
-              icon={<BookOpen className="w-4 h-4" />}
-              onClick={() => navigate(`/projects/${project.id}?tab=literature`)}
-            >
-              上传文献
-            </Button>
-            <Button
-              variant="primary"
-              icon={<Play className="w-4 h-4" />}
-              onClick={() => navigate(`/projects/${project.id}?tab=workflow`)}
-            >
-              运行 Pipeline
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* ========== 二级 Tab 导航 ========== */}
-      <div className="border-b border-dark-700 mb-6">
-        <nav className="flex gap-1 overflow-x-auto -mb-px">
-          {PROJECT_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-200',
-                  isActive
-                    ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-[#94A3B8] hover:text-[#F8FAFC] hover:border-dark-700',
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* ========== Tab 内容区 ========== */}
       <div className="animate-fade-in">
         {renderTabContent()}
       </div>

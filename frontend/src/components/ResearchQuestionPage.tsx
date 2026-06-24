@@ -224,8 +224,8 @@ function InputField({ field, value, onChange }: InputFieldProps) {
 
   return (
     <div>
-      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-300 mb-1.5">
-        <Icon className="w-4 h-4 text-primary-400" />
+      <label className="flex items-center gap-1.5 text-sm font-medium text-bp-text mb-1.5">
+        <Icon className="w-4 h-4 text-bp-cyan" />
         {field.label}
       </label>
       {field.rows ? (
@@ -235,9 +235,9 @@ function InputField({ field, value, onChange }: InputFieldProps) {
             onChange={(e) => onChange(field.key, e.target.value)}
             placeholder={field.placeholder}
             rows={field.rows}
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all resize-none"
+            className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan focus:ring-1 focus:ring-bp-cyan/50 transition-all resize-none"
           />
-          <span className="absolute bottom-2 right-3 text-[11px] text-gray-600">
+          <span className="absolute bottom-2 right-3 text-[11px] text-bp-muted">
             {charCount}
           </span>
         </div>
@@ -247,7 +247,7 @@ function InputField({ field, value, onChange }: InputFieldProps) {
           value={value}
           onChange={(e) => onChange(field.key, e.target.value)}
           placeholder={field.placeholder}
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all"
+          className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan focus:ring-1 focus:ring-bp-cyan/50 transition-all"
         />
       )}
     </div>
@@ -517,41 +517,41 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
             ))}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-dark-700 space-y-4">
+          <div className="mt-6 pt-4 border-t border-bp-border space-y-4">
             <h4 className="text-sm font-semibold text-indigo-200 flex items-center gap-1.5">
               <Database className="w-4 h-4" />
               结构化数据需求（DataSpec）
             </h4>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-bp-muted">
               可选：指定跨表对齐字段、目标变量与偏好数据源，将在多源数据采集阶段与自动推断的 DataSpec 合并。
             </p>
             <div>
-              <label className="text-sm font-medium text-gray-300 mb-1.5 block">实体 / 对齐字段（逗号分隔）</label>
+              <label className="text-sm font-medium text-bp-text mb-1.5 block">实体 / 对齐字段（逗号分隔）</label>
               <input
                 type="text"
                 value={form.dataEntities}
                 onChange={(e) => updateField('dataEntities', e.target.value)}
                 placeholder="例如：patient_id, sample_id, client_id"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-300 mb-1.5 block">目标变量 / 指标（逗号分隔）</label>
+              <label className="text-sm font-medium text-bp-text mb-1.5 block">目标变量 / 指标（逗号分隔）</label>
               <input
                 type="text"
                 value={form.dataTargetVariables}
                 onChange={(e) => updateField('dataTargetVariables', e.target.value)}
                 placeholder="例如：accuracy, f1_score, auc"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-gray-300 mb-1.5 block">合并策略</label>
+                <label className="text-sm font-medium text-bp-text mb-1.5 block">合并策略</label>
                 <select
                   value={form.dataMergeStrategy}
                   onChange={(e) => updateField('dataMergeStrategy', e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white"
+                  className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text"
                 >
                   <option value="auto">自动（auto）</option>
                   <option value="stack">纵向堆叠（stack）</option>
@@ -559,81 +559,81 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-300 mb-1.5 block">偏好数据源（逗号分隔）</label>
+                <label className="text-sm font-medium text-bp-text mb-1.5 block">偏好数据源（逗号分隔）</label>
                 <input
                   type="text"
                   value={form.dataPreferredSources}
                   onChange={(e) => updateField('dataPreferredSources', e.target.value)}
                   placeholder="zenodo, huggingface, paper_table"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500"
+                  className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted"
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-300 mb-1.5 block">补充数据需求说明</label>
+              <label className="text-sm font-medium text-bp-text mb-1.5 block">补充数据需求说明</label>
               <textarea
                 value={form.dataNeedNote}
                 onChange={(e) => updateField('dataNeedNote', e.target.value)}
                 placeholder="例如：需要对照实验的 baseline 表与消融实验指标…"
                 rows={2}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 resize-none"
+                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted resize-none"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-dark-700/80">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-bp-border/80">
               <div>
-                <label className="text-xs font-medium text-gray-400 mb-1 block">完备性阈值 (%)</label>
+                <label className="text-xs font-medium text-bp-muted mb-1 block">完备性阈值 (%)</label>
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={form.coverageGapThreshold}
                   onChange={(e) => updateField('coverageGapThreshold', e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                  className="w-full bg-bp-base border border-bp-border rounded-lg px-2 py-1.5 text-sm text-bp-text"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-400 mb-1 block">DataSpec 阈值 (%)</label>
+                <label className="text-xs font-medium text-bp-muted mb-1 block">DataSpec 阈值 (%)</label>
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={form.dataSpecGapThreshold}
                   onChange={(e) => updateField('dataSpecGapThreshold', e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                  className="w-full bg-bp-base border border-bp-border rounded-lg px-2 py-1.5 text-sm text-bp-text"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-400 mb-1 block">Gap 最大轮次</label>
+                <label className="text-xs font-medium text-bp-muted mb-1 block">Gap 最大轮次</label>
                 <input
                   type="number"
                   min={1}
                   max={4}
                   value={form.maxGapRounds}
                   onChange={(e) => updateField('maxGapRounds', e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                  className="w-full bg-bp-base border border-bp-border rounded-lg px-2 py-1.5 text-sm text-bp-text"
                 />
               </div>
             </div>
-            <div className="pt-2 border-t border-dark-700/80">
-              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <div className="pt-2 border-t border-bp-border/80">
+              <label className="flex items-center gap-2 text-sm text-bp-text cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.autoLiteratureDiscovery !== 'false'}
                   onChange={(e) =>
                     updateField('autoLiteratureDiscovery', e.target.checked ? 'true' : 'false')
                   }
-                  className="rounded border-gray-600 bg-gray-900 text-primary-500 focus:ring-primary-500/50"
+                  className="rounded border-bp-border bg-bp-base text-bp-cyan focus:ring-bp-cyan/50"
                 />
                 文献不足时自动检索 arXiv / OpenAlex 并导入
               </label>
-              <p className="text-[10px] text-gray-500 mt-1 ml-6">
+              <p className="text-[10px] text-bp-muted mt-1 ml-6">
                 项目文献少于 3 篇时触发；关闭后仅使用已上传的 PDF 与 arXiv 文献。
               </p>
             </div>
           </div>
 
           {/* 操作按钮 */}
-          <div className="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-dark-700">
+          <div className="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-bp-border">
             <Button
               icon={
                 saveStatus.type === 'saving' ? (
@@ -674,23 +674,23 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
-              <Brain className="w-4 h-4 text-primary-400" />
+              <Brain className="w-4 h-4 text-bp-cyan" />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-white">问题理解预览</h4>
-              <p className="text-xs text-gray-500">系统如何理解你的研究</p>
+              <h4 className="text-sm font-semibold text-bp-text">问题理解预览</h4>
+              <p className="text-xs text-bp-muted">系统如何理解你的研究</p>
             </div>
           </div>
 
           {/* 完成度 */}
           <div className="mb-4">
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-gray-500">完成度</span>
-              <span className="text-gray-400">
+              <span className="text-bp-muted">完成度</span>
+              <span className="text-bp-muted">
                 {filledCount}/{totalFields} 项
               </span>
             </div>
-            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-bp-panel rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full transition-all duration-500"
                 style={{ width: `${(filledCount / totalFields) * 100}%` }}
@@ -704,13 +704,13 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
               return (
                 <div key={item.key}>
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <ClipboardCheck className="w-3.5 h-3.5 text-gray-600" />
-                    <span className="text-xs font-medium text-gray-400">{item.label}</span>
+                    <ClipboardCheck className="w-3.5 h-3.5 text-bp-muted" />
+                    <span className="text-xs font-medium text-bp-muted">{item.label}</span>
                   </div>
                   {val ? (
-                    <p className="text-xs text-gray-300 pl-5 line-clamp-2">{val}</p>
+                    <p className="text-xs text-bp-text pl-5 line-clamp-2">{val}</p>
                   ) : (
-                    <p className="text-xs text-gray-600 pl-5 italic">尚未填写</p>
+                    <p className="text-xs text-bp-muted pl-5 italic">尚未填写</p>
                   )}
                 </div>
               );
@@ -720,22 +720,22 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
 
         {/* 统计信息 */}
         <Card>
-          <div className="text-xs text-gray-500 space-y-2">
+          <div className="text-xs text-bp-muted space-y-2">
             <div className="flex justify-between">
               <span>表单字符数</span>
-              <span className="text-gray-400 font-mono">
+              <span className="text-bp-muted font-mono">
                 {Object.values(form).reduce((s, v) => s + v.length, 0)}
               </span>
             </div>
             <div className="flex justify-between">
               <span>已识别关键词</span>
-              <span className="text-primary-400 font-mono">
+              <span className="text-bp-cyan font-mono">
                 {form.researchDomain.trim() ? '✓' : '—'}
               </span>
             </div>
             <div className="flex justify-between">
               <span>知识图谱节点</span>
-              <span className="text-gray-400 font-mono">
+              <span className="text-bp-muted font-mono">
                 {filledCount > 3 ? '~' + filledCount * 4 : '—'}
               </span>
             </div>

@@ -74,13 +74,13 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
         title="Prompt 管理"
         subtitle="范式模板库 + 项目级覆盖；报告生成阶段锁定为固定章节模板"
       >
-        <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+        <div className="flex flex-wrap gap-4 text-xs text-bp-muted">
           <span className="flex items-center gap-1.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-primary-400" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-bp-cyan" />
             {PIPELINE_PROMPT_STAGES.length} 个 Pipeline 阶段 · 其中 7 个可选范式预设
           </span>
           {loadingList ? (
-            <span className="flex items-center gap-1 text-gray-500">
+            <span className="flex items-center gap-1 text-bp-muted">
               <Loader2 className="w-3 h-3 animate-spin" /> 检查覆盖状态…
             </span>
           ) : (
@@ -104,7 +104,7 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[520px]">
         <div className="lg:col-span-4">
           <Card className="p-0 overflow-hidden h-full">
-            <div className="px-3 py-2 border-b border-dark-700 text-xs font-medium text-gray-400">
+            <div className="px-3 py-2 border-b border-bp-border text-xs font-medium text-bp-muted">
               Pipeline 阶段
             </div>
             <ul className="divide-y divide-dark-700/80 max-h-[calc(100vh-280px)] overflow-y-auto">
@@ -119,22 +119,22 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
                       className={cn(
                         'w-full text-left px-3 py-3 transition-colors',
                         active
-                          ? 'bg-primary-500/10 border-l-2 border-primary-500'
-                          : 'hover:bg-dark-800/60 border-l-2 border-transparent',
+                          ? 'bg-bp-cyan-tint border-l-2 border-bp-cyan'
+                          : 'hover:bg-bp-panel/60 border-l-2 border-transparent',
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-600 font-mono w-4">{idx + 1}</span>
-                            <span className={cn('text-sm font-medium', active ? 'text-primary-300' : 'text-gray-200')}>
+                            <span className="text-[10px] text-bp-muted font-mono w-4">{idx + 1}</span>
+                            <span className={cn('text-sm font-medium', active ? 'text-bp-cyan' : 'text-bp-text')}>
                               {item.label}
                             </span>
                             {item.presetLocked && (
-                              <Lock className="w-3 h-3 text-gray-500" />
+                              <Lock className="w-3 h-3 text-bp-muted" />
                             )}
                           </div>
-                          <p className="text-[11px] text-gray-500 mt-1 ml-6 line-clamp-2">{item.description}</p>
+                          <p className="text-[11px] text-bp-muted mt-1 ml-6 line-clamp-2">{item.description}</p>
                         </div>
                         {hasOverride && (
                           <span title="已覆盖">
@@ -154,9 +154,9 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
           <Card className="h-full min-h-[480px] flex flex-col">
             {selectedMeta?.presetLocked ? (
               <div className="py-8 text-center space-y-2">
-                <Lock className="w-8 h-8 text-gray-600 mx-auto" />
-                <p className="text-sm text-gray-300">报告生成 Prompt 锁定</p>
-                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                <Lock className="w-8 h-8 text-bp-muted mx-auto" />
+                <p className="text-sm text-bp-text">报告生成 Prompt 锁定</p>
+                <p className="text-xs text-bp-muted max-w-md mx-auto">
                   研究报告须严格遵循系统固定章节模板（12 章结构），不提供 Sakana/AISci 范式替换。
                   仍可手动编辑下方系统默认模板（不推荐修改章节 Schema）。
                 </p>

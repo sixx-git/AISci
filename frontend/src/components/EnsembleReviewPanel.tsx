@@ -15,8 +15,8 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
   const members = review.ensemble_reviews ?? [];
 
   return (
-    <div className="p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-      <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+    <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+      <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-blue-400" />
         集成评审（Ensemble Review）
       </h3>
@@ -26,23 +26,23 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
         <StatBox
           label="决策"
           value={decision || '—'}
-          accent={decision === 'Accept' ? 'text-green-400' : decision === 'Reject' ? 'text-red-400' : 'text-gray-400'}
+          accent={decision === 'Accept' ? 'text-green-400' : decision === 'Reject' ? 'text-red-400' : 'text-bp-muted'}
         />
-        <StatBox label="评审者" value={String(members.length || 4)} accent="text-primary-400" />
-        <StatBox label="需人工复核" value={needsHuman ? '是' : '否'} accent={needsHuman ? 'text-yellow-400' : 'text-gray-500'} />
+        <StatBox label="评审者" value={String(members.length || 4)} accent="text-bp-cyan" />
+        <StatBox label="需人工复核" value={needsHuman ? '是' : '否'} accent={needsHuman ? 'text-yellow-400' : 'text-bp-muted'} />
       </div>
 
       {members.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-gray-500 mb-2">各评审者得分</p>
+          <p className="text-[11px] text-bp-muted mb-2">各评审者得分</p>
           <div className="space-y-1.5">
             {members.map((m) => (
               <div key={String(m.reviewer_id)} className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">
+                <span className="text-bp-muted">
                   {String(m.reviewer_id)}
                   {m.weight != null ? ` (${(Number(m.weight) * 100).toFixed(0)}%)` : ''}
                 </span>
-                <span className="font-mono text-gray-200">{Number(m.overall_score ?? 0).toFixed(1)}</span>
+                <span className="font-mono text-bp-text">{Number(m.overall_score ?? 0).toFixed(1)}</span>
               </div>
             ))}
           </div>
@@ -61,10 +61,10 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
       {(review.weaknesses?.length ?? 0) > 0 && (
         <div className="mb-3">
-          <p className="text-[11px] text-gray-500 mb-1">主要不足</p>
+          <p className="text-[11px] text-bp-muted mb-1">主要不足</p>
           <ul className="space-y-1">
             {review.weaknesses!.slice(0, 5).map((w, i) => (
-              <li key={i} className="text-xs text-gray-400 flex gap-1.5">
+              <li key={i} className="text-xs text-bp-muted flex gap-1.5">
                 <AlertTriangle className="w-3 h-3 text-red-400/70 shrink-0 mt-0.5" />
                 {w}
               </li>
@@ -75,10 +75,10 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
       {(review.revision_suggestions?.length ?? 0) > 0 && (
         <div className="mb-3">
-          <p className="text-[11px] text-gray-500 mb-1">修订建议</p>
+          <p className="text-[11px] text-bp-muted mb-1">修订建议</p>
           <ul className="space-y-1">
             {review.revision_suggestions!.slice(0, 4).map((s, i) => (
-              <li key={i} className="text-xs text-gray-400">• {s}</li>
+              <li key={i} className="text-xs text-bp-muted">• {s}</li>
             ))}
           </ul>
         </div>
@@ -100,8 +100,8 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
 function StatBox({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="p-2.5 rounded border border-dark-700 bg-dark-900/50">
-      <p className="text-[10px] text-gray-500 mb-0.5">{label}</p>
+    <div className="p-2.5 rounded border border-bp-border bg-bp-base/50">
+      <p className="text-[10px] text-bp-muted mb-0.5">{label}</p>
       <p className={`text-lg font-bold font-mono ${accent}`}>{value}</p>
     </div>
   );

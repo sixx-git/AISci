@@ -31,8 +31,8 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
       <Card>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">比赛规范完整性检查</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h3 className="text-sm font-semibold text-bp-text">比赛规范完整性检查</h3>
+            <p className="text-xs text-bp-muted mt-0.5">
               挑战杯 XH-202619 · {completedCount}/{totalItems} 项完成
             </p>
           </div>
@@ -51,7 +51,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                 strokeDasharray={`${ratio * 125.66} 125.66`}
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white">
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-bp-text">
               {Math.round(ratio * 100)}%
             </span>
           </div>
@@ -61,41 +61,41 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         <div className="grid grid-cols-3 gap-2 mb-3">
           <div className="text-center p-2 rounded-lg bg-green-500/5 border border-green-500/10">
             <p className="text-lg font-mono font-bold text-green-400">{completedCount}</p>
-            <p className="text-[10px] text-gray-500">已完成</p>
+            <p className="text-[10px] text-bp-muted">已完成</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-red-500/5 border border-red-500/10">
             <p className="text-lg font-mono font-bold text-red-400">{missingCount}</p>
-            <p className="text-[10px] text-gray-500">缺失</p>
+            <p className="text-[10px] text-bp-muted">缺失</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
             <p className="text-lg font-mono font-bold text-amber-400">{reviewCount}</p>
-            <p className="text-[10px] text-gray-500">需人工确认</p>
+            <p className="text-[10px] text-bp-muted">需人工确认</p>
           </div>
         </div>
 
         {/* 赛题专属指标 */}
         {cc && (
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="p-2 rounded-lg bg-gray-800/60 border border-gray-700/50">
-              <p className="text-[10px] text-gray-500 mb-0.5">Evidence 事实数</p>
+            <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
+              <p className="text-[10px] text-bp-muted mb-0.5">Evidence 事实数</p>
               <p className="text-sm font-mono font-bold text-purple-400">
                 {cc.evidence_fact_count}
               </p>
             </div>
-            <div className="p-2 rounded-lg bg-gray-800/60 border border-gray-700/50">
-              <p className="text-[10px] text-gray-500 mb-0.5">有证据假设数</p>
+            <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
+              <p className="text-[10px] text-bp-muted mb-0.5">有证据假设数</p>
               <p className="text-sm font-mono font-bold text-green-400">
                 {cc.hypothesis_with_evidence_count}
               </p>
             </div>
-            <div className="p-2 rounded-lg bg-gray-800/60 border border-gray-700/50">
-              <p className="text-[10px] text-gray-500 mb-0.5">已验证引用</p>
+            <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
+              <p className="text-[10px] text-bp-muted mb-0.5">已验证引用</p>
               <p className="text-sm font-mono font-bold text-cyan-400">
                 {cc.references_verified}
               </p>
             </div>
-            <div className="p-2 rounded-lg bg-gray-800/60 border border-gray-700/50">
-              <p className="text-[10px] text-gray-500 mb-0.5">含实际/模拟结果</p>
+            <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
+              <p className="text-[10px] text-bp-muted mb-0.5">含实际/模拟结果</p>
               <p className="text-sm font-mono font-bold">
                 {cc.has_actual_or_simulated_result
                   ? <span className="text-green-400">有</span>
@@ -113,7 +113,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             </p>
             {cc.novelty_score != null && (
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-gray-400">新颖性评分</span>
+                <span className="text-[10px] text-bp-muted">新颖性评分</span>
                 <span className={cn(
                   'text-xs font-mono font-bold',
                   cc.novelty_score >= 7 ? 'text-green-400' :
@@ -126,7 +126,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             {cc.experiment_sanity_check && (
               <div className="space-y-1 mt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-gray-400">实验可执行性</span>
+                  <span className="text-[10px] text-bp-muted">实验可执行性</span>
                   <span className={cn(
                     'text-[10px] font-medium',
                     cc.experiment_sanity_check.executable
@@ -158,10 +158,10 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             return (
               <div
                 key={s.key}
-                className="flex flex-col gap-1 py-2 border-b border-gray-800/50 last:border-0"
+                className="flex flex-col gap-1 py-2 border-b border-bp-border/50 last:border-0"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-300">{s.label}</span>
+                  <span className="text-xs text-bp-text">{s.label}</span>
                   <span className={cn(
                     'text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1',
                     cfg.className,
@@ -171,7 +171,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                   </span>
                 </div>
                 {s.note && (
-                  <p className="text-[11px] text-gray-500 leading-relaxed ml-0">{s.note}</p>
+                  <p className="text-[11px] text-bp-muted leading-relaxed ml-0">{s.note}</p>
                 )}
               </div>
             );

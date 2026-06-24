@@ -20,11 +20,11 @@ export function QualityCheckCard({
       <Card className={cn(className)}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
-            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+            <h3 className="text-sm font-semibold text-bp-text">报告质量检查</h3>
+            <p className="text-xs text-bp-muted mt-0.5">赛题规范 · 完整性 · 真实性</p>
           </div>
         </div>
-        <div className="flex items-center justify-center py-8 text-gray-500">
+        <div className="flex items-center justify-center py-8 text-bp-muted">
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           <span className="text-xs">报告生成完成后将显示质量检查结果</span>
         </div>
@@ -37,11 +37,11 @@ export function QualityCheckCard({
       <Card className={cn(className)}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
-            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+            <h3 className="text-sm font-semibold text-bp-text">报告质量检查</h3>
+            <p className="text-xs text-bp-muted mt-0.5">赛题规范 · 完整性 · 真实性</p>
           </div>
         </div>
-        <div className="flex items-center justify-center py-8 text-gray-500">
+        <div className="flex items-center justify-center py-8 text-bp-muted">
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           <span className="text-xs">暂无检测结果，等待数据...</span>
         </div>
@@ -54,8 +54,8 @@ export function QualityCheckCard({
       <Card className={cn(className)}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
-            <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+            <h3 className="text-sm font-semibold text-bp-text">报告质量检查</h3>
+            <p className="text-xs text-bp-muted mt-0.5">赛题规范 · 完整性 · 真实性</p>
           </div>
         </div>
         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
@@ -92,8 +92,8 @@ export function QualityCheckCard({
     <Card className={cn(className)}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-white">报告质量检查</h3>
-          <p className="text-xs text-gray-500 mt-0.5">赛题规范 · 完整性 · 真实性</p>
+          <h3 className="text-sm font-semibold text-bp-text">报告质量检查</h3>
+          <p className="text-xs text-bp-muted mt-0.5">赛题规范 · 完整性 · 真实性</p>
         </div>
       </div>
 
@@ -102,7 +102,7 @@ export function QualityCheckCard({
           <div className="flex items-center gap-2">
             <Shield className={cn('w-5 h-5', scoreColor)} />
             <span className={cn('text-xl font-bold', scoreColor)}>{score}</span>
-            <span className="text-xs text-gray-600">/ 100</span>
+            <span className="text-xs text-bp-muted">/ 100</span>
           </div>
           <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', passed ? 'bg-green-500/20 text-green-400' : score >= 60 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400')}>
             {passed ? '✓ 合格' : scoreLabel}
@@ -117,28 +117,28 @@ export function QualityCheckCard({
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+        <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-[10px] text-gray-500">已验证引用</span>
+            <span className="text-[10px] text-bp-muted">已验证引用</span>
           </div>
           <p className={cn('text-lg font-mono font-bold', refsVerified > 0 ? 'text-cyan-400' : 'text-red-400')}>
             {refsVerified}
           </p>
         </div>
-        <div className="p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+        <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-[10px] text-gray-500">真实图表</span>
+            <span className="text-[10px] text-bp-muted">真实图表</span>
           </div>
           <p className={cn('text-sm font-mono font-bold', hasRealPlots ? 'text-emerald-400' : 'text-red-400')}>
             {hasRealPlots ? '是' : '否'}
           </p>
         </div>
-        <div className="p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+        <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-[10px] text-gray-500">实验结果</span>
+            <span className="text-[10px] text-bp-muted">实验结果</span>
           </div>
           <p className={cn('text-sm font-mono font-bold', hasActualOrSimulated ? 'text-purple-400' : 'text-red-400')}>
             {hasActualOrSimulated ? '是' : '否'}
@@ -222,12 +222,12 @@ export function QualityCheckCard({
       )}
 
       {warnings.length > 0 && criticalIssues.length === 0 && (
-        <div className="p-3 rounded-lg bg-gray-800/60 border border-gray-700/50 mb-3">
+        <div className="p-3 rounded-lg bg-bp-panel/60 border border-bp-border/50 mb-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-bp-muted shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-gray-300 mb-1">警告 ({warnings.length})</p>
-              <ul className="list-disc list-inside text-[11px] text-gray-400 space-y-0.5">
+              <p className="text-xs font-semibold text-bp-text mb-1">警告 ({warnings.length})</p>
+              <ul className="list-disc list-inside text-[11px] text-bp-muted space-y-0.5">
                 {warnings.slice(0, 3).map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}

@@ -150,12 +150,12 @@ export function RunLogsPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">运行日志</h1>
-          <p className="text-gray-400 text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
+          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
         </div>
         <Card className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-primary-400 animate-spin mr-3" />
-          <span className="text-gray-400">正在加载运行日志...</span>
+          <Loader2 className="w-6 h-6 text-bp-cyan animate-spin mr-3" />
+          <span className="text-bp-muted">正在加载运行日志...</span>
         </Card>
       </div>
     );
@@ -166,13 +166,13 @@ export function RunLogsPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">运行日志</h1>
-          <p className="text-gray-400 text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
+          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
         </div>
         <Card className="py-12 text-center">
           <Terminal className="w-12 h-12 text-red-400/50 mx-auto mb-4" />
           <p className="text-red-400 text-sm mb-1">加载失败</p>
-          <p className="text-gray-500 text-xs">{errorMsg}</p>
+          <p className="text-bp-muted text-xs">{errorMsg}</p>
         </Card>
       </div>
     );
@@ -183,13 +183,13 @@ export function RunLogsPage({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-1">运行日志</h1>
-          <p className="text-gray-400 text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
+          <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
         </div>
         <Card className="py-12 text-center">
-          <Terminal className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm">暂无运行日志</p>
-          <p className="text-gray-600 text-xs mt-1">运行一次 Pipeline 后这里会显示日志</p>
+          <Terminal className="w-12 h-12 text-bp-muted mx-auto mb-4" />
+          <p className="text-bp-muted text-sm">暂无运行日志</p>
+          <p className="text-bp-muted text-xs mt-1">运行一次 Pipeline 后这里会显示日志</p>
         </Card>
       </div>
     );
@@ -199,8 +199,8 @@ export function RunLogsPage({
     <div className="max-w-7xl mx-auto">
       {/* 页面标题 */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-1">运行日志</h1>
-        <p className="text-gray-400 text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
+        <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
+        <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
       </div>
 
       {/* 表格区域 */}
@@ -214,10 +214,10 @@ export function RunLogsPage({
       <div className="mt-6">
         <Card>
           <div className="flex items-center gap-2 mb-4">
-            <Terminal className="w-4 h-4 text-primary-400" />
+            <Terminal className="w-4 h-4 text-bp-cyan" />
             <div>
-              <h3 className="text-sm font-semibold text-white">运行详情</h3>
-              <p className="text-xs text-gray-500">输入摘要 · 输出快照 · 模型参数 · 错误信息</p>
+              <h3 className="text-sm font-semibold text-bp-text">运行详情</h3>
+              <p className="text-xs text-bp-muted">输入摘要 · 输出快照 · 模型参数 · 错误信息</p>
             </div>
           </div>
           <RunLogDetail

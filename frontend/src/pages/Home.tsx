@@ -20,6 +20,13 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: '已完成' },
 ] as const;
 
+const selectChevronStyle = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 12px center',
+  paddingRight: '2.5rem',
+} as const;
+
 export function Home() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -98,25 +105,20 @@ export function Home() {
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bp-muted pointer-events-none" />
           <input
             type="text"
             placeholder="搜索项目名称、领域或描述..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+            className="input-field pl-10 py-2.5"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500 transition-colors appearance-none cursor-pointer"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 12px center',
-            paddingRight: '2.5rem',
-          }}
+          className="input-field py-2.5 appearance-none cursor-pointer w-full sm:w-auto sm:min-w-[140px]"
+          style={selectChevronStyle}
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -126,8 +128,9 @@ export function Home() {
         </select>
         {hasFilters && (
           <button
+            type="button"
             onClick={clearFilters}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-bp-muted hover:text-bp-text transition-colors"
           >
             <FilterX className="w-4 h-4" />
             清除
@@ -136,29 +139,29 @@ export function Home() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-primary-400">{projectCount}</div>
-          <div className="text-gray-400 text-sm mt-1">总项目数</div>
-        </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-green-400">{completedCount}</div>
-          <div className="text-gray-400 text-sm mt-1">已完成</div>
-        </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-blue-400">{runningCount}</div>
-          <div className="text-gray-400 text-sm mt-1">运行中</div>
-        </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-gray-400">{draftCount}</div>
-          <div className="text-gray-400 text-sm mt-1">草稿</div>
-        </Card>
+        <div className="bp-metric-box">
+          <div className="text-bp-metric font-bold text-bp-cyan">{projectCount}</div>
+          <div className="text-bp-muted text-sm">总项目数</div>
+        </div>
+        <div className="bp-metric-box">
+          <div className="text-bp-metric font-bold text-bp-green">{completedCount}</div>
+          <div className="text-bp-muted text-sm">已完成</div>
+        </div>
+        <div className="bp-metric-box">
+          <div className="text-bp-metric font-bold text-bp-cyan">{runningCount}</div>
+          <div className="text-bp-muted text-sm">运行中</div>
+        </div>
+        <div className="bp-metric-box">
+          <div className="text-bp-metric font-bold text-bp-muted">{draftCount}</div>
+          <div className="text-bp-muted text-sm">草稿</div>
+        </div>
       </div>
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">我的项目</h2>
+          <h2 className="text-xl font-semibold text-bp-text">我的项目</h2>
           {!loading && !error && hasFilters && (
-            <span className="text-sm text-gray-500">共 {filtered.length} 个匹配结果</span>
+            <span className="text-sm text-bp-muted">共 {filtered.length} 个匹配结果</span>
           )}
         </div>
 
@@ -166,18 +169,18 @@ export function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
-                <div className="h-4 bg-dark-700 rounded w-3/4 mb-2" />
-                <div className="h-3 bg-dark-700 rounded w-1/2" />
-                <div className="h-3 bg-dark-700 rounded w-1/4 mt-4" />
+                <div className="h-4 bg-bp-surface rounded w-3/4 mb-2" />
+                <div className="h-3 bg-bp-surface rounded w-1/2" />
+                <div className="h-3 bg-bp-surface rounded w-1/4 mt-4" />
               </Card>
             ))}
           </div>
         ) : error ? (
-          <Card className="border-red-800/30 bg-red-950/20">
+          <Card className="border-danger-500/30 bg-danger-500/5">
             <div className="text-center py-8">
-              <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-              <p className="text-red-400 mb-2">加载失败</p>
-              <p className="text-gray-400 text-sm mb-4">{error}</p>
+              <AlertTriangle className="w-10 h-10 text-danger-400 mx-auto mb-3" />
+              <p className="text-danger-300 mb-2">加载失败</p>
+              <p className="text-bp-muted text-sm mb-4">{error}</p>
               <Button onClick={() => window.location.reload()} variant="secondary">重试</Button>
             </div>
           </Card>
@@ -204,35 +207,35 @@ export function Home() {
                 to={`/projects/${project.id}`}
                 className="block group"
               >
-                <Card className="h-full hover:border-primary-600/50 transition-all duration-200 group-hover:shadow-xl group-hover:shadow-primary-900/10">
+                <Card className="h-full hover:border-bp-cyan/40 transition-all duration-200 group-hover:shadow-bp-glow">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                      <FlaskConical className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 bg-bp-cyan-tint border border-bp-cyan/20 rounded-bp flex items-center justify-center">
+                      <FlaskConical className="w-5 h-5 text-bp-cyan" />
                     </div>
                     <StatusBadge
                       status={(project.status as StatusType) || 'draft'}
                     />
                   </div>
-                  <h3 className="font-semibold text-white mb-2 group-hover:text-primary-400 transition-colors">
+                  <h3 className="font-semibold text-bp-text mb-2 group-hover:text-bp-cyan transition-colors">
                     {project.name}
                   </h3>
                   {project.description && (
-                    <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+                    <p className="text-sm text-bp-muted line-clamp-2 mb-3">
                       {project.description}
                     </p>
                   )}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-primary-500/10 text-primary-400 border border-primary-500/20">
+                    <span className="bp-chip bp-chip-cyan text-[11px]">
                       {project.research_field || '未知领域'}
                     </span>
                   </div>
-                  <div className="flex items-center text-gray-500 text-sm">
+                  <div className="flex items-center text-bp-muted text-sm">
                     <Calendar className="w-4 h-4 mr-2" />
                     {formatDate(project.created_at)}
                   </div>
-                  <div className="mt-4 pt-4 border-t border-dark-700 flex items-center justify-between">
-                    <span className="text-sm text-primary-400">进入项目</span>
-                    <ArrowRight className="w-4 h-4 text-primary-400 group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-4 pt-4 border-t border-bp-cyan-dim flex items-center justify-between">
+                    <span className="text-sm text-bp-cyan">进入项目</span>
+                    <ArrowRight className="w-4 h-4 text-bp-cyan group-hover:translate-x-1 transition-transform" />
                   </div>
                 </Card>
               </Link>
@@ -240,6 +243,10 @@ export function Home() {
           </div>
         )}
       </div>
+
+      <footer className="mt-12 pt-6 border-t border-bp-cyan-dim text-center text-bp-muted text-xs">
+        AI Scientist · Blueprint UI · 多智能体科研工作台
+      </footer>
     </div>
   );
 }

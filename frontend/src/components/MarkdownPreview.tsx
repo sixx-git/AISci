@@ -122,28 +122,28 @@ function parseBlocks(md: string): Block[] {
 function renderBlock(block: Block, key: number) {
   switch (block.type) {
     case 'h1':
-      return <h1 key={key} className="text-2xl font-bold text-white mt-8 mb-4 pb-2 border-b border-gray-800">{inlineMarkup(block.content)}</h1>;
+      return <h1 key={key} className="text-2xl font-bold text-bp-text mt-8 mb-4 pb-2 border-b border-bp-border">{inlineMarkup(block.content)}</h1>;
     case 'h2':
-      return <h2 key={key} className="text-lg font-semibold text-white mt-6 mb-3">{inlineMarkup(block.content)}</h2>;
+      return <h2 key={key} className="text-lg font-semibold text-bp-text mt-6 mb-3">{inlineMarkup(block.content)}</h2>;
     case 'h3':
-      return <h3 key={key} className="text-base font-semibold text-gray-200 mt-4 mb-2">{inlineMarkup(block.content)}</h3>;
+      return <h3 key={key} className="text-base font-semibold text-bp-text mt-4 mb-2">{inlineMarkup(block.content)}</h3>;
 
     case 'table':
       return (
         <div key={key} className="overflow-x-auto mb-4">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-bp-border">
                 {block.tableHeaders?.map((h, hi) => (
-                  <th key={hi} className="py-2 px-3 text-gray-400 font-medium text-xs">{inlineMarkup(h)}</th>
+                  <th key={hi} className="py-2 px-3 text-bp-muted font-medium text-xs">{inlineMarkup(h)}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {block.tableRows?.map((row, ri) => (
-                <tr key={ri} className="border-b border-gray-800/50 last:border-0">
+                <tr key={ri} className="border-b border-bp-border/50 last:border-0">
                   {row.map((cell, ci) => (
-                    <td key={ci} className="py-2 px-3 text-gray-300 text-xs">{inlineMarkup(cell)}</td>
+                    <td key={ci} className="py-2 px-3 text-bp-text text-xs">{inlineMarkup(cell)}</td>
                   ))}
                 </tr>
               ))}
@@ -155,7 +155,7 @@ function renderBlock(block: Block, key: number) {
     case 'list': {
       const items = block.content.split('\n');
       return (
-        <ul key={key} className="list-disc list-inside space-y-1 mb-4 text-sm text-gray-300">
+        <ul key={key} className="list-disc list-inside space-y-1 mb-4 text-sm text-bp-text">
           {items.map((item, idx) => (
             <li key={idx}>{inlineMarkup(item)}</li>
           ))}
@@ -165,7 +165,7 @@ function renderBlock(block: Block, key: number) {
 
     case 'paragraph': {
       if (block.content === '___HR___') {
-        return <hr key={key} className="my-6 border-gray-800" />;
+        return <hr key={key} className="my-6 border-bp-border" />;
       }
       if (block.content.startsWith('___BLOCKQUOTE___')) {
         const text = block.content.slice('___BLOCKQUOTE___'.length);
@@ -175,14 +175,14 @@ function renderBlock(block: Block, key: number) {
             'my-4 p-3 rounded-lg border text-sm',
             isWarning
               ? 'bg-amber-500/5 border-amber-500/20 text-amber-300/90'
-              : 'bg-gray-900/70 border-gray-700 text-gray-400 italic',
+              : 'bg-bp-base/70 border-bp-border text-bp-muted italic',
           )}>
             {isWarning && <AlertTriangle className="w-4 h-4 text-amber-400 inline-block mr-1.5 -mt-0.5" />}
             {inlineMarkup(text)}
           </div>
         );
       }
-      return <p key={key} className="text-sm text-gray-300 leading-relaxed mb-4">{inlineMarkup(block.content)}</p>;
+      return <p key={key} className="text-sm text-bp-text leading-relaxed mb-4">{inlineMarkup(block.content)}</p>;
     }
 
     default:
@@ -196,10 +196,10 @@ function inlineMarkup(text: string): React.ReactNode {
   const parts = text.split(/(\*\*.*?\*\*|\*[^*].*?\*)/g);
   return parts.map((p, i) => {
     if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={i} className="text-white font-semibold">{p.slice(2, -2)}</strong>;
+      return <strong key={i} className="text-bp-text font-semibold">{p.slice(2, -2)}</strong>;
     }
     if (p.startsWith('*') && p.endsWith('*') && !p.startsWith('**')) {
-      return <em key={i} className="italic text-gray-400">{p.slice(1, -1)}</em>;
+      return <em key={i} className="italic text-bp-muted">{p.slice(1, -1)}</em>;
     }
     return p;
   });

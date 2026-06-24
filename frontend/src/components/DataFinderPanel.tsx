@@ -173,12 +173,12 @@ export function DataFinderPanel({
 
   return (
     <div className="space-y-5">
-      <Card className="p-4 border-primary-500/20 bg-primary-500/5">
-        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <Search className="w-4 h-4 text-primary-400" />
+      <Card className="p-4 border-bp-cyan/20 bg-primary-500/5">
+        <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
+          <Search className="w-4 h-4 text-bp-cyan" />
           多源科学数据查找与整合
         </h3>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-bp-muted mb-3">
           从已导入 PDF、论文链接与开放数据平台查找数据，抽取表格并输出可下载 CSV（含 provenance）。
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
@@ -241,15 +241,15 @@ export function DataFinderPanel({
                   key={step}
                   className={`text-xs p-2 rounded border ${
                     skipped
-                      ? 'border-dark-600 bg-dark-900/50 text-gray-500'
+                      ? 'border-bp-border bg-bp-base/50 text-bp-muted'
                       : 'border-teal-500/30 bg-teal-500/10 text-teal-200'
                   }`}
                 >
                   <div className="font-medium">{labelMap[step] || step}</div>
                   {skipped ? (
-                    <span className="text-[10px] text-gray-500">已跳过</span>
+                    <span className="text-[10px] text-bp-muted">已跳过</span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-bp-muted">
                       {detail?.tables != null && `表 ${detail.tables}`}
                       {detail?.rows != null && ` · 行 ${detail.rows}`}
                       {detail?.imported != null && ` · 导入 ${detail.imported}`}
@@ -265,7 +265,7 @@ export function DataFinderPanel({
             })}
           </div>
           {result.data_acquisition.stats && (
-            <p className="text-[10px] text-gray-500 mt-2">
+            <p className="text-[10px] text-bp-muted mt-2">
               外部候选 {result.data_acquisition.stats.external_candidates ?? 0} ·
               表格 {result.data_acquisition.stats.tables ?? 0} ·
               合并行 {result.data_acquisition.stats.merged_rows ?? '—'}
@@ -285,20 +285,20 @@ export function DataFinderPanel({
       {result?.data_spec && (
         <Card className="p-4 border-indigo-500/20 bg-indigo-500/5">
           <h4 className="text-sm font-semibold text-indigo-200 mb-2">DataSpec · 数据需求</h4>
-          <p className="text-xs text-gray-400 mb-2">
+          <p className="text-xs text-bp-muted mb-2">
             场景 {result.data_spec.scenario || 'general'}
             {result.data_spec.merge_strategy_hint && (
-              <span className="text-gray-500"> · 合并策略 {result.data_spec.merge_strategy_hint}</span>
+              <span className="text-bp-muted"> · 合并策略 {result.data_spec.merge_strategy_hint}</span>
             )}
           </p>
           {(result.data_spec.entities_of_interest?.length ?? 0) > 0 && (
-            <p className="text-[10px] text-gray-500 mb-1">
+            <p className="text-[10px] text-bp-muted mb-1">
               实体字段: {result.data_spec.entities_of_interest!.join(', ')}
             </p>
           )}
           <div className="flex flex-wrap gap-1">
             {(result.data_spec.target_variables || result.data_requirements?.expected_metrics || []).map((m) => (
-              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-gray-400 border border-dark-700">{m}</span>
+              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
             ))}
           </div>
         </Card>
@@ -306,11 +306,11 @@ export function DataFinderPanel({
 
       {result?.data_requirements && !result?.data_spec && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2">数据需求理解</h4>
-          <p className="text-xs text-gray-400 mb-2">{result.data_requirements.data_need}</p>
+          <h4 className="text-sm font-semibold text-bp-text mb-2">数据需求理解</h4>
+          <p className="text-xs text-bp-muted mb-2">{result.data_requirements.data_need}</p>
           <div className="flex flex-wrap gap-1">
             {(result.data_requirements.expected_metrics || []).map((m) => (
-              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-gray-400 border border-dark-700">{m}</span>
+              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
             ))}
           </div>
         </Card>
@@ -319,14 +319,14 @@ export function DataFinderPanel({
       {result?.text_facts && result.text_facts.length > 0 && (
         <Card className="p-4 border-violet-500/20 bg-violet-500/5">
           <h4 className="text-sm font-semibold text-violet-200 mb-2">正文数值事实 L1 ({result.text_facts.length})</h4>
-          <p className="text-[10px] text-gray-500 mb-2">来自 Methods/Results，供假设与实验设计引用（不进 merge CSV）</p>
+          <p className="text-[10px] text-bp-muted mb-2">来自 Methods/Results，供假设与实验设计引用（不进 merge CSV）</p>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {result.text_facts.slice(0, 6).map((fact) => (
-              <div key={String(fact.fact_id)} className="text-xs text-gray-400 p-2 rounded border border-dark-700">
+              <div key={String(fact.fact_id)} className="text-xs text-bp-muted p-2 rounded border border-bp-border">
                 <span className="text-violet-300/80 text-[10px]">{String(fact.section)}</span>
                 <p className="line-clamp-2 mt-0.5">{String(fact.sentence)}</p>
                 {(fact.matched_targets as string[] | undefined)?.length ? (
-                  <p className="text-[10px] text-gray-500 mt-1">
+                  <p className="text-[10px] text-bp-muted mt-1">
                     命中: {(fact.matched_targets as string[]).join(', ')}
                   </p>
                 ) : null}
@@ -342,7 +342,7 @@ export function DataFinderPanel({
             <Link2 className="w-4 h-4" />
             自动文献发现
           </h4>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-bp-muted">
             导入 {result.literature_discovery.imported} 篇 · 来源 {result.literature_discovery.fallback_source}
             {result.literature_discovery.pdf_downloaded != null && (
               <span> · PDF {result.literature_discovery.pdf_downloaded}</span>
@@ -359,20 +359,20 @@ export function DataFinderPanel({
 
       {result?.paper_extractions && result.paper_extractions.length > 0 && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
             <Link2 className="w-4 h-4 text-blue-400" />
             论文数据链接 ({result.paper_extractions.length})
           </h4>
           <div className="space-y-3">
             {result.paper_extractions.map((pe) => (
-              <div key={pe.paper_id} className="p-3 rounded-lg border border-dark-700 bg-dark-900/50 text-xs">
-                <div className="text-gray-200 font-medium mb-1">{pe.source_title}</div>
-                <div className="text-gray-500">
+              <div key={pe.paper_id} className="p-3 rounded-lg border border-bp-border bg-bp-base/50 text-xs">
+                <div className="text-bp-text font-medium mb-1">{pe.source_title}</div>
+                <div className="text-bp-muted">
                   表格引用 {pe.tables_detected?.length || 0} · 图引用 {pe.figures_detected?.length || 0} ·
                   置信度 {(pe.confidence * 100).toFixed(0)}%
                 </div>
                 {pe.data_links?.length > 0 && (
-                  <div className="mt-1 text-primary-300 truncate">{pe.data_links[0]}</div>
+                  <div className="mt-1 text-bp-cyan truncate">{pe.data_links[0]}</div>
                 )}
               </div>
             ))}
@@ -382,18 +382,18 @@ export function DataFinderPanel({
 
       {result?.extracted_tables && result.extracted_tables.length > 0 && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
             <FileSpreadsheet className="w-4 h-4 text-green-400" />
             PDF 表格抽取 ({result.extracted_tables.length})
           </h4>
           <div className="space-y-2">
             {result.extracted_tables.map((t) => (
-              <div key={t.table_id} className="p-3 rounded-lg border border-dark-700 text-xs text-gray-300">
+              <div key={t.table_id} className="p-3 rounded-lg border border-bp-border text-xs text-bp-text">
                 <div className="flex justify-between mb-1">
                   <span>{t.caption || t.table_id}</span>
                   <span className="text-green-400">质量 {(t.quality_score * 100).toFixed(0)}%</span>
                 </div>
-                <div className="text-gray-500">
+                <div className="text-bp-muted">
                   {t.source_title} · 第 {t.page} 页 · {t.columns?.length || 0} 列
                   {t.needs_review && <span className="text-amber-400 ml-2">需复核</span>}
                 </div>
@@ -405,13 +405,13 @@ export function DataFinderPanel({
 
       {result?.alignments && result.alignments.length > 0 && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
             <Map className="w-4 h-4 text-purple-400" />
             字段映射
           </h4>
           {result.alignments.map((a) => (
-            <div key={a.table_id} className="text-xs text-gray-400 mb-2">
-              <span className="text-gray-300">{a.table_id}</span>: {a.standard_columns?.join(', ') || '无标准字段'}
+            <div key={a.table_id} className="text-xs text-bp-muted mb-2">
+              <span className="text-bp-text">{a.table_id}</span>: {a.standard_columns?.join(', ') || '无标准字段'}
               {a.merge_strategy && (
                 <span className="text-indigo-400/80 ml-1">[{a.merge_strategy}]</span>
               )}
@@ -425,12 +425,12 @@ export function DataFinderPanel({
 
       {result?.figures && result.figures.length > 0 && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
             <Image className="w-4 h-4 text-amber-400" />
             图像/图表元信息
           </h4>
           {result.figures.map((f, i) => (
-            <div key={i} className="text-xs text-gray-400 mb-2 p-2 rounded border border-dark-700">
+            <div key={i} className="text-xs text-bp-muted mb-2 p-2 rounded border border-bp-border">
               Fig {String(f.figure_number)} · {String(f.chart_type)} · 置信度 {Number(f.extraction_confidence) * 100}%
               {Boolean(f.needs_manual_review) && <span className="text-amber-400 ml-2">需人工复核（未写入 CSV）</span>}
             </div>
@@ -440,8 +440,8 @@ export function DataFinderPanel({
 
       {result?.provenance && result.provenance.length > 0 && (
         <Card className="p-4">
-          <h4 className="text-sm font-semibold text-white mb-2">Provenance 来源说明</h4>
-          <div className="space-y-1 text-xs text-gray-400">
+          <h4 className="text-sm font-semibold text-bp-text mb-2">Provenance 来源说明</h4>
+          <div className="space-y-1 text-xs text-bp-muted">
             {result.provenance.map((p, i) => (
               <div key={i} className="flex items-start gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
@@ -481,7 +481,7 @@ export function DataFinderPanel({
                   className={`text-[10px] px-2 py-0.5 rounded border ${
                     item.hit
                       ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
-                      : 'border-dark-600 bg-dark-900 text-gray-500'
+                      : 'border-bp-border bg-bp-base text-bp-muted'
                   }`}
                 >
                   {item.label || item.field}
@@ -496,7 +496,7 @@ export function DataFinderPanel({
                 className={`text-[10px] px-2 py-0.5 rounded border ${
                   item.hit
                     ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                    : 'border-dark-600 bg-dark-900 text-gray-500'
+                    : 'border-bp-border bg-bp-base text-bp-muted'
                 }`}
               >
                 {item.label}
@@ -544,14 +544,14 @@ export function DataFinderPanel({
                 <GitMerge className="w-4 h-4" />
                 最终整合 CSV
               </h4>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-bp-muted mt-1">
                 {result.merged.row_count} 行 · merge_id={result.merged.merge_id}
                 {result.merged.cleaned_csv_path && (
                   <span className="text-emerald-400 ml-2">已清洗</span>
                 )}
               </p>
               {result.merged.cleaning_report && (
-                <p className="text-[10px] text-gray-500 mt-1">
+                <p className="text-[10px] text-bp-muted mt-1">
                   清洗: 行 {String(result.merged.cleaning_report.rows_before)}→
                   {String(result.merged.cleaning_report.rows_after)} · 缺失{' '}
                   {String(result.merged.cleaning_report.missing_cells_before)}→
@@ -571,7 +571,7 @@ export function DataFinderPanel({
                   下载 Analysis Bundle
                 </Button>
               )}
-              <span className="text-xs text-gray-500 flex items-center gap-1">
+              <span className="text-xs text-bp-muted flex items-center gap-1">
                 <Download className="w-3.5 h-3.5" /> 含 data_spec / manifest / provenance
               </span>
             </div>
@@ -588,7 +588,7 @@ export function DataFinderPanel({
       )}
 
       {loading && !action && (
-        <div className="flex items-center gap-2 text-gray-500 text-sm">
+        <div className="flex items-center gap-2 text-bp-muted text-sm">
           <Loader2 className="w-4 h-4 animate-spin" /> 处理中...
         </div>
       )}

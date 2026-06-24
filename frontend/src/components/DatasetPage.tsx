@@ -13,6 +13,7 @@ import { DataFinderPanel } from '@/components/DataFinderPanel';
 import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { DataCatalogPanel } from '@/components/DataCatalogPanel';
+import { PageSubTabNav } from '@/components/workspace/PageSubTabNav';
 import datasetService, { type DataContext, type ModelingResult } from '@/services/datasetService';
 import { useToast } from '@/hooks/useToast';
 import type { BackendDataset, DatasetSummary } from '@/types';
@@ -29,7 +30,7 @@ const DATA_TYPE_CONFIG: Record<string, { icon: typeof Database; label: string; c
   time_series: { icon: BarChart3, label: '时间序列', color: 'text-green-400' },
   json: { icon: FileJson, label: 'JSON', color: 'text-yellow-400' },
   pdf: { icon: FileText, label: 'PDF', color: 'text-red-400' },
-  unknown: { icon: FileText, label: '未知', color: 'text-gray-400' },
+  unknown: { icon: FileText, label: '未知', color: 'text-bp-muted' },
 };
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -44,7 +45,7 @@ const MODALITY_LABELS: Record<string, string> = {
 const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; label: string; cls: string }> = {
   completed: { icon: CheckCircle2, label: '已完成', cls: 'text-green-400 bg-green-500/10' },
   processing: { icon: RefreshCw, label: '预处理中', cls: 'text-blue-400 bg-blue-500/10' },
-  pending: { icon: Clock, label: '待处理', cls: 'text-gray-400 bg-gray-500/10' },
+  pending: { icon: Clock, label: '待处理', cls: 'text-bp-muted bg-gray-500/10' },
   failed: { icon: XCircle, label: '失败', cls: 'text-red-400 bg-red-500/10' },
 };
 
@@ -52,6 +53,14 @@ const SUPPORTED_FORMATS =
   'CSV/Excel/JSON/文本、图像 (.png/.jpg/.webp)、音频 (.wav/.mp3/.m4a)；多模态解析见「多模态证据」Tab';
 const BYTES_KB = 1024;
 const BYTES_MB = 1024 * 1024;
+
+const DATASET_PAGE_TABS = [
+  { id: 'datasets', label: '项目数据集' },
+  { id: 'data-finder', label: '多源数据查找与整合' },
+  { id: 'multimodal', label: '多模态证据' },
+  { id: 'catalog', label: '数据目录' },
+  { id: 'feedback', label: '反馈中心' },
+] as const;
 
 function parseJsonSafe(raw: string | undefined): unknown {
   if (!raw) return null;
@@ -89,7 +98,7 @@ function formatSize(bytes?: number): string {
 }
 
 function formatQualityScore(score: number | null | undefined): { label: string; cls: string } {
-  if (score == null) return { label: '-', cls: 'text-gray-500' };
+  if (score == null) return { label: '-', cls: 'text-bp-muted' };
   if (score >= 0.8) return { label: score.toFixed(2), cls: 'text-green-400' };
   if (score >= 0.5) return { label: score.toFixed(2), cls: 'text-yellow-400' };
   return { label: score.toFixed(2), cls: 'text-red-400' };
@@ -295,63 +304,11 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="flex gap-2 mb-4 border-b border-dark-700">
-        <button
-          type="button"
-          onClick={() => setPageTab('datasets')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'datasets'
-              ? 'border-primary-500 text-primary-300'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          项目数据集
-        </button>
-        <button
-          type="button"
-          onClick={() => setPageTab('data-finder')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'data-finder'
-              ? 'border-primary-500 text-primary-300'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          多源数据查找与整合
-        </button>
-        <button
-          type="button"
-          onClick={() => setPageTab('multimodal')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'multimodal'
-              ? 'border-primary-500 text-primary-300'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          多模态证据
-        </button>
-        <button
-          type="button"
-          onClick={() => setPageTab('catalog')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'catalog'
-              ? 'border-primary-500 text-primary-300'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          数据目录
-        </button>
-        <button
-          type="button"
-          onClick={() => setPageTab('feedback')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'feedback'
-              ? 'border-primary-500 text-primary-300'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          反馈中心
-        </button>
-      </div>
+      <PageSubTabNav
+        tabs={[...DATASET_PAGE_TABS]}
+        activeTab={pageTab}
+        onTabChange={(id) => setPageTab(id as typeof pageTab)}
+      />
 
       {pageTab === 'feedback' ? (
         <FeedbackHubPanel projectId={projectId} />
@@ -374,8 +331,8 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       {/* 头部控制区 */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">数据集管理</h1>
-          <p className="text-gray-400 text-sm">
+          <h1 className="text-3xl font-bold text-bp-text mb-2">数据集管理</h1>
+          <p className="text-bp-muted text-sm">
             上传观测数据、实验数据、临床数据等多模态数据集，用于假设生成和实验设计。支持格式: {SUPPORTED_FORMATS}
           </p>
         </div>
@@ -424,8 +381,8 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           {dataContext?.fl_context ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
               <div>
-                <span className="text-gray-500">FL / VFL 类型</span>
-                <p className="text-white font-mono mt-0.5">
+                <span className="text-bp-muted">FL / VFL 类型</span>
+                <p className="text-bp-text font-mono mt-0.5">
                   {dataContext.fl_context.federated_setting || dataContext.fl_context.fl_setting || 'unknown'}
                   {dataContext.fl_context.fl_setting === 'vertical_fl' && (
                     <span className="ml-2 text-violet-400">vertical_fl</span>
@@ -435,70 +392,70 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
               {dataContext.fl_context.fl_setting === 'vertical_fl' && (
                 <>
                   <div>
-                    <span className="text-gray-500">特征方 (feature parties)</span>
-                    <p className="text-gray-300 mt-0.5">
+                    <span className="text-bp-muted">特征方 (feature parties)</span>
+                    <p className="text-bp-text mt-0.5">
                       {(dataContext.fl_context.feature_parties || []).join(', ') || '暂无'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-500">标签方 (label party)</span>
-                    <p className="text-gray-300 mt-0.5">
+                    <span className="text-bp-muted">标签方 (label party)</span>
+                    <p className="text-bp-text mt-0.5">
                       {dataContext.fl_context.label_party || '暂无'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-500">对齐键 (alignment keys)</span>
-                    <p className="text-gray-300 mt-0.5">
+                    <span className="text-bp-muted">对齐键 (alignment keys)</span>
+                    <p className="text-bp-text mt-0.5">
                       {(dataContext.fl_context.alignment_keys || []).join(', ') || '暂无'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-500">隐私字段 (privacy)</span>
-                    <p className="text-gray-300 mt-0.5">
+                    <span className="text-bp-muted">隐私字段 (privacy)</span>
+                    <p className="text-bp-text mt-0.5">
                       {(dataContext.fl_context.privacy_fields || []).join(', ') || '暂无'}
                     </p>
                   </div>
                 </>
               )}
               <div>
-                <span className="text-gray-500">检测字段</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">检测字段</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.detected_fields || []).join(', ') || '暂无'}
                 </p>
               </div>
               <div>
-                <span className="text-gray-500">指标字段</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">指标字段</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.metrics_fields || []).join(', ') || '暂无'}
                 </p>
               </div>
               <div>
-                <span className="text-gray-500">客户端字段</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">客户端字段</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.client_fields || []).join(', ') || '暂无'}
                 </p>
               </div>
               <div>
-                <span className="text-gray-500">参与方字段</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">参与方字段</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.party_fields || []).join(', ') || '暂无'}
                 </p>
               </div>
               <div>
-                <span className="text-gray-500">指标候选</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">指标候选</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.metrics_candidates || dataContext.fl_context.metrics_fields || []).join(', ') || '暂无'}
                 </p>
               </div>
               <div>
-                <span className="text-gray-500">目标候选</span>
-                <p className="text-gray-300 mt-0.5">
+                <span className="text-bp-muted">目标候选</span>
+                <p className="text-bp-text mt-0.5">
                   {(dataContext.fl_context.target_candidates || dataContext.target_candidates || []).join(', ') || '暂无'}
                 </p>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-bp-muted">
               请上传含 party_id/entity_id/feature_owner/label_owner（VFL）或
               method、non_iid_degree、global_accuracy 等列（横向联邦）的 CSV
             </p>
@@ -511,15 +468,15 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
         <Card className="p-4 mb-6">
           <div className="flex items-center gap-6 flex-wrap">
             <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-primary-400" />
-              <span className="text-sm text-gray-300">
-                <strong className="text-white">{dataContext.dataset_count}</strong> 个数据集
+              <Database className="w-4 h-4 text-bp-cyan" />
+              <span className="text-sm text-bp-text">
+                <strong className="text-bp-text">{dataContext.dataset_count}</strong> 个数据集
               </span>
             </div>
             {dataContext.available_modalities.length > 0 && (
               <div className="flex items-center gap-2">
                 <ListFilter className="w-4 h-4 text-purple-400" />
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-bp-muted">
                   模态: {dataContext.available_modalities.map((m) => MODALITY_LABELS[m] || m).join('、')}
                 </span>
               </div>
@@ -527,16 +484,16 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             {dataContext.field_candidates.length > 0 && (
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-green-400" />
-                <span className="text-sm text-gray-400">
-                  <strong className="text-white">{dataContext.field_candidates.length}</strong> 个可用字段
+                <span className="text-sm text-bp-muted">
+                  <strong className="text-bp-text">{dataContext.field_candidates.length}</strong> 个可用字段
                 </span>
               </div>
             )}
             {dataContext.target_candidates.length > 0 && (
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm text-gray-400">
-                  <strong className="text-white">{dataContext.target_candidates.length}</strong> 个目标候选
+                <span className="text-sm text-bp-muted">
+                  <strong className="text-bp-text">{dataContext.target_candidates.length}</strong> 个目标候选
                 </span>
               </div>
             )}
@@ -548,13 +505,13 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     综合质量: {formatQualityScore((dataContext.quality_summary as Record<string, unknown>)?.overall_score as number | null).label}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-500">质量: 待分析</span>
+                  <span className="text-sm text-bp-muted">质量: 待分析</span>
                 )}
               </div>
             )}
           </div>
           {dataContext.warnings.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-800">
+            <div className="mt-3 pt-3 border-t border-bp-border">
               {dataContext.warnings.map((w, i) => (
                 <div key={i} className="text-xs text-yellow-400/80 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
@@ -570,13 +527,13 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       {!loading && tabularDatasets.length > 0 && (
         <Card className="p-5 mb-6">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-primary-400" />
-            <h3 className="text-base font-semibold text-white">数据建模与自校正</h3>
+            <TrendingUp className="w-5 h-5 text-bp-cyan" />
+            <h3 className="text-base font-semibold text-bp-text">数据建模与自校正</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">数据集</label>
+              <label className="text-xs text-bp-muted mb-1 block">数据集</label>
               <select
                 value={modelingDatasetId}
                 onChange={(e) => {
@@ -584,7 +541,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                   setTargetColumn('');
                   setModelingResult(null);
                 }}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
               >
                 {tabularDatasets.map((ds) => (
                   <option key={ds.id} value={ds.id}>{ds.filename}</option>
@@ -592,11 +549,11 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">目标变量</label>
+              <label className="text-xs text-bp-muted mb-1 block">目标变量</label>
               <select
                 value={targetColumn}
                 onChange={(e) => setTargetColumn(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
               >
                 <option value="">请选择目标列</option>
                 {(tabularDatasets.find((d) => d.id === modelingDatasetId)?.columns || []).map((col) => (
@@ -607,12 +564,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           </div>
 
           <div className="mb-4">
-            <label className="text-xs text-gray-500 mb-1 block">研究任务（可选）</label>
+            <label className="text-xs text-bp-muted mb-1 block">研究任务（可选）</label>
             <input
               value={researchTask}
               onChange={(e) => setResearchTask(e.target.value)}
               placeholder="例如：预测疾病分类 / 估计指标回归"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+              className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
             />
           </div>
 
@@ -627,7 +584,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           </Button>
 
           {modelingResult?.success && (
-            <div className="mt-5 space-y-4 border-t border-gray-800 pt-4">
+            <div className="mt-5 space-y-4 border-t border-bp-border pt-4">
               {modelingResult.is_pilot_validation && (
                 <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
                   Pilot Validation：样本量较小，结果仅用于可行性验证，不得夸大为最终结论。
@@ -635,21 +592,21 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div className="bg-gray-900/70 rounded-lg p-2">
-                  <div className="text-gray-500 text-xs">任务类型</div>
-                  <div className="text-white font-medium">{modelingResult.task_type}</div>
+                <div className="bg-bp-base/70 rounded-lg p-2">
+                  <div className="text-bp-muted text-xs">任务类型</div>
+                  <div className="text-bp-text font-medium">{modelingResult.task_type}</div>
                 </div>
-                <div className="bg-gray-900/70 rounded-lg p-2">
-                  <div className="text-gray-500 text-xs">目标变量</div>
-                  <div className="text-white font-medium">{modelingResult.target_column}</div>
+                <div className="bg-bp-base/70 rounded-lg p-2">
+                  <div className="text-bp-muted text-xs">目标变量</div>
+                  <div className="text-bp-text font-medium">{modelingResult.target_column}</div>
                 </div>
-                <div className="bg-gray-900/70 rounded-lg p-2">
-                  <div className="text-gray-500 text-xs">最佳模型</div>
-                  <div className="text-primary-300 font-medium">{modelingResult.best_model}</div>
+                <div className="bg-bp-base/70 rounded-lg p-2">
+                  <div className="text-bp-muted text-xs">最佳模型</div>
+                  <div className="text-bp-cyan font-medium">{modelingResult.best_model}</div>
                 </div>
-                <div className="bg-gray-900/70 rounded-lg p-2">
-                  <div className="text-gray-500 text-xs">样本规模</div>
-                  <div className="text-white font-medium">
+                <div className="bg-bp-base/70 rounded-lg p-2">
+                  <div className="text-bp-muted text-xs">样本规模</div>
+                  <div className="text-bp-text font-medium">
                     {String((modelingResult.profile as { n_rows?: number })?.n_rows ?? '-')}
                   </div>
                 </div>
@@ -657,8 +614,8 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
               {modelingResult.profile && (
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">数据概览</div>
-                  <div className="text-xs text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="text-xs text-bp-muted mb-2">数据概览</div>
+                  <div className="text-xs text-bp-muted grid grid-cols-2 md:grid-cols-4 gap-2">
                     <span>字段数: {String((modelingResult.profile as { n_columns?: number }).n_columns ?? '-')}</span>
                     <span>缺失率: {(((modelingResult.profile as { missing_rate?: number }).missing_rate ?? 0) * 100).toFixed(1)}%</span>
                     <span>目标候选: {((modelingResult.profile as { target_candidates?: string[] }).target_candidates || []).length}</span>
@@ -669,11 +626,11 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
               {modelingResult.models?.length > 0 && (
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">模型指标</div>
+                  <div className="text-xs text-bp-muted mb-2">模型指标</div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-gray-500 border-b border-gray-800">
+                        <tr className="text-bp-muted border-b border-bp-border">
                           <th className="text-left py-1 pr-2">模型</th>
                           <th className="text-right py-1 px-1">accuracy</th>
                           <th className="text-right py-1 px-1">f1</th>
@@ -683,7 +640,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       </thead>
                       <tbody>
                         {modelingResult.models.map((m) => (
-                          <tr key={m.model_name} className={`border-b border-gray-800/50 ${m.model_name === modelingResult.best_model ? 'text-primary-300' : 'text-gray-300'}`}>
+                          <tr key={m.model_name} className={`border-b border-bp-border/50 ${m.model_name === modelingResult.best_model ? 'text-bp-cyan' : 'text-bp-text'}`}>
                             <td className="py-1 pr-2 font-mono">{m.model_name}</td>
                             <td className="text-right py-1 px-1">{m.metrics.accuracy ?? '-'}</td>
                             <td className="text-right py-1 px-1">{m.metrics.f1 ?? '-'}</td>
@@ -699,13 +656,13 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
               {modelingResult.self_correction_suggestions?.length > 0 && (
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">自校正建议</div>
+                  <div className="text-xs text-bp-muted mb-2">自校正建议</div>
                   <div className="space-y-2">
                     {modelingResult.self_correction_suggestions.map((item, idx) => (
-                      <div key={idx} className="text-xs bg-gray-900/60 border border-gray-800 rounded-lg p-2">
+                      <div key={idx} className="text-xs bg-bp-base/60 border border-bp-border rounded-lg p-2">
                         <div className="text-yellow-300">{item.reason}</div>
-                        <div className="text-gray-300 mt-1">{item.suggestion}</div>
-                        <div className="text-gray-500 mt-1">下一步: {item.next_action}</div>
+                        <div className="text-bp-text mt-1">{item.suggestion}</div>
+                        <div className="text-bp-muted mt-1">下一步: {item.next_action}</div>
                       </div>
                     ))}
                   </div>
@@ -714,16 +671,16 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
               {modelingResult.charts?.length > 0 && (
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">图表</div>
+                  <div className="text-xs text-bp-muted mb-2">图表</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {modelingResult.charts.map((chart) => (
                       chart.base64 ? (
-                        <div key={chart.plot_id} className="bg-gray-900/60 rounded-lg p-2">
-                          <div className="text-xs text-gray-400 mb-2">{chart.title}</div>
+                        <div key={chart.plot_id} className="bg-bp-base/60 rounded-lg p-2">
+                          <div className="text-xs text-bp-muted mb-2">{chart.title}</div>
                           <img
                             src={`data:image/png;base64,${chart.base64}`}
                             alt={chart.title}
-                            className="w-full rounded border border-gray-800"
+                            className="w-full rounded border border-bp-border"
                           />
                         </div>
                       ) : null
@@ -737,20 +694,20 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       )}
 
       {alertMsg && (
-        <div className="mb-4 px-4 py-2.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-300">
+        <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan">
           {alertMsg}
         </div>
       )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-primary-400" />
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
+          <Loader2 className="w-8 h-8 animate-spin mb-3 text-bp-cyan" />
           <p className="text-sm">加载数据集...</p>
         </div>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
           <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
           <p className="text-sm text-red-400 mb-2">{error}</p>
         </div>
@@ -760,12 +717,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       {!loading && !error && datasets.length === 0 && (
         <Card className="p-12">
           <div className="flex flex-col items-center justify-center text-center">
-            <Database className="w-14 h-14 text-gray-600 mb-5" />
-            <h3 className="text-lg font-semibold text-gray-300 mb-3">暂无数据集</h3>
-            <p className="text-sm text-gray-500 max-w-lg mb-4">
+            <Database className="w-14 h-14 text-bp-muted mb-5" />
+            <h3 className="text-lg font-semibold text-bp-text mb-3">暂无数据集</h3>
+            <p className="text-sm text-bp-muted max-w-lg mb-4">
               请上传 CSV、Excel、JSON、图像或时间序列数据，以增强假设生成的可验证性。
             </p>
-            <p className="text-xs text-gray-600 mb-5">支持格式: {SUPPORTED_FORMATS}</p>
+            <p className="text-xs text-bp-muted mb-5">支持格式: {SUPPORTED_FORMATS}</p>
             <label>
               <input
                 type="file"
@@ -804,13 +761,13 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                 {/* 头部：文件名、类型、状态 */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-gray-800 border border-gray-700 ${dtConfig.color}`}>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-bp-panel border border-bp-border ${dtConfig.color}`}>
                       <TypeIcon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-white truncate">{ds.filename}</h3>
+                      <h3 className="text-sm font-semibold text-bp-text truncate">{ds.filename}</h3>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-[11px] text-gray-500">{dtConfig.label}</span>
+                        <span className="text-[11px] text-bp-muted">{dtConfig.label}</span>
                         <span className={`text-[11px] px-1.5 py-0.5 rounded flex items-center gap-1 ${stConfig.cls}`}>
                           <StatusIcon className="w-3 h-3" />
                           {stConfig.label}
@@ -821,7 +778,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                             用于假设
                           </span>
                         ) : (
-                          <span className="text-[11px] text-gray-500 bg-gray-700/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-[11px] text-bp-muted bg-bp-surface/50 px-1.5 py-0.5 rounded flex items-center gap-1">
                             <EyeOff className="w-3 h-3" />
                             已排除
                           </span>
@@ -829,46 +786,46 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       </div>
                     </div>
                   </div>
-                  <span className="text-[11px] text-gray-600 shrink-0">{formatSize(ds.fileSize)}</span>
+                  <span className="text-[11px] text-bp-muted shrink-0">{formatSize(ds.fileSize)}</span>
                 </div>
 
                 {/* 核心指标 */}
                 <div className="grid grid-cols-4 gap-2 mb-2">
-                  <div className="text-center p-1.5 rounded bg-gray-800/50">
-                    <div className="text-lg font-bold font-mono text-white">{ds.nRows ?? '-'}</div>
-                    <div className="text-[10px] text-gray-500">样本数</div>
+                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                    <div className="text-lg font-bold font-mono text-bp-text">{ds.nRows ?? '-'}</div>
+                    <div className="text-[10px] text-bp-muted">样本数</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-gray-800/50">
-                    <div className="text-lg font-bold font-mono text-white">{ds.nColumns ?? '-'}</div>
-                    <div className="text-[10px] text-gray-500">字段数</div>
+                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                    <div className="text-lg font-bold font-mono text-bp-text">{ds.nColumns ?? '-'}</div>
+                    <div className="text-[10px] text-bp-muted">字段数</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-gray-800/50">
-                    <div className="text-lg font-bold font-mono text-white">
+                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                    <div className="text-lg font-bold font-mono text-bp-text">
                       {ds.missingRate != null ? `${(ds.missingRate * 100).toFixed(1)}%` : '-'}
                     </div>
-                    <div className="text-[10px] text-gray-500">缺失率</div>
+                    <div className="text-[10px] text-bp-muted">缺失率</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-gray-800/50">
+                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
                     <div className={`text-lg font-bold font-mono ${qScore.cls}`}>
                       {qScore.label}
                     </div>
-                    <div className="text-[10px] text-gray-500">质量分</div>
+                    <div className="text-[10px] text-bp-muted">质量分</div>
                   </div>
                 </div>
 
                 {/* 展开详情 */}
                 {isExpanded && (
-                  <div className="mt-2 pt-3 border-t border-gray-800 space-y-3 animate-fade-in">
+                  <div className="mt-2 pt-3 border-t border-bp-border space-y-3 animate-fade-in">
                     {/* 字段列表 */}
                     {ds.columns && ds.columns.length > 0 && (
                       <div>
-                        <div className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
+                        <div className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
                           <ListFilter className="w-3 h-3" />
                           字段列表 ({ds.columns.length})
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {ds.columns.map((col) => (
-                            <span key={col} className="text-[10px] font-mono bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">
+                            <span key={col} className="text-[10px] font-mono bg-bp-panel text-bp-text px-1.5 py-0.5 rounded">
                               {col}
                             </span>
                           ))}
@@ -889,7 +846,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       if (targetCandidates.size === 0) return null;
                       return (
                         <div>
-                          <div className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
+                          <div className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
                             <Target className="w-3 h-3 text-yellow-400" />
                             目标变量候选 ({targetCandidates.size})
                           </div>
@@ -913,7 +870,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       if (numCols.length === 0) return null;
                       return (
                         <div>
-                          <div className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
+                          <div className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
                             <BarChart3 className="w-3 h-3 text-blue-400" />
                             数值字段 ({numCols.length})
                           </div>
@@ -931,7 +888,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     {/* 数据类型映射 */}
                     {ds.dtypes && Object.keys(ds.dtypes).length > 0 && (
                       <div>
-                        <div className="text-xs text-gray-500 mb-1.5">字段类型</div>
+                        <div className="text-xs text-bp-muted mb-1.5">字段类型</div>
                         <div className="flex flex-wrap gap-1">
                           {Object.entries(ds.dtypes).map(([col, dt]) => (
                             <span key={col} className="text-[10px] bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded">
@@ -945,11 +902,11 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     {/* 统计信息 */}
                     {ds.statistics && Object.keys(ds.statistics as object).length > 0 && (
                       <div>
-                        <div className="text-xs text-gray-500 mb-1.5">数值列统计</div>
+                        <div className="text-xs text-bp-muted mb-1.5">数值列统计</div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[11px]">
                             <thead>
-                              <tr className="text-gray-500">
+                              <tr className="text-bp-muted">
                                 <th className="text-left font-normal px-1">列名</th>
                                 <th className="text-right font-normal px-1">均值</th>
                                 <th className="text-right font-normal px-1">标准差</th>
@@ -960,13 +917,13 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                             </thead>
                             <tbody>
                               {(Object.entries(ds.statistics as Record<string, Record<string, unknown>>)).slice(0, 6).map(([col, stats]) => (
-                                <tr key={col} className="border-t border-gray-800">
-                                  <td className="px-1 py-0.5 font-mono text-gray-300">{col}</td>
-                                  <td className="px-1 py-0.5 text-right text-gray-400">{stats.mean != null ? String(stats.mean).slice(0, 8) : '-'}</td>
-                                  <td className="px-1 py-0.5 text-right text-gray-400">{stats.std != null ? String(stats.std).slice(0, 8) : '-'}</td>
-                                  <td className="px-1 py-0.5 text-right text-gray-400">{stats.min != null ? String(stats.min).slice(0, 8) : '-'}</td>
-                                  <td className="px-1 py-0.5 text-right text-gray-400">{stats.max != null ? String(stats.max).slice(0, 8) : '-'}</td>
-                                  <td className="px-1 py-0.5 text-right text-gray-400">{String(stats.missing ?? '-')}</td>
+                                <tr key={col} className="border-t border-bp-border">
+                                  <td className="px-1 py-0.5 font-mono text-bp-text">{col}</td>
+                                  <td className="px-1 py-0.5 text-right text-bp-muted">{stats.mean != null ? String(stats.mean).slice(0, 8) : '-'}</td>
+                                  <td className="px-1 py-0.5 text-right text-bp-muted">{stats.std != null ? String(stats.std).slice(0, 8) : '-'}</td>
+                                  <td className="px-1 py-0.5 text-right text-bp-muted">{stats.min != null ? String(stats.min).slice(0, 8) : '-'}</td>
+                                  <td className="px-1 py-0.5 text-right text-bp-muted">{stats.max != null ? String(stats.max).slice(0, 8) : '-'}</td>
+                                  <td className="px-1 py-0.5 text-right text-bp-muted">{String(stats.missing ?? '-')}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -978,9 +935,9 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     {/* 数据预览 */}
                     {ds.preview && ds.preview.length > 0 && (
                       <div>
-                        <div className="text-xs text-gray-500 mb-1.5">数据预览（前 {Math.min(ds.preview.length, 5)} 行）</div>
+                        <div className="text-xs text-bp-muted mb-1.5">数据预览（前 {Math.min(ds.preview.length, 5)} 行）</div>
                         <div className="overflow-x-auto max-h-32">
-                          <pre className="text-[10px] font-mono text-gray-400 bg-gray-800/50 p-2 rounded whitespace-pre-wrap">
+                          <pre className="text-[10px] font-mono text-bp-muted bg-bp-panel/50 p-2 rounded whitespace-pre-wrap">
                             {JSON.stringify(ds.preview.slice(0, 5), null, 2)}
                           </pre>
                         </div>
@@ -990,10 +947,10 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                 )}
 
                 {/* 操作按钮 */}
-                <div className="flex items-center gap-2 pt-2 border-t border-gray-800 flex-wrap">
+                <div className="flex items-center gap-2 pt-2 border-t border-bp-border flex-wrap">
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : ds.id)}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    className="flex items-center gap-1 text-xs text-bp-muted hover:text-bp-text transition-colors"
                   >
                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     {isExpanded ? '收起详情' : '展开详情'}

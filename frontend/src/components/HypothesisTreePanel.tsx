@@ -13,14 +13,14 @@ export function HypothesisTreePanel({ tree }: HypothesisTreePanelProps) {
   if (branches.length === 0) return null;
 
   return (
-    <div className="mb-5 p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-      <h2 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-        <GitBranch className="w-4 h-4 text-primary-400" />
+    <div className="mb-5 p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+      <h2 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-2">
+        <GitBranch className="w-4 h-4 text-bp-cyan" />
         假设树 · BFTS 轻量剪枝
       </h2>
 
       {tree.iteration_summary && (
-        <p className="text-xs text-gray-500 mb-3">{tree.iteration_summary}</p>
+        <p className="text-xs text-bp-muted mb-3">{tree.iteration_summary}</p>
       )}
 
       <div className="space-y-2 mb-3">
@@ -32,23 +32,23 @@ export function HypothesisTreePanel({ tree }: HypothesisTreePanelProps) {
               className={`p-3 rounded-lg border ${
                 isSelected
                   ? 'border-amber-500/40 bg-amber-500/5'
-                  : 'border-dark-700 bg-dark-900/40'
+                  : 'border-bp-border bg-bp-base/40'
               }`}
             >
               <div className="flex items-start justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-1.5 min-w-0">
                   {isSelected && <Star className="w-3 h-3 text-amber-400 shrink-0" />}
-                  <span className="text-xs font-medium text-gray-200 line-clamp-2">
+                  <span className="text-xs font-medium text-bp-text line-clamp-2">
                     {branch.label || branch.hypothesis}
                   </span>
                 </div>
-                <span className="text-sm font-mono font-bold text-primary-300 shrink-0">
+                <span className="text-sm font-mono font-bold text-bp-cyan shrink-0">
                   {branch.composite_score?.toFixed?.(1) ?? branch.composite_score}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2 text-[10px] text-gray-500">
+              <div className="flex flex-wrap gap-2 text-[10px] text-bp-muted">
                 {branch.scores && Object.entries(branch.scores).map(([k, v]) => (
-                  <span key={k} className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700">
+                  <span key={k} className="px-1.5 py-0.5 rounded bg-bp-panel border border-bp-border">
                     {k}: {Number(v).toFixed(1)}
                   </span>
                 ))}
@@ -68,8 +68,8 @@ export function HypothesisTreePanel({ tree }: HypothesisTreePanelProps) {
       </div>
 
       {pruned.length > 0 && (
-        <div className="pt-2 border-t border-dark-700/80">
-          <p className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1">
+        <div className="pt-2 border-t border-bp-border/80">
+          <p className="text-[11px] text-bp-muted mb-1.5 flex items-center gap-1">
             <Scissors className="w-3 h-3" />
             已剪枝 {pruned.length} 条低分分支
           </p>
@@ -87,7 +87,7 @@ export function HypothesisTreePanel({ tree }: HypothesisTreePanelProps) {
       )}
 
       {tree.evidence_coverage && (
-        <div className="mt-3 text-[11px] text-gray-500">
+        <div className="mt-3 text-[11px] text-bp-muted">
           证据覆盖: 已验证 {String(tree.evidence_coverage.verified_fact_refs ?? 0)}/
           {String(tree.evidence_coverage.total_fact_refs ?? 0)} 条 fact
           {tree.evidence_coverage.has_data_evidence ? ' · 含数据证据' : ''}

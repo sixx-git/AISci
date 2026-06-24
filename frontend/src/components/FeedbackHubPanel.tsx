@@ -64,7 +64,7 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
         <MessageSquarePlus className="w-4 h-4" />
         统一反馈中心
       </h4>
-      <p className="text-[10px] text-gray-500 mb-3">
+      <p className="text-[10px] text-bp-muted mb-3">
         纠错/约束一处提交，自动写入 global_constraints 并影响下一轮 Pipeline
       </p>
 
@@ -72,7 +72,7 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
         <select
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          className="text-xs bg-dark-900 border border-dark-700 rounded px-2 py-1 text-gray-300"
+          className="text-xs bg-bp-base border border-bp-border rounded px-2 py-1 text-bp-text"
         >
           <option value="user">用户</option>
           <option value="provenance">Provenance</option>
@@ -83,7 +83,7 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
         <select
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          className="text-xs bg-dark-900 border border-dark-700 rounded px-2 py-1 text-gray-300"
+          className="text-xs bg-bp-base border border-bp-border rounded px-2 py-1 text-bp-text"
         >
           <option value="hypothesis">假设</option>
           <option value="data_finder">Data Finder</option>
@@ -113,8 +113,8 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
 
       {constraints.length > 0 && (
         <div className="mt-3">
-          <p className="text-[10px] text-gray-500 mb-1">活跃约束 ({constraints.length})</p>
-          <ul className="text-[10px] text-gray-400 space-y-1 max-h-24 overflow-y-auto">
+          <p className="text-[10px] text-bp-muted mb-1">活跃约束 ({constraints.length})</p>
+          <ul className="text-[10px] text-bp-muted space-y-1 max-h-24 overflow-y-auto">
             {constraints.slice(-5).map((c) => (
               <li key={c} className="line-clamp-2">• {c}</li>
             ))}
@@ -123,7 +123,7 @@ export function FeedbackHubPanel({ projectId }: FeedbackHubPanelProps) {
       )}
 
       {entries.length > 0 && (
-        <div className="mt-2 text-[10px] text-gray-600">
+        <div className="mt-2 text-[10px] text-bp-muted">
           最近 {entries.length} 条反馈已记录
         </div>
       )}

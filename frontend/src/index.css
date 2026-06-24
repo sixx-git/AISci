@@ -3,15 +3,36 @@
 @tailwind utilities;
 
 /* ============================================================
-   全局设计 Token —— 深色科技风
-   背景：#0F172A  卡片：#1E293B  边框：#334155
-   主色：#0EA5E9  成功：#22C55E  警告：#FACC15  错误：#EF4444
-   主文字：#F8FAFC  次文字：#94A3B8
+   Blueprint Design Tokens
+   来源: designs/aisci-ui.pen — Pencil MCP get_variables
+   Tailwind 单源: tailwind.blueprint.js
    ============================================================ */
 
 @layer base {
+  :root {
+    --bp-bg: #0a1628;
+    --bp-panel: #0f172a;
+    --bp-surface: #1e293b;
+    --bp-text: #e2e8f0;
+    --bp-muted: #64748b;
+    --bp-cyan: #38bdf8;
+    --bp-cyan-dim: #38bdf866;
+    --bp-green: #22c55e;
+    --bp-yellow: #facc15;
+    --bp-purple: #a855f7;
+    --bp-border: #334155;
+    --bp-panel-glass: #0f172a99;
+    --bp-cyan-tint: #38bdf822;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+  }
+
   body {
-    @apply bg-[#0F172A] text-[#F8FAFC] font-sans antialiased;
+    background-color: var(--bp-bg);
+    color: var(--bp-text);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   ::-webkit-scrollbar {
@@ -19,102 +40,242 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-dark-800;
+    background-color: var(--bp-surface);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-dark-600 rounded-full;
+    background-color: var(--bp-muted);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-dark-500;
+    background-color: var(--bp-text);
   }
 }
 
 @layer components {
-  /* ---- 卡片 ---- */
+  /* ---- 卡片（MetricBox / 面板: cornerRadius 2） ---- */
   .card {
-    @apply bg-[#1E293B] border border-[#334155] rounded-xl
-           transition-all duration-200;
+    background-color: var(--bp-panel-glass);
+    border: 1px solid var(--bp-cyan);
+    border-radius: 2px;
+    @apply transition-all duration-200;
   }
 
   .card-hover {
-    @apply card hover:border-primary-500/40
-           hover:shadow-[0_0_20px_rgba(14,165,233,0.08)]
-           hover:bg-[#1e293b]/90;
+    @apply card;
   }
 
-  /* ---- 按钮基础类 ---- */
+  .card-hover:hover {
+    border-color: var(--bp-cyan);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.08);
+    background-color: color-mix(in srgb, var(--bp-surface) 90%, transparent);
+  }
+
+  /* ---- 按钮（comp/BtnPrimary · comp/BtnSecondary） ---- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 font-medium
-           rounded-lg transition-all duration-200
+    @apply inline-flex items-center justify-center gap-2 font-semibold
+           transition-all duration-200
            disabled:opacity-50 disabled:cursor-not-allowed
            active:scale-[0.98];
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   .btn-primary {
-    @apply btn bg-[#0EA5E9] hover:bg-primary-600 text-white
-           shadow-lg shadow-primary-500/20
-           hover:shadow-primary-500/30;
+    @apply btn;
+    background-color: var(--bp-cyan);
+    color: var(--bp-bg);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.08);
+  }
+
+  .btn-primary:hover {
+    background-color: color-mix(in srgb, var(--bp-cyan) 90%, transparent);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
   }
 
   .btn-secondary {
-    @apply btn bg-[#1E293B] hover:bg-dark-600 text-[#F8FAFC]
-           border border-[#334155] hover:border-dark-500;
+    @apply btn;
+    background-color: var(--bp-panel);
+    color: var(--bp-cyan);
+    border: 1px solid var(--bp-cyan);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--bp-surface);
+    border-color: color-mix(in srgb, var(--bp-cyan) 80%, transparent);
   }
 
   .btn-danger {
-    @apply btn bg-[#EF4444] hover:bg-danger-600 text-white
+    @apply btn bg-danger-500 hover:bg-danger-600 text-white
            shadow-lg shadow-danger-500/20
            hover:shadow-danger-500/30;
   }
 
   .btn-icon {
-    @apply inline-flex items-center justify-center
-           rounded-lg transition-all duration-200
-           text-[#94A3B8] hover:text-[#F8FAFC]
-           hover:bg-[#1E293B] border border-[#334155]
-           disabled:opacity-50 disabled:cursor-not-allowed
-           active:scale-[0.98];
+    @apply btn;
+    color: var(--bp-muted);
+    border: 1px solid var(--bp-border);
+    border-radius: 2px;
+  }
+
+  .btn-icon:hover {
+    color: var(--bp-text);
+    background-color: var(--bp-panel);
   }
 
   /* ---- 表单 ---- */
   .input-field {
-    @apply w-full bg-[#0F172A] border border-[#334155] rounded-lg
-           px-4 py-3 text-[#F8FAFC] placeholder-[#64748b]
-           focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/40
-           focus:border-transparent transition-all duration-200;
+    @apply w-full px-4 py-3 transition-all duration-200;
+    background-color: var(--bp-panel);
+    border: 1px solid var(--bp-border);
+    border-radius: 2px;
+    color: var(--bp-text);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.5;
   }
 
-  /* ---- 状态标签 ---- */
+  .input-field::placeholder {
+    color: var(--bp-muted);
+  }
+
+  .input-field:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bp-cyan) 40%, transparent);
+    border-color: transparent;
+  }
+
+  /* ---- 状态标签（comp/StatusBadge） ---- */
   .badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1
-           rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 font-semibold;
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    line-height: 1.5;
   }
 
-  .badge-pending   { @apply badge bg-dark-700/60 text-[#94A3B8]; }
-  .badge-running   { @apply badge bg-primary-500/15 text-primary-400; }
-  .badge-completed { @apply badge bg-success-500/15 text-success-400; }
-  .badge-failed    { @apply badge bg-danger-500/15  text-danger-400; }
-  .badge-review    { @apply badge bg-accent-500/15  text-accent-400; }
+  .badge-pending {
+    @apply badge;
+    background-color: var(--bp-panel);
+    color: var(--bp-muted);
+    border: 1px solid var(--bp-border);
+  }
+
+  .badge-running,
+  .badge-completed {
+    @apply badge;
+    background-color: color-mix(in srgb, var(--bp-green) 15%, transparent);
+    color: var(--bp-green);
+    border: 1px solid color-mix(in srgb, var(--bp-green) 30%, transparent);
+  }
+
+  .badge-failed {
+    @apply badge bg-danger-500/15 text-danger-400 border border-danger-500/30;
+  }
+
+  .badge-review {
+    @apply badge;
+    background-color: color-mix(in srgb, var(--bp-purple) 15%, transparent);
+    color: var(--bp-purple);
+    border: 1px solid color-mix(in srgb, var(--bp-purple) 30%, transparent);
+  }
 
   /* ---- 表格 ---- */
   .table-header {
-    @apply text-xs font-medium text-[#94A3B8] uppercase tracking-wider;
+    @apply font-medium uppercase tracking-wider;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    line-height: 1.5;
+    color: var(--bp-muted);
   }
 
   .table-row {
-    @apply border-b border-[#334155]/50 hover:bg-dark-800/50 transition-colors;
+    border-bottom: 1px solid var(--bp-cyan-dim);
+    @apply transition-colors;
+  }
+
+  .table-row:hover {
+    background-color: color-mix(in srgb, var(--bp-panel) 50%, transparent);
   }
 
   /* ---- 分割线 ---- */
   .divider {
-    @apply border-t border-[#334155]/50;
+    border-top: 1px solid var(--bp-cyan-dim);
+  }
+
+  /* ---- Blueprint 面板 ---- */
+  .bp-panel {
+    background-color: var(--bp-panel-glass);
+    border: 1px solid var(--bp-cyan-dim);
+    border-radius: 2px;
+    padding: 14px;
+  }
+
+  .bp-panel-accent {
+    @apply bp-panel;
+    border-color: var(--bp-cyan);
+  }
+
+  .bp-metric-box {
+    @apply card p-3 flex flex-col gap-1 items-center;
+  }
+
+  .bp-tab-nav {
+    border-bottom: 1px solid var(--bp-cyan-dim);
+    @apply mb-6;
+  }
+
+  .bp-tab {
+    @apply flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap
+           border-b-2 border-transparent transition-all duration-200;
+    color: var(--bp-muted);
+  }
+
+  .bp-tab:hover {
+    color: var(--bp-text);
+    border-color: color-mix(in srgb, var(--bp-border) 80%, transparent);
+  }
+
+  .bp-tab-active {
+    border-color: var(--bp-cyan);
+    color: var(--bp-cyan);
+  }
+
+  .bp-chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-sm border rounded-bp;
+  }
+
+  .bp-chip-cyan {
+    background-color: var(--bp-cyan-tint);
+    border-color: color-mix(in srgb, var(--bp-cyan) 20%, transparent);
+    color: var(--bp-cyan);
+  }
+
+  .bp-chip-purple {
+    background-color: color-mix(in srgb, var(--bp-purple) 10%, transparent);
+    border-color: color-mix(in srgb, var(--bp-purple) 20%, transparent);
+    color: color-mix(in srgb, var(--bp-purple) 85%, white);
+  }
+
+  .bp-chip-green {
+    background-color: color-mix(in srgb, var(--bp-green) 10%, transparent);
+    border-color: color-mix(in srgb, var(--bp-green) 20%, transparent);
+    color: var(--bp-green);
+  }
+
+  .bp-link-back {
+    @apply inline-flex items-center text-sm transition-colors;
+    color: var(--bp-muted);
+  }
+
+  .bp-link-back:hover {
+    color: var(--text-primary);
   }
 }
 
 @layer utilities {
-  .text-primary    { color: #F8FAFC; }
-  .text-secondary  { color: #94A3B8; }
-  .text-accent     { color: #0EA5E9; }
+  .text-primary    { color: var(--text-primary); }
+  .text-secondary  { color: var(--text-secondary); }
+  .text-accent     { color: var(--bp-cyan); }
 }

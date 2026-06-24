@@ -1,14 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 import typography from '@tailwindcss/typography';
+import { blueprintThemeExtend } from './tailwind.blueprint.js';
 
 export default {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
       colors: {
+        ...blueprintThemeExtend.colors,
         primary: {
           50: '#f0f9ff',
           100: '#e0f2fe',
@@ -22,7 +24,7 @@ export default {
           900: '#0c4a6e',
         },
         gray: {
-          50:  '#f8fafc',
+          50: '#f8fafc',
           100: '#f1f5f9',
           200: '#e2e8f0',
           300: '#cbd5e1',
@@ -92,11 +94,16 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
+        ...blueprintThemeExtend.fontFamily,
       },
+      fontSize: blueprintThemeExtend.fontSize,
+      borderRadius: blueprintThemeExtend.borderRadius,
+      spacing: blueprintThemeExtend.spacing,
+      boxShadow: blueprintThemeExtend.boxShadow,
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'fade-in': 'fadeIn 0.5s ease-in-out',
-        'glow': 'glow 2s ease-in-out infinite alternate',
+        glow: 'glow 2s ease-in-out infinite alternate',
       },
       keyframes: {
         fadeIn: {
@@ -104,8 +111,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 5px rgba(14, 165, 233, 0.1)' },
-          '100%': { boxShadow: '0 0 20px rgba(14, 165, 233, 0.2)' },
+          '0%': { boxShadow: '0 0 5px rgba(56, 189, 248, 0.1)' },
+          '100%': { boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)' },
         },
       },
     },
@@ -113,4 +120,4 @@ export default {
   plugins: [
     typography,
   ],
-}
+};

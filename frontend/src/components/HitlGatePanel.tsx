@@ -59,17 +59,17 @@ export function HitlGatePanel({
         </div>
         <div>
           <h3 className="text-sm font-semibold text-amber-300">Teaching HITL Gate · 等待人工确认</h3>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-bp-muted mt-1">
             阶段「{gate?.stage_label || gate?.stage || '—'}」已完成。请审阅结果后选择继续、从本阶段重跑或终止。
           </p>
           {gate?.paused_at && (
-            <p className="text-[10px] text-gray-500 mt-1">暂停于 {gate.paused_at}</p>
+            <p className="text-[10px] text-bp-muted mt-1">暂停于 {gate.paused_at}</p>
           )}
         </div>
       </div>
 
       <textarea
-        className="w-full mb-3 px-3 py-2 text-xs rounded-lg bg-dark-900 border border-dark-700 text-gray-200 placeholder:text-gray-600 min-h-[72px]"
+        className="w-full mb-3 px-3 py-2 text-xs rounded-lg bg-bp-base border border-bp-border text-bp-text placeholder:text-bp-muted min-h-[72px]"
         placeholder="可选：输入人工反馈，将在继续运行时注入下一轮假设/实验设计约束…"
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}

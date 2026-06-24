@@ -67,7 +67,7 @@ const typeConfig: Record<LiteratureItem['type'], { label: string; className: str
 
 // ============ 解析状态映射 ============
 const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; className: string }> = {
-  pending:   { label: '待解析', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' },
+  pending:   { label: '待解析', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' },
   parsing:   { label: '解析中', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
   completed: { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
   error:     { label: '失败',   className: 'bg-red-500/15 text-red-400 border-red-500/25' },
@@ -84,7 +84,7 @@ const sourceTypeConfig: Record<string, { label: string; className: string }> = {
 
 // ============ import_status 标签映射 ============
 const importStatusConfig: Record<string, { label: string; className: string }> = {
-  discovered:      { label: '已发现', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' },
+  discovered:      { label: '已发现', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' },
   imported:        { label: '已导入', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
   pdf_downloaded:  { label: 'PDF已下载', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
   parsed:          { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
@@ -480,11 +480,11 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
       <div className="max-w-7xl mx-auto">
         <StatusBar msg={statusMsg} />
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
-          <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+          <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
         </div>
-        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-          <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary-400" />
+        <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
+          <Loader2 className="w-8 h-8 animate-spin mb-4 text-bp-cyan" />
           <p className="text-sm">正在加载文献库...</p>
         </div>
       </div>
@@ -498,8 +498,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
         <StatusBar msg={statusMsg} />
 
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
-          <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+          <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+          <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
         </div>
 
         {/* Tabs */}
@@ -540,8 +540,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
 
       {/* ========== 头部 ========== */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">科研文献库</h1>
-        <p className="text-gray-400">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
+        <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
+        <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
       </div>
 
       {/* ========== Tabs ========== */}
@@ -555,8 +555,8 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             {/* 上传区域 */}
             <Card className="mb-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileSearch className="w-4 h-4 text-primary-400" />
-                <h3 className="text-sm font-semibold text-gray-200">数据导入与处理</h3>
+                <FileSearch className="w-4 h-4 text-bp-cyan" />
+                <h3 className="text-sm font-semibold text-bp-text">数据导入与处理</h3>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input ref={fileInputRef} type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" />
@@ -565,23 +565,23 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
                     'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                    uploading ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+                    uploading ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
                   )}
                 >
-                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-primary-500/25' : 'bg-gray-700')}>
-                    {uploading ? <Loader2 className="w-4 h-4 text-primary-400 animate-spin" /> : <Upload className="w-4 h-4 text-gray-300" />}
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-primary-500/25' : 'bg-bp-surface')}>
+                    {uploading ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <Upload className="w-4 h-4 text-bp-text" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-200">{uploading ? '解析中…' : '上传 PDF'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">上传论文 PDF，自动解析文本</div>
+                    <div className="text-sm font-medium text-bp-text">{uploading ? '解析中…' : '上传 PDF'}</div>
+                    <div className="text-xs text-bp-muted mt-0.5">上传论文 PDF，自动解析文本</div>
                   </div>
                 </button>
 
-                <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-gray-700 bg-gray-800/40 opacity-60 text-left">
-                  <div className="w-9 h-9 rounded-lg bg-gray-700 flex items-center justify-center shrink-0"><ArrowUp className="w-4 h-4 text-gray-400" /></div>
+                <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-bp-border bg-bp-panel/40 opacity-60 text-left">
+                  <div className="w-9 h-9 rounded-lg bg-bp-surface flex items-center justify-center shrink-0"><ArrowUp className="w-4 h-4 text-bp-muted" /></div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-500">导入 CSV 数据</div>
-                    <div className="text-xs text-gray-600 mt-0.5">导入结构化科研数据</div>
+                    <div className="text-sm font-medium text-bp-muted">导入 CSV 数据</div>
+                    <div className="text-xs text-bp-muted mt-0.5">导入结构化科研数据</div>
                   </div>
                 </button>
 
@@ -590,15 +590,15 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
                   onClick={handleBuildIndex}
                   className={cn(
                     'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                    buildingIndex ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700 bg-gray-800/40 hover:border-primary-500/40 hover:bg-gray-800',
+                    buildingIndex ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
                   )}
                 >
-                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-primary-500/25' : 'bg-gray-700')}>
-                    {buildingIndex ? <Loader2 className="w-4 h-4 text-primary-400 animate-spin" /> : <BrainCircuit className="w-4 h-4 text-gray-300" />}
+                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-primary-500/25' : 'bg-bp-surface')}>
+                    {buildingIndex ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <BrainCircuit className="w-4 h-4 text-bp-text" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-200">{buildingIndex ? '构建中…' : '构建向量索引'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">为文献构建语义检索索引</div>
+                    <div className="text-sm font-medium text-bp-text">{buildingIndex ? '构建中…' : '构建向量索引'}</div>
+                    <div className="text-xs text-bp-muted mt-0.5">为文献构建语义检索索引</div>
                   </div>
                 </button>
               </div>
@@ -615,14 +615,14 @@ export function LiteratureLibrary({ projectId = 'default', compact: _compact = f
             {/* 搜索 + 结果 */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div className="relative flex-1 max-w-sm">
-                <FileSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <FileSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bp-muted" />
                 <input
                   type="text" placeholder="搜索论文标题或作者…" value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2 bg-bp-base border border-bp-border rounded-lg text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan transition-colors"
                 />
               </div>
-              <span className="text-sm text-gray-500">{loading ? '加载中…' : `共 ${filtered.length} 篇文献`}</span>
+              <span className="text-sm text-bp-muted">{loading ? '加载中…' : `共 ${filtered.length} 篇文献`}</span>
             </div>
 
             {/* 文献表格 */}
@@ -690,26 +690,24 @@ function TabBar({ tabs, active, onChange }: {
   onChange: (key: string) => void;
 }) {
   return (
-    <div className="flex gap-1 border-b border-gray-700">
+    <div className="bp-tab-nav">
+      <nav className="flex gap-1 overflow-x-auto -mb-px">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = active === tab.key;
         return (
           <button
             key={tab.key}
+            type="button"
             onClick={() => onChange(tab.key)}
-            className={cn(
-              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
-              isActive
-                ? 'border-primary-500 text-primary-400'
-                : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600',
-            )}
+            className={cn('bp-tab', isActive && 'bp-tab-active')}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="w-4 h-4 shrink-0" />
             {tab.label}
           </button>
         );
       })}
+      </nav>
     </div>
   );
 }
@@ -722,11 +720,11 @@ function UploadTabEmpty({ fileInputRef, uploading, onUpload }: {
 }) {
   return (
     <Card className="text-center py-16">
-      <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-5">
-        <BookOpen className="w-8 h-8 text-gray-500" />
+      <div className="w-16 h-16 rounded-2xl bg-bp-surface flex items-center justify-center mx-auto mb-5">
+        <BookOpen className="w-8 h-8 text-bp-muted" />
       </div>
-      <h3 className="text-lg font-medium text-gray-300 mb-2">还没有上传科研文献</h3>
-      <p className="text-gray-500 max-w-md mx-auto mb-6 text-sm">
+      <h3 className="text-lg font-medium text-bp-text mb-2">还没有上传科研文献</h3>
+      <p className="text-bp-muted max-w-md mx-auto mb-6 text-sm">
         上传论文 PDF 后，系统将自动完成文本解析、文献切片、向量索引构建和科学事实提取。
       </p>
       <input ref={fileInputRef} type="file" accept=".pdf" onChange={onUpload} className="hidden" />
@@ -769,12 +767,12 @@ function ArxivTabContent({
   return (
     <div>
       {/* 研究问题推荐区 */}
-      <Card className="mb-4 border-primary-500/15 bg-primary-500/[0.02]">
+      <Card className="mb-4 border-bp-cyan/15 bg-primary-500/[0.02]">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles className="w-4 h-4 text-primary-400" />
-          <h3 className="text-sm font-semibold text-white">从研究问题检索 arXiv 文献</h3>
+          <Sparkles className="w-4 h-4 text-bp-cyan" />
+          <h3 className="text-sm font-semibold text-bp-text">从研究问题检索 arXiv 文献</h3>
         </div>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-bp-muted mb-3">
           输入完整的研究问题，AI 将自动提取关键词后搜索 arXiv，推荐最相关的文献
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
@@ -784,7 +782,7 @@ function ArxivTabContent({
               value={researchQuestion}
               onChange={(e) => onResearchQuestionChange(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors resize-none"
+              className="w-full px-4 py-2.5 bg-bp-base border border-bp-border rounded-lg text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan transition-colors resize-none"
             />
           </div>
           <div className="flex flex-col justify-end gap-2">
@@ -800,10 +798,10 @@ function ArxivTabContent({
         </div>
         {/* 推荐关键词展示 */}
         {recommendInfo && (
-          <div className="mt-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700/50">
+          <div className="mt-3 p-3 rounded-lg bg-bp-panel/60 border border-bp-border/50">
             <div className="flex items-center gap-2 mb-1.5">
-              <BrainCircuit className="w-3.5 h-3.5 text-primary-400" />
-              <span className="text-xs font-medium text-gray-400">
+              <BrainCircuit className="w-3.5 h-3.5 text-bp-cyan" />
+              <span className="text-xs font-medium text-bp-muted">
                 {recommendInfo.query_mode === 'keyword' ? '已提取关键词' : '直接搜索'}
               </span>
             </div>
@@ -812,14 +810,14 @@ function ArxivTabContent({
                 {recommendInfo.keywords.map((kw, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded text-[11px] bg-primary-500/15 text-primary-400 border border-primary-500/25"
+                    className="px-2 py-0.5 rounded text-[11px] bg-primary-500/15 text-bp-cyan border border-bp-cyan/25"
                   >
                     {kw}
                   </span>
                 ))}
               </div>
             )}
-            <p className="text-[10px] text-gray-600 font-mono truncate">
+            <p className="text-[10px] text-bp-muted font-mono truncate">
               arXiv Query: {recommendInfo.search_query}
             </p>
           </div>
@@ -829,30 +827,30 @@ function ArxivTabContent({
       {/* 手动搜索栏 */}
       <Card className="mb-6">
         <div className="flex items-center gap-2 mb-3">
-          <Search className="w-4 h-4 text-gray-400" />
-          <h3 className="text-sm font-semibold text-white">手动搜索 arXiv</h3>
+          <Search className="w-4 h-4 text-bp-muted" />
+          <h3 className="text-sm font-semibold text-bp-text">手动搜索 arXiv</h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">搜索关键词</label>
+            <label className="block text-xs font-medium text-bp-muted mb-1.5">搜索关键词</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bp-muted" />
               <input
                 type="text"
                 placeholder="输入研究主题或关键词"
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+                className="w-full pl-10 pr-4 py-2.5 bg-bp-base border border-bp-border rounded-lg text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan transition-colors"
               />
             </div>
           </div>
           <div className="w-28">
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">结果数</label>
+            <label className="block text-xs font-medium text-bp-muted mb-1.5">结果数</label>
             <select
               value={maxResults}
               onChange={(e) => onMaxResultsChange(Number(e.target.value))}
-              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+              className="w-full px-3 py-2.5 bg-bp-base border border-bp-border rounded-lg text-sm text-bp-text focus:outline-none focus:border-bp-cyan"
             >
               <option value={5}>5</option>
               <option value={10}>10</option>
@@ -874,7 +872,7 @@ function ArxivTabContent({
 
       {/* 搜索结果 */}
       {searching && (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-bp-muted">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
           <p className="text-sm">正在搜索 arXiv…</p>
         </div>
@@ -882,14 +880,14 @@ function ArxivTabContent({
 
       {!searching && searched && results.length === 0 && (
         <Card className="text-center py-12">
-          <Search className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">未找到匹配的 arXiv 论文，请尝试其他关键词</p>
+          <Search className="w-10 h-10 text-bp-muted mx-auto mb-3" />
+          <p className="text-bp-muted text-sm">未找到匹配的 arXiv 论文，请尝试其他关键词</p>
         </Card>
       )}
 
       {!searching && results.length > 0 && (
         <div className="space-y-4">
-          <div className="text-sm text-gray-500 mb-2">共 {results.length} 条结果</div>
+          <div className="text-sm text-bp-muted mb-2">共 {results.length} 条结果</div>
           {results.map((paper) => {
             const isImporting = importing[paper.external_id];
             const isImported = imported[paper.external_id];
@@ -900,41 +898,41 @@ function ArxivTabContent({
                   <div className="flex-1 min-w-0">
                     {/* 标题 + arXiv ID */}
                     <div className="flex items-start gap-2 mb-1">
-                      <h4 className="text-base font-semibold text-white leading-snug">{paper.title}</h4>
+                      <h4 className="text-base font-semibold text-bp-text leading-snug">{paper.title}</h4>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 font-mono">
                         {paper.external_id}
                       </span>
                       {paper.categories && paper.categories.split(',').map((cat) => (
-                        <span key={cat} className="text-xs px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400 border border-gray-600">
+                        <span key={cat} className="text-xs px-1.5 py-0.5 rounded bg-bp-surface/50 text-bp-muted border border-bp-border">
                           {cat.trim()}
                         </span>
                       ))}
                     </div>
 
                     {/* 作者 */}
-                    <p className="text-sm text-gray-400 mb-2">{truncate(paper.authors, 120)}</p>
+                    <p className="text-sm text-bp-muted mb-2">{truncate(paper.authors, 120)}</p>
 
                     {/* 摘要 */}
-                    <p className="text-sm text-gray-500 leading-relaxed mb-3 line-clamp-3">
+                    <p className="text-sm text-bp-muted leading-relaxed mb-3 line-clamp-3">
                       {paper.abstract}
                     </p>
 
                     {/* 链接 */}
                     <div className="flex items-center gap-3 text-xs">
                       <a href={paper.source_url} target="_blank" rel="noopener noreferrer"
-                         className="flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors">
+                         className="flex items-center gap-1 text-bp-cyan hover:text-bp-cyan transition-colors">
                         <ExternalLink className="w-3 h-3" /> arXiv 详情
                       </a>
                       {paper.pdf_url && (
                         <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer"
-                           className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+                           className="flex items-center gap-1 text-bp-muted hover:text-bp-text transition-colors">
                           <Download className="w-3 h-3" /> PDF
                         </a>
                       )}
                       {paper.published_at && (
-                        <span className="text-gray-600">
+                        <span className="text-bp-muted">
                           {paper.published_at.slice(0, 10)}
                         </span>
                       )}
@@ -968,9 +966,9 @@ function ArxivTabContent({
 
       {!searching && !searched && (
         <Card className="text-center py-12">
-          <Search className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">输入关键词后点击搜索，从 arXiv 检索论文元数据</p>
-          <p className="text-gray-600 text-xs mt-1">当前阶段仅导入元数据，不下载 PDF</p>
+          <Search className="w-10 h-10 text-bp-muted mx-auto mb-3" />
+          <p className="text-bp-muted text-sm">输入关键词后点击搜索，从 arXiv 检索论文元数据</p>
+          <p className="text-bp-muted text-xs mt-1">当前阶段仅导入元数据，不下载 PDF</p>
         </Card>
       )}
     </div>
@@ -981,11 +979,11 @@ function ArxivTabContent({
 function LibraryTabEmpty() {
   return (
     <Card className="text-center py-16">
-      <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-5">
-        <Database className="w-8 h-8 text-gray-500" />
+      <div className="w-16 h-16 rounded-2xl bg-bp-surface flex items-center justify-center mx-auto mb-5">
+        <Database className="w-8 h-8 text-bp-muted" />
       </div>
-      <h3 className="text-lg font-medium text-gray-300 mb-2">暂无已入库文献</h3>
-      <p className="text-gray-500 max-w-md mx-auto text-sm">
+      <h3 className="text-lg font-medium text-bp-text mb-2">暂无已入库文献</h3>
+      <p className="text-bp-muted max-w-md mx-auto text-sm">
         上传 PDF 或通过 arXiv 检索导入文献后，这里将显示所有已入库的文献。
       </p>
     </Card>
@@ -1013,7 +1011,7 @@ function LibraryTabContent({
 }) {
   if (loading) {
     return (
-      <div className="py-16 text-center text-gray-500">
+      <div className="py-16 text-center text-bp-muted">
         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
         <p className="text-sm">加载已入库文献…</p>
       </div>
@@ -1027,22 +1025,22 @@ function LibraryTabContent({
   return (
     <>
     <div className="space-y-4">
-      <div className="text-sm text-gray-500 mb-2">共 {docs.length} 篇文献</div>
+      <div className="text-sm text-bp-muted mb-2">共 {docs.length} 篇文献</div>
       {docs.map((doc) => {
-        const sConf = sourceTypeConfig[doc.source_type ?? ''] ?? { label: doc.source_type ?? '—', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' };
-        const iConf = importStatusConfig[doc.import_status ?? ''] ?? { label: doc.import_status ?? '—', className: 'bg-gray-500/15 text-gray-400 border-gray-500/25' };
+        const sConf = sourceTypeConfig[doc.source_type ?? ''] ?? { label: doc.source_type ?? '—', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' };
+        const iConf = importStatusConfig[doc.import_status ?? ''] ?? { label: doc.import_status ?? '—', className: 'bg-gray-500/15 text-bp-muted border-gray-500/25' };
 
         return (
           <Card key={doc.id}>
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <h4 className="text-base font-semibold text-white leading-snug mb-1">
+                <h4 className="text-base font-semibold text-bp-text leading-snug mb-1">
                   {doc.title || '未命名文献'}
                 </h4>
-                <p className="text-sm text-gray-400 mb-2">{doc.authors}</p>
+                <p className="text-sm text-bp-muted mb-2">{doc.authors}</p>
 
                 {doc.abstract && (
-                  <p className="text-sm text-gray-500 leading-relaxed mb-3 line-clamp-2">
+                  <p className="text-sm text-bp-muted leading-relaxed mb-3 line-clamp-2">
                     {doc.abstract}
                   </p>
                 )}
@@ -1052,7 +1050,7 @@ function LibraryTabContent({
                   <span className={cn('text-xs px-2 py-0.5 rounded border', sConf.className)}>{sConf.label}</span>
                   <span className={cn('text-xs px-2 py-0.5 rounded border', iConf.className)}>{iConf.label}</span>
                   {doc.external_id && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-gray-700/50 text-gray-400 border border-gray-600 font-mono">
+                    <span className="text-xs px-2 py-0.5 rounded bg-bp-surface/50 text-bp-muted border border-bp-border font-mono">
                       {doc.external_id}
                     </span>
                   )}
@@ -1067,18 +1065,18 @@ function LibraryTabContent({
                 <div className="flex items-center gap-3 text-xs">
                   {doc.source_url && (
                     <a href={doc.source_url} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors">
+                       className="flex items-center gap-1 text-bp-cyan hover:text-bp-cyan transition-colors">
                       <ExternalLink className="w-3 h-3" /> 来源
                     </a>
                   )}
                   {doc.pdf_url && (
                     <a href={doc.pdf_url} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+                       className="flex items-center gap-1 text-bp-muted hover:text-bp-text transition-colors">
                       <Download className="w-3 h-3" /> PDF
                     </a>
                   )}
                   {doc.created_at && (
-                    <span className="text-gray-600">{doc.created_at.slice(0, 10)}</span>
+                    <span className="text-bp-muted">{doc.created_at.slice(0, 10)}</span>
                   )}
                 </div>
               </div>
@@ -1090,7 +1088,7 @@ function LibraryTabContent({
                   <button title="下载 PDF"
                           disabled={downloadingDoc === doc.id}
                           onClick={() => onDownloadPdf(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-blue-400 hover:text-white hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+                          className="p-1.5 rounded-md text-blue-400 hover:text-bp-text hover:bg-blue-500/30 transition-colors disabled:opacity-50">
                     {downloadingDoc === doc.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
@@ -1104,7 +1102,7 @@ function LibraryTabContent({
                   <button title="解析并索引"
                           disabled={parsingDoc === doc.id}
                           onClick={() => onParseAndIndex(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-green-400 hover:text-white hover:bg-green-500/30 transition-colors disabled:opacity-50">
+                          className="p-1.5 rounded-md text-green-400 hover:text-bp-text hover:bg-green-500/30 transition-colors disabled:opacity-50">
                     {parsingDoc === doc.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
@@ -1117,14 +1115,14 @@ function LibraryTabContent({
                 {(doc.import_status === 'parsed' || doc.import_status === 'indexed') && (
                   <button title="查看切片"
                           onClick={() => onViewChunks(doc.id, doc.title || '文献')}
-                          className="p-1.5 rounded-md text-purple-400 hover:text-white hover:bg-purple-500/30 transition-colors">
+                          className="p-1.5 rounded-md text-purple-400 hover:text-bp-text hover:bg-purple-500/30 transition-colors">
                     <FileSearch className="w-3.5 h-3.5" />
                   </button>
                 )}
 
                 {/* 查看详情 */}
                 <button title="查看详情"
-                        className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
+                        className="p-1.5 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1137,18 +1135,18 @@ function LibraryTabContent({
     {/* ========== Chunk 查看器 Modal ========== */}
       {chunkViewer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCloseChunks}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-bp-base border border-bp-border rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-bp-border">
               <div className="flex items-center gap-2">
                 <FileSearch className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-semibold text-white truncate max-w-md">
+                <h3 className="text-sm font-semibold text-bp-text truncate max-w-md">
                   切片预览: {chunkViewer.title}
                 </h3>
               </div>
               <button title="关闭"
                       onClick={onCloseChunks}
-                      className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-700 transition-colors">
+                      className="p-1 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                 <XCircle className="w-4 h-4" />
               </button>
             </div>
@@ -1156,35 +1154,35 @@ function LibraryTabContent({
             {/* Body */}
             <div className="overflow-y-auto max-h-[65vh] p-4">
               {chunkLoading ? (
-                <div className="py-12 text-center text-gray-500">
+                <div className="py-12 text-center text-bp-muted">
                   <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
                   <p className="text-sm">加载切片…</p>
                 </div>
               ) : chunkList.length === 0 ? (
-                <div className="py-12 text-center text-gray-500">
+                <div className="py-12 text-center text-bp-muted">
                   <p className="text-sm">暂无切片数据</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {chunkList.map((chunk: any, i: number) => (
-                    <div key={chunk.id || i} className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                    <div key={chunk.id || i} className="p-3 rounded-lg bg-bp-panel/50 border border-bp-border">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono">
                           #{chunk.chunk_index ?? i + 1}
                         </span>
                         {chunk.page_number && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-bp-surface text-bp-muted">
                             p.{chunk.page_number}
                           </span>
                         )}
                         <span className={cn(
                           'text-xs px-1.5 py-0.5 rounded',
-                          chunk.status === 'ready' ? 'bg-green-500/15 text-green-400' : 'bg-gray-700 text-gray-500',
+                          chunk.status === 'ready' ? 'bg-green-500/15 text-green-400' : 'bg-bp-surface text-bp-muted',
                         )}>
                           {chunk.status || 'pending'}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                      <p className="text-sm text-bp-text leading-relaxed whitespace-pre-wrap">
                         {chunk.content_preview || chunk.content || '(空)'}
                       </p>
                     </div>
@@ -1215,9 +1213,9 @@ function LiteratureTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-dark-700 bg-dark-800/50">
+            <tr className="border-b border-bp-border bg-bp-panel/50">
               {TABLE_COLUMNS.map((col) => (
-                <th key={col.key} className={cn('px-4 py-3 font-medium text-gray-400 text-xs whitespace-nowrap', col.className)}>
+                <th key={col.key} className={cn('px-4 py-3 font-medium text-bp-muted text-xs whitespace-nowrap', col.className)}>
                   {col.label}
                 </th>
               ))}
@@ -1229,17 +1227,17 @@ function LiteratureTable({
               const psConf = parseStatusConfig[item.parseStatus];
               const isDeleting = deleting === item.id;
               return (
-                <tr key={item.id} className={cn('border-b border-dark-800 hover:bg-dark-800/30 transition-colors', isDeleting && 'opacity-50')}>
+                <tr key={item.id} className={cn('border-b border-dark-800 hover:bg-bp-panel/30 transition-colors', isDeleting && 'opacity-50')}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded bg-primary-500/15 flex items-center justify-center shrink-0">
-                        <FileText className="w-3.5 h-3.5 text-primary-400" />
+                        <FileText className="w-3.5 h-3.5 text-bp-cyan" />
                       </div>
-                      <span className="text-white text-sm font-medium line-clamp-1">{item.title}</span>
+                      <span className="text-bp-text text-sm font-medium line-clamp-1">{item.title}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{item.authors}</td>
-                  <td className="px-4 py-3 text-center text-gray-300 whitespace-nowrap">{item.year}</td>
+                  <td className="px-4 py-3 text-bp-muted whitespace-nowrap">{item.authors}</td>
+                  <td className="px-4 py-3 text-center text-bp-text whitespace-nowrap">{item.year}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border', tConf.className)}>{tConf.label}</span>
                   </td>
@@ -1252,15 +1250,15 @@ function LiteratureTable({
                       {psConf.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center text-gray-300">{item.snippetCount}</td>
+                  <td className="px-4 py-3 text-center text-bp-text">{item.snippetCount}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-gray-600'}>{item.factCount}</span>
+                    <span className={item.factCount > 0 ? 'text-amber-400 font-medium' : 'text-bp-muted'}>{item.factCount}</span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     {(() => {
                       const st = extractionStats[item.id];
                       if (!st || (st.tables === 0 && st.figures_confirmed === 0)) {
-                        return <span className="text-gray-600 text-[11px]">—</span>;
+                        return <span className="text-bp-muted text-[11px]">—</span>;
                       }
                       return (
                         <button
@@ -1279,16 +1277,16 @@ function LiteratureTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button title="查看详情"
-                              className="p-1.5 rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
+                              className="p-1.5 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                         <Eye className="w-3.5 h-3.5" />
                       </button>
                       <button title="提取事实" disabled
-                              className="p-1.5 rounded-md text-gray-600 cursor-not-allowed transition-colors">
+                              className="p-1.5 rounded-md text-bp-muted cursor-not-allowed transition-colors">
                         <Sparkles className="w-3.5 h-3.5" />
                       </button>
                       <button title="删除" disabled={isDeleting} onClick={() => onDelete(item.id)}
                               className={cn('p-1.5 rounded-md transition-colors',
-                                isDeleting ? 'text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10',
+                                isDeleting ? 'text-bp-muted cursor-not-allowed' : 'text-bp-muted hover:text-red-400 hover:bg-red-500/10',
                               )}>
                         {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
@@ -1301,7 +1299,7 @@ function LiteratureTable({
         </table>
       </div>
       {items.length === 0 && !loading && (
-        <div className="py-12 text-center text-gray-500 text-sm">没有匹配的文献</div>
+        <div className="py-12 text-center text-bp-muted text-sm">没有匹配的文献</div>
       )}
     </Card>
   );
@@ -1319,10 +1317,10 @@ function StatusBar({ msg }: { msg: StatusToastMessage | null }) {
   if (!msg || dismissed) return null;
 
   const config = {
-    loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-white' },
-    success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-white' },
-    error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-white' },
-    info:    { bg: 'bg-gray-500/90',  icon: Info,     text: 'text-white' },
+    loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-bp-text' },
+    success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-bp-text' },
+    error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-bp-text' },
+    info:    { bg: 'bg-gray-500/90',  icon: Info,     text: 'text-bp-text' },
   }[msg.type];
 
   const Icon = config.icon;
@@ -1338,7 +1336,7 @@ function StatusBar({ msg }: { msg: StatusToastMessage | null }) {
       {msg.type === 'error' && (
         <button
           onClick={() => setDismissed(true)}
-          className="ml-2 text-white/60 hover:text-white transition-colors"
+          className="ml-2 text-bp-text/60 hover:text-bp-text transition-colors"
         >
           <XCircle className="w-4 h-4" />
         </button>

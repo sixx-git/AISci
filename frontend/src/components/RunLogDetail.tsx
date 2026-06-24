@@ -12,7 +12,7 @@ const statusBadge: Record<RunLogStatus, { label: string; className: string }> = 
   success: { label: '成功', className: 'text-green-400 bg-green-500/10 border-green-500/20' },
   running: { label: '运行中', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   failed:  { label: '失败', className: 'text-red-400 bg-red-500/10 border-red-500/20' },
-  pending: { label: '等待中', className: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
+  pending: { label: '等待中', className: 'text-bp-muted bg-gray-500/10 border-gray-500/20' },
 };
 
 export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
@@ -20,7 +20,7 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
 
   if (!log) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+      <div className="flex flex-col items-center justify-center py-16 text-bp-muted">
         <Terminal className="w-12 h-12 mb-3 opacity-30" />
         <p className="text-sm">选择一条运行记录查看详情</p>
       </div>
@@ -41,17 +41,17 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
-            <span className="font-mono text-sm text-primary-400">{log.id}</span>
+          <h3 className="text-base font-semibold text-bp-text flex items-center gap-2">
+            <span className="font-mono text-sm text-bp-cyan">{log.id}</span>
             <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium', sc.className)}>
               {sc.label}
             </span>
           </h3>
-          <p className="text-xs text-gray-500 mt-1">{log.projectName} · {log.stage} · {log.runTime}</p>
+          <p className="text-xs text-bp-muted mt-1">{log.projectName} · {log.stage} · {log.runTime}</p>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-bp-panel text-bp-muted hover:text-bp-text transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
@@ -69,7 +69,7 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
       </div>
 
       {/* Tab 切换 */}
-      <div className="flex items-center gap-1 p-1 bg-gray-900/70 rounded-lg border border-gray-800">
+      <div className="flex items-center gap-1 p-1 bg-bp-base/70 rounded-lg border border-bp-border">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
@@ -79,8 +79,8 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                 activeTab === t.key
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-500 hover:text-gray-300',
+                  ? 'bg-bp-surface text-bp-text'
+                  : 'text-bp-muted hover:text-bp-text',
               )}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -91,7 +91,7 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
       </div>
 
       {/* Tab 内容 */}
-      <div className="p-4 rounded-lg bg-gray-950/80 border border-gray-800 font-mono text-xs text-gray-300 max-h-[340px] overflow-auto whitespace-pre-wrap leading-relaxed">
+      <div className="p-4 rounded-lg bg-gray-950/80 border border-bp-border font-mono text-xs text-bp-text max-h-[340px] overflow-auto whitespace-pre-wrap leading-relaxed">
         {activeTab === 'output' && log.outputSnapshot}
 
         {activeTab === 'input' && log.inputSummary}
@@ -109,9 +109,9 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
         {activeTab === 'params' && (
           <div className="space-y-2">
             {log.modelParams && Object.entries(log.modelParams).map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between py-1.5 border-b border-gray-800/50 last:border-0">
-                <span className="text-gray-400">{k}</span>
-                <span className="text-primary-400 font-semibold">{v}</span>
+              <div key={k} className="flex items-center justify-between py-1.5 border-b border-bp-border/50 last:border-0">
+                <span className="text-bp-muted">{k}</span>
+                <span className="text-bp-cyan font-semibold">{v}</span>
               </div>
             ))}
           </div>
@@ -123,9 +123,9 @@ export function RunLogDetail({ log, onClose }: RunLogDetailProps) {
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-2.5 rounded-lg bg-gray-900/60 border border-gray-800/50">
-      <p className="text-[10px] text-gray-500 mb-0.5">{label}</p>
-      <p className="text-xs text-gray-200 font-medium">{value}</p>
+    <div className="p-2.5 rounded-lg bg-bp-base/60 border border-bp-border/50">
+      <p className="text-[10px] text-bp-muted mb-0.5">{label}</p>
+      <p className="text-xs text-bp-text font-medium">{value}</p>
     </div>
   );
 }

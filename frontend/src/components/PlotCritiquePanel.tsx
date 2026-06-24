@@ -11,8 +11,8 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
   const avg = critique?.average_score;
 
   return (
-    <div className="p-4 rounded-lg border border-dark-700 bg-dark-800/30">
-      <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+    <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
+      <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <Image className="w-4 h-4 text-cyan-400" />
         VLM 图表质量评审
       </h3>
@@ -32,7 +32,7 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
           </span>
         )}
         {critique?.degradation_reason && (
-          <span className="text-[10px] text-gray-500 block w-full mt-1">
+          <span className="text-[10px] text-bp-muted block w-full mt-1">
             {critique.degradation_reason}
             {critique.review_mode ? ` · 模式: ${critique.review_mode}` : ''}
           </span>
@@ -42,12 +42,12 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
       {critiques.length > 0 && (
         <div className="space-y-2">
           {critiques.map((c) => (
-            <div key={String(c.plot_id)} className="p-2 rounded border border-dark-700/80 bg-dark-900/40 text-xs">
+            <div key={String(c.plot_id)} className="p-2 rounded border border-bp-border/80 bg-bp-base/40 text-xs">
               <div className="flex justify-between mb-1">
-                <span className="text-gray-300 truncate">{String(c.plot_id)}</span>
-                <span className="font-mono text-gray-200">{Number(c.overall_score ?? 0).toFixed(1)}</span>
+                <span className="text-bp-text truncate">{String(c.plot_id)}</span>
+                <span className="font-mono text-bp-text">{Number(c.overall_score ?? 0).toFixed(1)}</span>
               </div>
-              <div className="text-[10px] text-gray-500">
+              <div className="text-[10px] text-bp-muted">
                 reviewer: {String(c.reviewer ?? '—')} · misleading: {String(c.misleading_risk ?? '—')}
               </div>
               {(c.issues as string[] | undefined)?.slice(0, 2).map((issue, i) => (

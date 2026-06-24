@@ -107,13 +107,13 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
       )}
 
       {loading && assets.length === 0 && (
-        <p className="text-sm text-gray-500 flex items-center gap-2">
+        <p className="text-sm text-bp-muted flex items-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> 加载中…
         </p>
       )}
 
       {!loading && assets.length === 0 && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-bp-muted">
           暂无多模态资产。可上传论文图表、实验截图或会议录音（音频需后续接入转写模型）。
         </p>
       )}
@@ -128,19 +128,19 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
           return (
             <div
               key={asset.id}
-              className="p-3 rounded-lg border border-dark-700 bg-dark-900/40"
+              className="p-3 rounded-lg border border-bp-border bg-bp-base/40"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Icon className="w-4 h-4 text-primary-400 shrink-0" />
-                  <span className="text-sm text-gray-200 truncate">{asset.file_name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-dark-800 text-gray-500">
+                  <Icon className="w-4 h-4 text-bp-cyan shrink-0" />
+                  <span className="text-sm text-bp-text truncate">{asset.file_name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
                     {asset.modality}
                   </span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                     asset.parse_status === 'completed' ? 'bg-green-500/10 text-green-400'
                       : asset.parse_status === 'warning' ? 'bg-yellow-500/10 text-yellow-400'
-                        : 'bg-gray-500/10 text-gray-400'
+                        : 'bg-gray-500/10 text-bp-muted'
                   }`}>
                     {asset.parse_status}
                   </span>
@@ -148,7 +148,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
                 <button
                   type="button"
                   onClick={() => handleToggle(asset.id)}
-                  className="text-gray-400 hover:text-primary-300"
+                  className="text-bp-muted hover:text-bp-cyan"
                   title={asset.use_for_hypothesis ? '用于假设生成' : '不参与假设生成'}
                 >
                   {asset.use_for_hypothesis ? (
@@ -160,16 +160,16 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               </div>
 
               {asset.extracted_summary && (
-                <p className="text-xs text-gray-400 mb-2 line-clamp-3">{asset.extracted_summary}</p>
+                <p className="text-xs text-bp-muted mb-2 line-clamp-3">{asset.extracted_summary}</p>
               )}
 
               {preview && (
                 <div className="mb-2 flex items-center gap-2">
-                  <Eye className="w-3 h-3 text-gray-500" />
+                  <Eye className="w-3 h-3 text-bp-muted" />
                   <img
                     src={preview}
                     alt={asset.file_name}
-                    className="max-h-32 rounded border border-dark-700 object-contain"
+                    className="max-h-32 rounded border border-bp-border object-contain"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
@@ -190,12 +190,12 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               )}
 
               {facts.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-dark-700/80">
-                  <p className="text-[11px] text-gray-500 mb-1">Evidence Facts ({facts.length})</p>
+                <div className="mt-2 pt-2 border-t border-bp-border/80">
+                  <p className="text-[11px] text-bp-muted mb-1">Evidence Facts ({facts.length})</p>
                   <ul className="space-y-1">
                     {facts.slice(0, 4).map((f) => (
-                      <li key={f.fact_id} className="text-[11px] text-gray-300">
-                        <span className="font-mono text-primary-300/80">{f.fact_id}</span>
+                      <li key={f.fact_id} className="text-[11px] text-bp-text">
+                        <span className="font-mono text-bp-cyan/80">{f.fact_id}</span>
                         {' '}{f.fact_text?.slice(0, 120)}
                         {f.fact_text && f.fact_text.length > 120 ? '…' : ''}
                       </li>
@@ -207,7 +207,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  className="text-[10px] text-gray-500 hover:text-gray-300"
+                  className="text-[10px] text-bp-muted hover:text-bp-text"
                   onClick={() => handleReparse(asset.id)}
                 >
                   重新解析

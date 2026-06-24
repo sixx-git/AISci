@@ -11,7 +11,7 @@ interface StatCardProps {
 /**
  * 统一统计卡片 —— 图标 + 数值 + 标签
  */
-export function StatCard({ label, value, icon, colorClass = 'text-primary-400' }: StatCardProps) {
+export function StatCard({ label, value, icon, colorClass = 'text-bp-cyan' }: StatCardProps) {
   // 从文字颜色推导背景色：text-xxx-400 → bg-xxx-500/15
   const bgClass = colorClass.replace(/^text-/, 'bg-').replace(/-400$/, '-500/15');
 
@@ -24,7 +24,7 @@ export function StatCard({ label, value, icon, colorClass = 'text-primary-400' }
         {icon}
       </div>
       <div className={cn('text-3xl font-bold', colorClass)}>{value}</div>
-      <div className="text-[#94A3B8] mt-1 text-sm">{label}</div>
+      <div className="text-bp-muted mt-1 text-sm">{label}</div>
     </Card>
   );
 }

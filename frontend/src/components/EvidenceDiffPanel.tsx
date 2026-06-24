@@ -27,7 +27,7 @@ export function EvidenceDiffPanel({
 
   return (
     <div className="p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
-      <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <GitBranch className="w-4 h-4 text-emerald-400" />
         {title}
       </h3>
@@ -48,12 +48,12 @@ export function EvidenceDiffPanel({
           return (
             <div
               key={`evidence-${before.label}-${after.label}`}
-              className="p-3 rounded border border-dark-700/80 bg-dark-900/40 text-xs"
+              className="p-3 rounded border border-bp-border/80 bg-bp-base/40 text-xs"
             >
               <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
-                <span className="text-gray-400">{before.label || `R${before.round}`}</span>
-                <span className="text-gray-600">→</span>
-                <span className="text-gray-300">{after.label || `R${after.round}`}</span>
+                <span className="text-bp-muted">{before.label || `R${before.round}`}</span>
+                <span className="text-bp-muted">→</span>
+                <span className="text-bp-text">{after.label || `R${after.round}`}</span>
                 {facts.delta !== 0 && (
                   <span className={facts.delta > 0 ? 'text-green-400' : 'text-red-400'}>
                     证据 {facts.delta > 0 ? '+' : ''}{facts.delta}
@@ -63,11 +63,11 @@ export function EvidenceDiffPanel({
 
               <div className="grid gap-2 sm:grid-cols-2 text-[11px]">
                 <div>
-                  <p className="text-gray-500 mb-1 flex items-center gap-1">
+                  <p className="text-bp-muted mb-1 flex items-center gap-1">
                     <FileText className="w-3 h-3" />
                     文献 fact
                   </p>
-                  <p className="text-gray-300">
+                  <p className="text-bp-text">
                     {before.supporting_fact_count ?? '—'} → {after.supporting_fact_count ?? '—'}
                   </p>
                   {facts.added.length > 0 && (
@@ -78,8 +78,8 @@ export function EvidenceDiffPanel({
                   )}
                 </div>
                 <div>
-                  <p className="text-gray-500 mb-1">证据等级</p>
-                  <p className={levelChanged ? 'text-amber-300' : 'text-gray-300'}>
+                  <p className="text-bp-muted mb-1">证据等级</p>
+                  <p className={levelChanged ? 'text-amber-300' : 'text-bp-text'}>
                     {before.evidence_level || '—'} → {after.evidence_level || '—'}
                     {levelChanged && <span className="ml-1 text-amber-400">已变更</span>}
                   </p>
@@ -87,12 +87,12 @@ export function EvidenceDiffPanel({
               </div>
 
               {(after.verifiable_primary_metric || specChanged) && (
-                <div className="mt-2 pt-2 border-t border-dark-700/60">
-                  <p className="text-gray-500 mb-1 flex items-center gap-1">
+                <div className="mt-2 pt-2 border-t border-bp-border/60">
+                  <p className="text-bp-muted mb-1 flex items-center gap-1">
                     <Target className="w-3 h-3" />
                     可验证 spec
                   </p>
-                  <p className="text-gray-400 line-clamp-2">
+                  <p className="text-bp-muted line-clamp-2">
                     {after.verifiable_spec_summary || before.verifiable_spec_summary || '—'}
                   </p>
                   {after.verifiable_primary_metric && (

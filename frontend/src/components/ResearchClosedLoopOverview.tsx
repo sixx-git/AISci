@@ -169,7 +169,7 @@ export function ResearchClosedLoopOverview({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-16 text-bp-muted">
         <Loader2 className="w-8 h-8 animate-spin mb-3" />
         <span className="text-sm">正在加载科研闭环数据...</span>
       </div>
@@ -204,7 +204,7 @@ export function ResearchClosedLoopOverview({
                   ? 'border-red-500/40 bg-red-500/10 text-red-300'
                   : status === 'running'
                     ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                    : 'border-dark-600 bg-dark-800/50 text-gray-400';
+                    : 'border-bp-border bg-bp-panel/50 text-bp-muted';
 
             return (
               <div key={step.key} className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export function ResearchClosedLoopOverview({
                   {step.label}
                 </button>
                 {idx < FLOW_STEPS.length - 1 && (
-                  <ChevronRight className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-bp-muted shrink-0" />
                 )}
               </div>
             );
@@ -226,13 +226,13 @@ export function ResearchClosedLoopOverview({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {runs.length > 0 ? (
-              <label className="flex items-center gap-2 text-gray-400">
-                <Orbit className="w-4 h-4 text-primary-400" />
+              <label className="flex items-center gap-2 text-bp-muted">
+                <Orbit className="w-4 h-4 text-bp-cyan" />
                 运行记录
                 <select
                   value={selectedRunId || ''}
                   onChange={(e) => setSelectedRunId(e.target.value || null)}
-                  className="px-2 py-1 bg-dark-800 border border-dark-600 rounded text-gray-200 text-xs"
+                  className="px-2 py-1 bg-bp-panel border border-bp-border rounded text-bp-text text-xs"
                 >
                   {runs.map((r) => (
                     <option key={r.run_id || r.id} value={r.run_id || r.id}>
@@ -242,10 +242,10 @@ export function ResearchClosedLoopOverview({
                 </select>
               </label>
             ) : (
-              <span className="text-gray-500 text-sm">尚未运行 Pipeline</span>
+              <span className="text-bp-muted text-sm">尚未运行 Pipeline</span>
             )}
             {runDetail && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-bp-muted">
                 状态：{runDetail.status}
                 {runDetail.failed_stage ? ` · 失败阶段 ${runDetail.failed_stage}` : ''}
               </span>
@@ -275,7 +275,7 @@ export function ResearchClosedLoopOverview({
       {primaryHypothesis && (
         <Card title="当前主假设与依据" subtitle="假设来源、证据引用与验证目标">
           <div className="space-y-3 text-sm">
-            <p className="text-gray-200 leading-relaxed">{primaryHypothesis.hypothesis}</p>
+            <p className="text-bp-text leading-relaxed">{primaryHypothesis.hypothesis}</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
               <Metric label="文献 fact" value={String(primaryHypothesis.supporting_fact_ids?.length ?? 0)} />
               <Metric label="数据字段引用" value={String(primaryHypothesis.dataset_field_refs?.length ?? 0)} />
@@ -283,7 +283,7 @@ export function ResearchClosedLoopOverview({
               <Metric label="验证目标" value={primaryHypothesis.validation_target || '—'} />
             </div>
             {primaryHypothesis.rationale && (
-              <p className="text-gray-400 text-xs border-t border-dark-700 pt-3">
+              <p className="text-bp-muted text-xs border-t border-bp-border pt-3">
                 依据：{primaryHypothesis.rationale}
               </p>
             )}
@@ -314,11 +314,11 @@ export function ResearchClosedLoopOverview({
       )}
 
       {!runDetail && runs.length === 0 && (
-        <Card className="border-dashed border-dark-600">
+        <Card className="border-dashed border-bp-border">
           <div className="text-center py-10">
-            <Orbit className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-300 mb-2">尚无闭环迭代记录</p>
-            <p className="text-gray-500 text-sm mb-4">
+            <Orbit className="w-10 h-10 text-bp-muted mx-auto mb-3" />
+            <p className="text-bp-text mb-2">尚无闭环迭代记录</p>
+            <p className="text-bp-muted text-sm mb-4">
               运行 Pipeline 后，此处将展示 Discovery 多轮、证据 Diff、版本对比与质量验收
             </p>
             <Button
@@ -364,8 +364,8 @@ export function ResearchClosedLoopOverview({
       )}
 
       {!hasClosedLoopData && runDetail && (
-        <Card className="border-dark-600 bg-dark-800/20">
-          <p className="text-sm text-gray-400 text-center py-4">
+        <Card className="border-bp-border bg-bp-panel/20">
+          <p className="text-sm text-bp-muted text-center py-4">
             当前运行为单轮模式。启用 Discovery 或 Teaching 自动闭环后，将在此展示多轮迭代与版本对比。
           </p>
         </Card>
@@ -378,9 +378,9 @@ export function ResearchClosedLoopOverview({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-3 rounded-lg bg-dark-800/50 border border-dark-700">
-      <div className="text-gray-500 mb-1">{label}</div>
-      <div className="text-gray-200 font-medium truncate" title={value}>{value}</div>
+    <div className="p-3 rounded-lg bg-bp-panel/50 border border-bp-border">
+      <div className="text-bp-muted mb-1">{label}</div>
+      <div className="text-bp-text font-medium truncate" title={value}>{value}</div>
     </div>
   );
 }
@@ -398,7 +398,7 @@ function QuickLink({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-primary-400 border border-primary-500/20 bg-primary-500/5 hover:bg-primary-500/10 transition-colors"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-bp-cyan border border-bp-cyan/20 bg-primary-500/5 hover:bg-bp-cyan-tint transition-colors"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}

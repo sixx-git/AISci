@@ -1000,44 +1000,44 @@ export function WorkflowPage({
     <div className="max-w-7xl mx-auto">
       {/* 头部 */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">智能体工作流</h1>
+        <h1 className="text-3xl font-bold text-bp-text mb-2">智能体工作流</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-gray-400 text-sm">从文献/数据输入到可验证科学假设输出的多智能体闭环</p>
+          <p className="text-bp-muted text-sm">从文献/数据输入到可验证科学假设输出的多智能体闭环</p>
           {projectId && (
-            <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded">
+            <span className="text-xs bg-bp-cyan-tint text-bp-cyan px-2 py-0.5 rounded-bp border border-bp-cyan/20">
               API Connected
             </span>
           )}
         </div>
 
         {(researchQuestion || localResearchQuestion) && (
-          <p className="text-sm text-gray-500 mt-1 truncate">
+          <p className="text-sm text-bp-muted mt-1 truncate">
             研究问题：{finalResearchQuestion}
           </p>
         )}
 
         {currentRunId && (
-          <p className="text-sm text-gray-500 mt-1 truncate font-mono text-xs">
+          <p className="text-sm text-bp-muted mt-1 truncate font-mono text-xs">
             run_id: {currentRunId}
           </p>
         )}
 
         {/* P5: Pipeline 运行模式 */}
-        <div className="mt-4 p-3 rounded-lg border border-dark-700 bg-dark-800/30 flex flex-wrap items-end gap-4">
+        <div className="mt-4 p-3 rounded-bp border border-bp-border bg-bp-panel/30 flex flex-wrap items-end gap-4">
           <div>
-            <label className="text-[11px] text-gray-500 block mb-1">运行模式</label>
+            <label className="text-[11px] text-bp-muted block mb-1">运行模式</label>
             <select
               value={pipelineMode}
               onChange={(e) => setPipelineMode(e.target.value as PipelineRunMode)}
               disabled={runState !== 'idle'}
-              className="bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+              className="input-field py-1.5 px-2 text-sm w-auto"
             >
               <option value="teaching">Teaching — 强 HITL（研究生仿真）</option>
               <option value="discovery">Discovery — Sakana-like 自动循环</option>
             </select>
           </div>
           <div>
-            <label className="text-[11px] text-gray-500 block mb-1">num_ideas</label>
+            <label className="text-[11px] text-bp-muted block mb-1">num_ideas</label>
             <input
               type="number"
               min={1}
@@ -1045,33 +1045,33 @@ export function WorkflowPage({
               value={numIdeas}
               onChange={(e) => setNumIdeas(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
               disabled={runState !== 'idle'}
-              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+              className="input-field py-1.5 px-2 text-sm w-16"
             />
           </div>
           {pipelineMode === 'teaching' && (
-            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+            <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
               <input
                 type="checkbox"
                 checked={enableTeachingAutoRefinement}
                 onChange={(e) => setEnableTeachingAutoRefinement(e.target.checked)}
                 disabled={runState !== 'idle'}
-                className="rounded border-dark-600"
+                className="rounded border-bp-border"
               />
               验证失败时自动重跑实验设计
             </label>
           )}
-          <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
             <input
               type="checkbox"
               checked={enableGapSearch}
               onChange={(e) => setEnableGapSearch(e.target.checked)}
               disabled={runState !== 'idle'}
-              className="rounded border-dark-600"
+              className="rounded border-bp-border"
             />
             数据采集 Gap 自动补搜
           </label>
           <div>
-            <label className="text-[11px] text-gray-500 block mb-1">完备性阈值</label>
+            <label className="text-[11px] text-bp-muted block mb-1">完备性阈值</label>
             <input
               type="number"
               min={0}
@@ -1079,11 +1079,11 @@ export function WorkflowPage({
               value={coverageGapThreshold}
               onChange={(e) => setCoverageGapThreshold(Number(e.target.value) || 70)}
               disabled={runState !== 'idle'}
-              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+              className="input-field py-1.5 px-2 text-sm w-16"
             />
           </div>
           <div>
-            <label className="text-[11px] text-gray-500 block mb-1">DataSpec 阈值</label>
+            <label className="text-[11px] text-bp-muted block mb-1">DataSpec 阈值</label>
             <input
               type="number"
               min={0}
@@ -1091,20 +1091,20 @@ export function WorkflowPage({
               value={dataSpecGapThreshold}
               onChange={(e) => setDataSpecGapThreshold(Number(e.target.value) || 60)}
               disabled={runState !== 'idle'}
-              className="w-16 bg-dark-900 border border-dark-600 rounded px-2 py-1.5 text-sm text-gray-200"
+              className="input-field py-1.5 px-2 text-sm w-16"
             />
           </div>
-          <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
             <input
               type="checkbox"
               checked={sandboxUseDocker}
               onChange={(e) => setSandboxUseDocker(e.target.checked)}
               disabled={runState !== 'idle'}
-              className="rounded border-dark-600"
+              className="rounded border-bp-border"
             />
             沙箱 Docker 隔离（需本地 Docker）
           </label>
-          <p className="text-[11px] text-gray-500 flex-1 min-w-[200px]">
+          <p className="text-[11px] text-bp-muted flex-1 min-w-[200px]">
             {pipelineMode === 'discovery'
               ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献（arXiv+向量检索）并重跑假设→实验→报告。'
               : 'Teaching：每阶段可 HITL 编辑/重跑；Ideation 新颖性 + num_ideas 方向供假设树选择。'}
@@ -1114,8 +1114,8 @@ export function WorkflowPage({
 
       {/* 研究问题缺失时的兜底输入 */}
       {!researchQuestion && (
-        <div className="mb-5 p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-          <p className="text-sm text-yellow-300 font-medium mb-2 flex items-center gap-2">
+        <div className="mb-5 p-4 bg-bp-panel/50 border border-bp-border rounded-bp">
+          <p className="text-sm text-bp-yellow font-medium mb-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             缺少研究问题，请先在研究问题页面填写并保存，或在下方的输入框中直接输入
           </p>
@@ -1125,7 +1125,7 @@ export function WorkflowPage({
               value={localResearchQuestion}
               onChange={(e) => setLocalResearchQuestion(e.target.value)}
               placeholder="请输入研究问题后运行 Pipeline"
-              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all"
+              className="input-field flex-1 py-2 text-sm"
             />
             <Button
               icon={<Send className="w-4 h-4" />}
@@ -1158,7 +1158,7 @@ export function WorkflowPage({
           </div>
           <button
             onClick={() => setErrorMessage(null)}
-            className="text-gray-500 hover:text-gray-300 shrink-0"
+            className="text-bp-muted hover:text-bp-text shrink-0"
           >
             <span className="text-xs">✕</span>
           </button>
@@ -1167,28 +1167,28 @@ export function WorkflowPage({
 
       {/* 状态栏 */}
       {runState === 'submitting' && (
-        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-blue-300">正在提交 Pipeline 任务…</p>
+        <div className="mb-6 p-4 bg-bp-cyan-tint border border-bp-cyan/30 rounded-bp flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-bp-cyan border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-bp-cyan">正在提交 Pipeline 任务…</p>
         </div>
       )}
 
       {runState === 'running' && !pollingRef.current && (
-        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-blue-300">Pipeline 后台运行中…</p>
+        <div className="mb-6 p-4 bg-bp-cyan-tint border border-bp-cyan/30 rounded-bp flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-bp-cyan border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-bp-cyan">Pipeline 后台运行中…</p>
         </div>
       )}
 
       {(runState === 'polling' || runState === 'running') && pollingRef.current && (
-        <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${
+        <div className={`mb-6 p-4 rounded-bp flex items-start gap-3 ${
           staleWarning
-            ? 'bg-yellow-500/10 border border-yellow-500/30'
-            : 'bg-blue-500/10 border border-blue-500/30'
+            ? 'bg-bp-yellow/10 border border-bp-yellow/30'
+            : 'bg-bp-cyan-tint border border-bp-cyan/30'
         }`}>
-          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0 mt-0.5" />
+          <div className="w-5 h-5 border-2 border-bp-cyan border-t-transparent rounded-full animate-spin shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className={`text-sm ${staleWarning ? 'text-yellow-300' : 'text-blue-300'} font-medium`}>
+            <p className={`text-sm ${staleWarning ? 'text-bp-yellow' : 'text-bp-cyan'} font-medium`}>
               {staleWarning ? (
                 <span className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4" />
@@ -1197,13 +1197,13 @@ export function WorkflowPage({
               ) : statusMessage || '运行中'}
             </p>
             {runningStageName && !staleWarning && (
-              <p className="text-xs text-blue-400/70 mt-1">正在运行：{runningStageName}</p>
+              <p className="text-xs text-bp-cyan/70 mt-1">正在运行：{runningStageName}</p>
             )}
             {completedCount > 0 && (
-              <p className="text-xs text-blue-400/70 mt-1">已完成 {completedCount}/{nodes.length} 个阶段</p>
+              <p className="text-xs text-bp-cyan/70 mt-1">已完成 {completedCount}/{nodes.length} 个阶段</p>
             )}
             {!staleWarning && allPendingCountRef.current >= 3 && !runningStageName && !completedCount && (
-              <p className="text-xs text-yellow-400/80 mt-1">
+              <p className="text-xs text-bp-yellow/80 mt-1">
                 Pipeline 已创建，等待后台任务启动...
               </p>
             )}
@@ -1228,13 +1228,13 @@ export function WorkflowPage({
 
       {/* 无运行记录提示 — 只在真正没有历史记录且没有活动运行时显示 */}
       {hasExistingRuns === false && projectId && runState === 'idle' && !currentRunId && (
-        <div className="mb-6 p-4 bg-gray-800/50 border border-gray-700 rounded-lg flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
-            <span className="text-gray-400 text-sm">—</span>
+        <div className="mb-6 p-4 bg-bp-panel/50 border border-bp-border rounded-bp flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-bp-surface flex items-center justify-center shrink-0">
+            <span className="text-bp-muted text-sm">—</span>
           </div>
           <div>
-            <p className="text-sm text-gray-300 font-medium">暂无真实运行记录</p>
-            <p className="text-xs text-gray-500 mt-0.5">请点击运行 Pipeline 以启动智能体工作流</p>
+            <p className="text-sm text-bp-text font-medium">暂无真实运行记录</p>
+            <p className="text-xs text-bp-muted mt-0.5">请点击运行 Pipeline 以启动智能体工作流</p>
           </div>
         </div>
       )}
