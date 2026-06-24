@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ApiManagementPanel } from '@/components/ApiManagementPanel';
 
@@ -11,6 +11,7 @@ export function Navbar() {
     { path: '/', label: '首页', icon: Home },
     { path: '/documents', label: '文献', icon: BookOpen },
     { path: '/reports', label: '报告', icon: ClipboardList },
+    { path: '/settings', label: '设置', icon: Settings2 },
   ];
 
   return (
