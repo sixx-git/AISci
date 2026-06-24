@@ -59,27 +59,27 @@ function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
 
 // ============ 类型标签映射 ============
 const typeConfig: Record<LiteratureItem['type'], { label: string; className: string }> = {
-  '论文':   { label: '论文',   className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-  '综述':   { label: '综述',   className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
-  '会议':   { label: '会议',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
-  '预印本': { label: '预印本', className: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25' },
+  '论文':   { label: '论文',   className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  '综述':   { label: '综述',   className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
+  '会议':   { label: '会议',   className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
+  '预印本': { label: '预印本', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
 };
 
 // ============ 解析状态映射 ============
 const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; className: string }> = {
   pending:   { label: '待解析', className: 'bg-bp-panel text-bp-muted border-bp-border' },
-  parsing:   { label: '解析中', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-  completed: { label: '已解析', className: 'bg-green-500/15 text-green-400 border-green-500/25' },
-  error:     { label: '失败',   className: 'bg-red-500/15 text-red-400 border-red-500/25' },
+  parsing:   { label: '解析中', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  completed: { label: '已解析', className: 'bg-bp-green/15 text-bp-green border-bp-green/25' },
+  error:     { label: '失败',   className: 'bg-danger-500/15 text-danger-400 border-danger-500/25' },
 };
 
 // ============ source_type 标签映射 ============
 const sourceTypeConfig: Record<string, { label: string; className: string }> = {
-  upload:                { label: 'PDF上传', className: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-  arxiv:                 { label: 'arXiv',   className: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25' },
-  bibtex:                { label: 'BibTeX',  className: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
-  google_scholar_import: { label: 'Scholar', className: 'bg-orange-500/15 text-orange-400 border-orange-500/25' },
-  manual:                { label: '手动',   className: 'bg-amber-500/15 text-amber-400 border-amber-500/25' },
+  upload:                { label: 'PDF上传', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  arxiv:                 { label: 'arXiv',   className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  bibtex:                { label: 'BibTeX',  className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
+  google_scholar_import: { label: 'Scholar', className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
+  manual:                { label: '手动',   className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
 };
 
 // ============ import_status 标签映射 ============
@@ -1319,7 +1319,7 @@ function StatusBar({ msg }: { msg: StatusToastMessage | null }) {
     loading: { bg: 'bg-blue-500/90', icon: Loader2, text: 'text-bp-text' },
     success: { bg: 'bg-green-500/90', icon: CheckCircle, text: 'text-bp-text' },
     error:   { bg: 'bg-red-500/90',   icon: XCircle,  text: 'text-bp-text' },
-    info:    { bg: 'bg-gray-500/90',  icon: Info,     text: 'text-bp-text' },
+    info:    { bg: 'bg-bp-panel',  icon: Info,     text: 'text-bp-text' },
   }[msg.type];
 
   const Icon = config.icon;

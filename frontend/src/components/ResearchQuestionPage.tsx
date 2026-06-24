@@ -673,7 +673,7 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
       <div className="lg:col-span-1 space-y-4">
         <Card>
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-bp bg-bp-cyan-tint flex items-center justify-center">
               <Brain className="w-4 h-4 text-bp-cyan" />
             </div>
             <div>
@@ -692,7 +692,7 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
             </div>
             <div className="h-1.5 bg-bp-panel rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full transition-all duration-500"
+                className="h-full bg-gradient-to-r from-bp-cyan to-bp-cyan/70 rounded-full transition-all duration-500"
                 style={{ width: `${(filledCount / totalFields) * 100}%` }}
               />
             </div>

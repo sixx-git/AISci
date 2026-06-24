@@ -198,8 +198,8 @@ export function ReportPage({
           <p className="text-bp-muted text-sm">自动生成符合比赛规范的科学假设与研究计划</p>
         </div>
         <Card className="flex flex-col items-center justify-center py-12 gap-4">
-          <XCircle className="w-10 h-10 text-red-400" />
-          <p className="text-red-300 text-sm">{errorMsg}</p>
+          <XCircle className="w-10 h-10 text-danger-400" />
+          <p className="text-danger-300 text-sm">{errorMsg}</p>
           <button
             onClick={() => {
               setErrorMsg(null);
@@ -209,7 +209,7 @@ export function ReportPage({
                 .catch((e) => setErrorMsg(e instanceof Error ? e.message : '加载失败'))
                 .finally(() => setIsLoading(false));
             }}
-            className="px-4 py-2 rounded-lg bg-primary-500/20 border border-bp-cyan/30 text-bp-cyan text-xs hover:bg-primary-500/30 transition-colors"
+            className="px-4 py-2 rounded-bp bg-bp-cyan-tint border border-bp-cyan/30 text-bp-cyan text-xs hover:bg-bp-cyan/20 transition-colors"
           >
             重试
           </button>
@@ -273,18 +273,18 @@ export function ReportPage({
       <div className="space-y-3 mb-6">
         {/* References 为空 → 红色 warning */}
         {hasNoRefs && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/25">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-danger-500/10 border border-danger-500/25">
+            <AlertTriangle className="w-5 h-5 text-danger-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-300 mb-1">
+              <p className="text-sm font-semibold text-danger-300 mb-1">
                 参考论文缺失或未验证，不符合赛题要求
               </p>
-              <p className="text-xs text-red-300/70 mb-2 leading-relaxed">
+              <p className="text-xs text-danger-300/70 mb-2 leading-relaxed">
                 参考文献未能在文献库中找到匹配条目，存在虚构引用风险。请先上传 PDF 或导入 arXiv 文献后再生成报告。
               </p>
               <button
                 onClick={() => navigate('/documents')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-xs text-red-300 hover:bg-red-500/30 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-bp bg-danger-500/20 border border-danger-500/30 text-xs text-danger-300 hover:bg-danger-500/30 transition-colors"
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 前往文献库导入文献
@@ -296,13 +296,13 @@ export function ReportPage({
 
         {/* 仅有预期结果 → 黄色 warning */}
         {hasOnlyExpected && !hasNoRefs && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-bp-yellow/10 border border-bp-yellow/25">
+            <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-300 mb-1">
+              <p className="text-sm font-semibold text-bp-yellow mb-1">
                 当前仅有预期结果，建议补充公式推导、模拟验证或小样实验
               </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 leading-relaxed">
                 Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议补充小样验证或可行性模拟来增强报告可信度。
               </p>
             </div>
@@ -311,13 +311,13 @@ export function ReportPage({
 
         {/* Dataset 没有真实来源 → 黄色 warning */}
         {hasNoDatasets && !hasNoRefs && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-bp-yellow/10 border border-bp-yellow/25">
+            <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-300 mb-1">
+              <p className="text-sm font-semibold text-bp-yellow mb-1">
                 数据集来源不足，请补充真实或合规数据来源
               </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 leading-relaxed">
                 Datasets 章节内容不足，需要说明真实来源或拟采集状态。
               </p>
             </div>
@@ -326,13 +326,13 @@ export function ReportPage({
 
         {/* Source 缺失 → 黄色 warning */}
         {hasNoSource && !hasNoRefs && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-bp-yellow/10 border border-bp-yellow/25">
+            <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-300 mb-1">
+              <p className="text-sm font-semibold text-bp-yellow mb-1">
                 缺少真实历史数据来源（Source）
               </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 leading-relaxed">
                 请补充假设推演所依据的历史数据或文献来源。
               </p>
             </div>
@@ -341,13 +341,13 @@ export function ReportPage({
 
         {/* Target 缺失 → 黄色 warning */}
         {hasNoTarget && !hasNoRefs && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-bp-yellow/10 border border-bp-yellow/25">
+            <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-300 mb-1">
+              <p className="text-sm font-semibold text-bp-yellow mb-1">
                 缺少目标数据特征描述（Target）
               </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 leading-relaxed">
                 请补充验证实验所需的拟采集数据特征描述。
               </p>
             </div>
@@ -356,11 +356,11 @@ export function ReportPage({
 
         {/* 严重问题列表 */}
         {criticalIssues.length > 0 && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/25">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-danger-500/10 border border-danger-500/25">
+            <AlertTriangle className="w-5 h-5 text-danger-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-300 mb-1">赛题合规严重问题</p>
-              <ul className="list-disc list-inside text-xs text-red-300/70 leading-relaxed">
+              <p className="text-sm font-semibold text-danger-300 mb-1">赛题合规严重问题</p>
+              <ul className="list-disc list-inside text-xs text-danger-300/70 leading-relaxed">
                 {criticalIssues.map((issue, i) => (
                   <li key={i}>{issue}</li>
                 ))}
@@ -371,13 +371,13 @@ export function ReportPage({
 
         {/* PDF 导出失败 → 黄色 warning */}
         {pdfFailed && !hasNoRefs && criticalIssues.length === 0 && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-bp-yellow/10 border border-bp-yellow/25">
+            <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-300 mb-1">
+              <p className="text-sm font-semibold text-bp-yellow mb-1">
                 PDF 导出失败
               </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 leading-relaxed">
                 PDF 导出失败，不影响核心报告生成。Markdown 和 JSON 格式仍可使用。
               </p>
             </div>
@@ -426,7 +426,7 @@ export function ReportPage({
                 <p className="text-xs text-bp-muted">Markdown 格式 · 科学假设与研究计划</p>
               </div>
             </div>
-            <div className="bg-gray-950/80 rounded-lg border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]">
+            <div className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]">
               <MarkdownPreview content={report.markdownContent} />
             </div>
           </Card>
@@ -435,7 +435,7 @@ export function ReportPage({
           {report.plots && report.plots.length > 0 && (
             <Card className="mt-4">
               <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <BarChart3 className="w-4 h-4 text-bp-green" />
                 <div>
                   <h3 className="text-sm font-semibold text-bp-text">数据可视化</h3>
                   <p className="text-xs text-bp-muted">
@@ -448,7 +448,7 @@ export function ReportPage({
                 {report.plots.map((plot: ReportPlot) => (
                   <div
                     key={plot.plot_id}
-                    className="rounded-lg border border-bp-border bg-gray-950/60 overflow-hidden"
+                    className="rounded-bp border border-bp-border bg-bp-base/60 overflow-hidden"
                   >
                     <div className="px-3 py-2 border-b border-bp-border/60 bg-bp-base/50">
                       <p className="text-xs font-medium text-bp-text truncate">{plot.title}</p>
@@ -460,25 +460,25 @@ export function ReportPage({
                           {plot.type}
                         </span>
                         {plot.is_generated_from_real_data ? (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-emerald-500/15 text-emerald-400">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-green/15 text-bp-green">
                             <CheckCircle2 className="w-2.5 h-2.5" />
                             真实数据
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/15 text-amber-400">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-yellow/15 text-bp-yellow">
                             <AlertTriangle className="w-2.5 h-2.5" />
                             非真实数据
                           </span>
                         )}
                         {plot.source_dataset_id && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-400">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-cyan-tint text-bp-cyan">
                             <Database className="w-2.5 h-2.5" />
                             {plot.source_dataset_id.slice(0, 8)}
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="p-3 flex items-center justify-center bg-gray-950/40 min-h-[200px]">
+                    <div className="p-3 flex items-center justify-center bg-bp-base/40 min-h-[200px]">
                       {plot.base64 ? (
                         <img
                           src={`data:image/png;base64,${plot.base64}`}
@@ -510,15 +510,15 @@ export function ReportPage({
           {(!report.plots || report.plots.length === 0) && (
             <Card className="mt-4">
               <div className="flex items-start gap-3 p-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-medium text-amber-300 mb-1">缺少真实数据，未生成图表</p>
+                  <p className="text-xs font-medium text-bp-yellow mb-1">缺少真实数据，未生成图表</p>
                   {hasNoDatasets ? (
-                    <p className="text-xs text-amber-300/70">
+                    <p className="text-xs text-bp-yellow/70">
                       请通过"数据集"页面上传 CSV/Excel 等结构化数据文件，以启用统计图表生成。
                     </p>
                   ) : (
-                    <p className="text-xs text-amber-300/70">
+                    <p className="text-xs text-bp-yellow/70">
                       当前数据集可能不包含可分析的结构化数据，无法生成统计图表。
                     </p>
                   )}
@@ -530,7 +530,7 @@ export function ReportPage({
 
         {/* 右侧：比赛规范检查 + 证据链质量 + 操作 */}
         <div className="lg:col-span-1">
-          <div className="overflow-y-auto max-h-[calc(100vh-320px)] space-y-4 pr-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+          <div className="overflow-y-auto max-h-[calc(100vh-320px)] space-y-4 pr-1 scrollbar-thin scrollbar-thumb-bp-muted scrollbar-track-transparent">
             <ReportChecklist
               sections={sections}
               complianceCheck={complianceCheck}
@@ -549,7 +549,7 @@ export function ReportPage({
                 type="button"
                 onClick={handleMentorReview}
                 disabled={mentorBusy}
-                className="w-full flex items-center justify-center gap-2 text-xs py-2 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 text-xs py-2 mb-3 rounded-bp border border-bp-yellow/30 bg-bp-yellow/10 text-bp-yellow hover:bg-bp-yellow/15 disabled:opacity-50"
               >
                 {mentorBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GraduationCap className="w-3.5 h-3.5" />}
                 导师式评审
@@ -561,9 +561,9 @@ export function ReportPage({
                 onChange={(e) => setMentorNotes(e.target.value)}
               />
               {mentorReview && (
-                <div className="mb-3 p-2 rounded-lg border border-amber-500/20 bg-amber-500/5 text-[11px] space-y-1.5 max-h-48 overflow-y-auto">
+                <div className="mb-3 p-2 rounded-bp border border-bp-yellow/20 bg-bp-yellow/5 text-[11px] space-y-1.5 max-h-48 overflow-y-auto">
                   {mentorReview.overall_assessment && (
-                    <p className="text-amber-200/90">{mentorReview.overall_assessment}</p>
+                    <p className="text-bp-yellow/90">{mentorReview.overall_assessment}</p>
                   )}
                   {mentorReview.readiness_score != null && (
                     <p className="text-bp-muted">就绪度：{mentorReview.readiness_score}/10</p>
@@ -650,13 +650,13 @@ export function ReportPage({
                 type="button"
                 onClick={handleReviseReport}
                 disabled={reviseBusy || !reviseMessage.trim()}
-                className="w-full text-xs py-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-bp-text disabled:opacity-50"
+                className="w-full text-xs py-2 rounded-bp bg-bp-green/90 hover:bg-bp-green text-bp-text disabled:opacity-50"
               >
                 {reviseBusy ? '修改中…' : reviseScope === 'section' ? '修改选定章节' : '根据反馈修改报告'}
               </button>
 
               {lastChatReply && (
-                <p className="mt-2 text-[11px] text-green-400/90 border border-green-500/20 rounded p-2">
+                <p className="mt-2 text-[11px] text-bp-green/90 border border-bp-green/20 rounded-bp p-2">
                   {lastChatReply}
                 </p>
               )}

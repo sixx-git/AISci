@@ -107,7 +107,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                 <div key={`${label}-${idx}`} className="flex flex-col items-center gap-1 min-w-[52px]">
                   <span className="text-[10px] font-mono text-bp-cyan">{formatScore(score)}</span>
                   <div
-                    className="w-8 rounded-t bg-primary-500/40 border border-bp-cyan/30"
+                    className="w-8 rounded-t bg-bp-cyan/40 border border-bp-cyan/30"
                     style={{ height: `${height}px` }}
                     title={`${label}: CQS ${formatScore(score)}${rawHint}`}
                   />

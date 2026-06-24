@@ -32,7 +32,7 @@ export function ExportActions({ onAction, className }: ExportActionsProps) {
                 border border-bp-border hover:border-bp-border
                 transition-colors duration-150
                 ${act.type === 'generate'
-                  ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30 hover:bg-primary-500/20'
+                  ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30 hover:bg-bp-cyan/20'
                   : 'bg-bp-base/70 text-bp-text hover:bg-bp-panel'}
               `}
             >

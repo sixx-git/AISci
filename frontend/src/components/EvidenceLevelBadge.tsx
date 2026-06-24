@@ -12,7 +12,7 @@ export function evidenceLevelBadgeCls(level: string | undefined): string {
   switch (level) {
     case 'high': return 'bg-green-500/15 text-green-400 border-green-500/30';
     case 'medium': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-    default: return 'bg-gray-500/15 text-bp-muted border-gray-500/30';
+    default: return 'bg-bp-panel text-bp-muted border-bp-border';
   }
 }
 

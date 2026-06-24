@@ -210,7 +210,7 @@ export function FederatedCampaignPanel({
                         ? 'bg-red-500/10 text-red-400'
                         : act.priority === 'high'
                           ? 'bg-amber-500/10 text-amber-400'
-                          : 'bg-gray-500/10 text-bp-muted'
+                          : 'bg-bp-panel text-bp-muted'
                     }`}
                   >
                     {act.priority || 'medium'}

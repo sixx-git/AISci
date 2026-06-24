@@ -67,7 +67,7 @@ export function HypothesisProvenanceTimeline({
         const Icon = STEP_ICONS[step.step] || Link2;
         return (
           <div key={`${step.step}-${idx}`} className="relative">
-            <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-primary-500/80 ring-2 ring-dark-900" />
+            <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-bp-cyan/80 ring-2 ring-bp-base" />
             <div className="flex items-center gap-1.5 mb-1.5">
               <Icon className="w-3.5 h-3.5 text-bp-cyan" />
               <span className="text-xs font-medium text-bp-text">{step.label}</span>
@@ -103,7 +103,7 @@ function TimelineItem({
     const docId = String(item.document_id || '');
     const chunkId = item.chunk_id ? String(item.chunk_id) : undefined;
     return (
-      <div className="p-2 rounded border border-bp-cyan/15 bg-primary-500/5">
+      <div className="p-2 rounded-bp border border-bp-cyan/15 bg-bp-cyan-tint">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[10px] font-mono text-bp-cyan">{String(item.fact_id || '')}</p>

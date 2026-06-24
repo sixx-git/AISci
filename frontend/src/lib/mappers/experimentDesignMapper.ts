@@ -14,7 +14,7 @@ const categoryLabel: Record<string, string> = {
 };
 
 const categoryColor: Record<string, string> = {
-  traditional: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+  traditional: 'bg-bp-panel text-bp-muted border-bp-border',
   deep: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
   sota: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
 };

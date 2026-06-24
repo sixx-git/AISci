@@ -11,9 +11,9 @@ interface ReportChecklistProps {
 }
 
 const statusConfig: Record<ReportSection['status'], { icon: typeof CheckCircle; label: string; className: string }> = {
-  completed:  { icon: CheckCircle,  label: '已完成',  className: 'text-green-400 bg-green-500/10 border-green-500/20' },
-  missing:    { icon: XCircle,      label: '缺失',    className: 'text-red-400 bg-red-500/10 border-red-500/20' },
-  human_review: { icon: AlertTriangle, label: '需人工确认', className: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  completed:  { icon: CheckCircle,  label: '已完成',  className: 'text-bp-green bg-bp-green/10 border-bp-green/20' },
+  missing:    { icon: XCircle,      label: '缺失',    className: 'text-danger-400 bg-danger-500/10 border-danger-500/20' },
+  human_review: { icon: AlertTriangle, label: '需人工确认', className: 'text-bp-yellow bg-bp-yellow/10 border-bp-yellow/20' },
 };
 
 export function ReportChecklist({ sections, complianceCheck, className, warnings }: ReportChecklistProps) {
@@ -40,11 +40,11 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
           <div className="relative w-12 h-12">
             <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
               <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor"
-                className="text-gray-800" strokeWidth="5" />
+                className="text-bp-panel" strokeWidth="5" />
               <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor"
                 className={cn(
-                  ratio >= 1 ? 'text-green-400' :
-                  ratio >= 0.5 ? 'text-amber-400' : 'text-red-400',
+                  ratio >= 1 ? 'text-bp-green' :
+                  ratio >= 0.5 ? 'text-bp-yellow' : 'text-danger-400',
                 )}
                 strokeWidth="5"
                 strokeLinecap="round"
@@ -59,16 +59,16 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
 
         {/* 汇总统计 */}
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="text-center p-2 rounded-lg bg-green-500/5 border border-green-500/10">
-            <p className="text-lg font-mono font-bold text-green-400">{completedCount}</p>
+          <div className="text-center p-2 rounded-lg bg-bp-green/5 border border-bp-green/10">
+            <p className="text-lg font-mono font-bold text-bp-green">{completedCount}</p>
             <p className="text-[10px] text-bp-muted">已完成</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-red-500/5 border border-red-500/10">
-            <p className="text-lg font-mono font-bold text-red-400">{missingCount}</p>
+          <div className="text-center p-2 rounded-lg bg-danger-500/5 border border-danger-500/10">
+            <p className="text-lg font-mono font-bold text-danger-400">{missingCount}</p>
             <p className="text-[10px] text-bp-muted">缺失</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
-            <p className="text-lg font-mono font-bold text-amber-400">{reviewCount}</p>
+          <div className="text-center p-2 rounded-lg bg-bp-yellow/5 border border-bp-yellow/10">
+            <p className="text-lg font-mono font-bold text-bp-yellow">{reviewCount}</p>
             <p className="text-[10px] text-bp-muted">需人工确认</p>
           </div>
         </div>
@@ -78,19 +78,19 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
               <p className="text-[10px] text-bp-muted mb-0.5">Evidence 事实数</p>
-              <p className="text-sm font-mono font-bold text-purple-400">
+              <p className="text-sm font-mono font-bold text-bp-purple">
                 {cc.evidence_fact_count}
               </p>
             </div>
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
               <p className="text-[10px] text-bp-muted mb-0.5">有证据假设数</p>
-              <p className="text-sm font-mono font-bold text-green-400">
+              <p className="text-sm font-mono font-bold text-bp-green">
                 {cc.hypothesis_with_evidence_count}
               </p>
             </div>
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
               <p className="text-[10px] text-bp-muted mb-0.5">已验证引用</p>
-              <p className="text-sm font-mono font-bold text-cyan-400">
+              <p className="text-sm font-mono font-bold text-bp-cyan">
                 {cc.references_verified}
               </p>
             </div>
@@ -98,8 +98,8 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
               <p className="text-[10px] text-bp-muted mb-0.5">含实际/模拟结果</p>
               <p className="text-sm font-mono font-bold">
                 {cc.has_actual_or_simulated_result
-                  ? <span className="text-green-400">有</span>
-                  : <span className="text-red-400">无</span>}
+                  ? <span className="text-bp-green">有</span>
+                  : <span className="text-danger-400">无</span>}
               </p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         {/* Skill 评估指标 */}
         {cc && (cc.novelty_score != null || cc.experiment_sanity_check) && (
           <div className="mb-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/15">
-            <p className="text-[10px] text-purple-400 font-semibold mb-2 uppercase tracking-wide">
+            <p className="text-[10px] text-bp-purple font-semibold mb-2 uppercase tracking-wide">
               Skill 评估
             </p>
             {cc.novelty_score != null && (
@@ -116,8 +116,8 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                 <span className="text-[10px] text-bp-muted">新颖性评分</span>
                 <span className={cn(
                   'text-xs font-mono font-bold',
-                  cc.novelty_score >= 7 ? 'text-green-400' :
-                  cc.novelty_score >= 4 ? 'text-amber-400' : 'text-red-400',
+                  cc.novelty_score >= 7 ? 'text-bp-green' :
+                  cc.novelty_score >= 4 ? 'text-bp-yellow' : 'text-danger-400',
                 )}>
                   {cc.novelty_score}/10
                 </span>
@@ -130,18 +130,18 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                   <span className={cn(
                     'text-[10px] font-medium',
                     cc.experiment_sanity_check.executable
-                      ? 'text-green-400' : 'text-red-400',
+                      ? 'text-bp-green' : 'text-danger-400',
                   )}>
                     {cc.experiment_sanity_check.executable ? '可执行' : '存在问题'}
                   </span>
                 </div>
                 {cc.experiment_sanity_check.missing_items?.length > 0 && (
-                  <p className="text-[9px] text-red-400/70 leading-relaxed">
+                  <p className="text-[9px] text-danger-400/70 leading-relaxed">
                     缺失: {cc.experiment_sanity_check.missing_items.join(', ')}
                   </p>
                 )}
                 {cc.experiment_sanity_check.recommendations?.length > 0 && (
-                  <p className="text-[9px] text-purple-400/70 leading-relaxed">
+                  <p className="text-[9px] text-bp-purple/70 leading-relaxed">
                     建议: {cc.experiment_sanity_check.recommendations.slice(0, 2).join('; ')}
                   </p>
                 )}
@@ -183,44 +183,44 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
       <Card className={cn(
         'border',
         cc && cc.references_verified === 0
-          ? 'bg-red-500/[0.04] border-red-500/20'
-          : 'bg-amber-500/[0.03] border-amber-500/10',
+          ? 'bg-danger-500/[0.04] border-danger-500/20'
+          : 'bg-bp-yellow/[0.03] border-bp-yellow/10',
       )}>
         <div className="flex items-start gap-2.5">
           <div className={cn(
             'w-8 h-8 rounded-lg border flex items-center justify-center shrink-0',
             cc && cc.references_verified === 0
-              ? 'bg-red-500/10 border-red-500/20'
-              : 'bg-amber-500/10 border-amber-500/20',
+              ? 'bg-danger-500/10 border-danger-500/20'
+              : 'bg-bp-yellow/10 border-bp-yellow/20',
           )}>
             <Shield className={cn(
               'w-4 h-4',
-              cc && cc.references_verified === 0 ? 'text-red-400' : 'text-amber-400',
+              cc && cc.references_verified === 0 ? 'text-danger-400' : 'text-bp-yellow',
             )} />
           </div>
           <div>
             <h4 className={cn(
               'text-xs font-semibold',
-              cc && cc.references_verified === 0 ? 'text-red-300' : 'text-amber-300',
+              cc && cc.references_verified === 0 ? 'text-danger-300' : 'text-bp-yellow',
             )}>
               References 合规声明
             </h4>
             {cc && cc.references_verified === 0 ? (
-              <p className="text-[11px] text-red-300/80 mt-1 leading-relaxed">
+              <p className="text-[11px] text-danger-300/80 mt-1 leading-relaxed">
                 当前报告缺少真实文献引用，请先上传 PDF 或导入 arXiv 文献。
               </p>
             ) : (
-              <p className="text-[11px] text-amber-300/70 mt-1 leading-relaxed">
+              <p className="text-[11px] text-bp-yellow/70 mt-1 leading-relaxed">
                 参考文献仅来自文献库和证据链，禁止虚构引用。
               </p>
             )}
             {cc && (
               <div className="mt-2 flex items-center gap-3 text-[10px]">
-                <span className={cc.references_verified > 0 ? 'text-green-400' : 'text-red-400'}>
+                <span className={cc.references_verified > 0 ? 'text-bp-green' : 'text-danger-400'}>
                   已验证 {cc.references_verified} 条
                 </span>
                 {cc.references_suspicious > 0 && (
-                  <span className="text-red-400">
+                  <span className="text-danger-400">
                     疑似虚构 {cc.references_suspicious} 条
                   </span>
                 )}
@@ -232,16 +232,16 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
 
       {/* 12 字段合规警告 */}
       {warnings && warnings.length > 0 && (
-        <Card className="bg-amber-500/[0.03] border border-amber-500/10">
+        <Card className="bg-bp-yellow/[0.03] border border-bp-yellow/10">
           <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
-              <h4 className="text-xs font-semibold text-amber-300 mb-1.5">
+              <h4 className="text-xs font-semibold text-bp-yellow mb-1.5">
                 赛题合规提示
               </h4>
               <ul className="space-y-1">
                 {warnings.map((w, i) => (
-                  <li key={i} className="text-[10px] text-amber-300/70 leading-relaxed">
+                  <li key={i} className="text-[10px] text-bp-yellow/70 leading-relaxed">
                     {w}
                   </li>
                 ))}

@@ -173,7 +173,7 @@ export function DataFinderPanel({
 
   return (
     <div className="space-y-5">
-      <Card className="p-4 border-bp-cyan/20 bg-primary-500/5">
+      <Card className="p-4 border-bp-cyan/20 bg-bp-cyan-tint">
         <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
           <Search className="w-4 h-4 text-bp-cyan" />
           多源科学数据查找与整合

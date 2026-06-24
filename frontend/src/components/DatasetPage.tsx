@@ -25,11 +25,11 @@ interface DatasetPageProps {
 }
 
 const DATA_TYPE_CONFIG: Record<string, { icon: typeof Database; label: string; color: string }> = {
-  tabular: { icon: Table2, label: '表格', color: 'text-blue-400' },
-  image: { icon: Image, label: '图像', color: 'text-purple-400' },
-  time_series: { icon: BarChart3, label: '时间序列', color: 'text-green-400' },
-  json: { icon: FileJson, label: 'JSON', color: 'text-yellow-400' },
-  pdf: { icon: FileText, label: 'PDF', color: 'text-red-400' },
+  tabular: { icon: Table2, label: '表格', color: 'text-bp-cyan' },
+  image: { icon: Image, label: '图像', color: 'text-bp-purple' },
+  time_series: { icon: BarChart3, label: '时间序列', color: 'text-bp-green' },
+  json: { icon: FileJson, label: 'JSON', color: 'text-bp-yellow' },
+  pdf: { icon: FileText, label: 'PDF', color: 'text-danger-400' },
   unknown: { icon: FileText, label: '未知', color: 'text-bp-muted' },
 };
 
@@ -43,10 +43,10 @@ const MODALITY_LABELS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; label: string; cls: string }> = {
-  completed: { icon: CheckCircle2, label: '已完成', cls: 'text-green-400 bg-green-500/10' },
-  processing: { icon: RefreshCw, label: '预处理中', cls: 'text-blue-400 bg-blue-500/10' },
-  pending: { icon: Clock, label: '待处理', cls: 'text-bp-muted bg-gray-500/10' },
-  failed: { icon: XCircle, label: '失败', cls: 'text-red-400 bg-red-500/10' },
+  completed: { icon: CheckCircle2, label: '已完成', cls: 'text-bp-green bg-bp-green/10' },
+  processing: { icon: RefreshCw, label: '预处理中', cls: 'text-bp-cyan bg-bp-cyan-tint' },
+  pending: { icon: Clock, label: '待处理', cls: 'text-bp-muted bg-bp-panel' },
+  failed: { icon: XCircle, label: '失败', cls: 'text-danger-400 bg-danger-500/10' },
 };
 
 const SUPPORTED_FORMATS =
@@ -99,9 +99,9 @@ function formatSize(bytes?: number): string {
 
 function formatQualityScore(score: number | null | undefined): { label: string; cls: string } {
   if (score == null) return { label: '-', cls: 'text-bp-muted' };
-  if (score >= 0.8) return { label: score.toFixed(2), cls: 'text-green-400' };
-  if (score >= 0.5) return { label: score.toFixed(2), cls: 'text-yellow-400' };
-  return { label: score.toFixed(2), cls: 'text-red-400' };
+  if (score >= 0.8) return { label: score.toFixed(2), cls: 'text-bp-green' };
+  if (score >= 0.5) return { label: score.toFixed(2), cls: 'text-bp-yellow' };
+  return { label: score.toFixed(2), cls: 'text-danger-400' };
 }
 
 export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: DatasetPageProps) {
@@ -370,11 +370,11 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
       {/* 项目模式 / 联邦数据识别 */}
       {(projectMode === 'federated_learning' || dataContext?.project_mode === 'federated_learning') && (
-        <Card className="p-4 mb-6 border-cyan-500/20 bg-cyan-500/5">
+        <Card className="p-4 mb-6 border-bp-cyan/20 bg-bp-cyan-tint">
           <div className="flex items-center gap-2 mb-3">
-            <Network className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-cyan-300">联邦学习数据识别</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-400">
+            <Network className="w-4 h-4 text-bp-cyan" />
+            <h3 className="text-sm font-semibold text-bp-cyan">联邦学习数据识别</h3>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-bp-cyan/30 text-bp-cyan">
               Federated Learning Scientist
             </span>
           </div>
@@ -385,7 +385,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                 <p className="text-bp-text font-mono mt-0.5">
                   {dataContext.fl_context.federated_setting || dataContext.fl_context.fl_setting || 'unknown'}
                   {dataContext.fl_context.fl_setting === 'vertical_fl' && (
-                    <span className="ml-2 text-violet-400">vertical_fl</span>
+                    <span className="ml-2 text-bp-purple">vertical_fl</span>
                   )}
                 </p>
               </div>
@@ -475,7 +475,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             </div>
             {dataContext.available_modalities.length > 0 && (
               <div className="flex items-center gap-2">
-                <ListFilter className="w-4 h-4 text-purple-400" />
+                <ListFilter className="w-4 h-4 text-bp-purple" />
                 <span className="text-sm text-bp-muted">
                   模态: {dataContext.available_modalities.map((m) => MODALITY_LABELS[m] || m).join('、')}
                 </span>
@@ -483,7 +483,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             )}
             {dataContext.field_candidates.length > 0 && (
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-green-400" />
+                <Activity className="w-4 h-4 text-bp-green" />
                 <span className="text-sm text-bp-muted">
                   <strong className="text-bp-text">{dataContext.field_candidates.length}</strong> 个可用字段
                 </span>
@@ -491,7 +491,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             )}
             {dataContext.target_candidates.length > 0 && (
               <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-yellow-400" />
+                <Target className="w-4 h-4 text-bp-yellow" />
                 <span className="text-sm text-bp-muted">
                   <strong className="text-bp-text">{dataContext.target_candidates.length}</strong> 个目标候选
                 </span>
@@ -499,7 +499,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             )}
             {dataContext.quality_summary && typeof dataContext.quality_summary === 'object' && (
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-blue-400" />
+                <TrendingUp className="w-4 h-4 text-bp-cyan" />
                 {formatQualityScore((dataContext.quality_summary as Record<string, unknown>)?.overall_score as number | null).label !== '-' ? (
                   <span className={`text-sm ${formatQualityScore((dataContext.quality_summary as Record<string, unknown>)?.overall_score as number | null).cls}`}>
                     综合质量: {formatQualityScore((dataContext.quality_summary as Record<string, unknown>)?.overall_score as number | null).label}
@@ -513,7 +513,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           {dataContext.warnings.length > 0 && (
             <div className="mt-3 pt-3 border-t border-bp-border">
               {dataContext.warnings.map((w, i) => (
-                <div key={i} className="text-xs text-yellow-400/80 flex items-center gap-1">
+                <div key={i} className="text-xs text-bp-yellow/80 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   {w}
                 </div>
@@ -541,7 +541,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                   setTargetColumn('');
                   setModelingResult(null);
                 }}
-                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
+                className="input-field w-full py-2 text-sm"
               >
                 {tabularDatasets.map((ds) => (
                   <option key={ds.id} value={ds.id}>{ds.filename}</option>
@@ -553,7 +553,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
               <select
                 value={targetColumn}
                 onChange={(e) => setTargetColumn(e.target.value)}
-                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
+                className="input-field w-full py-2 text-sm"
               >
                 <option value="">请选择目标列</option>
                 {(tabularDatasets.find((d) => d.id === modelingDatasetId)?.columns || []).map((col) => (
@@ -569,7 +569,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
               value={researchTask}
               onChange={(e) => setResearchTask(e.target.value)}
               placeholder="例如：预测疾病分类 / 估计指标回归"
-              className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
+              className="input-field w-full py-2 text-sm"
             />
           </div>
 
@@ -586,25 +586,25 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           {modelingResult?.success && (
             <div className="mt-5 space-y-4 border-t border-bp-border pt-4">
               {modelingResult.is_pilot_validation && (
-                <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
+                <div className="text-xs text-bp-yellow bg-bp-yellow/10 border border-bp-yellow/20 rounded-bp px-3 py-2">
                   Pilot Validation：样本量较小，结果仅用于可行性验证，不得夸大为最终结论。
                 </div>
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div className="bg-bp-base/70 rounded-lg p-2">
+                <div className="bg-bp-panel/70 rounded-bp p-2">
                   <div className="text-bp-muted text-xs">任务类型</div>
                   <div className="text-bp-text font-medium">{modelingResult.task_type}</div>
                 </div>
-                <div className="bg-bp-base/70 rounded-lg p-2">
+                <div className="bg-bp-panel/70 rounded-bp p-2">
                   <div className="text-bp-muted text-xs">目标变量</div>
                   <div className="text-bp-text font-medium">{modelingResult.target_column}</div>
                 </div>
-                <div className="bg-bp-base/70 rounded-lg p-2">
+                <div className="bg-bp-panel/70 rounded-bp p-2">
                   <div className="text-bp-muted text-xs">最佳模型</div>
                   <div className="text-bp-cyan font-medium">{modelingResult.best_model}</div>
                 </div>
-                <div className="bg-bp-base/70 rounded-lg p-2">
+                <div className="bg-bp-panel/70 rounded-bp p-2">
                   <div className="text-bp-muted text-xs">样本规模</div>
                   <div className="text-bp-text font-medium">
                     {String((modelingResult.profile as { n_rows?: number })?.n_rows ?? '-')}
@@ -660,7 +660,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                   <div className="space-y-2">
                     {modelingResult.self_correction_suggestions.map((item, idx) => (
                       <div key={idx} className="text-xs bg-bp-base/60 border border-bp-border rounded-lg p-2">
-                        <div className="text-yellow-300">{item.reason}</div>
+                        <div className="text-bp-yellow">{item.reason}</div>
                         <div className="text-bp-text mt-1">{item.suggestion}</div>
                         <div className="text-bp-muted mt-1">下一步: {item.next_action}</div>
                       </div>
@@ -708,8 +708,8 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
       {!loading && error && (
         <div className="flex flex-col items-center justify-center py-20 text-bp-muted">
-          <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
-          <p className="text-sm text-red-400 mb-2">{error}</p>
+          <AlertCircle className="w-8 h-8 mb-3 text-danger-400" />
+          <p className="text-sm text-danger-400 mb-2">{error}</p>
         </div>
       )}
 
@@ -773,7 +773,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                           {stConfig.label}
                         </span>
                         {ds.useForHypothesis ? (
-                          <span className="text-[11px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-[11px] text-bp-green bg-bp-green/10 px-1.5 py-0.5 rounded flex items-center gap-1">
                             <Eye className="w-3 h-3" />
                             用于假设
                           </span>
@@ -791,21 +791,21 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
                 {/* 核心指标 */}
                 <div className="grid grid-cols-4 gap-2 mb-2">
-                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                  <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">{ds.nRows ?? '-'}</div>
                     <div className="text-[10px] text-bp-muted">样本数</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                  <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">{ds.nColumns ?? '-'}</div>
                     <div className="text-[10px] text-bp-muted">字段数</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                  <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">
                       {ds.missingRate != null ? `${(ds.missingRate * 100).toFixed(1)}%` : '-'}
                     </div>
                     <div className="text-[10px] text-bp-muted">缺失率</div>
                   </div>
-                  <div className="text-center p-1.5 rounded bg-bp-panel/50">
+                  <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className={`text-lg font-bold font-mono ${qScore.cls}`}>
                       {qScore.label}
                     </div>
@@ -847,12 +847,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       return (
                         <div>
                           <div className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
-                            <Target className="w-3 h-3 text-yellow-400" />
+                            <Target className="w-3 h-3 text-bp-yellow" />
                             目标变量候选 ({targetCandidates.size})
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {Array.from(targetCandidates).map((col) => (
-                              <span key={col} className="text-[10px] font-mono bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 px-1.5 py-0.5 rounded">
+                              <span key={col} className="text-[10px] font-mono bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20 px-1.5 py-0.5 rounded-bp">
                                 {col}
                               </span>
                             ))}
@@ -871,12 +871,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       return (
                         <div>
                           <div className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
-                            <BarChart3 className="w-3 h-3 text-blue-400" />
+                            <BarChart3 className="w-3 h-3 text-bp-cyan" />
                             数值字段 ({numCols.length})
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {numCols.map((col) => (
-                              <span key={col} className="text-[10px] bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded">
+                              <span key={col} className="text-[10px] bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
                                 {col}
                               </span>
                             ))}
@@ -891,7 +891,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                         <div className="text-xs text-bp-muted mb-1.5">字段类型</div>
                         <div className="flex flex-wrap gap-1">
                           {Object.entries(ds.dtypes).map(([col, dt]) => (
-                            <span key={col} className="text-[10px] bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded">
+                            <span key={col} className="text-[10px] bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
                               {col}: {dt}
                             </span>
                           ))}
@@ -976,7 +976,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     onClick={() => handleToggleHypothesis(ds.id)}>
                     {ds.useForHypothesis ? '排除' : '用于假设'}
                   </Button>
-                  <Button variant="secondary" size="sm" icon={<Trash2 className="w-3.5 h-3.5 text-red-400" />}
+                  <Button variant="secondary" size="sm" icon={<Trash2 className="w-3.5 h-3.5 text-danger-400" />}
                     onClick={() => handleDelete(ds.id)}>
                     删除
                   </Button>

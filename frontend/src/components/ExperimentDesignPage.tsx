@@ -380,7 +380,7 @@ export function ExperimentDesignPage({
                   {experiment.steps.map((s, idx) => (
                     <div key={s.step + '-' + idx} className="flex gap-3">
                       <div className="flex flex-col items-center shrink-0 w-8">
-                        <div className="w-8 h-8 rounded-full bg-primary-500/20 border border-bp-cyan/30 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-bp-cyan-tint border border-bp-cyan/30 flex items-center justify-center">
                           <span className="text-xs font-bold text-bp-cyan">{s.step}</span>
                         </div>
                         {idx < experiment.steps.length - 1 && (

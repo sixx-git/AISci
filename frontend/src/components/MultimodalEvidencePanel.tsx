@@ -140,7 +140,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                     asset.parse_status === 'completed' ? 'bg-green-500/10 text-green-400'
                       : asset.parse_status === 'warning' ? 'bg-yellow-500/10 text-yellow-400'
-                        : 'bg-gray-500/10 text-bp-muted'
+                        : 'bg-bp-panel text-bp-muted'
                   }`}>
                     {asset.parse_status}
                   </span>
