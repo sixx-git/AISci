@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, Loader2, CheckCircle2, Lock } from 'lucide-react';
+import { SlidersHorizontal, CheckCircle2, Lock } from 'lucide-react';
 import { Card } from '@/components/Card';
+import { LoadingState } from '@/components/workspace/LoadingState';
 import { PromptStageEditor } from '@/components/PromptStageEditor';
 import { PromptPresetBar } from '@/components/PromptPresetBar';
 import { PIPELINE_PROMPT_STAGES } from '@/config/promptStages';
@@ -80,16 +81,14 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
             {PIPELINE_PROMPT_STAGES.length} 个 Pipeline 阶段 · 其中 7 个可选范式预设
           </span>
           {loadingList ? (
-            <span className="flex items-center gap-1 text-bp-muted">
-              <Loader2 className="w-3 h-3 animate-spin" /> 检查覆盖状态…
-            </span>
+            <span className="text-bp-muted">检查覆盖状态…</span>
           ) : (
             <span>
-              已自定义 <span className="text-amber-300">{overrideCount}</span> / {PIPELINE_PROMPT_STAGES.length}
+              已自定义 <span className="text-bp-yellow">{overrideCount}</span> / {PIPELINE_PROMPT_STAGES.length}
             </span>
           )}
           {isFederated && (
-            <span className="text-violet-300">联邦项目：已显示 Pack D 联邦特色模板</span>
+            <span className="text-bp-purple">联邦项目：已显示 Pack D 联邦特色模板</span>
           )}
         </div>
       </Card>
@@ -107,7 +106,7 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
             <div className="px-3 py-2 border-b border-bp-border text-xs font-medium text-bp-muted">
               Pipeline 阶段
             </div>
-            <ul className="divide-y divide-dark-700/80 max-h-[calc(100vh-280px)] overflow-y-auto">
+            <ul className="divide-y divide-bp-border max-h-[calc(100vh-280px)] overflow-y-auto">
               {PIPELINE_PROMPT_STAGES.map((item, idx) => {
                 const active = selectedStage === item.key;
                 const hasOverride = overrideMap[item.key];
@@ -138,7 +137,7 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
                         </div>
                         {hasOverride && (
                           <span title="已覆盖">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-bp-yellow shrink-0 mt-0.5" />
                           </span>
                         )}
                       </div>
@@ -152,6 +151,10 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
 
         <div className="lg:col-span-8">
           <Card className="h-full min-h-[480px] flex flex-col">
+            {loadingList ? (
+              <LoadingState message="加载 Prompt 阶段列表…" />
+            ) : (
+              <>
             {selectedMeta?.presetLocked ? (
               <div className="py-8 text-center space-y-2">
                 <Lock className="w-8 h-8 text-bp-muted mx-auto" />
@@ -169,6 +172,8 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
               stageLabel={selectedMeta?.label}
               onSaved={handleSaved}
             />
+              </>
+            )}
           </Card>
         </div>
       </div>

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import promptService, { type PromptInfo } from '@/services/promptService';
 
 interface PromptStageEditorProps {
   projectId: string;
   stage: string;
   stageLabel?: string;
-  /** 父组件保存成功后回调，用于刷新覆盖状态列表 */
   onSaved?: (info: PromptInfo) => void;
 }
 
@@ -34,6 +35,8 @@ export function PromptStageEditor({
         setInfo(res.data);
         setDraft(res.data.effective_template);
         setDirty(false);
+      } else {
+        setError(res.message || '加载 Prompt 失败');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
@@ -56,6 +59,8 @@ export function PromptStageEditor({
         setDraft(res.data.effective_template);
         setDirty(false);
         onSaved?.(res.data);
+      } else {
+        setError(res.message || '保存失败');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败');
@@ -74,6 +79,8 @@ export function PromptStageEditor({
         setDraft(res.data.effective_template);
         setDirty(false);
         onSaved?.(res.data);
+      } else {
+        setError(res.message || '恢复失败');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '恢复失败');
@@ -94,8 +101,8 @@ export function PromptStageEditor({
         <span
           className={
             info?.has_override
-              ? 'text-[11px] px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300'
-              : 'text-[11px] px-2 py-0.5 rounded border border-bp-border bg-bp-panel/50 text-bp-muted'
+              ? 'text-[11px] px-2 py-0.5 rounded-bp border border-bp-yellow/30 bg-bp-yellow/10 text-bp-yellow'
+              : 'text-[11px] px-2 py-0.5 rounded-bp border border-bp-border bg-bp-panel/50 text-bp-muted'
           }
         >
           {info?.has_override ? '项目级覆盖' : '系统默认'}
@@ -103,14 +110,16 @@ export function PromptStageEditor({
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-bp-muted text-sm py-12 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin" /> 加载 Prompt…
-        </div>
+        <LoadingState message="加载 Prompt…" compact />
+      ) : error && !draft ? (
+        <ErrorState message={error} onRetry={load} compact />
       ) : (
         <>
-          {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+          {error && (
+            <p className="text-xs text-danger-400 mb-2">{error}</p>
+          )}
           <textarea
-            className="flex-1 min-h-[420px] w-full rounded-lg bg-[#0d1117] border border-bp-border text-xs text-bp-text font-mono p-3 focus:outline-none focus:border-emerald-500 resize-y"
+            className="flex-1 min-h-[420px] w-full rounded-bp bg-bp-base border border-bp-border text-xs text-bp-text font-mono p-3 focus:outline-none focus:border-bp-cyan resize-y input-field"
             value={draft}
             onChange={(e) => {
               setDraft(e.target.value);

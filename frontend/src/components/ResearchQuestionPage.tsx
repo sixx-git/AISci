@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { LoadingState } from '@/components/workspace/LoadingState';
+import { ErrorState } from '@/components/workspace/ErrorState';
 import { projectService } from '@/services/projectService';
 import { researchQuestionKey } from '@/lib/storageKeys';
 
@@ -309,11 +311,25 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
   const navigate = useNavigate();
   const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: 'idle' });
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      setPageLoading(false);
+      setPageError('未提供项目 ID');
+      return;
+    }
+
+    setPageLoading(true);
+    setPageError(null);
+
     projectService.getProject(projectId).then((res) => {
-      if (res.code !== 200 || !res.data) return;
+      if (res.code !== 200 || !res.data) {
+        setPageError(res.message || '加载项目信息失败');
+        return;
+      }
       const p = res.data;
       const hints = p.config?.data_spec_hints || {};
       setForm((prev) => ({
@@ -352,8 +368,10 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
               ? 'true'
               : prev.autoLiteratureDiscovery,
       }));
-    }).catch(() => { /* ignore */ });
-  }, [projectId]);
+    }).catch((e) => {
+      setPageError(e instanceof Error ? e.message : '加载项目信息失败');
+    }).finally(() => setPageLoading(false));
+  }, [projectId, reloadTick]);
 
   const updateField = useCallback(
     (key: keyof ResearchQuestionForm, value: string) => {
@@ -438,27 +456,27 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
       idle: null,
       saving: {
         icon: <Loader2 className={`${iconClass} animate-spin`} />,
-        bg: 'bg-blue-500/10 border-blue-500/30',
+        bg: 'bg-bp-cyan-tint border-bp-cyan/30',
         text: '保存中...',
-        textColor: 'text-blue-300',
+        textColor: 'text-bp-cyan',
       },
       success: {
         icon: <CheckCircle className={iconClass} />,
-        bg: 'bg-green-500/10 border-green-500/30',
+        bg: 'bg-bp-green/10 border-bp-green/30',
         text: '研究问题已保存',
-        textColor: 'text-green-300',
+        textColor: 'text-bp-green',
       },
       error: {
         icon: <XCircle className={iconClass} />,
-        bg: 'bg-red-500/10 border-red-500/30',
+        bg: 'bg-danger-500/10 border-danger-500/30',
         text: `保存失败: ${(saveStatus as { type: 'error'; message: string }).message}`,
-        textColor: 'text-red-300',
+        textColor: 'text-danger-300',
       },
       localSaved: {
         icon: <AlertTriangle className={iconClass} />,
-        bg: 'bg-yellow-500/10 border-yellow-500/30',
+        bg: 'bg-bp-yellow/10 border-bp-yellow/30',
         text: (saveStatus as { type: 'localSaved'; message: string }).message,
-        textColor: 'text-yellow-300',
+        textColor: 'text-bp-yellow',
       },
     };
 
@@ -473,15 +491,34 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
     );
   };
 
+  if (pageLoading) {
+    return (
+      <Card>
+        <LoadingState message="正在加载研究问题…" />
+      </Card>
+    );
+  }
+
+  if (pageError) {
+    return (
+      <Card>
+        <ErrorState
+          message={pageError}
+          onRetry={() => setReloadTick((t) => t + 1)}
+        />
+      </Card>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* ========== 左侧：表单 ========== */}
       <div className="lg:col-span-2 space-y-5">
         <Card title="研究问题定义" subtitle="填写以下信息，AI 将基于这些内容展开研究">
           {projectMode === 'federated_learning' && (
-            <div className="mb-4 p-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5">
-              <p className="text-xs text-cyan-300 mb-2">
-                当前为<strong className="text-cyan-200">联邦学习科研模式</strong>，提供横向联邦与<strong className="text-violet-300">垂直联邦（VFL）</strong>模板。
+            <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint">
+              <p className="text-xs text-bp-cyan mb-2">
+                当前为<strong className="text-bp-text">联邦学习科研模式</strong>，提供横向联邦与<strong className="text-bp-purple">垂直联邦（VFL）</strong>模板。
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -518,7 +555,7 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
           </div>
 
           <div className="mt-6 pt-4 border-t border-bp-border space-y-4">
-            <h4 className="text-sm font-semibold text-indigo-200 flex items-center gap-1.5">
+            <h4 className="text-sm font-semibold text-bp-cyan flex items-center gap-1.5">
               <Database className="w-4 h-4" />
               结构化数据需求（DataSpec）
             </h4>

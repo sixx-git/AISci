@@ -248,7 +248,7 @@ KG Top Bar（构建/增量重建/缩放/标签/导出）、Graph Canvas、Relati
 |------|-------------|
 | 首页 / 文献 / 报告 | `[AISci]` + Tab 导航 + `API 管理 · qwen-max ▾` |
 | 工作台 02–13 | 见 §5 |
-| 设置 | EmptyState + API 说明 |
+| 设置 | LLM 配置 + 环境变量说明 | `pages/Settings.tsx` |
 
 现网：`Navbar.tsx` + `ApiManagementPanel`
 
@@ -291,13 +291,24 @@ KG Top Bar（构建/增量重建/缩放/标签/导出）、Graph Canvas、Relati
 | P0 | Tab 文案、Pipeline 8 阶段、核心 5 屏 | ✅ |
 | P1 | MetaBar、Navbar 双按钮、图谱/日志/假设/数据集主视图 | ✅ |
 | P2 | 数据集 5 Tab、工作流 Detail 收拢、报告中心、UI States | ✅ |
-| 精修 | Frame 960px、首页 Footer/最近运行/6 卡片 | ✅ |
+| Phase C | 设置页、UI 三态推广、假设三栏、验收清单 | 🟡 |
+
+### Phase C 进度（2026-06）
+
+| 项 | 状态 |
+|----|------|
+| `/settings` LLM 配置页 | ✅ |
+| `LoadingState` / `ErrorState` / `EmptyState` 主要 Tab | ✅ |
+| 候选假设三栏（`Cf9pk`） | ✅ |
+| 知识图谱 Blueprint 画布 | ✅ |
+| 验收清单 | ✅ `designs/aisci-ui-acceptance.md` |
+| Pencil PNG 批量导出 | 🟡 MCP 路径受限，见验收清单 §1 |
 
 ### 后续可选
 
-- 按本规范反推前端样式变量（Tailwind / CSS variables）
-- 各 Tab 内嵌 Loading/Error 态（现仅 `18` 集中展示）
-- 导出 PNG 资产供评审
+- Pencil `export_nodes` 全量 PNG 至 `designs/exports/`
+- 图谱节点色与 Neo4j 科研色板微调
+- 各 Tab 像素级逐块对照（MetaBar 高度、Tab 间距）
 
 ---
 
