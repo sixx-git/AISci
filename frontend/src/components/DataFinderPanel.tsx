@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   Search, FileSpreadsheet, Link2, Image, GitMerge, Download,
   Loader2, AlertCircle, Database, CheckCircle2, Map, Workflow, RefreshCw,
@@ -247,9 +247,9 @@ export function DataFinderPanel({
                 >
                   <div className="font-medium">{labelMap[step] || step}</div>
                   {skipped ? (
-                    <span className="text-[10px] text-bp-muted">已跳过</span>
+                    <span className="text-xs text-bp-muted">已跳过</span>
                   ) : (
-                    <span className="text-[10px] text-bp-muted">
+                    <span className="text-xs text-bp-muted">
                       {detail?.tables != null && `表 ${detail.tables}`}
                       {detail?.rows != null && ` · 行 ${detail.rows}`}
                       {detail?.imported != null && ` · 导入 ${detail.imported}`}
@@ -265,7 +265,7 @@ export function DataFinderPanel({
             })}
           </div>
           {result.data_acquisition.stats && (
-            <p className="text-[10px] text-bp-muted mt-2">
+            <p className="text-xs text-bp-muted mt-2">
               外部候选 {result.data_acquisition.stats.external_candidates ?? 0} ·
               表格 {result.data_acquisition.stats.tables ?? 0} ·
               合并行 {result.data_acquisition.stats.merged_rows ?? '—'}
@@ -292,13 +292,13 @@ export function DataFinderPanel({
             )}
           </p>
           {(result.data_spec.entities_of_interest?.length ?? 0) > 0 && (
-            <p className="text-[10px] text-bp-muted mb-1">
+            <p className="text-xs text-bp-muted mb-1">
               实体字段: {result.data_spec.entities_of_interest!.join(', ')}
             </p>
           )}
           <div className="flex flex-wrap gap-1">
             {(result.data_spec.target_variables || result.data_requirements?.expected_metrics || []).map((m) => (
-              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
+              <span key={m} className="text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
             ))}
           </div>
         </Card>
@@ -310,7 +310,7 @@ export function DataFinderPanel({
           <p className="text-xs text-bp-muted mb-2">{result.data_requirements.data_need}</p>
           <div className="flex flex-wrap gap-1">
             {(result.data_requirements.expected_metrics || []).map((m) => (
-              <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
+              <span key={m} className="text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">{m}</span>
             ))}
           </div>
         </Card>
@@ -319,14 +319,14 @@ export function DataFinderPanel({
       {result?.text_facts && result.text_facts.length > 0 && (
         <Card className="p-4 border-bp-purple/20 bg-bp-purple/5">
           <h4 className="text-sm font-semibold text-bp-purple mb-2">正文数值事实 L1 ({result.text_facts.length})</h4>
-          <p className="text-[10px] text-bp-muted mb-2">来自 Methods/Results，供假设与实验设计引用（不进 merge CSV）</p>
+          <p className="text-xs text-bp-muted mb-2">来自 Methods/Results，供假设与实验设计引用（不进 merge CSV）</p>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {result.text_facts.slice(0, 6).map((fact) => (
               <div key={String(fact.fact_id)} className="text-xs text-bp-muted p-2 rounded border border-bp-border">
-                <span className="text-bp-purple/80 text-[10px]">{String(fact.section)}</span>
+                <span className="text-bp-purple/80 text-xs">{String(fact.section)}</span>
                 <p className="line-clamp-2 mt-0.5">{String(fact.sentence)}</p>
                 {(fact.matched_targets as string[] | undefined)?.length ? (
-                  <p className="text-[10px] text-bp-muted mt-1">
+                  <p className="text-xs text-bp-muted mt-1">
                     命中: {(fact.matched_targets as string[]).join(', ')}
                   </p>
                 ) : null}
@@ -478,7 +478,7 @@ export function DataFinderPanel({
               {result.coverage_report.data_spec_coverage!.checklist!.map((item) => (
                 <span
                   key={item.field || item.label}
-                  className={`text-[10px] px-2 py-0.5 rounded border ${
+                  className={`text-xs px-2 py-0.5 rounded border ${
                     item.hit
                       ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
                       : 'border-bp-border bg-bp-base text-bp-muted'
@@ -493,7 +493,7 @@ export function DataFinderPanel({
             {(result.coverage_report.domain_checklist || []).map((item) => (
               <span
                 key={item.id}
-                className={`text-[10px] px-2 py-0.5 rounded border ${
+                className={`text-xs px-2 py-0.5 rounded border ${
                   item.hit
                     ? 'border-bp-green/30 bg-bp-green/10 text-bp-green'
                     : 'border-bp-border bg-bp-base text-bp-muted'
@@ -504,24 +504,24 @@ export function DataFinderPanel({
             ))}
           </div>
           {(result.coverage_report.gaps || []).length > 0 && (
-            <ul className="text-[10px] text-bp-yellow/90 list-disc list-inside">
+            <ul className="text-xs text-bp-yellow/90 list-disc list-inside">
               {result.coverage_report.gaps!.slice(0, 4).map((g) => (
                 <li key={g}>{g}</li>
               ))}
             </ul>
           )}
           {(result.coverage_report.external_import_succeeded ?? 0) > 0 && (
-            <p className="text-[10px] text-bp-green mt-2">
+            <p className="text-xs text-bp-green mt-2">
               已自动入库外部数据集 {result.coverage_report.external_import_succeeded} 个
             </p>
           )}
           {(result.coverage_report.gap_enrichment_recommended ?? false) && (
-            <p className="text-[10px] text-bp-yellow/90 mt-2">
+            <p className="text-xs text-bp-yellow/90 mt-2">
               建议执行 Gap 补搜（完备性 &lt; {result.coverage_report.threshold ?? 70}% 或 DataSpec &lt; {result.coverage_report.data_spec_threshold ?? 60}%）
             </p>
           )}
           {result.gap_enrichment && !result.gap_enrichment.skipped && (
-            <p className="text-[10px] text-bp-green mt-2">
+            <p className="text-xs text-bp-green mt-2">
               最近 Gap 补搜：{result.gap_enrichment.score_before ?? '—'}→{result.gap_enrichment.score_after ?? '—'} 分
               {result.gap_enrichment.data_spec_score_after != null && (
                 <span> · DataSpec {result.gap_enrichment.data_spec_score_after}/100</span>
@@ -529,7 +529,7 @@ export function DataFinderPanel({
             </p>
           )}
           {result.entity_alignment && !result.entity_alignment.skipped && result.entity_alignment.match_rate != null && (
-            <p className="text-[10px] text-indigo-400/90 mt-2">
+            <p className="text-xs text-indigo-400/90 mt-2">
               Entity 跨表匹配率: {(Number(result.entity_alignment.match_rate) * 100).toFixed(0)}%
             </p>
           )}
@@ -551,7 +551,7 @@ export function DataFinderPanel({
                 )}
               </p>
               {result.merged.cleaning_report && (
-                <p className="text-[10px] text-bp-muted mt-1">
+                <p className="text-xs text-bp-muted mt-1">
                   清洗: 行 {String(result.merged.cleaning_report.rows_before)}→
                   {String(result.merged.cleaning_report.rows_after)} · 缺失{' '}
                   {String(result.merged.cleaning_report.missing_cells_before)}→

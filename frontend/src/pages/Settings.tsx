@@ -1,4 +1,4 @@
-import { KeyRound, Terminal, Info } from 'lucide-react';
+﻿import { KeyRound, Terminal, Info } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
 import { LlmConfigForm } from '@/components/settings/LlmConfigForm';
@@ -40,7 +40,7 @@ export function Settings() {
                   className="p-3 rounded-bp border border-bp-border bg-bp-panel/30"
                 >
                   <code className="text-xs font-mono text-bp-cyan">{item.key}</code>
-                  <p className="text-[11px] text-bp-muted mt-1 leading-relaxed">{item.desc}</p>
+                  <p className="text-xs text-bp-muted mt-1 leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>

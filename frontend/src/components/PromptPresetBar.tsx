@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutTemplate, Loader2, Layers, Eye } from 'lucide-react';
 import { Button } from '@/components/Button';
 import promptService, { type PromptPresetCatalog, type PromptPresetPack } from '@/services/promptService';
@@ -141,7 +141,7 @@ export function PromptPresetBar({
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <label className="block">
-              <span className="text-[10px] text-bp-muted mb-1 block">范式包</span>
+              <span className="text-xs text-bp-muted mb-1 block">范式包</span>
               <select
                 value={packId}
                 onChange={(e) => setPackId(e.target.value)}
@@ -155,7 +155,7 @@ export function PromptPresetBar({
               </select>
             </label>
             <label className="block sm:col-span-2">
-              <span className="text-[10px] text-bp-muted mb-1 block">当前阶段变体</span>
+              <span className="text-xs text-bp-muted mb-1 block">当前阶段变体</span>
               <select
                 value={variantId}
                 onChange={(e) => setVariantId(e.target.value)}
@@ -184,7 +184,7 @@ export function PromptPresetBar({
           </div>
 
           {selectedPack?.reference && (
-            <p className="text-[10px] text-bp-muted">
+            <p className="text-xs text-bp-muted">
               参考：{selectedPack.reference}
               {selectedPack.recommended_pipeline_mode && (
                 <span> · 推荐运行模式 {selectedPack.recommended_pipeline_mode}</span>
@@ -192,7 +192,7 @@ export function PromptPresetBar({
             </p>
           )}
 
-          {hint && <p className="text-[11px] text-bp-muted leading-relaxed">{hint}</p>}
+          {hint && <p className="text-xs text-bp-muted leading-relaxed">{hint}</p>}
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -215,7 +215,7 @@ export function PromptPresetBar({
           </div>
 
           {preview && (
-            <pre className="text-[10px] text-bp-muted font-mono bg-dark-950 border border-bp-border rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">
+            <pre className="text-xs text-bp-muted font-mono bg-dark-950 border border-bp-border rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">
               {preview.slice(0, 2000)}{preview.length > 2000 ? '\n…' : ''}
             </pre>
           )}

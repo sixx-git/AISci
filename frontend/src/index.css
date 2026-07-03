@@ -13,8 +13,8 @@
     --bp-bg: #0a1628;
     --bp-panel: #0f172a;
     --bp-surface: #1e293b;
-    --bp-text: #e2e8f0;
-    --bp-muted: #64748b;
+    --bp-text: #f1f5f9;
+    --bp-muted: #94a3b8;
     --bp-cyan: #38bdf8;
     --bp-cyan-dim: #38bdf866;
     --bp-green: #22c55e;
@@ -30,9 +30,15 @@
   body {
     background-color: var(--bp-bg);
     color: var(--bp-text);
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  code, pre, kbd, samp, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   ::-webkit-scrollbar {
@@ -67,8 +73,9 @@
   }
 
   .card-hover:hover {
-    border-color: var(--bp-cyan);
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.08);
+    box-shadow:
+      inset 2px 0 0 var(--bp-cyan),
+      0 0 20px rgba(56, 189, 248, 0.08);
     background-color: color-mix(in srgb, var(--bp-surface) 90%, transparent);
   }
 
@@ -79,7 +86,6 @@
            disabled:opacity-50 disabled:cursor-not-allowed
            active:scale-[0.98];
     border-radius: 2px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   .btn-primary {
@@ -103,7 +109,7 @@
 
   .btn-secondary:hover {
     background-color: var(--bp-surface);
-    border-color: color-mix(in srgb, var(--bp-cyan) 80%, transparent);
+    box-shadow: inset 0 -2px 0 var(--bp-cyan);
   }
 
   .btn-danger {
@@ -131,9 +137,8 @@
     border: 1px solid var(--bp-border);
     border-radius: 2px;
     color: var(--bp-text);
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
   }
 
   .input-field::placeholder {
@@ -150,8 +155,7 @@
   .badge {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 font-semibold;
     border-radius: 2px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.5;
   }
 
@@ -162,7 +166,13 @@
     border: 1px solid var(--bp-border);
   }
 
-  .badge-running,
+  .badge-running {
+    @apply badge;
+    background-color: color-mix(in srgb, var(--bp-cyan) 15%, transparent);
+    color: var(--bp-cyan);
+    border: 1px solid color-mix(in srgb, var(--bp-cyan) 30%, transparent);
+  }
+
   .badge-completed {
     @apply badge;
     background-color: color-mix(in srgb, var(--bp-green) 15%, transparent);
@@ -184,8 +194,7 @@
   /* ---- 表格 ---- */
   .table-header {
     @apply font-medium uppercase tracking-wider;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.5;
     color: var(--bp-muted);
   }
@@ -234,7 +243,7 @@
 
   .bp-tab:hover {
     color: var(--bp-text);
-    border-color: color-mix(in srgb, var(--bp-border) 80%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--bp-cyan) 45%, transparent);
   }
 
   .bp-tab-active {
@@ -271,6 +280,39 @@
 
   .bp-link-back:hover {
     color: var(--text-primary);
+  }
+
+  /* ---- Accent bar hover（方案 B：指示条替代四周边框变色） ---- */
+  .hover-accent-left {
+    @apply transition-all duration-200;
+  }
+
+  .hover-accent-left:hover {
+    box-shadow: inset 2px 0 0 var(--bp-cyan);
+  }
+
+  .hover-accent-left-muted:hover {
+    box-shadow: inset 2px 0 0 var(--bp-muted);
+  }
+
+  .hover-accent-left-green:hover {
+    box-shadow: inset 2px 0 0 var(--bp-green);
+  }
+
+  .hover-accent-left-yellow:hover {
+    box-shadow: inset 2px 0 0 var(--bp-yellow);
+  }
+
+  .hover-accent-left-danger:hover {
+    box-shadow: inset 2px 0 0 #f87171;
+  }
+
+  .hover-accent-bottom {
+    @apply transition-all duration-200;
+  }
+
+  .hover-accent-bottom:hover {
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--bp-cyan) 45%, transparent);
   }
 }
 

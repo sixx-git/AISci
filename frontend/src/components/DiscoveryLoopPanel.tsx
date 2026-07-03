@@ -1,4 +1,4 @@
-import { RefreshCw, BookOpen, TrendingUp, CheckCircle2, AlertCircle, FlaskConical, Shield } from 'lucide-react';
+﻿import { RefreshCw, BookOpen, TrendingUp, CheckCircle2, AlertCircle, FlaskConical, Shield } from 'lucide-react';
 import type { DiscoveryLoopData, TeachingAutoRefinementData, QualityAcceptance } from '@/types';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
@@ -28,7 +28,7 @@ export function QualityAcceptanceSection({ qualityAcceptance }: { qualityAccepta
         闭环质量验收
       </h2>
       <p className="text-xs text-bp-muted mb-2">{qualityAcceptance.summary}</p>
-      <div className="flex flex-wrap gap-3 text-[11px]">
+      <div className="flex flex-wrap gap-3 text-xs">
         <Stat label="Accept" value={qualityAcceptance.accepted ? '是' : '否'} />
         <Stat
           label="CQS 趋势"
@@ -125,7 +125,7 @@ export function DiscoveryHistorySection({ discoveryLoop }: { discoveryLoop: Disc
               </div>
 
               {fedAccept && !fedAccept.accepted && (fedAccept.blockers || []).length > 0 && (
-                <ul className="text-[10px] text-bp-yellow/90 list-disc list-inside mb-1">
+                <ul className="text-xs text-bp-yellow/90 list-disc list-inside mb-1">
                   {(fedAccept.blockers || []).slice(0, 3).map((b) => (
                     <li key={b}>{b}</li>
                   ))}
@@ -133,7 +133,7 @@ export function DiscoveryHistorySection({ discoveryLoop }: { discoveryLoop: Disc
               )}
 
               {fedCampaign && (
-                <p className="text-[10px] text-bp-purple/90 flex items-center gap-1 mb-1">
+                <p className="text-xs text-bp-purple/90 flex items-center gap-1 mb-1">
                   <FlaskConical className="w-3 h-3" />
                   Campaign R{fedCampaign.round ?? '—'}
                   {fedCampaign.reran ? ' · 已自动 R2' : ''}
@@ -145,7 +145,7 @@ export function DiscoveryHistorySection({ discoveryLoop }: { discoveryLoop: Disc
               )}
 
               {litRefresh && (
-                <p className="text-[10px] text-bp-muted flex items-center gap-1 mb-1">
+                <p className="text-xs text-bp-muted flex items-center gap-1 mb-1">
                   <BookOpen className="w-3 h-3" />
                   文献刷新 new_facts={String(litRefresh.new_facts ?? '—')}
                   {litRefresh.data_finder_rerun ? ' · Data Finder 已重跑' : ''}
@@ -153,28 +153,28 @@ export function DiscoveryHistorySection({ discoveryLoop }: { discoveryLoop: Disc
               )}
 
               {entry.driven_by && (
-                <p className="text-[10px] text-bp-cyan/90 mb-1">
+                <p className="text-xs text-bp-cyan/90 mb-1">
                   驱动: {entry.driven_by}
                 </p>
               )}
               {(entry.data_changes || []).length > 0 && (
-                <p className="text-[10px] text-bp-green/90 mb-1">
+                <p className="text-xs text-bp-green/90 mb-1">
                   数据变更: {(entry.data_changes || []).join(' · ')}
                 </p>
               )}
               {(entry.plan_changes || []).length > 0 && (
-                <p className="text-[10px] text-bp-cyan/90 mb-1">
+                <p className="text-xs text-bp-cyan/90 mb-1">
                   计划变更: {(entry.plan_changes || []).join(' · ')}
                 </p>
               )}
               {entry.status === 'stagnant' && entry.stagnation && (
-                <p className="text-[10px] text-bp-yellow mb-1">
+                <p className="text-xs text-bp-yellow mb-1">
                   CQS 停滞: {String((entry.stagnation as { reason?: string }).reason || '建议人工介入')}
                 </p>
               )}
 
               {(entry.refinement_notes || []).slice(0, 2).map((note) => (
-                <p key={note} className="text-[10px] text-bp-muted line-clamp-1">• {note}</p>
+                <p key={note} className="text-xs text-bp-muted line-clamp-1">• {note}</p>
               ))}
             </div>
           );

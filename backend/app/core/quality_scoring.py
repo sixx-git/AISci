@@ -14,6 +14,8 @@ STAGE_SCORE_HINTS: Dict[str, str] = {
     "federated_pilot": "mode_weighted",
     "pilot_feedback": "0_10",
     "plot_critique": "0_10",
+    "data_gap_loop": "0_100",
+    "evidence_reasoning": "0_10",
     "teaching_refine": "fixed",
     "federated_r": "fixed",
     "hitl_gate": "fixed",
@@ -63,6 +65,12 @@ def normalize_raw_to_cqs(raw: Optional[float], stage: str = "", context: Optiona
 
     if stage_key.startswith("hitl_gate"):
         return 60.0
+
+    if stage_key == "data_gap_loop":
+        return _clamp(v if v > 10 else v * 10)
+
+    if stage_key == "evidence_reasoning":
+        return _clamp(v * 10 if v <= 10 else v)
 
     # 默认 0–10 量纲（ensemble、ideation、discovery）
     if v <= 10:

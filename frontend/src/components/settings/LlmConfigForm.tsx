@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Loader2, AlertCircle, Eye, EyeOff, Settings2,
 } from 'lucide-react';
@@ -203,13 +203,13 @@ export function LlmConfigForm({
           )}>
             <p>{envKeyHint}</p>
             {config?.env_api_key_configured && config.api_key_source === 'env' && config.api_key_masked && (
-              <p className="mt-1 font-mono text-[11px] text-bp-green/80">{config.api_key_masked}</p>
+              <p className="mt-1 font-mono text-xs text-bp-green/80">{config.api_key_masked}</p>
             )}
           </div>
         ) : (
           <div className="mt-2 space-y-1.5">
             {config?.custom_api_key_configured && config.api_key_source === 'custom' && !apiKeyInput && (
-              <p className="text-[11px] text-bp-muted">
+              <p className="text-xs text-bp-muted">
                 当前密钥：<span className="font-mono text-bp-text">{config.api_key_masked}</span>
                 <span className="text-bp-muted/70"> · 留空则保持不变</span>
               </p>
@@ -235,7 +235,7 @@ export function LlmConfigForm({
         )}
 
         <div className={cn(
-          'mt-2 flex items-center gap-2 text-[11px] px-2 py-1 rounded-bp border',
+          'mt-2 flex items-center gap-2 text-xs px-2 py-1 rounded-bp border',
           keyConfigured
             ? 'border-bp-green/20 text-bp-green/90'
             : 'border-bp-yellow/20 text-bp-yellow/90',
@@ -311,6 +311,16 @@ export function LlmConfigForm({
             />
           </div>
         </div>
+      )}
+
+      {config && (
+        <p className="text-xs text-bp-muted rounded-bp border border-bp-border/60 bg-bp-base/40 px-2.5 py-2">
+          当前生效模型：<span className="text-bp-cyan font-mono">{config.model}</span>
+          {config.model_override && config.model_override !== config.env_model && (
+            <span>（已覆盖 .env 默认 {config.env_model}）</span>
+          )}
+          <span className="block mt-1">切换后请点击「保存配置」；将持久化到 backend/data/llm_runtime.json，重启后端仍生效。</span>
+        </p>
       )}
 
       {error && (

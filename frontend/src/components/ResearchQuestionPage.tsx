@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+﻿import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Save, Play, ArrowRight, CheckCircle, XCircle, AlertTriangle,
@@ -239,7 +239,7 @@ function InputField({ field, value, onChange }: InputFieldProps) {
             rows={field.rows}
             className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2.5 text-sm text-bp-text placeholder:text-bp-muted focus:outline-none focus:border-bp-cyan focus:ring-1 focus:ring-bp-cyan/50 transition-all resize-none"
           />
-          <span className="absolute bottom-2 right-3 text-[11px] text-bp-muted">
+          <span className="absolute bottom-2 right-3 text-xs text-bp-muted">
             {charCount}
           </span>
         </div>
@@ -663,7 +663,7 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
                 />
                 文献不足时自动检索 arXiv / OpenAlex 并导入
               </label>
-              <p className="text-[10px] text-bp-muted mt-1 ml-6">
+              <p className="text-xs text-bp-muted mt-1 ml-6">
                 项目文献少于 3 篇时触发；关闭后仅使用已上传的 PDF 与 arXiv 文献。
               </p>
             </div>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { TrendingUp, GitBranch, FlaskConical, ShieldCheck, Sparkles, Image, BookOpen, RefreshCw, GitCommitHorizontal, Download } from 'lucide-react';
+﻿import { useState } from 'react';
+import { TrendingUp, GitBranch, FlaskConical, ShieldCheck, Sparkles, Image, BookOpen, RefreshCw, GitCommitHorizontal, Download, Database, Link2 } from 'lucide-react';
 import type { ClosedLoopEvent, ClosedLoopDecision, QualityTrendEntry } from '@/types';
 import { pipelineService } from '@/services/pipelineService';
 
@@ -23,6 +23,8 @@ const EVENT_LABELS: Record<string, string> = {
   quality_acceptance: '质量验收',
   federated_campaign: '联邦 Campaign Pilot',
   hitl_gate_pause: 'HITL Gate 暂停',
+  data_gap_loop: 'Gap 数据补搜',
+  evidence_reasoning_loop: '证据链迭代',
 };
 
 const EVENT_ICONS: Record<string, typeof GitBranch> = {
@@ -35,6 +37,8 @@ const EVENT_ICONS: Record<string, typeof GitBranch> = {
   discovery_literature_refresh: BookOpen,
   federated_campaign: FlaskConical,
   federated_campaign_refine: RefreshCw,
+  data_gap_loop: Database,
+  evidence_reasoning_loop: Link2,
 };
 
 function formatScore(score?: number): string {
@@ -48,6 +52,7 @@ const DECISION_LABELS: Record<string, string> = {
   discovery_refine: 'Discovery 迭代',
   stop_discovery: '停止迭代',
   skip_validation: '跳过验证',
+  gap_enrichment: 'Gap 数据补搜',
 };
 
 export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions = [], runId }: ClosedLoopTimelineProps) {
@@ -86,7 +91,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
             type="button"
             onClick={handleExportAudit}
             disabled={exporting}
-            className="flex items-center gap-1 text-[11px] text-bp-muted hover:text-bp-cyan disabled:opacity-50"
+            className="flex items-center gap-1 text-xs text-bp-muted hover:text-bp-cyan disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
             {exporting ? '导出中…' : '导出审计链'}
@@ -96,7 +101,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {qualityTrend.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-bp-muted mb-2">综合质量分 CQS（0–100，越高越好）</p>
+          <p className="text-xs text-bp-muted mb-2">综合质量分 CQS（0–100，越高越好）</p>
           <div className="flex flex-wrap items-end gap-2">
             {qualityTrend.map((entry, idx) => {
               const score = entry.cqs ?? entry.score ?? 0;
@@ -105,13 +110,13 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
               const rawHint = entry.raw_score != null ? ` raw=${entry.raw_score}` : '';
               return (
                 <div key={`${label}-${idx}`} className="flex flex-col items-center gap-1 min-w-[52px]">
-                  <span className="text-[10px] font-mono text-bp-cyan">{formatScore(score)}</span>
+                  <span className="text-xs font-mono text-bp-cyan">{formatScore(score)}</span>
                   <div
                     className="w-8 rounded-t bg-bp-cyan/40 border border-bp-cyan/30"
                     style={{ height: `${height}px` }}
                     title={`${label}: CQS ${formatScore(score)}${rawHint}`}
                   />
-                  <span className="text-[9px] text-bp-muted text-center leading-tight max-w-[64px] truncate">
+                  <span className="text-xs text-bp-muted text-center leading-tight max-w-[64px] truncate">
                     {label}
                   </span>
                 </div>
@@ -123,7 +128,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {decisions.length > 0 && (
         <div className="mb-4 space-y-2">
-          <p className="text-[11px] text-bp-muted flex items-center gap-1">
+          <p className="text-xs text-bp-muted flex items-center gap-1">
             <GitCommitHorizontal className="w-3 h-3" />
             闭环决策记录
           </p>
@@ -137,19 +142,19 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-bp-text">{d.trigger}</span>
                   {d.action && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-purple">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-purple">
                       {DECISION_LABELS[d.action] || d.action}
                     </span>
                   )}
                   {d.round != null && (
-                    <span className="text-[10px] text-bp-muted">R{d.round}</span>
+                    <span className="text-xs text-bp-muted">R{d.round}</span>
                   )}
                 </div>
                 {d.reason && (
-                  <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">{d.reason}</p>
+                  <p className="text-xs text-bp-muted mt-0.5 line-clamp-2">{d.reason}</p>
                 )}
                 {d.next_stage && (
-                  <p className="text-[10px] text-bp-muted mt-0.5">下一步: {d.next_stage}</p>
+                  <p className="text-xs text-bp-muted mt-0.5">下一步: {d.next_stage}</p>
                 )}
               </div>
             </div>
@@ -159,7 +164,7 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
 
       {events.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] text-bp-muted">闭环事件</p>
+          <p className="text-xs text-bp-muted">闭环事件</p>
           {events.slice(-6).reverse().map((evt, idx) => {
             const Icon = EVENT_ICONS[evt.type] || TrendingUp;
             const label = EVENT_LABELS[evt.type] || evt.type;
@@ -173,11 +178,11 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-bp-text">{label}</span>
                     {evt.at && (
-                      <span className="text-[10px] text-bp-muted">{String(evt.at).slice(0, 19)}</span>
+                      <span className="text-xs text-bp-muted">{String(evt.at).slice(0, 19)}</span>
                     )}
                     {evt.decision && (
                       <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        className={`text-xs px-1.5 py-0.5 rounded ${
                           evt.decision === 'Accept'
                             ? 'bg-bp-green/10 text-bp-green'
                             : 'bg-danger-500/10 text-danger-400'
@@ -187,32 +192,47 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
                       </span>
                     )}
                     {evt.overall != null && (
-                      <span className="text-[10px] font-mono text-bp-yellow">
+                      <span className="text-xs font-mono text-bp-yellow">
                         综合 {formatScore(Number(evt.overall))}
                       </span>
                     )}
                   </div>
                   {evt.summary && (
-                    <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">{String(evt.summary)}</p>
+                    <p className="text-xs text-bp-muted mt-0.5 line-clamp-2">{String(evt.summary)}</p>
                   )}
                   {evt.success != null && evt.type === 'sandbox_validation' && (
-                    <p className="text-[11px] text-bp-muted mt-0.5">
+                    <p className="text-xs text-bp-muted mt-0.5">
                       沙箱执行: {evt.success ? '成功' : '失败'}
                       {evt.experiment_id ? ` · ${evt.experiment_id}` : ''}
                     </p>
                   )}
                   {evt.type === 'quality_acceptance' && evt.summary && (
-                    <p className="text-[11px] text-bp-muted mt-0.5">{String(evt.summary)}</p>
+                    <p className="text-xs text-bp-muted mt-0.5">{String(evt.summary)}</p>
                   )}
                   {evt.type === 'teaching_auto_refinement' && Array.isArray(evt.reasons) && (
-                    <p className="text-[11px] text-bp-muted mt-0.5 line-clamp-2">
+                    <p className="text-xs text-bp-muted mt-0.5 line-clamp-2">
                       {(evt.reasons as string[]).join('；')}
                     </p>
                   )}
                   {evt.type === 'discovery_literature_refresh' && evt.new_facts != null && (
-                    <p className="text-[11px] text-bp-muted mt-0.5">
+                    <p className="text-xs text-bp-muted mt-0.5">
                       文献刷新 +{String(evt.new_facts)} 条 fact
                       {evt.search_query ? ` · ${String(evt.search_query).slice(0, 60)}` : ''}
+                    </p>
+                  )}
+                  {evt.type === 'data_gap_loop' && (
+                    <p className="text-xs text-bp-muted mt-0.5">
+                      {evt.summary ? String(evt.summary) : `执行 ${String(evt.executed_rounds ?? evt.rounds ?? '—')} 轮`}
+                      {evt.score_before != null && evt.score_after != null && (
+                        <span className="text-bp-cyan font-mono">
+                          {' '}· 覆盖率 {String(evt.score_before)}→{String(evt.score_after)}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {evt.type === 'evidence_reasoning_loop' && (
+                    <p className="text-xs text-bp-muted mt-0.5">
+                      {evt.summary ? String(evt.summary) : `修订 ${String(evt.revision_count ?? evt.rounds ?? '—')} 次`}
                     </p>
                   )}
                 </div>

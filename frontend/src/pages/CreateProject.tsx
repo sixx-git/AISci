@@ -109,7 +109,7 @@ export function CreateProject() {
                       'text-left p-4 rounded-bp border transition-all',
                       selected
                         ? 'border-bp-cyan bg-bp-cyan-tint ring-1 ring-bp-cyan/30'
-                        : 'border-bp-border bg-bp-panel/50 hover:border-bp-muted',
+                        : 'border-bp-border bg-bp-panel/50 hover:bg-bp-surface hover-accent-left',
                     )}
                   >
                     <div className="flex items-center gap-2 mb-2">

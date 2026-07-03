@@ -110,4 +110,41 @@ export const reportService = {
     });
     return data;
   },
+
+  /** GET /api/v1/reports/browse — 报告中心分页列表 */
+  async browse(params: {
+    page?: number;
+    page_size?: number;
+    project_mode?: string;
+    date_from?: string;
+    date_to?: string;
+    keyword?: string;
+  }): Promise<ApiResponse<ReportBrowsePage>> {
+    const { data } = await api.get<ApiResponse<ReportBrowsePage>>('/reports/browse', { params });
+    return data;
+  },
 };
+
+export interface ReportBrowseItem {
+  id: string;
+  project_id: string;
+  project_name: string;
+  project_mode: 'general' | 'federated_learning' | string;
+  research_question?: string | null;
+  title: string;
+  paper_title: string;
+  status: string;
+  version: number;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface ReportBrowsePage {
+  list: ReportBrowseItem[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
+}

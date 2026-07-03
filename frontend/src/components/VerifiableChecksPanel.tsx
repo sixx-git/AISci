@@ -1,4 +1,4 @@
-import { ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
+﻿import { ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
 import type { VerifiableCheck } from '@/types';
 
 interface VerifiableChecksPanelProps {
@@ -16,7 +16,7 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
         <ShieldCheck className="w-4 h-4 text-bp-green" />
         可验证 spec 对照
         {passed != null && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-bp ${passed ? 'bg-bp-green/15 text-bp-green' : 'bg-danger-500/15 text-danger-400'}`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded-bp ${passed ? 'bg-bp-green/15 text-bp-green' : 'bg-danger-500/15 text-danger-400'}`}>
             {passed ? '通过' : '未通过'}
           </span>
         )}
@@ -24,7 +24,7 @@ export function VerifiableChecksPanel({ checks, passed, spec }: VerifiableChecks
       {spec?.claim && <p className="text-xs text-bp-muted mb-2 line-clamp-2">{spec.claim}</p>}
       <ul className="space-y-1.5">
         {(checks || []).map((c) => (
-          <li key={c.check_id} className="flex items-start gap-2 text-[11px]">
+          <li key={c.check_id} className="flex items-start gap-2 text-xs">
             {c.passed ? (
               <CheckCircle2 className="w-3.5 h-3.5 text-bp-green shrink-0 mt-0.5" />
             ) : (

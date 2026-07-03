@@ -44,6 +44,16 @@ class TestBatch5LiteratureCorpus(unittest.TestCase):
         result = ensure_corpora_from_search("proj", "query", None, db=None)
         self.assertEqual(result.get("imported", 0), 0)
 
+    def test_coerce_authors_list(self):
+        from app.services.literature_ingestion_service import coerce_authors_text
+
+        self.assertEqual(
+            coerce_authors_text(["Alice", "Bob"]),
+            "Alice, Bob",
+        )
+        self.assertEqual(coerce_authors_text("Alice, Bob"), "Alice, Bob")
+        self.assertEqual(coerce_authors_text(None), "")
+
 
 class TestBatch5ExternalApi(unittest.TestCase):
     def test_zenodo_search_structure(self):

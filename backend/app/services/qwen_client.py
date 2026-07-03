@@ -245,7 +245,7 @@ class QwenClient:
     ):
         self.api_key = api_key or get_effective_api_key()
         self.base_url = base_url or get_effective_base_url()
-        self.model = model or get_effective_model()
+        self._pinned_model = model  # 测试注入；None 表示每次调用读取运行时配置
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -255,6 +255,13 @@ class QwenClient:
         self.client = self._create_openai_client()
 
         logger.info(f"QwenClient initialized with model: {self.model}")
+
+    @property
+    def model(self) -> str:
+        """每次调用使用当前生效模型（支持设置页切换后立即生效）。"""
+        if self._pinned_model:
+            return self._pinned_model
+        return get_effective_model()
 
     def _create_openai_client(self):
         try:

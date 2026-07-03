@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList, Settings2 } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ApiManagementPanel } from '@/components/ApiManagementPanel';
 
@@ -11,7 +11,7 @@ export function Navbar() {
     { path: '/', label: '首页', icon: Home },
     { path: '/documents', label: '文献', icon: BookOpen },
     { path: '/reports', label: '报告', icon: ClipboardList },
-    { path: '/settings', label: '设置', icon: Settings2 },
+    { path: '/skills', label: '技能', icon: Puzzle },
   ];
 
   return (
@@ -41,7 +41,7 @@ export function Navbar() {
                     'flex items-center gap-2 px-3 py-2 rounded-bp text-sm font-medium border',
                     isActive
                       ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30'
-                      : 'border-transparent text-bp-muted hover:text-bp-text hover:bg-bp-surface hover:border-bp-border',
+                      : 'border-transparent text-bp-muted hover:text-bp-text hover:bg-bp-surface hover-accent-bottom',
                   )}
                 >
                   <Icon className="w-4 h-4 shrink-0" />

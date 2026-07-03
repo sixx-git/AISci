@@ -27,12 +27,17 @@ class RerunFromStageRequest(BaseModel):
     run_id: str
     stage: str
     use_human_modified_output: bool = True
+    rerun_mode: str = Field(
+        default="single_stage",
+        description="single_stage=仅重跑本阶段; from_stage_onward=从本阶段起执行后续流程",
+    )
 
 
 class RerunFromStageResponse(BaseModel):
     run_id: str
     parent_run_id: str
     rerun_from_stage: str
+    rerun_mode: str = "single_stage"
     status: str
 
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -100,7 +100,7 @@ function FlExperimentPlanSidebar({ experiment }: { experiment: DetailedExperimen
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-bp-muted mt-3 leading-relaxed">
+      <p className="text-xs text-bp-muted mt-3 leading-relaxed">
         隐私机制建议：DP、Secure Aggregation、PSI（垂直联邦）— 详见 Pipeline 生成的 federated_plan
       </p>
     </Card>
@@ -297,7 +297,7 @@ export function ExperimentDesignPage({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-3 bg-bp-base/70 rounded-lg border border-bp-border">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/20 font-medium">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/20 font-medium">
                         Source
                       </span>
                       <span className="text-sm font-medium text-bp-text">{experiment.sourceDataset}</span>
@@ -306,7 +306,7 @@ export function ExperimentDesignPage({
                   </div>
                   <div className="p-3 bg-bp-base/70 rounded-lg border border-bp-border">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/20 font-medium">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/20 font-medium">
                         Target
                       </span>
                       <span className="text-sm font-medium text-bp-text">{experiment.targetDataset}</span>
@@ -339,7 +339,7 @@ export function ExperimentDesignPage({
                           <td className="py-2.5 pr-3 text-bp-text font-medium font-mono text-xs">{bl.name}</td>
                           <td className="py-2.5 pr-3 text-bp-muted text-xs">{bl.description}</td>
                           <td className="py-2.5">
-                            <span className={cn('text-[11px] px-1.5 py-0.5 rounded border', categoryColor[bl.category] || categoryColor.traditional)}>
+                            <span className={cn('text-xs px-1.5 py-0.5 rounded border', categoryColor[bl.category] || categoryColor.traditional)}>
                               {categoryLabel[bl.category] || categoryLabel.traditional}
                             </span>
                           </td>

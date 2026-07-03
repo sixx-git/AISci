@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
-import { Eye, ChevronDown, Filter } from 'lucide-react';
+﻿import { useState, useMemo, useCallback, useEffect } from 'react';
+import { ChevronDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RUN_LOG_STATUS_BADGE } from '@/lib/runLogStatus';
-import type { RunLog, RunLogStatus, RunLogStage } from '@/types';
+import { Button } from '@/components/Button';
+import type { RunLog, RunLogStatus } from '@/types';
 
 interface RunLogTableProps {
   logs: RunLog[];
@@ -11,38 +12,56 @@ interface RunLogTableProps {
   className?: string;
 }
 
+const PAGE_SIZE = 10;
+
 const statusBadge = RUN_LOG_STATUS_BADGE;
 
-const ALL_STAGES: RunLogStage[] = ['问题理解', '文献挖掘', '假设生成', '实验设计', '实验执行', '报告生成'];
 const ALL_STATUSES: RunLogStatus[] = ['success', 'running', 'failed', 'pending'];
+
+function formatRunId(log: RunLog): string {
+  const id = log.runId || log.id;
+  return id.length > 12 ? `${id.slice(0, 8)}…` : id;
+}
 
 export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTableProps) {
   const [statusFilter, setStatusFilter] = useState<RunLogStatus | 'all'>('all');
-  const [stageFilter, setStageFilter] = useState<RunLogStage | 'all'>('all');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [stageFilter, setStageFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
 
-  // 提取唯一项目名
-  const projects = useMemo(() => {
-    const set = new Set(logs.map(l => l.projectName));
+  const stages = useMemo(() => {
+    const set = new Set(logs.map((l) => l.stage));
     return Array.from(set);
   }, [logs]);
 
-  // 筛选
   const filtered = useMemo(() => {
-    return logs.filter(l =>
-      (statusFilter === 'all' || l.status === statusFilter) &&
-      (stageFilter === 'all' || l.stage === stageFilter) &&
-      (projectFilter === 'all' || l.projectName === projectFilter)
+    return logs.filter(
+      (l) =>
+        (statusFilter === 'all' || l.status === statusFilter) &&
+        (stageFilter === 'all' || l.stage === stageFilter),
     );
-  }, [logs, statusFilter, stageFilter, projectFilter]);
+  }, [logs, statusFilter, stageFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, stageFilter, logs.length]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paged = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
   const clearFilters = useCallback(() => {
     setStatusFilter('all');
     setStageFilter('all');
-    setProjectFilter('all');
   }, []);
 
-  const hasFilters = statusFilter !== 'all' || stageFilter !== 'all' || projectFilter !== 'all';
+  const hasFilters = statusFilter !== 'all' || stageFilter !== 'all';
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -70,20 +89,9 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
           value={stageFilter === 'all' ? '全部阶段' : stageFilter}
           options={[
             { value: 'all', label: '全部阶段' },
-            ...ALL_STAGES.map(s => ({ value: s, label: s })),
+            ...stages.map((s) => ({ value: s, label: s })),
           ]}
-          onChange={(v) => setStageFilter(v as RunLogStage | 'all')}
-        />
-
-        {/* 按项目 */}
-        <Dropdown
-          label="项目"
-          value={projectFilter === 'all' ? '全部项目' : projectFilter}
-          options={[
-            { value: 'all', label: '全部项目' },
-            ...projects.map(p => ({ value: p, label: p })),
-          ]}
-          onChange={setProjectFilter}
+          onChange={setStageFilter}
         />
 
         {hasFilters && (
@@ -101,32 +109,31 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
       </div>
 
       {/* 表格 */}
-      <div className="overflow-x-auto rounded-lg border border-bp-border">
-        <table className="w-full text-left text-sm">
+      <div className="rounded-lg border border-bp-border overflow-hidden">
+        <table className="w-full table-fixed text-left text-sm">
           <thead>
             <tr className="bg-bp-base/60 border-b border-bp-border">
-              <Th>Run ID</Th>
-              <Th>运行时间</Th>
-              <Th>项目名称</Th>
-              <Th>执行阶段</Th>
-              <Th>使用模型</Th>
-              <Th>Prompt 版本</Th>
-              <Th>耗时</Th>
-              <Th>状态</Th>
-              <Th className="w-20">操作</Th>
+              <Th className="w-[11%]">Run ID</Th>
+              <Th className="w-[18%]">运行时间</Th>
+              <Th className="w-[12%]">执行阶段</Th>
+              <Th className="w-[14%]">使用模型</Th>
+              <Th className="w-[18%]">Prompt 版本</Th>
+              <Th className="w-[9%]">耗时</Th>
+              <Th className="w-[10%]">状态</Th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-bp-muted text-xs">
+                <td colSpan={7} className="py-12 text-center text-bp-muted text-xs">
                   无匹配记录
                 </td>
               </tr>
             ) : (
-              filtered.map((log) => {
+              paged.map((log) => {
                 const sc = statusBadge[log.status];
                 const isSelected = log.id === selectedId;
+                const runIdLabel = formatRunId(log);
                 return (
                   <tr
                     key={log.id}
@@ -138,38 +145,34 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
                         : 'hover:bg-bp-base/40',
                     )}
                   >
-                    <td className="py-3 px-4">
-                      <span className="font-mono text-xs text-bp-cyan">{log.id}</span>
+                    <td className="py-3 px-3">
+                      <span
+                        className="font-mono text-xs text-bp-cyan truncate block"
+                        title={log.runId || log.id}
+                      >
+                        {runIdLabel}
+                      </span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-bp-muted font-mono whitespace-nowrap">{log.runTime}</td>
-                    <td className="py-3 px-4 text-xs text-bp-text whitespace-nowrap">{log.projectName}</td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs text-bp-text">{log.stage}</span>
+                    <td className="py-3 px-3 text-xs text-bp-muted font-mono truncate" title={log.runTime}>
+                      {log.runTime}
                     </td>
-                    <td className="py-3 px-4 text-xs text-bp-muted font-mono">{log.model}</td>
-                    <td className="py-3 px-4">
-                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">{log.promptVersion}</span>
+                    <td className="py-3 px-3">
+                      <span className="text-xs text-bp-text truncate block">{log.stage}</span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-bp-muted font-mono">{log.duration}</td>
-                    <td className="py-3 px-4">
-                      <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1', sc.className)}>
+                    <td className="py-3 px-3 text-xs text-bp-muted font-mono truncate" title={log.model}>
+                      {log.model}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted truncate block" title={log.promptVersion}>
+                        {log.promptVersion}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-xs text-bp-muted font-mono whitespace-nowrap">{log.duration}</td>
+                    <td className="py-3 px-3">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1 whitespace-nowrap', sc.className)}>
                         {log.status === 'running' && <span className={cn('w-1.5 h-1.5 rounded-full animate-pulse', sc.dotClass)} />}
                         {sc.label}
                       </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onSelect(log); }}
-                        className={cn(
-                          'p-1.5 rounded-lg transition-colors',
-                          isSelected
-                            ? 'bg-bp-cyan-tint text-bp-cyan'
-                            : 'hover:bg-bp-panel text-bp-muted hover:text-bp-text',
-                        )}
-                        title="查看详情"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
                     </td>
                   </tr>
                 );
@@ -178,13 +181,41 @@ export function RunLogTable({ logs, selectedId, onSelect, className }: RunLogTab
           </tbody>
         </table>
       </div>
+
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <span className="text-xs text-bp-muted">
+            第 {page} / {totalPages} 页
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page <= 1}
+              icon={<ChevronLeft className="w-4 h-4" />}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              上一页
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              下一页
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn('py-3 px-4 text-xs text-bp-muted font-medium', className)}>
+    <th className={cn('py-3 px-3 text-xs text-bp-muted font-medium', className)}>
       {children}
     </th>
   );
@@ -209,7 +240,7 @@ function Dropdown({ label: _l, value, options, onChange }: {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text hover:border-bp-border transition-colors"
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text hover-accent-left transition-colors"
       >
         <span className="max-w-[120px] truncate">{value}</span>
         <ChevronDown className={cn('w-3 h-3 text-bp-muted transition-transform', open && 'rotate-180')} />

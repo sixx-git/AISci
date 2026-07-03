@@ -44,4 +44,16 @@ export const pipelineService = {
     const { data } = await api.get<ApiResponse<Record<string, unknown>>>(`/pipeline/audit-export/${runId}`);
     return data;
   },
+  /** POST /api/v1/pipeline/loop-dry-run */
+  async loopDryRun(body: {
+    run_options?: Record<string, unknown>;
+    quality_trend?: Array<Record<string, unknown>>;
+    round_num?: number;
+    hypothesis_review?: Record<string, unknown>;
+    small_validation?: Record<string, unknown>;
+    project_mode?: string;
+  }): Promise<ApiResponse<{ summary?: string; [key: string]: unknown }>> {
+    const { data } = await api.post<ApiResponse<Record<string, unknown>>>('/pipeline/loop-dry-run', body);
+    return data;
+  },
 };

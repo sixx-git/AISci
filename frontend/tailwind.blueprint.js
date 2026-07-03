@@ -8,8 +8,8 @@ export const bpColors = {
   base: '#0A1628',
   panel: '#0F172A',
   surface: '#1E293B',
-  text: '#E2E8F0',
-  muted: '#64748B',
+  text: '#F1F5F9',
+  muted: '#94A3B8',
   cyan: {
     DEFAULT: '#38BDF8',
     dim: '#38BDF866',
@@ -31,8 +31,8 @@ export const blueprintThemeExtend = {
     bp: ['JetBrains Mono', 'ui-monospace', 'monospace'],
   },
   fontSize: {
-    'bp-annot': ['9px', { lineHeight: '1.5' }],
-    'bp-body': ['11px', { lineHeight: '1.5' }],
+    'bp-annot': ['12px', { lineHeight: '1.5' }],
+    'bp-body': ['13px', { lineHeight: '1.55' }],
     'bp-heading': ['36px', { lineHeight: '1.2', fontWeight: '700' }],
     'bp-metric': ['22px', { lineHeight: '1', fontWeight: '700' }],
   },

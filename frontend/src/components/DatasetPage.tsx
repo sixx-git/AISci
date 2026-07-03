@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Upload, Database, Table2, Image, FileJson, FileText,
@@ -10,9 +10,10 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { DataFinderPanel } from '@/components/DataFinderPanel';
+import { RequiredDatasetUploadPanel } from '@/components/RequiredDatasetUploadPanel';
 import { MultimodalEvidencePanel } from '@/components/MultimodalEvidencePanel';
-import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { DataCatalogPanel } from '@/components/DataCatalogPanel';
+import { DatasetModelingChatPanel } from '@/components/DatasetModelingChatPanel';
 import { PageSubTabNav } from '@/components/workspace/PageSubTabNav';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -59,7 +60,7 @@ const BYTES_MB = 1024 * 1024;
 
 const DATASET_PAGE_TABS = [
   { id: 'datasets', label: '项目数据集' },
-  { id: 'feedback', label: '反馈中心' },
+  { id: 'required-datasets', label: '所需数据集' },
   { id: 'catalog', label: '数据目录' },
   { id: 'multimodal', label: '多模态证据' },
   { id: 'data-finder', label: '多源数据查找与整合' },
@@ -108,15 +109,18 @@ function formatQualityScore(score: number | null | undefined): { label: string; 
 }
 
 export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: DatasetPageProps) {
-  const [pageTab, setPageTab] = useState<'datasets' | 'data-finder' | 'multimodal' | 'catalog' | 'feedback'>('datasets');
+  const [pageTab, setPageTab] = useState<
+    'datasets' | 'required-datasets' | 'data-finder' | 'multimodal' | 'catalog'
+  >('datasets');
   const [searchParams] = useSearchParams();
+  const quickReportRunId = searchParams.get('run_id');
 
   useEffect(() => {
     const sub = searchParams.get('subtab');
-    if (sub === 'data-finder') setPageTab('data-finder');
+    if (sub === 'required-datasets') setPageTab('required-datasets');
+    else if (sub === 'data-finder') setPageTab('data-finder');
     else if (sub === 'multimodal') setPageTab('multimodal');
     else if (sub === 'catalog') setPageTab('catalog');
-    else if (sub === 'feedback') setPageTab('feedback');
   }, [searchParams]);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [dataContext, setDataContext] = useState<DataContext | null>(null);
@@ -127,9 +131,6 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
   const { message: alertMsg, showAlert } = useToast();
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [modelingDatasetId, setModelingDatasetId] = useState<string>('');
-  const [targetColumn, setTargetColumn] = useState<string>('');
-  const [researchTask, setResearchTask] = useState<string>('');
-  const [modelingLoading, setModelingLoading] = useState(false);
   const [modelingResult, setModelingResult] = useState<ModelingResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -151,54 +152,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
 
   useEffect(() => {
     if (!modelingDatasetId) return;
-    const ds = tabularDatasets.find((d) => d.id === modelingDatasetId);
-    if (!ds) return;
-    const tcKeywords = ['label', 'target', 'class', 'y', 'score', 'result', 'outcome', '标签', '目标', '类别'];
-    const candidates = (ds.columns || []).filter((col) =>
-      tcKeywords.some((k) => col.toLowerCase().includes(k))
-    );
-    if (candidates.length > 0) {
-      setTargetColumn(candidates[0]);
-    } else {
-      const cols = ds.columns || [];
-      if (cols.length > 0) {
-        setTargetColumn(cols[cols.length - 1]);
-      }
-    }
     datasetService.getModelingResult(modelingDatasetId)
       .then((res) => {
         if (res.code === 200 && res.data) setModelingResult(res.data);
       })
       .catch(() => setModelingResult(null));
-  }, [modelingDatasetId, tabularDatasets]);
-
-  const handleRunModeling = useCallback(async () => {
-    if (!modelingDatasetId) {
-      showAlert('请先选择表格数据集');
-      return;
-    }
-    if (!targetColumn.trim()) {
-      showAlert('请选择或输入目标变量');
-      return;
-    }
-    setModelingLoading(true);
-    try {
-      const res = await datasetService.runModeling(modelingDatasetId, {
-        target_column: targetColumn.trim(),
-        research_task: researchTask.trim() || undefined,
-      });
-      if (res.code === 200 && res.data) {
-        setModelingResult(res.data);
-        showAlert('自动建模完成');
-      } else {
-        showAlert(res.message || '建模失败');
-      }
-    } catch (e) {
-      showAlert(e instanceof Error ? e.message : '建模失败');
-    } finally {
-      setModelingLoading(false);
-    }
-  }, [modelingDatasetId, targetColumn, researchTask, showAlert]);
+  }, [modelingDatasetId]);
 
   const loadDatasets = useCallback(() => {
     setLoading(true);
@@ -313,12 +272,16 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
         onTabChange={(id) => setPageTab(id as typeof pageTab)}
       />
 
-      {pageTab === 'feedback' ? (
-        <FeedbackHubPanel projectId={projectId} />
-      ) : pageTab === 'catalog' ? (
+      {pageTab === 'catalog' ? (
         <DataCatalogPanel projectId={projectId} />
       ) : pageTab === 'multimodal' ? (
         <MultimodalEvidencePanel projectId={projectId} researchQuestion={researchQuestion} />
+      ) : pageTab === 'required-datasets' ? (
+        <RequiredDatasetUploadPanel
+          projectId={projectId}
+          runId={quickReportRunId}
+          autoResumeOnUpload={Boolean(quickReportRunId)}
+        />
       ) : pageTab === 'data-finder' ? (
         <DataFinderPanel
           projectId={projectId}
@@ -377,7 +340,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           <div className="flex items-center gap-2 mb-3">
             <Network className="w-4 h-4 text-bp-cyan" />
             <h3 className="text-sm font-semibold text-bp-cyan">联邦学习数据识别</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-bp-cyan/30 text-bp-cyan">
+            <span className="text-xs px-1.5 py-0.5 rounded border border-bp-cyan/30 text-bp-cyan">
               Federated Learning Scientist
             </span>
           </div>
@@ -534,57 +497,29 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <h3 className="text-base font-semibold text-bp-text">数据建模与自校正</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            <div>
-              <label className="text-xs text-bp-muted mb-1 block">数据集</label>
-              <select
-                value={modelingDatasetId}
-                onChange={(e) => {
-                  setModelingDatasetId(e.target.value);
-                  setTargetColumn('');
-                  setModelingResult(null);
-                }}
-                className="input-field w-full py-2 text-sm"
-              >
-                {tabularDatasets.map((ds) => (
-                  <option key={ds.id} value={ds.id}>{ds.filename}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-bp-muted mb-1 block">目标变量</label>
-              <select
-                value={targetColumn}
-                onChange={(e) => setTargetColumn(e.target.value)}
-                className="input-field w-full py-2 text-sm"
-              >
-                <option value="">请选择目标列</option>
-                {(tabularDatasets.find((d) => d.id === modelingDatasetId)?.columns || []).map((col) => (
-                  <option key={col} value={col}>{col}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="text-xs text-bp-muted mb-1 block">研究任务（可选）</label>
-            <input
-              value={researchTask}
-              onChange={(e) => setResearchTask(e.target.value)}
-              placeholder="例如：预测疾病分类 / 估计指标回归"
+          <div className="mb-4 max-w-md">
+            <label className="text-xs text-bp-muted mb-1 block">数据集</label>
+            <select
+              value={modelingDatasetId}
+              onChange={(e) => {
+                setModelingDatasetId(e.target.value);
+                setModelingResult(null);
+              }}
               className="input-field w-full py-2 text-sm"
-            />
+            >
+              {tabularDatasets.map((ds) => (
+                <option key={ds.id} value={ds.id}>{ds.filename}</option>
+              ))}
+            </select>
           </div>
 
-          <Button
-            variant="primary"
-            size="sm"
-            icon={modelingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            onClick={handleRunModeling}
-            disabled={modelingLoading}
-          >
-            {modelingLoading ? '建模中...' : '运行自动建模'}
-          </Button>
+          {modelingDatasetId && (
+            <DatasetModelingChatPanel
+              datasetId={modelingDatasetId}
+              datasetName={tabularDatasets.find((d) => d.id === modelingDatasetId)?.filename || ''}
+              onModelingResult={setModelingResult}
+            />
+          )}
 
           {modelingResult?.success && (
             <div className="mt-5 space-y-4 border-t border-bp-border pt-4">
@@ -759,18 +694,18 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-bp-text truncate">{ds.filename}</h3>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-[11px] text-bp-muted">{dtConfig.label}</span>
-                        <span className={`text-[11px] px-1.5 py-0.5 rounded flex items-center gap-1 ${stConfig.cls}`}>
+                        <span className="text-xs text-bp-muted">{dtConfig.label}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded flex items-center gap-1 ${stConfig.cls}`}>
                           <StatusIcon className="w-3 h-3" />
                           {stConfig.label}
                         </span>
                         {ds.useForHypothesis ? (
-                          <span className="text-[11px] text-bp-green bg-bp-green/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-xs text-bp-green bg-bp-green/10 px-1.5 py-0.5 rounded flex items-center gap-1">
                             <Eye className="w-3 h-3" />
                             用于假设
                           </span>
                         ) : (
-                          <span className="text-[11px] text-bp-muted bg-bp-surface/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-xs text-bp-muted bg-bp-surface/50 px-1.5 py-0.5 rounded flex items-center gap-1">
                             <EyeOff className="w-3 h-3" />
                             已排除
                           </span>
@@ -778,30 +713,30 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       </div>
                     </div>
                   </div>
-                  <span className="text-[11px] text-bp-muted shrink-0">{formatSize(ds.fileSize)}</span>
+                  <span className="text-xs text-bp-muted shrink-0">{formatSize(ds.fileSize)}</span>
                 </div>
 
                 {/* 核心指标 */}
                 <div className="grid grid-cols-4 gap-2 mb-2">
                   <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">{ds.nRows ?? '-'}</div>
-                    <div className="text-[10px] text-bp-muted">样本数</div>
+                    <div className="text-xs text-bp-muted">样本数</div>
                   </div>
                   <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">{ds.nColumns ?? '-'}</div>
-                    <div className="text-[10px] text-bp-muted">字段数</div>
+                    <div className="text-xs text-bp-muted">字段数</div>
                   </div>
                   <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className="text-lg font-bold font-mono text-bp-text">
                       {ds.missingRate != null ? `${(ds.missingRate * 100).toFixed(1)}%` : '-'}
                     </div>
-                    <div className="text-[10px] text-bp-muted">缺失率</div>
+                    <div className="text-xs text-bp-muted">缺失率</div>
                   </div>
                   <div className="text-center p-1.5 rounded-bp bg-bp-panel/50">
                     <div className={`text-lg font-bold font-mono ${qScore.cls}`}>
                       {qScore.label}
                     </div>
-                    <div className="text-[10px] text-bp-muted">质量分</div>
+                    <div className="text-xs text-bp-muted">质量分</div>
                   </div>
                 </div>
 
@@ -817,7 +752,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {ds.columns.map((col) => (
-                            <span key={col} className="text-[10px] font-mono bg-bp-panel text-bp-text px-1.5 py-0.5 rounded">
+                            <span key={col} className="text-xs font-mono bg-bp-panel text-bp-text px-1.5 py-0.5 rounded">
                               {col}
                             </span>
                           ))}
@@ -844,7 +779,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {Array.from(targetCandidates).map((col) => (
-                              <span key={col} className="text-[10px] font-mono bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20 px-1.5 py-0.5 rounded-bp">
+                              <span key={col} className="text-xs font-mono bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20 px-1.5 py-0.5 rounded-bp">
                                 {col}
                               </span>
                             ))}
@@ -868,7 +803,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {numCols.map((col) => (
-                              <span key={col} className="text-[10px] bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
+                              <span key={col} className="text-xs bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
                                 {col}
                               </span>
                             ))}
@@ -883,7 +818,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                         <div className="text-xs text-bp-muted mb-1.5">字段类型</div>
                         <div className="flex flex-wrap gap-1">
                           {Object.entries(ds.dtypes).map(([col, dt]) => (
-                            <span key={col} className="text-[10px] bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
+                            <span key={col} className="text-xs bg-bp-cyan-tint text-bp-cyan px-1.5 py-0.5 rounded-bp">
                               {col}: {dt}
                             </span>
                           ))}
@@ -896,7 +831,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       <div>
                         <div className="text-xs text-bp-muted mb-1.5">数值列统计</div>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-[11px]">
+                          <table className="w-full text-xs">
                             <thead>
                               <tr className="text-bp-muted">
                                 <th className="text-left font-normal px-1">列名</th>
@@ -929,7 +864,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
                       <div>
                         <div className="text-xs text-bp-muted mb-1.5">数据预览（前 {Math.min(ds.preview.length, 5)} 行）</div>
                         <div className="overflow-x-auto max-h-32">
-                          <pre className="text-[10px] font-mono text-bp-muted bg-bp-panel/50 p-2 rounded whitespace-pre-wrap">
+                          <pre className="text-xs font-mono text-bp-muted bg-bp-panel/50 p-2 rounded whitespace-pre-wrap">
                             {JSON.stringify(ds.preview.slice(0, 5), null, 2)}
                           </pre>
                         </div>

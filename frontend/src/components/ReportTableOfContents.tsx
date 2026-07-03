@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, AlertTriangle, ListTree } from 'lucide-react';
+﻿import { CheckCircle, XCircle, AlertTriangle, ListTree } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
 import type { ReportSection } from '@/types';
@@ -6,6 +6,8 @@ import type { ReportSection } from '@/types';
 interface ReportTableOfContentsProps {
   sections: ReportSection[];
   className?: string;
+  /** PDF 预览时无法按章节跳转，仅展示完成状态 */
+  previewMode?: 'pdf' | 'markdown';
 }
 
 const statusConfig: Record<
@@ -29,8 +31,12 @@ function scrollToSection(label: string) {
   }
 }
 
-/** 报告章节目录 — 对齐设计稿 N7Jsj 左栏 TOC */
-export function ReportTableOfContents({ sections, className }: ReportTableOfContentsProps) {
+/** 报告章节目录 — 页面最左侧 TOC */
+export function ReportTableOfContents({
+  sections,
+  className,
+  previewMode = 'markdown',
+}: ReportTableOfContentsProps) {
   return (
     <Card className={cn('p-3', className)}>
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-bp-border">
@@ -47,9 +53,20 @@ export function ReportTableOfContents({ sections, className }: ReportTableOfCont
             <button
               key={section.key}
               type="button"
-              onClick={() => scrollToSection(section.label)}
-              className="w-full flex items-start gap-2 px-2 py-1.5 rounded-bp text-left text-[11px] text-bp-muted hover:text-bp-text hover:bg-bp-panel/60 transition-colors"
-              title={section.note}
+              onClick={() => {
+                if (previewMode === 'markdown') scrollToSection(section.label);
+              }}
+              className={cn(
+                'w-full flex items-start gap-2 px-2 py-1.5 rounded-bp text-left text-xs text-bp-muted transition-colors',
+                previewMode === 'markdown'
+                  ? 'hover:text-bp-text hover:bg-bp-panel/60 cursor-pointer'
+                  : 'cursor-default',
+              )}
+              title={
+                previewMode === 'pdf'
+                  ? `${section.note || section.label}（PDF 预览请滚动浏览）`
+                  : section.note
+              }
             >
               <Icon className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', iconCls)} />
               <span className="leading-snug">{section.label}</span>

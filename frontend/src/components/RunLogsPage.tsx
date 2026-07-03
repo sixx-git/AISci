@@ -3,7 +3,6 @@ import { Terminal } from 'lucide-react';
 import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
 import { RunLogDetail } from './RunLogDetail';
-import { RunLogStageStream } from './RunLogStageStream';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
@@ -202,9 +201,9 @@ export function RunLogsPage({
     <div className="max-w-7xl mx-auto">
       {pageHeader}
 
-      {/* 三栏布局：左列表 · 中详情 · 右阶段流 */}
+      {/* 双栏布局：左列表 · 右详情 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-7 min-w-0">
           <RunLogTable
             logs={logs}
             selectedId={selectedLog?.id || null}
@@ -212,18 +211,10 @@ export function RunLogsPage({
           />
         </div>
 
-        <div className="xl:col-span-4">
+        <div className="xl:col-span-5 min-w-0">
           <Card className="min-h-[520px]">
             <RunLogDetail log={selectedLog} />
           </Card>
-        </div>
-
-        <div className="xl:col-span-3">
-          <RunLogStageStream
-            logs={logs}
-            selectedLog={selectedLog}
-            onSelect={handleSelect}
-          />
         </div>
       </div>
     </div>

@@ -297,3 +297,36 @@ class ListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class QuickReportRequest(BaseModel):
+    """一键生成报告 — 仅需问题名称与数据/文件描述"""
+    question_name: str = Field(..., min_length=1, max_length=200, description="研究问题名称")
+    file_description: str = Field(..., min_length=1, max_length=2000, description="数据或文件背景描述")
+
+
+class QuickReportResponse(BaseModel):
+    """一键报告启动响应"""
+    project_id: str
+    run_id: str
+    research_question: str
+    status: str = "running"
+
+
+class QuickReportResumeRequest(BaseModel):
+    """上传数据后继续生成报告"""
+    run_id: str
+    force: bool = Field(default=False, description="仍有待上传项时强制继续")
+
+
+class QuickReportStatusResponse(BaseModel):
+    """一键报告运行状态"""
+    run_id: str
+    project_id: str
+    status: str
+    awaiting_data_upload: bool = False
+    pending_upload_count: int = 0
+    uploaded_count: int = 0
+    can_resume: bool = False
+    pending_candidates: List[Dict[str, Any]] = Field(default_factory=list)
+    final_report_id: Optional[str] = None

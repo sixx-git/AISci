@@ -108,6 +108,12 @@ frontend-debug-files/
 *.tar.gz
 
 # =========================
+# Dataset / export outputs (local, do not commit)
+# =========================
+output/
+out/
+
+# =========================
 # OS files
 # =========================
 .DS_Store

@@ -6,6 +6,8 @@ import { CreateProject } from './pages/CreateProject';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
 import { Documents } from './pages/Documents';
 import { Reports } from './pages/Reports';
+import { QuickReportPage } from './pages/QuickReportPage';
+import { Skills } from './pages/Skills';
 import { Settings } from './pages/Settings';
 
 function App() {
@@ -27,6 +29,8 @@ function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/workflow" element={<Navigate to="/" replace />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/quick-report" element={<QuickReportPage />} />
+            <Route path="/skills" element={<Skills />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

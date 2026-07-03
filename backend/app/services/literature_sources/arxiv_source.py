@@ -79,7 +79,7 @@ class ArxivSource:
     def __init__(
         self,
         timeout: int = 15,
-        max_retries: int = 2,
+        max_retries: int = 4,
         http_proxy: str = "",
         https_proxy: str = "",
         fallback_data_path: str = "./data/arxiv_fallback.json",
@@ -117,9 +117,28 @@ class ArxivSource:
         return urllib.request.build_opener(*handlers)
 
     def _fetch_text(self, url: str) -> str:
-        req = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
-        with self._build_opener().open(req, timeout=self.timeout) as response:
-            return response.read().decode("utf-8")
+        last_error: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            req = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
+            try:
+                with self._build_opener().open(req, timeout=self.timeout) as response:
+                    return response.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")[:300]
+                last_error = RuntimeError(f"HTTP {e.code}: {body}")
+                if e.code in (429, 503) and attempt < self.max_retries:
+                    delay = 5 * (2 ** attempt)
+                    logger.warning("arXiv/OpenAlex HTTP %d，%ss 后重试 (%d/%d)", e.code, delay, attempt + 1, self.max_retries + 1)
+                    time.sleep(delay)
+                    continue
+                raise last_error from e
+            except (urllib.error.URLError, TimeoutError, ssl.SSLError) as e:
+                last_error = RuntimeError(f"请求失败: {e}")
+                if attempt < self.max_retries:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise last_error from e
+        raise last_error or RuntimeError("HTTP 请求失败")
 
     def _load_fallback_data(self) -> List[Dict[str, Any]]:
         if self._fallback_data is not None:
@@ -301,7 +320,7 @@ class ArxivSource:
                 logger.warning(f"arXiv 未知错误 (attempt {attempt+1}/{self.max_retries+1}): {type(e).__name__}: {e}")
 
             if attempt < self.max_retries:
-                time.sleep(2 * (attempt + 1))
+                time.sleep(5 * (2 ** attempt))
 
         raise last_error or RuntimeError("arXiv API 连接失败（已重试）")
 

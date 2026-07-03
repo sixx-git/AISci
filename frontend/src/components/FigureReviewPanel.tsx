@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Image, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -62,7 +62,7 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
         <Image className="w-4 h-4" />
         图表数据复核 · {pending.length} 待确认
       </h4>
-      <p className="text-[10px] text-bp-muted mb-3">
+      <p className="text-xs text-bp-muted mb-3">
         L1 元信息 → L2 caption 数值 → L3 VLM 结构化 → L4 点列数字化（复核后写入 CSV 并自动 re-merge）
       </p>
 
@@ -78,29 +78,29 @@ export function FigureReviewPanel({ projectId, figures = [], onUpdated }: Figure
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <span className="font-medium text-bp-text">Fig {fig.figure_number || '—'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
                   {fig.extraction_tier || fig.extraction_method || 'rule'}
                 </span>
-                <span className="text-[10px] text-bp-yellow">
+                <span className="text-xs text-bp-yellow">
                   conf={String(fig.extraction_confidence ?? '—')}
                 </span>
                 {fig.included_in_csv && (
-                  <span className="text-[10px] text-bp-green flex items-center gap-0.5">
+                  <span className="text-xs text-bp-green flex items-center gap-0.5">
                     <CheckCircle2 className="w-3 h-3" /> 已入 CSV
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-bp-muted line-clamp-2 mb-2">{fig.caption}</p>
+              <p className="text-xs text-bp-muted line-clamp-2 mb-2">{fig.caption}</p>
               {fig.extraction_manifest?.extraction?.limitations && fig.extraction_manifest.extraction.limitations.length > 0 && (
-                <p className="text-[10px] text-bp-yellow/80 mb-2">
+                <p className="text-xs text-bp-yellow/80 mb-2">
                   {fig.extraction_manifest.extraction.limitations[0]}
                 </p>
               )}
               {fig.image_path && (
-                <p className="text-[10px] text-bp-cyan/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
+                <p className="text-xs text-bp-cyan/70 mb-1">已裁剪 PDF 图块 · VLM 可用</p>
               )}
               {preview.length > 0 && (
-                <div className="text-[10px] text-bp-muted mb-2 font-mono">
+                <div className="text-xs text-bp-muted mb-2 font-mono">
                   {preview.slice(0, 3).map((row, i) => (
                     <div key={i}>
                       {String(row.series)}

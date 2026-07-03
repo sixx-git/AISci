@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, CheckCircle2, Lock } from 'lucide-react';
 import { Card } from '@/components/Card';
@@ -125,7 +125,7 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-bp-muted font-mono w-4">{idx + 1}</span>
+                            <span className="text-xs text-bp-muted font-mono w-4">{idx + 1}</span>
                             <span className={cn('text-sm font-medium', active ? 'text-bp-cyan' : 'text-bp-text')}>
                               {item.label}
                             </span>
@@ -133,7 +133,7 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
                               <Lock className="w-3 h-3 text-bp-muted" />
                             )}
                           </div>
-                          <p className="text-[11px] text-bp-muted mt-1 ml-6 line-clamp-2">{item.description}</p>
+                          <p className="text-xs text-bp-muted mt-1 ml-6 line-clamp-2">{item.description}</p>
                         </div>
                         {hasOverride && (
                           <span title="已覆盖">

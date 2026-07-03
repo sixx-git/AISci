@@ -1,4 +1,4 @@
-import { X, FileText, BookOpen, Hash, Link2, Gauge, ShieldAlert, CheckCircle2, History } from 'lucide-react';
+﻿import { X, FileText, BookOpen, Hash, Link2, Gauge, ShieldAlert, CheckCircle2, History } from 'lucide-react';
 import type { EvidenceChain, EvidenceItem as EvidenceItemType } from '@/types';
 
 interface EvidenceChainDrawerProps {
@@ -19,7 +19,7 @@ function StanceBadge({ stance }: { stance?: string }) {
         ? 'bg-danger-500/15 text-danger-400 border-danger-500/30'
         : 'bg-bp-panel text-bp-muted border-bp-border';
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-bp border ${cls}`}>
+    <span className={`text-xs px-1.5 py-0.5 rounded-bp border ${cls}`}>
       {stance || 'neutral'}
     </span>
   );
@@ -52,7 +52,7 @@ function ChainEvidenceBlock({ title, items, emptyHint }: { title: string; items:
                 )}
               </div>
               {ev.stance_reason && (
-                <p className="text-[11px] text-bp-muted mt-1">立场理由: {ev.stance_reason}</p>
+                <p className="text-xs text-bp-muted mt-1">立场理由: {ev.stance_reason}</p>
               )}
             </div>
           ))}

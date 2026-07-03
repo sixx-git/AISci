@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Upload, Image, Mic, FileText, Loader2, AlertTriangle, Eye, ToggleLeft, ToggleRight, RefreshCw,
 } from 'lucide-react';
@@ -137,10 +137,10 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
                 <div className="flex items-center gap-2 min-w-0">
                   <Icon className="w-4 h-4 text-bp-cyan shrink-0" />
                   <span className="text-sm text-bp-text truncate">{asset.file_name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted">
                     {asset.modality}
                   </span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
                     asset.parse_status === 'completed' ? 'bg-bp-green/10 text-bp-green'
                       : asset.parse_status === 'warning' ? 'bg-bp-yellow/10 text-bp-yellow'
                         : 'bg-bp-panel text-bp-muted'
@@ -179,13 +179,13 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               )}
 
               {asset.modality === 'audio' && asset.extracted_text === '' && (
-                <p className="text-[11px] text-yellow-400/90 mb-2">
+                <p className="text-xs text-yellow-400/90 mb-2">
                   转写未执行 — 当前未接入 Qwen-Audio/Whisper，不会编造 transcript。
                 </p>
               )}
 
               {warnings.length > 0 && (
-                <ul className="text-[10px] text-bp-yellow/90 mb-2 list-disc list-inside">
+                <ul className="text-xs text-bp-yellow/90 mb-2 list-disc list-inside">
                   {warnings.map((w) => (
                     <li key={w}>{w}</li>
                   ))}
@@ -194,10 +194,10 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
 
               {facts.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-bp-border/80">
-                  <p className="text-[11px] text-bp-muted mb-1">Evidence Facts ({facts.length})</p>
+                  <p className="text-xs text-bp-muted mb-1">Evidence Facts ({facts.length})</p>
                   <ul className="space-y-1">
                     {facts.slice(0, 4).map((f) => (
-                      <li key={f.fact_id} className="text-[11px] text-bp-text">
+                      <li key={f.fact_id} className="text-xs text-bp-text">
                         <span className="font-mono text-bp-cyan/80">{f.fact_id}</span>
                         {' '}{f.fact_text?.slice(0, 120)}
                         {f.fact_text && f.fact_text.length > 120 ? '…' : ''}
@@ -210,7 +210,7 @@ export function MultimodalEvidencePanel({ projectId, researchQuestion = '' }: Mu
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  className="text-[10px] text-bp-muted hover:text-bp-text"
+                  className="text-xs text-bp-muted hover:text-bp-text"
                   onClick={() => handleReparse(asset.id)}
                 >
                   重新解析

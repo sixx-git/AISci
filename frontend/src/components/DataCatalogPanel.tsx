@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -77,7 +77,7 @@ export function DataCatalogPanel({ projectId }: DataCatalogPanelProps) {
       </div>
 
       {catalog?.generated_at && !loading && (
-        <p className="text-[10px] text-bp-muted mb-3">生成于 {catalog.generated_at.slice(0, 19)}</p>
+        <p className="text-xs text-bp-muted mb-3">生成于 {catalog.generated_at.slice(0, 19)}</p>
       )}
 
       {loading && assets.length === 0 && (
@@ -107,20 +107,20 @@ export function DataCatalogPanel({ projectId }: DataCatalogPanelProps) {
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <span className="font-medium text-bp-text">{asset.asset_id}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-bp bg-bp-panel text-bp-cyan">
+                <span className="text-xs px-1.5 py-0.5 rounded-bp bg-bp-panel text-bp-cyan">
                   {asset.type}
                 </span>
               </div>
               {asset.filename && (
-                <p className="text-[10px] text-bp-muted truncate">{asset.filename}</p>
+                <p className="text-xs text-bp-muted truncate">{asset.filename}</p>
               )}
               {(asset.used_by_stages || []).length > 0 && (
-                <p className="text-[10px] text-bp-muted mt-1">
+                <p className="text-xs text-bp-muted mt-1">
                   用于: {(asset.used_by_stages || []).join(', ')}
                 </p>
               )}
               {asset.provenance?.source != null && (
-                <p className="text-[10px] text-bp-cyan/80 mt-0.5">
+                <p className="text-xs text-bp-cyan/80 mt-0.5">
                   来源: {String(asset.provenance.source)}
                 </p>
               )}

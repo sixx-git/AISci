@@ -1,4 +1,4 @@
-import { ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react';
+﻿import { ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/Button';
 import type { EnsembleReviewData } from '@/types';
 
@@ -34,7 +34,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
       {members.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-bp-muted mb-2">各评审者得分</p>
+          <p className="text-xs text-bp-muted mb-2">各评审者得分</p>
           <div className="space-y-1.5">
             {members.map((m) => (
               <div key={String(m.reviewer_id)} className="flex items-center justify-between text-xs">
@@ -52,7 +52,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
       {flags.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {flags.map((f) => (
-            <span key={f} className="text-[10px] px-2 py-0.5 rounded bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20">
+            <span key={f} className="text-xs px-2 py-0.5 rounded bg-bp-yellow/10 text-bp-yellow border border-bp-yellow/20">
               {f}
             </span>
           ))}
@@ -61,7 +61,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
       {(review.weaknesses?.length ?? 0) > 0 && (
         <div className="mb-3">
-          <p className="text-[11px] text-bp-muted mb-1">主要不足</p>
+          <p className="text-xs text-bp-muted mb-1">主要不足</p>
           <ul className="space-y-1">
             {review.weaknesses!.slice(0, 5).map((w, i) => (
               <li key={i} className="text-xs text-bp-muted flex gap-1.5">
@@ -75,7 +75,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 
       {(review.revision_suggestions?.length ?? 0) > 0 && (
         <div className="mb-3">
-          <p className="text-[11px] text-bp-muted mb-1">修订建议</p>
+          <p className="text-xs text-bp-muted mb-1">修订建议</p>
           <ul className="space-y-1">
             {review.revision_suggestions!.slice(0, 4).map((s, i) => (
               <li key={i} className="text-xs text-bp-muted">• {s}</li>
@@ -91,7 +91,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
           icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={onRerunFromReview}
         >
-          从假设评审阶段重跑
+          从假设评审起继续后续流程
         </Button>
       )}
     </div>
@@ -101,7 +101,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
 function StatBox({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="p-2.5 rounded border border-bp-border bg-bp-base/50">
-      <p className="text-[10px] text-bp-muted mb-0.5">{label}</p>
+      <p className="text-xs text-bp-muted mb-0.5">{label}</p>
       <p className={`text-lg font-bold font-mono ${accent}`}>{value}</p>
     </div>
   );

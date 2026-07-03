@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+﻿import { cn } from '@/lib/utils';
 import {
   CheckCircle, Loader2, Clock, XCircle,
   AlertTriangle, ChevronRight, Circle,
@@ -153,17 +153,17 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             isSelected
               ? 'border border-bp-cyan bg-bp-cyan-tint shadow-lg shadow-bp-cyan/5 border-l-2 border-l-bp-cyan'
               : 'border border-transparent hover:shadow-md',
-            isFailed && !isSelected && 'hover:bg-danger-500/10 hover:border-danger-500/40',
-            isPending && !isSelected && 'hover:bg-bp-panel/40 hover:border-bp-border/50',
-            isRunning && !isSelected && 'hover:bg-bp-cyan-tint hover:border-bp-cyan/30',
-            isCompleted && !isSelected && 'hover:bg-bp-green/10 hover:border-bp-green/30',
+            isFailed && !isSelected && 'hover:bg-danger-500/10 hover-accent-left-danger',
+            isPending && !isSelected && 'hover:bg-bp-panel/40 hover-accent-left-muted',
+            isRunning && !isSelected && 'hover:bg-bp-cyan-tint hover-accent-left',
+            isCompleted && !isSelected && 'hover:bg-bp-green/10 hover-accent-left-green',
           )}
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               {/* 节点头部 */}
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-bp-muted font-mono w-4 shrink-0">
+                <span className="text-xs text-bp-muted font-mono w-4 shrink-0">
                   {stepNumber}
                 </span>
                 <span className={cn(
@@ -178,7 +178,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 </span>
                 {/* 状态角标 */}
                 <span className={cn(
-                  'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                  'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
                   isCompleted && 'bg-bp-green/15 text-bp-green border border-bp-green/30',
                   isRunning && 'bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/30',
                   isPending && 'bg-bp-surface/50 text-bp-muted border border-bp-border',
@@ -201,7 +201,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               {/* 耗时 */}
               {node.duration !== null && (
                 <div className="ml-6 mt-1">
-                  <span className="text-[11px] text-bp-muted">
+                  <span className="text-xs text-bp-muted">
                     耗时 {formatDuration(node.duration)}
                   </span>
                 </div>
@@ -212,7 +212,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 <div className="relative group ml-6 mt-2">
                   <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-danger-500/10 border border-danger-500/20">
                     <XCircle className="w-3 h-3 text-danger-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-danger-400/80 leading-relaxed line-clamp-2">
+                    <p className="text-xs text-danger-400/80 leading-relaxed line-clamp-2">
                       {node.error_message}
                     </p>
                   </div>
@@ -225,9 +225,9 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                   )}>
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 text-danger-400" />
-                      <span className="text-[11px] font-semibold text-danger-300">错误详情</span>
+                      <span className="text-xs font-semibold text-danger-300">错误详情</span>
                     </div>
-                    <p className="text-[11px] text-danger-400/90 leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-xs text-danger-400/90 leading-relaxed whitespace-pre-wrap break-words">
                       {node.error_message}
                     </p>
                     {/* Tooltip arrow */}
@@ -240,7 +240,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               {isPending && (
                 <div className="flex items-center gap-1.5 ml-6 mt-2">
                   <Circle className="w-2.5 h-2.5 text-bp-muted fill-bp-muted" />
-                  <span className="text-[11px] text-bp-muted">等待执行</span>
+                  <span className="text-xs text-bp-muted">等待执行</span>
                 </div>
               )}
 
@@ -252,7 +252,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                     <span className="w-1 h-1 rounded-full bg-bp-cyan/60 animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1 h-1 rounded-full bg-bp-cyan/60 animate-bounce" style={{ animationDelay: '300ms' }} />
                   </span>
-                  <span className="text-[11px] text-bp-cyan/70">执行中…</span>
+                  <span className="text-xs text-bp-cyan/70">执行中…</span>
                 </div>
               )}
             </div>

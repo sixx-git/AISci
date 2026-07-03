@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+﻿import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Upload, FileText,
@@ -576,7 +576,7 @@ export function LiteratureLibrary({
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
                     'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                    uploading ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
+                    uploading ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover-accent-left hover:bg-bp-panel',
                   )}
                 >
                   <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', uploading ? 'bg-bp-cyan-tint' : 'bg-bp-surface')}>
@@ -601,7 +601,7 @@ export function LiteratureLibrary({
                   onClick={handleBuildIndex}
                   className={cn(
                     'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                    buildingIndex ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover:border-bp-cyan/40 hover:bg-bp-panel',
+                    buildingIndex ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover-accent-left hover:bg-bp-panel',
                   )}
                 >
                   <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-bp-cyan-tint' : 'bg-bp-surface')}>
@@ -821,14 +821,14 @@ function ArxivTabContent({
                 {recommendInfo.keywords.map((kw, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded text-[11px] bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/25"
+                    className="px-2 py-0.5 rounded text-xs bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/25"
                   >
                     {kw}
                   </span>
                 ))}
               </div>
             )}
-            <p className="text-[10px] text-bp-muted font-mono truncate">
+            <p className="text-xs text-bp-muted font-mono truncate">
               arXiv Query: {recommendInfo.search_query}
             </p>
           </div>
@@ -1244,10 +1244,10 @@ function LiteratureTable({
                   <td className="px-4 py-3 text-bp-muted whitespace-nowrap">{item.authors}</td>
                   <td className="px-4 py-3 text-center text-bp-text whitespace-nowrap">{item.year}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border', tConf.className)}>{tConf.label}</span>
+                    <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium border', tConf.className)}>{tConf.label}</span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border', psConf.className)}>
+                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border', psConf.className)}>
                       {item.parseStatus === 'parsing' && <Loader2 className="w-3 h-3 animate-spin" />}
                       {item.parseStatus === 'completed' && <CheckCircle className="w-3 h-3" />}
                       {item.parseStatus === 'pending' && <Clock className="w-3 h-3" />}
@@ -1263,13 +1263,13 @@ function LiteratureTable({
                     {(() => {
                       const st = extractionStats[item.id];
                       if (!st || (st.tables === 0 && st.figures_confirmed === 0)) {
-                        return <span className="text-bp-muted text-[11px]">—</span>;
+                        return <span className="text-bp-muted text-xs">—</span>;
                       }
                       return (
                         <button
                           type="button"
                           onClick={onOpenDataFinder}
-                          className="inline-flex items-center gap-1 text-[11px] text-bp-cyan hover:text-bp-cyan/80"
+                          className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-cyan/80"
                           title="跳转 Data Finder 详情"
                         >
                           <Database className="w-3 h-3" />

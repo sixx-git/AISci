@@ -57,6 +57,19 @@ export interface ModelingRunPayload {
   research_task?: string;
 }
 
+export interface DatasetAssistantChatPayload {
+  message: string;
+  history?: { role: string; content: string }[];
+}
+
+export interface DatasetAssistantChatResult {
+  reply: string;
+  action: string;
+  action_success: boolean;
+  action_result?: Record<string, unknown>;
+  modeling_result?: ModelingResult;
+}
+
 export interface DataContext {
   dataset_count: number;
   available_modalities: string[];
@@ -175,6 +188,18 @@ const datasetService = {
 
   async getModelingResult(datasetId: string): Promise<ApiResponse<ModelingResult>> {
     const res = await api.get<ApiResponse<ModelingResult>>(`/datasets/${datasetId}/modeling/result`);
+    return res.data;
+  },
+
+  async assistantChat(
+    datasetId: string,
+    payload: DatasetAssistantChatPayload,
+  ): Promise<ApiResponse<DatasetAssistantChatResult>> {
+    const res = await api.post<ApiResponse<DatasetAssistantChatResult>>(
+      `/datasets/${datasetId}/assistant/chat`,
+      payload,
+      { timeout: 300000 },
+    );
     return res.data;
   },
 

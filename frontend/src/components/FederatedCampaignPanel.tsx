@@ -1,4 +1,4 @@
-import { FlaskConical, ShieldAlert, CheckCircle2, RefreshCw, Target, TrendingUp } from 'lucide-react';
+﻿import { FlaskConical, ShieldAlert, CheckCircle2, RefreshCw, Target, TrendingUp } from 'lucide-react';
 import { FederatedPareto3DPanel, type Pareto3DData } from '@/components/FederatedPareto3DPanel';
 import type { ClosedLoopEvent, IterationSnapshot, ReplanAction } from '@/types';
 
@@ -60,7 +60,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
 
   return (
     <div className="mb-4">
-      <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
+      <p className="text-xs text-bp-muted mb-2 flex items-center gap-1">
         <TrendingUp className="w-3 h-3" />
         精度—通信 Pareto 前沿
         {pareto.best_tradeoff_method && (
@@ -73,7 +73,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
           const commW = Math.round(((p.communication_cost ?? 0) / maxComm) * 100);
           const onFrontier = frontierMethods.has(p.method);
           return (
-            <div key={p.method} className="text-[10px]">
+            <div key={p.method} className="text-xs">
               <div className="flex justify-between text-bp-muted mb-0.5">
                 <span className={onFrontier ? 'text-bp-purple font-medium' : ''}>{p.method}</span>
                 <span>
@@ -96,7 +96,7 @@ function ParetoChart({ pareto }: { pareto: ParetoFrontier }) {
           );
         })}
       </div>
-      <p className="text-[9px] text-bp-muted mt-1">绿=精度归一化 · 琥珀=通信成本（越低越好）</p>
+      <p className="text-xs text-bp-muted mt-1">绿=精度归一化 · 琥珀=通信成本（越低越好）</p>
     </div>
   );
 }
@@ -136,7 +136,7 @@ export function FederatedCampaignPanel({
       </h2>
 
       {(campaignRefinement?.reran || refineEvt) && (
-        <div className="mb-3 p-2 rounded border border-bp-cyan/20 bg-bp-cyan/5 text-[11px]">
+        <div className="mb-3 p-2 rounded border border-bp-cyan/20 bg-bp-cyan/5 text-xs">
           <span className="text-cyan-300 font-medium">
             自动 Campaign R{campaignRefinement?.round ?? refineEvt?.round ?? 2}
           </span>
@@ -156,7 +156,7 @@ export function FederatedCampaignPanel({
           <span className="text-bp-muted">Pilot 模式</span>
           <p className="text-bp-text font-mono mt-0.5">{mode}</p>
           {(federatedPilot?.runtime_engine as string) && (
-            <p className="text-[10px] text-bp-cyan/80 mt-0.5">
+            <p className="text-xs text-bp-cyan/80 mt-0.5">
               engine: {String(federatedPilot?.runtime_engine)}
             </p>
           )}
@@ -193,7 +193,7 @@ export function FederatedCampaignPanel({
 
       {actions.length > 0 && (
         <div className="mb-4">
-          <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
+          <p className="text-xs text-bp-muted mb-2 flex items-center gap-1">
             <Target className="w-3 h-3" />
             结构化 Replan Actions（含 expected_check，可验收）
           </p>
@@ -201,11 +201,11 @@ export function FederatedCampaignPanel({
             {actions.slice(0, 6).map((act, idx) => (
               <div
                 key={act.action_id || idx}
-                className="p-2 rounded border border-bp-border/80 bg-bp-base/40 text-[11px]"
+                className="p-2 rounded border border-bp-border/80 bg-bp-base/40 text-xs"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    className={`px-1.5 py-0.5 rounded text-xs ${
                       act.priority === 'critical'
                         ? 'bg-danger-500/10 text-danger-400'
                         : act.priority === 'high'
@@ -235,7 +235,7 @@ export function FederatedCampaignPanel({
 
       {snapshots.length > 0 && (
         <div>
-          <p className="text-[11px] text-bp-muted mb-2 flex items-center gap-1">
+          <p className="text-xs text-bp-muted mb-2 flex items-center gap-1">
             <RefreshCw className="w-3 h-3" />
             Campaign 快照
           </p>
@@ -243,7 +243,7 @@ export function FederatedCampaignPanel({
             {snapshots.slice(-6).map((snap, idx) => (
               <div
                 key={`${snap.label}-${idx}`}
-                className="px-2 py-1.5 rounded border border-bp-border bg-bp-base/30 text-[10px] max-w-xs"
+                className="px-2 py-1.5 rounded border border-bp-border bg-bp-base/30 text-xs max-w-xs"
               >
                 <span className="text-bp-purple font-medium">{snap.label || `R${snap.round}`}</span>
                 {snap.federated_best_method && (

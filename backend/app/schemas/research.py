@@ -328,6 +328,24 @@ class ReportDBResponse(ReportCreate):
         from_attributes = True
 
 
+class ReportBrowseItem(BaseModel):
+    """报告中心浏览列表项（含项目上下文）"""
+    id: str
+    project_id: str
+    project_name: str
+    project_mode: str = "general"
+    research_question: Optional[str] = None
+    title: str
+    paper_title: str
+    status: str
+    version: int = 1
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class DatasetCreate(BaseModel):
     """创建数据集"""
     project_id: str = Field(..., description="项目 ID")

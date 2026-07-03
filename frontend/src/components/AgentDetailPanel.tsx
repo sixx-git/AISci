@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Cpu, FileCode, RotateCcw, AlertTriangle,
@@ -132,13 +132,13 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
 
     return (
       <div className="mb-2">
-        <p className="text-[10px] text-bp-purple/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 分析输出</p>
+        <p className="text-xs text-bp-purple/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 分析输出</p>
         <div className="space-y-1">
           {items.map((item, i) => (
             <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-bp-base/50 border border-bp-border/50">
-              <span className="text-[10px] text-bp-muted shrink-0">{item.label}</span>
-              <span className="text-[10px] text-bp-text font-medium">{item.value}</span>
-              {item.extra && <span className="text-[9px] text-bp-muted">{item.extra}</span>}
+              <span className="text-xs text-bp-muted shrink-0">{item.label}</span>
+              <span className="text-xs text-bp-text font-medium">{item.value}</span>
+              {item.extra && <span className="text-xs text-bp-muted">{item.extra}</span>}
             </div>
           ))}
         </div>
@@ -180,12 +180,12 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
 
     return (
       <div className="mb-2">
-        <p className="text-[10px] text-bp-green/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 图表输出</p>
+        <p className="text-xs text-bp-green/70 font-medium mb-1.5 uppercase tracking-wide">{formatSkillName(skillName)} 图表输出</p>
         <div className="space-y-1">
           {items.map((item, i) => (
             <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-bp-base/50 border border-bp-border/50">
-              <span className="text-[10px] text-bp-muted shrink-0">{item.label}</span>
-              <span className="text-[10px] text-bp-text font-medium">{item.value}</span>
+              <span className="text-xs text-bp-muted shrink-0">{item.label}</span>
+              <span className="text-xs text-bp-text font-medium">{item.value}</span>
             </div>
           ))}
         </div>
@@ -220,9 +220,9 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                     const vd = v as Record<string, unknown>;
                     return (
                       <div key={k} className="flex items-center justify-between px-2 py-1 rounded bg-bp-base/50 border border-bp-border/50">
-                        <span className="text-[10px] text-bp-muted">{k}</span>
+                        <span className="text-xs text-bp-muted">{k}</span>
                         <span className={cn(
-                          'text-[10px] font-medium',
+                          'text-xs font-medium',
                           vd?.success === true ? 'text-bp-green' :
                           vd?.success === false ? 'text-danger-400' : 'text-bp-muted',
                         )}>
@@ -241,7 +241,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className={cn(
-                    'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                    'text-xs px-1.5 py-0.5 rounded font-medium',
                     sSuccess === true ? 'bg-bp-green/10 text-bp-green' : 'bg-danger-500/10 text-danger-400',
                   )}>
                     {sSuccess === true ? '成功' : sSuccess === false ? '失败' : '未知'}
@@ -254,7 +254,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                 {sWarnings.length > 0 && (
                   <div className="space-y-0.5">
                     {sWarnings.map((w, i) => (
-                      <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                      <div key={i} className="flex items-start gap-1.5 text-xs">
                         <AlertTriangle className="w-3 h-3 text-bp-yellow shrink-0 mt-0.5" />
                         <span className="text-bp-yellow/80">{w}</span>
                       </div>
@@ -264,7 +264,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                 {sErrors.length > 0 && (
                   <div className="space-y-0.5">
                     {sErrors.map((e, i) => (
-                      <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                      <div key={i} className="flex items-start gap-1.5 text-xs">
                         <AlertTriangle className="w-3 h-3 text-danger-400 shrink-0 mt-0.5" />
                         <span className="text-danger-400/80">{e}</span>
                       </div>
@@ -272,7 +272,7 @@ function SkillOutputsCard({ skillOutputs }: { skillOutputs?: Record<string, unkn
                   </div>
                 )}
                 {!isPreliminary && !isChartGeneration && sWarnings.length === 0 && sErrors.length === 0 && (
-                  <p className="text-[10px] text-bp-muted">无警告或错误</p>
+                  <p className="text-xs text-bp-muted">无警告或错误</p>
                 )}
               </div>
             </CollapsibleSection>
@@ -336,8 +336,9 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
               icon={<RotateCcw className="w-3.5 h-3.5" />}
               onClick={() => onRerun?.(node.id)}
               disabled={node.status === 'running'}
+              title="仅重新运行当前智能体，保留上游结果，不重启全流程"
             >
-              重新运行
+              重新运行本阶段
             </Button>
           </div>
         </div>
@@ -425,14 +426,14 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-bp-muted" />
             <div>
-              <div className="text-[11px] text-bp-muted">使用模型</div>
+              <div className="text-xs text-bp-muted">使用模型</div>
               <div className="text-xs text-bp-text font-mono">{node.model}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <FileCode className="w-4 h-4 text-bp-muted" />
             <div>
-              <div className="text-[11px] text-bp-muted">Prompt 版本</div>
+              <div className="text-xs text-bp-muted">Prompt 版本</div>
               <div className="text-xs text-bp-text font-mono">{node.promptVersion}</div>
             </div>
           </div>
@@ -440,7 +441,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             <div className="flex items-center gap-2">
               <Hash className="w-4 h-4 text-bp-muted" />
               <div>
-                <div className="text-[11px] text-bp-muted">Token 消耗</div>
+                <div className="text-xs text-bp-muted">Token 消耗</div>
                 <div className="text-xs text-bp-text font-mono">{node.token_count.toLocaleString()}</div>
               </div>
             </div>

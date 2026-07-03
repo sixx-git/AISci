@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import cytoscape, { type Core } from 'cytoscape';
 import {
   Network, Search, RefreshCw, Loader2, AlertCircle, CheckCircle2,
@@ -401,7 +401,7 @@ export function KnowledgeGraphPage({
               {graph?.communities?.length ? ` · ${graph.communities.length} 主题社区` : ''}
             </p>
             {scenarioHint && (
-              <p className="text-[11px] text-bp-muted mt-1 max-w-xl">{scenarioHint}</p>
+              <p className="text-xs text-bp-muted mt-1 max-w-xl">{scenarioHint}</p>
             )}
           </div>
         </div>
@@ -462,7 +462,7 @@ export function KnowledgeGraphPage({
                 <option value="graduate">研究生 · 科研视图</option>
                 <option value="researcher">科研工作者 · 科研视图</option>
               </select>
-              <p className="col-span-2 text-[10px] text-bp-muted flex items-start gap-1">
+              <p className="col-span-2 text-xs text-bp-muted flex items-start gap-1">
                 <Layers className="w-3 h-3 shrink-0 mt-0.5 text-bp-green" />
                 {viewPreset.label}：{viewPreset.hint}
               </p>
@@ -615,7 +615,7 @@ export function KnowledgeGraphPage({
                     key={c.community_id}
                     type="button"
                     onClick={() => handleFocusCommunity(c.community_id)}
-                    className="w-full text-left text-xs bg-bp-base rounded-bp p-2 border border-bp-border hover:border-bp-green/50 transition-colors"
+                    className="w-full text-left text-xs bg-bp-base rounded-bp p-2 border border-bp-border hover-accent-left-green transition-colors"
                   >
                     <span className="text-bp-green">
                       {TYPE_LABELS_ZH[c.dominant_type] || c.dominant_type}
@@ -648,13 +648,13 @@ export function KnowledgeGraphPage({
               <>
                 <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 max-w-[55%]">
                   <span
-                    className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-bp bg-bp-panel/92 border border-bp-border text-bp-green"
+                    className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-bp bg-bp-panel/92 border border-bp-border text-bp-green"
                   >
                     <Layers className="w-3 h-3" />
                     {viewPreset.label}
                   </span>
                   {visibleNodeHint && (
-                    <span className="text-[10px] text-bp-muted px-1">{visibleNodeHint}</span>
+                    <span className="text-xs text-bp-muted px-1">{visibleNodeHint}</span>
                   )}
                 </div>
                 <div className="absolute top-3 right-3 z-20 flex gap-1.5">
@@ -676,7 +676,7 @@ export function KnowledgeGraphPage({
                     type="button"
                     title={`标签: ${labelModeHint}`}
                     onClick={cycleLabelMode}
-                    className="px-2 py-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-[10px] text-bp-text hover:text-bp-cyan flex items-center gap-1"
+                    className="px-2 py-1.5 rounded-bp bg-bp-panel/90 border border-bp-border text-xs text-bp-text hover:text-bp-cyan flex items-center gap-1"
                   >
                     <Tag className="w-3.5 h-3.5" />
                     {labelMode === 'auto' ? '自动' : labelMode === 'always' ? '全显' : '隐藏'}
@@ -697,7 +697,7 @@ export function KnowledgeGraphPage({
                     {legendTypes.map((t) => (
                       <span
                         key={t}
-                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-bp-panel/92 border border-bp-border text-bp-muted"
+                        className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-bp-panel/92 border border-bp-border text-bp-muted"
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -710,7 +710,7 @@ export function KnowledgeGraphPage({
                     ))}
                   </div>
                 )}
-                <p className="absolute bottom-3 right-3 z-20 text-[10px] text-bp-muted">
+                <p className="absolute bottom-3 right-3 z-20 text-xs text-bp-muted">
                   {viewPreset.mode === 'simplified'
                     ? '点击节点查看详情 · 社区摘要见左侧'
                     : viewPreset.mode === 'research'

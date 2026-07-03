@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+﻿import { cn } from '@/lib/utils';
 
 export function evidenceLevelLabel(level: string | undefined): string {
   switch (level) {
@@ -24,7 +24,7 @@ interface EvidenceLevelBadgeProps {
 export function EvidenceLevelBadge({ level, className }: EvidenceLevelBadgeProps) {
   return (
     <span className={cn(
-      'text-[11px] px-1.5 py-0.5 rounded border',
+      'text-xs px-1.5 py-0.5 rounded border',
       evidenceLevelBadgeCls(level),
       className,
     )}>

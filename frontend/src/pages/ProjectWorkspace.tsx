@@ -17,8 +17,11 @@ import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
 import { DatasetPage } from '@/components/DatasetPage';
+import { DataUploadGateFloating } from '@/components/DataUploadGateFloating';
+import { useDataUploadGate } from '@/hooks/useDataUploadGate';
+import { buildProjectTabUrl } from '@/lib/projectNavigation';
+import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
 import { KnowledgeGraphPage } from '@/components/KnowledgeGraphPage';
-import { ResearchClosedLoopOverview } from '@/components/ResearchClosedLoopOverview';
 import { PromptManagementPage } from '@/components/PromptManagementPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
@@ -101,14 +104,24 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
         )}
       </Card>
 
-      <Card title="研究 Pipeline" subtitle="各阶段执行状态">
-        <PipelineProgress nodes={pipelineNodes as any} />
+      <Card title="研究 Pipeline" subtitle="各阶段执行状态 · 点击阶段可跳转">
+        <PipelineProgress
+          nodes={pipelineNodes as any}
+          onNodeClick={(node) => {
+            const tab = getPipelineStageTab(node.id);
+            if (tab) {
+              navigate(buildProjectTabUrl(project.id, tab));
+            } else {
+              navigate(buildProjectTabUrl(project.id, 'workflow'));
+            }
+          }}
+        />
         <div className="mt-6 flex justify-end">
           <Button
             icon={<Play className="w-4 h-4" />}
-            onClick={() => navigate(`/projects/${project.id}?tab=closed_loop`)}
+            onClick={() => navigate(`/projects/${project.id}?tab=workflow`)}
           >
-            查看科研闭环总览 →
+            进入智能体工作流 →
           </Button>
         </div>
       </Card>
@@ -288,6 +301,18 @@ export function ProjectWorkspace() {
 
     return () => { cancelled = true; };
   }, [id, revalidateKey]);
+
+  useEffect(() => {
+    if (pipelineRuns[0]?.run_id) {
+      setLatestRunId(pipelineRuns[0].run_id);
+    }
+  }, [pipelineRuns]);
+
+  const dataUploadGate = useDataUploadGate(id, latestRunId ?? pipelineRuns[0]?.run_id ?? null);
+  const [dataGateDismissed, setDataGateDismissed] = useState(false);
+
+  const onRequiredDatasetsTab =
+    activeTab === 'datasets' && searchParams.get('subtab') === 'required-datasets';
 
   // --- 项目数据加载 ---
   const [project, setProject] = useState<ProjectOverview | null>(null);
@@ -494,14 +519,6 @@ export function ProjectWorkspace() {
     switch (activeTab) {
       case 'overview':
         return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
-      case 'closed_loop':
-        return (
-          <ResearchClosedLoopOverview
-            projectId={id}
-            latestRunId={latestRunId}
-            revalidateKey={revalidateKey}
-          />
-        );
       case 'questions':
         return <QuestionsTab projectId={id} projectMode={resolvedProjectMode} onSaved={handleResearchSaved} />;
       case 'literature':
@@ -577,6 +594,21 @@ export function ProjectWorkspace() {
       <div className="animate-fade-in">
         {renderTabContent()}
       </div>
+
+      {dataUploadGate.awaiting && !dataGateDismissed && !onRequiredDatasetsTab && dataUploadGate.runId && (
+        <DataUploadGateFloating
+          pendingCount={dataUploadGate.pendingCount}
+          uploadedCount={dataUploadGate.uploadedCount}
+          onGoToDatasets={() => {
+            setDataGateDismissed(true);
+            navigate(buildProjectTabUrl(id, 'datasets', {
+              subtab: 'required-datasets',
+              run_id: dataUploadGate.runId ?? undefined,
+            }));
+          }}
+          onDismiss={() => setDataGateDismissed(true)}
+        />
+      )}
     </div>
   );
 }

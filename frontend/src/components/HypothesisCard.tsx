@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -46,7 +46,7 @@ export function HypothesisCard({
 
   return (
     <Card className={cn(
-      'hover:border-bp-border transition-colors',
+      'hover-accent-left transition-colors',
       hypothesis.off_topic && 'border-danger-500/30 bg-danger-500/5',
       isLowEvidence && !hypothesis.off_topic && 'border-bp-yellow/20 bg-bp-yellow/5',
     )}>
@@ -67,12 +67,12 @@ export function HypothesisCard({
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-bp-text truncate">{hypothesis.title}</h3>
               {hypothesis.isPrimary && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30 shrink-0">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30 shrink-0">
                   主假设
                 </span>
               )}
               {hypothesis.off_topic && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-danger-500/15 text-danger-400 border border-danger-500/30 shrink-0 flex items-center gap-1">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-danger-500/15 text-danger-400 border border-danger-500/30 shrink-0 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
                   偏题
                 </span>
@@ -81,7 +81,7 @@ export function HypothesisCard({
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               <EvidenceLevelBadge level={hypothesis.evidenceLevel} />
               {hypothesis.alignment_score != null && (
-                <span className={`text-[11px] px-1.5 py-0.5 rounded border font-mono ${
+                <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${
                   hypothesis.alignment_score >= 70 ? 'bg-bp-green/10 text-bp-green border-bp-green/25' :
                   hypothesis.alignment_score >= 40 ? 'bg-bp-yellow/10 text-bp-yellow border-bp-yellow/25' :
                   'bg-danger-500/10 text-danger-400 border-danger-500/25'
@@ -105,42 +105,42 @@ export function HypothesisCard({
       {/* ===== 关键信息标签行 ===== */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         {hypothesis.question_alignment && (
-          <span className="text-[11px] text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-2 py-0.5 max-w-[320px] truncate"
+          <span className="text-xs text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-2 py-0.5 max-w-[320px] truncate"
             title={hypothesis.question_alignment}>
             {hypothesis.question_alignment}
           </span>
         )}
         {hypothesis.validation_target && (
-          <span className="text-[11px] font-mono text-bp-green bg-bp-green/10 border border-bp-green/20 rounded px-1.5 py-0.5">
+          <span className="text-xs font-mono text-bp-green bg-bp-green/10 border border-bp-green/20 rounded px-1.5 py-0.5">
             {hypothesis.validation_target}
           </span>
         )}
         {hypothesis.expected_measurable_effect && (
-          <span className="text-[11px] text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-1.5 py-0.5 max-w-[260px] truncate"
+          <span className="text-xs text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/15 rounded px-1.5 py-0.5 max-w-[260px] truncate"
             title={hypothesis.expected_measurable_effect}>
             {hypothesis.expected_measurable_effect}
           </span>
         )}
-        <span className="text-[11px] text-bp-muted">{hypothesis.evidenceCount} 条证据</span>
+        <span className="text-xs text-bp-muted">{hypothesis.evidenceCount} 条证据</span>
         {hypothesis.chainCompleteness != null && (
-          <span className="text-[11px] text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/20 rounded px-1.5 py-0.5">
+          <span className="text-xs text-bp-cyan/80 bg-bp-cyan-tint border border-bp-cyan/20 rounded px-1.5 py-0.5">
             链完整度 {(hypothesis.chainCompleteness * 100).toFixed(0)}%
           </span>
         )}
         {hypothesis.supportEvidenceCount != null && (
-          <span className="text-[11px] text-bp-green/80">支持 {hypothesis.supportEvidenceCount}</span>
+          <span className="text-xs text-bp-green/80">支持 {hypothesis.supportEvidenceCount}</span>
         )}
         {hypothesis.counterEvidenceCount != null && (
-          <span className="text-[11px] text-bp-yellow/80">反对 {hypothesis.counterEvidenceCount}</span>
+          <span className="text-xs text-bp-yellow/80">反对 {hypothesis.counterEvidenceCount}</span>
         )}
         {hypothesis.citationReliability != null && (
-          <span className="text-[11px] text-bp-cyan/80 flex items-center gap-0.5">
+          <span className="text-xs text-bp-cyan/80 flex items-center gap-0.5">
             <ShieldCheck className="w-3 h-3" />
             引用 {(hypothesis.citationReliability * 100).toFixed(0)}%
           </span>
         )}
         {hasDatasetFields && (
-          <span className="text-[11px] text-bp-muted">{hypothesis.dataset_field_refs!.length} 个数据字段</span>
+          <span className="text-xs text-bp-muted">{hypothesis.dataset_field_refs!.length} 个数据字段</span>
         )}
       </div>
 
@@ -156,7 +156,7 @@ export function HypothesisCard({
 
       {/* ===== 低证据提示 ===== */}
       {isLowEvidence && !hypothesis.off_topic && (
-        <div className="mb-2 p-2 rounded border border-bp-yellow/20 bg-bp-yellow/5 text-[11px] text-bp-yellow/80 flex items-start gap-1.5">
+        <div className="mb-2 p-2 rounded border border-bp-yellow/20 bg-bp-yellow/5 text-xs text-bp-yellow/80 flex items-start gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
           <span>当前假设证据不足，建议先补充文献或数据集。</span>
         </div>
@@ -207,7 +207,7 @@ export function HypothesisCard({
               {hypothesis.domain_conflict_keywords && hypothesis.domain_conflict_keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {hypothesis.domain_conflict_keywords.map((kw) => (
-                    <span key={kw} className="text-[10px] text-danger-400/70 bg-danger-500/10 px-1.5 py-0.5 rounded">
+                    <span key={kw} className="text-xs text-danger-400/70 bg-danger-500/10 px-1.5 py-0.5 rounded">
                       {kw}
                     </span>
                   ))}
@@ -238,12 +238,12 @@ export function HypothesisCard({
                 <p className="text-xs text-bp-text mb-1">{hypothesis.verifiable_spec.claim}</p>
               )}
               {hypothesis.verifiable_spec.primary_metric && (
-                <p className="text-[10px] font-mono text-bp-green/90">
+                <p className="text-xs font-mono text-bp-green/90">
                   主指标: {hypothesis.verifiable_spec.primary_metric}
                 </p>
               )}
               {hypothesis.verifiable_spec.falsification_criteria && (
-                <p className="text-[10px] text-bp-muted mt-1 line-clamp-2">
+                <p className="text-xs text-bp-muted mt-1 line-clamp-2">
                   Falsify: {hypothesis.verifiable_spec.falsification_criteria}
                 </p>
               )}
@@ -261,7 +261,7 @@ export function HypothesisCard({
                 {hypothesis.supporting_fact_ids!.map((fid) => (
                   <span
                     key={fid}
-                    className="text-[10px] font-mono text-bp-cyan/80 bg-bp-cyan-tint px-1.5 py-0.5 rounded"
+                    className="text-xs font-mono text-bp-cyan/80 bg-bp-cyan-tint px-1.5 py-0.5 rounded"
                   >
                     {fid}
                   </span>
@@ -283,7 +283,7 @@ export function HypothesisCard({
               {hasDatasetFields && hypothesis.dataset_field_refs && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {hypothesis.dataset_field_refs.map((ref) => (
-                    <span key={ref} className="text-[10px] font-mono text-bp-green/70 bg-bp-green/10 px-1.5 py-0.5 rounded">
+                    <span key={ref} className="text-xs font-mono text-bp-green/70 bg-bp-green/10 px-1.5 py-0.5 rounded">
                       {ref}
                     </span>
                   ))}
@@ -301,17 +301,17 @@ export function HypothesisCard({
               </div>
               {hypothesis.matched_keywords && hypothesis.matched_keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-1">
-                  <span className="text-[10px] text-bp-muted">匹配:</span>
+                  <span className="text-xs text-bp-muted">匹配:</span>
                   {hypothesis.matched_keywords.map((kw) => (
-                    <span key={kw} className="text-[10px] text-bp-green/70 bg-bp-green/10 px-1.5 py-0.5 rounded">{kw}</span>
+                    <span key={kw} className="text-xs text-bp-green/70 bg-bp-green/10 px-1.5 py-0.5 rounded">{kw}</span>
                   ))}
                 </div>
               )}
               {hypothesis.missing_keywords && hypothesis.missing_keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  <span className="text-[10px] text-bp-muted">缺失:</span>
+                  <span className="text-xs text-bp-muted">缺失:</span>
                   {hypothesis.missing_keywords.map((kw) => (
-                    <span key={kw} className="text-[10px] text-bp-yellow/70 bg-bp-yellow/10 px-1.5 py-0.5 rounded">{kw}</span>
+                    <span key={kw} className="text-xs text-bp-yellow/70 bg-bp-yellow/10 px-1.5 py-0.5 rounded">{kw}</span>
                   ))}
                 </div>
               )}

@@ -46,7 +46,7 @@ def normalize_pipeline_mode(mode: str | None) -> str:
 
 
 PIPELINE_MODE_LABELS_ZH = {
-    PipelineMode.TEACHING.value: "Teaching 模式 — 强 HITL，适合研究生仿真",
+    PipelineMode.TEACHING.value: "Teaching 模式 — 单轮自动精化，适合研究生仿真",
     PipelineMode.DISCOVERY.value: "Discovery 模式 — Sakana-like 自动 ideate→experiment→review 循环",
 }
 
@@ -74,7 +74,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         fed_max = DEFAULT_FEDERATED_CAMPAIGN_MAX
     enable_hitl_gate = opts.get("enable_hitl_gate")
     if enable_hitl_gate is None:
-        enable_hitl_gate = mode == PipelineMode.TEACHING.value
+        enable_hitl_gate = False
     gate_stages = opts.get("hitl_gate_stages")
     if not gate_stages:
         gate_stages = list(DEFAULT_HITL_GATE_STAGES)
@@ -98,6 +98,11 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         max_gap_rounds = max(1, min(int(max_gap_rounds), 4))
     except (TypeError, ValueError):
         max_gap_rounds = DEFAULT_MAX_GAP_ROUNDS
+    enable_quick_report = bool(opts.get("enable_quick_report"))
+    if enable_quick_report:
+        mode = PipelineMode.DISCOVERY.value
+        enable_hitl_gate = False
+        teaching_auto = False
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -118,4 +123,5 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "coverage_gap_threshold": coverage_threshold,
         "data_spec_gap_threshold": data_spec_threshold,
         "max_gap_rounds": max_gap_rounds,
+        "enable_quick_report": enable_quick_report,
     }

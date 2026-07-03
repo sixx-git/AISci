@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.pipeline_modes import HITL_GATE_STAGE_LABELS
 from app.models.pipeline import (
     PipelineRun,
     PipelineStageExecution,
@@ -185,10 +186,61 @@ class StageHumanLoopService:
             out.append(f"阶段「{stage_key}」人工反馈: {fb}")
         return out[:10]
 
+    def _infer_gate_stage(self, run: PipelineRun, gate: Dict[str, Any]) -> Optional[str]:
+        stage = gate.get("stage")
+        if stage:
+            return str(stage)
+        if run.current_stage is not None:
+            cs = run.current_stage.value if hasattr(run.current_stage, "value") else str(run.current_stage)
+            return cs.lower()
+        return None
+
+    def _repair_hitl_gate(self, run: PipelineRun) -> Dict[str, Any]:
+        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+        gate = dict(meta.get("hitl_gate") or {})
+        status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+        if status_val != PipelineStatus.HUMAN_REVIEW_REQUIRED.value and not gate.get("paused"):
+            return gate
+
+        stage = self._infer_gate_stage(run, gate)
+        if stage and not gate.get("stage"):
+            gate["stage"] = stage
+            gate["stage_label"] = HITL_GATE_STAGE_LABELS.get(stage, stage)
+            gate["resume_phase"] = f"after_{stage}"
+            gate["paused"] = True
+            meta["hitl_gate"] = gate
+            run.extra_metadata = meta
+            try:
+                self.db.commit()
+            except Exception:
+                pass
+        return gate
+
+    def _ensure_hitl_checkpoint(self, run: PipelineRun, stage_key: str) -> Dict[str, Any]:
+        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+        if meta.get("pipeline_checkpoint"):
+            return meta
+
+        if stage_key not in STAGE_KEY_ORDER:
+            return meta
+
+        stage_idx = STAGE_KEY_ORDER.index(stage_key)
+        if stage_idx + 1 >= len(STAGE_KEY_ORDER):
+            return meta
+
+        next_stage = STAGE_KEY_ORDER[stage_idx + 1]
+        results = self.seed_results_from_run(run, next_stage)
+        meta["pipeline_checkpoint"] = {
+            "results": results,
+            "resume_phase": f"after_{stage_key}",
+        }
+        run.extra_metadata = meta
+        self.db.commit()
+        return meta
+
     def get_hitl_gate_status(self, run_id: str) -> Dict[str, Any]:
         run = self._get_run(run_id)
-        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
-        gate = meta.get("hitl_gate") or {}
+        gate = self._repair_hitl_gate(run)
         status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
         paused = bool(gate.get("paused")) or status_val == PipelineStatus.HUMAN_REVIEW_REQUIRED.value
         return {
@@ -213,7 +265,7 @@ class StageHumanLoopService:
         run = self._get_run(run_id)
         meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
         gate = dict(meta.get("hitl_gate") or {})
-        stage = gate.get("stage")
+        stage = self._infer_gate_stage(run, gate)
 
         if run.status != PipelineStatus.HUMAN_REVIEW_REQUIRED and not gate.get("paused"):
             raise ValueError("Pipeline 未处于 HITL Gate 暂停状态")
@@ -233,6 +285,7 @@ class StageHumanLoopService:
             if not stage:
                 raise ValueError("无法重跑：缺少 gate stage")
             gate["paused"] = False
+            gate["stage"] = stage
             gate["last_action"] = "rerun"
             meta["hitl_gate"] = gate
             run.extra_metadata = meta
@@ -247,14 +300,31 @@ class StageHumanLoopService:
         if action != "continue":
             raise ValueError(f"未知 action: {action}")
 
+        if not stage:
+            raise ValueError("无法继续：缺少暂停阶段信息")
+
+        gate["stage"] = stage
+        gate.setdefault("stage_label", HITL_GATE_STAGE_LABELS.get(stage, stage))
+        meta = self._ensure_hitl_checkpoint(run, stage)
+        gate = dict(meta.get("hitl_gate") or gate)
+
+        next_stage_map = {
+            "hypothesis_generation": "hypothesis_review",
+            "hypothesis_review": "experiment_design",
+            "experiment_design": "small_validation",
+            "small_validation": "report_generation",
+            "data_acquisition": "knowledge_gap",
+        }
+        run.current_stage = next_stage_map.get(stage, stage)
+
         constraints: List[str] = []
         if inject_feedback and human_feedback.strip():
-            constraints.append(f"人工反馈（{stage or 'gate'}）: {human_feedback.strip()}")
+            constraints.append(f"人工反馈（{stage}）: {human_feedback.strip()}")
         if inject_feedback:
             constraints.extend(self.collect_feedback_constraints(run_id))
 
         cleared = list(gate.get("cleared_stages") or [])
-        if stage and stage not in cleared:
+        if stage not in cleared:
             cleared.append(stage)
 
         gate["cleared_stages"] = cleared

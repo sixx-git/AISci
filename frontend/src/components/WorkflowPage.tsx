@@ -1,12 +1,10 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+﻿import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw, Database } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
-import { HitlGatePanel } from '@/components/HitlGatePanel';
 import { ExecutionTierBadge } from '@/components/ExecutionTierBadge';
-import { HumanInLoopCard } from '@/components/HumanInLoopCard';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
 import { FederatedCampaignPanel } from '@/components/FederatedCampaignPanel';
@@ -17,6 +15,7 @@ import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
+import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, type LoopConfigState } from '@/components/LoopConfigPanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
@@ -28,7 +27,6 @@ import type {
   IdeationNoveltyData,
   PlotQualityData,
   PipelineRunExtraMetadata,
-  PipelineRunMode,
   PipelineRunResult,
   PipelineStageLog,
   DiscoveryLoopData,
@@ -62,6 +60,10 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
   small_validation: 'validation',
   report_generation: 'report',
 };
+
+const NODE_ID_TO_STAGE: Record<string, string> = Object.fromEntries(
+  Object.entries(STAGE_TO_NODE_ID).map(([stage, nodeId]) => [nodeId, stage]),
+);
 
 // ============ localStorage 工具 ============
 
@@ -422,6 +424,25 @@ function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNode
   };
 }
 
+function extractRunStatusFromResponse(response: unknown): string | null {
+  if (!response || typeof response !== 'object') return null;
+  const r = response as Record<string, unknown>;
+  const data = (r.code != null && r.data != null ? r.data : response) as Record<string, unknown>;
+  if (!data || typeof data !== 'object') return null;
+  const status = data.status;
+  return typeof status === 'string' ? status : null;
+}
+
+function applyInferredRunningStage(nodes: AgentNodeData[], overallStatus: string | null): AgentNodeData[] {
+  if (overallStatus !== 'running') return nodes;
+  if (nodes.some((n) => n.status === 'running')) return nodes;
+  const firstPending = nodes.findIndex((n) => n.status === 'pending');
+  if (firstPending < 0) return nodes;
+  return nodes.map((node, idx) => (
+    idx === firstPending ? { ...node, status: 'running' as AgentStatus } : node
+  ));
+}
+
 function extractStagesFromResponse(response: unknown): PipelineStageLog[] {
   if (!response || typeof response !== 'object') return [];
 
@@ -466,22 +487,29 @@ export function WorkflowPage({
   const [runState, setRunState] = useState<RunState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  /** 最近一次 run（含已完成），用于本阶段重跑等操作 */
+  const [latestRunId, setLatestRunId] = useState<string | null>(null);
   const [hasExistingRuns, setHasExistingRuns] = useState<boolean | null>(null);
   const [staleWarning, setStaleWarning] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
-  const [pipelineMode, setPipelineMode] = useState<PipelineRunMode>('teaching');
-  const [numIdeas, setNumIdeas] = useState(3);
-  const [enableTeachingAutoRefinement, setEnableTeachingAutoRefinement] = useState(true);
-  const [sandboxUseDocker, setSandboxUseDocker] = useState(false);
-  const [coverageGapThreshold, setCoverageGapThreshold] = useState(70);
-  const [dataSpecGapThreshold, setDataSpecGapThreshold] = useState(60);
-  const [enableGapSearch, setEnableGapSearch] = useState(true);
+  const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
+  const [loopConfig, setLoopConfig] = useState<LoopConfigState>(DEFAULT_LOOP_CONFIG);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
   const allPendingCountRef = useRef(0);
   const currentRunIdRef = useRef<string | null>(null);
+  const latestRunIdRef = useRef<string | null>(null);
+
+  const rememberLatestRunId = useCallback((runId: string) => {
+    latestRunIdRef.current = runId;
+    setLatestRunId(runId);
+  }, []);
+
+  const resolveRunIdForActions = useCallback((): string | null => {
+    return currentRunIdRef.current ?? latestRunIdRef.current;
+  }, []);
 
   const [localResearchQuestion, setLocalResearchQuestion] = useState('');
   const finalResearchQuestion = (researchQuestion ?? '').trim() || localResearchQuestion.trim();
@@ -583,7 +611,38 @@ export function WorkflowPage({
     [runExtraMetadata],
   );
 
-  const hitlGateInfo = useMemo(() => runExtraMetadata?.hitl_gate ?? null, [runExtraMetadata]);
+  const autoResumeHitlGate = useCallback(async (runId: string) => {
+    if (!projectId) return false;
+    try {
+      const detailRes = await pipelineService.getRunDetail(runId);
+      const meta = detailRes.data?.extra_metadata as Record<string, unknown> | undefined;
+      const duGate = meta?.data_upload_gate as Record<string, unknown> | undefined;
+      if (duGate?.paused) {
+        setRunState('idle');
+        setStatusMessage('数据采集已完成，请前往「数据集 → 所需数据集」上传至少 1 个文件后继续');
+        return false;
+      }
+
+      const res = await humanLoopService.resumeHitlGate({
+        run_id: runId,
+        project_id: projectId,
+        action: 'continue',
+      });
+      if (res.code === 200) {
+        const newRunId = res.data?.run_id;
+        if (newRunId && newRunId !== runId) {
+          setCurrentRunId(newRunId);
+          currentRunIdRef.current = newRunId;
+          setActiveRunId(projectId, newRunId);
+          return newRunId;
+        }
+        return runId;
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }, [projectId]);
 
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
@@ -623,11 +682,16 @@ export function WorkflowPage({
               const errMsg = (resultData as Record<string, unknown>).error_message as string | undefined;
               setErrorMessage(errMsg || 'Pipeline 执行失败');
               setHasExistingRuns(true);
+              rememberLatestRunId(savedRunId);
             }
           } else if (status === 'human_review_required') {
-            setRunState('idle');
-            setStatusMessage('等待人工复核（HITL Gate）…');
-            await refreshFromRunDetail(savedRunId);
+            const resumedRunId = await autoResumeHitlGate(savedRunId);
+            if (resumedRunId) {
+              startPolling(typeof resumedRunId === 'string' ? resumedRunId : savedRunId);
+            } else {
+              setRunState('idle');
+              setStatusMessage('流程暂停，请重新运行 Pipeline');
+            }
           } else if (status === 'running') {
             startPolling(savedRunId);
           } else {
@@ -667,6 +731,7 @@ export function WorkflowPage({
         return;
       }
       const latestRun = runsRes.data[0];
+      rememberLatestRunId(latestRun.run_id);
 
       const savedRunId = getActiveRunId(projectId);
       if (savedRunId && savedRunId === latestRun.run_id) {
@@ -680,6 +745,7 @@ export function WorkflowPage({
       }
       const runDetail = detailRes.data;
       setHasExistingRuns(true);
+      setPipelineRunStatus((runDetail.status as string) ?? null);
       setRunExtraMetadata(runDetail.extra_metadata ?? null);
       setNodes(() => {
         const base = createInitialNodes();
@@ -691,7 +757,7 @@ export function WorkflowPage({
     } catch {
       setHasExistingRuns(false);
     }
-  }, [projectId]);
+  }, [projectId, rememberLatestRunId]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -699,23 +765,32 @@ export function WorkflowPage({
 
   // ========== 用真实 stages 刷新节点（最终刷新） ==========
   const refreshFromRunDetail = useCallback(async (runId: string) => {
+    rememberLatestRunId(runId);
     try {
       const detailRes = await pipelineService.getRunDetail(runId);
       if (detailRes.code !== 200 || !detailRes.data) return;
       const runDetail = detailRes.data;
+      const runStatus = (runDetail.status as string) ?? null;
+      setPipelineRunStatus(runStatus);
       setRunExtraMetadata(runDetail.extra_metadata ?? null);
-      setNodes(createInitialNodes().map((node) => {
+      const mergedNodes = createInitialNodes().map((node) => {
         const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
         return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
-      }));
+      });
+      setNodes(applyInferredRunningStage(mergedNodes, runStatus));
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [rememberLatestRunId]);
 
   // ========== 兼容多种响应格式更新节点 ==========
   const updateNodesFromStages = useCallback((response: unknown) => {
     const stages = extractStagesFromResponse(response);
+    const overallStatus = extractRunStatusFromResponse(response);
+
+    if (overallStatus) {
+      setPipelineRunStatus(overallStatus);
+    }
 
     setNodes((prev) => {
       const base = prev.length > 0 ? prev : createInitialNodes();
@@ -725,7 +800,7 @@ export function WorkflowPage({
         return matchedStage ? mergeStageData(node, matchedStage) : node;
       });
 
-      return updated;
+      return applyInferredRunningStage(updated, overallStatus);
     });
 
     if (import.meta.env.DEV && stages.length > 0) {
@@ -796,11 +871,10 @@ export function WorkflowPage({
           }
 
           if (status === 'human_review_required') {
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            pollingRef.current = null;
-            setRunState('idle');
-            setStatusMessage('等待人工复核（HITL Gate）…');
-            await refreshFromRunDetail(runId);
+            const resumedRunId = await autoResumeHitlGate(runId);
+            if (resumedRunId) {
+              startPolling(typeof resumedRunId === 'string' ? resumedRunId : runId);
+            }
             return;
           }
 
@@ -870,19 +944,7 @@ export function WorkflowPage({
 
     try {
       console.log('[Pipeline] submitting POST /pipeline/run projectId=', projectId, 'question=', finalResearchQuestion?.slice(0, 50));
-      const response = await pipelineService.run(projectId, finalResearchQuestion, {
-        pipeline_mode: pipelineMode,
-        num_ideas: numIdeas,
-        discovery_max_rounds: 3,
-        enable_plot_vlm_critique: true,
-        enable_teaching_auto_refinement: enableTeachingAutoRefinement,
-        sandbox_use_docker: sandboxUseDocker,
-        enable_gap_search: enableGapSearch,
-        enable_hf_auto_import: true,
-        coverage_gap_threshold: coverageGapThreshold,
-        data_spec_gap_threshold: dataSpecGapThreshold,
-        max_gap_rounds: 2,
-      });
+      const response = await pipelineService.run(projectId, finalResearchQuestion, loopConfigToRunOptions(loopConfig));
       const result: PipelineRunResult = response.data;
 
       if (!result || !result.run_id) {
@@ -896,6 +958,7 @@ export function WorkflowPage({
       setActiveRunId(projectId, result.run_id);
       setCurrentRunId(result.run_id);
       currentRunIdRef.current = result.run_id;
+      rememberLatestRunId(result.run_id);
       setRunState('running');
 
       startPolling(result.run_id);
@@ -909,13 +972,8 @@ export function WorkflowPage({
     projectId,
     finalResearchQuestion,
     startPolling,
-    pipelineMode,
-    numIdeas,
-    enableTeachingAutoRefinement,
-    sandboxUseDocker,
-    enableGapSearch,
-    coverageGapThreshold,
-    dataSpecGapThreshold,
+    loopConfig,
+    rememberLatestRunId,
   ]);
 
   // ========== 暂停 ==========
@@ -950,9 +1008,9 @@ export function WorkflowPage({
   }, [loadLatestRun, projectId]);
 
   // ========== 重新运行 ==========
-  const handleRerun = useCallback(
+  const handleRerunFullPipeline = useCallback(
     async () => {
-      console.log('[Pipeline] rerun clicked, projectId=', projectId);
+      console.log('[Pipeline] full rerun clicked, projectId=', projectId);
       if (projectId) clearActiveRun(projectId);
       setStaleWarning(false);
       setStatusMessage(null);
@@ -967,29 +1025,84 @@ export function WorkflowPage({
     [projectId, handleRunAll],
   );
 
+  const handleRerunCurrentStage = useCallback(
+    async (nodeId: string) => {
+      if (!projectId) {
+        setErrorMessage('缺少项目 ID，无法重跑本阶段。');
+        return;
+      }
+      const parentRunId = resolveRunIdForActions();
+      if (!parentRunId) {
+        setErrorMessage('未找到可重跑的运行记录，请先运行一次 Pipeline。');
+        return;
+      }
+      const stage = NODE_ID_TO_STAGE[nodeId] || nodeId;
+      const nodeName = nodes.find((n) => n.id === nodeId)?.name || stage;
+      try {
+        setErrorMessage(null);
+        setStatusMessage(`正在重新运行「${nodeName}」（仅本智能体，不重启全流程）…`);
+        const res = await humanLoopService.rerunFromStage({
+          project_id: projectId,
+          run_id: parentRunId,
+          stage,
+          use_human_modified_output: true,
+          rerun_mode: 'single_stage',
+        });
+        if (res.code === 200 && res.data?.run_id) {
+          const newRunId = res.data.run_id;
+          setCurrentRunId(newRunId);
+          currentRunIdRef.current = newRunId;
+          rememberLatestRunId(newRunId);
+          setActiveRunId(projectId, newRunId);
+          setRunState('running');
+          startPolling(newRunId);
+        } else {
+          setStatusMessage(null);
+          setErrorMessage(res.message || '本阶段重跑失败');
+        }
+      } catch (err) {
+        console.error('本阶段重跑失败', err);
+        setStatusMessage(null);
+        setErrorMessage(err instanceof Error ? err.message : '本阶段重跑失败');
+      }
+    },
+    [projectId, nodes, startPolling, resolveRunIdForActions, rememberLatestRunId],
+  );
+
   const handleRerunFromReview = useCallback(async () => {
-    if (!projectId || !currentRunId) return;
+    if (!projectId) return;
+    const parentRunId = resolveRunIdForActions();
+    if (!parentRunId) {
+      setErrorMessage('未找到可重跑的运行记录，请先运行一次 Pipeline。');
+      return;
+    }
     try {
       const res = await humanLoopService.rerunFromStage({
         project_id: projectId,
-        run_id: currentRunId,
+        run_id: parentRunId,
         stage: 'hypothesis_review',
         use_human_modified_output: true,
+        rerun_mode: 'from_stage_onward',
       });
       if (res.code === 200 && res.data?.run_id) {
         const newRunId = res.data.run_id;
         setCurrentRunId(newRunId);
         currentRunIdRef.current = newRunId;
+        rememberLatestRunId(newRunId);
         setActiveRunId(projectId, newRunId);
         setRunState('running');
         startPolling(newRunId);
+      } else {
+        setErrorMessage(res.message || '从假设评审重跑失败');
       }
     } catch (err) {
       console.error('从假设评审重跑失败', err);
+      setErrorMessage(err instanceof Error ? err.message : '从假设评审重跑失败');
     }
-  }, [projectId, currentRunId, startPolling]);
+  }, [projectId, startPolling, resolveRunIdForActions, rememberLatestRunId]);
 
   // ========== 计算状态摘要 ==========
+  const effectiveRunId = currentRunId ?? latestRunId;
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
 
@@ -1017,98 +1130,23 @@ export function WorkflowPage({
           </p>
         )}
 
-        {currentRunId && (
+        {effectiveRunId && (
           <p className="text-sm text-bp-muted mt-1 truncate font-mono text-xs">
-            run_id: {currentRunId}
+            run_id: {effectiveRunId}
           </p>
         )}
 
-        {/* P5: Pipeline 运行模式 */}
-        <div className="mt-4 p-3 rounded-bp border border-bp-border bg-bp-panel/30 flex flex-wrap items-end gap-4">
-          <div>
-            <label className="text-[11px] text-bp-muted block mb-1">运行模式</label>
-            <select
-              value={pipelineMode}
-              onChange={(e) => setPipelineMode(e.target.value as PipelineRunMode)}
-              disabled={runState !== 'idle'}
-              className="input-field py-1.5 px-2 text-sm w-auto"
-            >
-              <option value="teaching">Teaching — 强 HITL（研究生仿真）</option>
-              <option value="discovery">Discovery — Sakana-like 自动循环</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] text-bp-muted block mb-1">num_ideas</label>
-            <input
-              type="number"
-              min={1}
-              max={8}
-              value={numIdeas}
-              onChange={(e) => setNumIdeas(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
-              disabled={runState !== 'idle'}
-              className="input-field py-1.5 px-2 text-sm w-16"
-            />
-          </div>
-          {pipelineMode === 'teaching' && (
-            <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enableTeachingAutoRefinement}
-                onChange={(e) => setEnableTeachingAutoRefinement(e.target.checked)}
-                disabled={runState !== 'idle'}
-                className="rounded border-bp-border"
-              />
-              验证失败时自动重跑实验设计
-            </label>
-          )}
-          <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enableGapSearch}
-              onChange={(e) => setEnableGapSearch(e.target.checked)}
-              disabled={runState !== 'idle'}
-              className="rounded border-bp-border"
-            />
-            数据采集 Gap 自动补搜
-          </label>
-          <div>
-            <label className="text-[11px] text-bp-muted block mb-1">完备性阈值</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={coverageGapThreshold}
-              onChange={(e) => setCoverageGapThreshold(Number(e.target.value) || 70)}
-              disabled={runState !== 'idle'}
-              className="input-field py-1.5 px-2 text-sm w-16"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-bp-muted block mb-1">DataSpec 阈值</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={dataSpecGapThreshold}
-              onChange={(e) => setDataSpecGapThreshold(Number(e.target.value) || 60)}
-              disabled={runState !== 'idle'}
-              className="input-field py-1.5 px-2 text-sm w-16"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={sandboxUseDocker}
-              onChange={(e) => setSandboxUseDocker(e.target.checked)}
-              disabled={runState !== 'idle'}
-              className="rounded border-bp-border"
-            />
-            沙箱 Docker 隔离（需本地 Docker）
-          </label>
-          <p className="text-[11px] text-bp-muted flex-1 min-w-[200px]">
-            {pipelineMode === 'discovery'
-              ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献（arXiv+向量检索）并重跑假设→实验→报告。'
-              : 'Teaching：每阶段可 HITL 编辑/重跑；Ideation 新颖性 + num_ideas 方向供假设树选择。'}
+        <div className="mt-4">
+          <LoopConfigPanel
+            value={loopConfig}
+            onChange={setLoopConfig}
+            disabled={runState !== 'idle'}
+            qualityTrend={runExtraMetadata?.quality_trend}
+          />
+          <p className="text-xs text-bp-muted mt-2">
+            {loopConfig.pipelineMode === 'discovery'
+              ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献并重跑假设→实验→报告。'
+              : 'Teaching：全自动流水线；验证失败时可触发单轮自动精化。'}
           </p>
         </div>
       </div>
@@ -1217,9 +1255,9 @@ export function WorkflowPage({
                   size="sm"
                   variant="primary"
                   icon={<RefreshCw className="w-4 h-4" />}
-                  onClick={handleRerun}
+                  onClick={handleRerunFullPipeline}
                 >
-                  重新运行 Pipeline
+                  重新运行全部流程
                 </Button>
               </div>
             )}
@@ -1256,9 +1294,9 @@ export function WorkflowPage({
                 size="sm"
                 variant="primary"
                 icon={<RefreshCw className="w-4 h-4" />}
-                onClick={handleRerun}
+                onClick={handleRerunFullPipeline}
               >
-                重新运行 Pipeline
+                重新运行全部流程
               </Button>
             </div>
           </div>
@@ -1302,7 +1340,7 @@ export function WorkflowPage({
 
         {/* 右侧：详情 + 收拢辅助面板 */}
         <div className="lg:col-span-2 space-y-4">
-          <AgentDetailPanel node={selectedNode} onRerun={() => handleRerun()} />
+          <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
           {(runExtraMetadata?.closed_loop_events?.length
             || runExtraMetadata?.quality_trend?.length
@@ -1312,32 +1350,10 @@ export function WorkflowPage({
                 events={runExtraMetadata?.closed_loop_events}
                 qualityTrend={runExtraMetadata?.quality_trend}
                 decisions={runExtraMetadata?.closed_loop_decisions}
-                runId={currentRunId}
+                runId={effectiveRunId}
               />
             </CollapsiblePanel>
           ) : null}
-
-          {projectId && currentRunId && (
-            <CollapsiblePanel
-              title="HITL 门禁"
-              subtitle="HitlGatePanel"
-              defaultOpen={!!hitlGateInfo?.paused}
-            >
-              <HitlGatePanel
-                projectId={projectId}
-                runId={currentRunId}
-                gate={hitlGateInfo}
-                runStatus={hitlGateInfo?.paused ? 'human_review_required' : undefined}
-                onResumed={(newRunId) => {
-                  const rid = newRunId || currentRunId;
-                  setCurrentRunId(rid);
-                  currentRunIdRef.current = rid;
-                  if (projectId) setActiveRunId(projectId, rid);
-                  startPolling(rid);
-                }}
-              />
-            </CollapsiblePanel>
-          )}
 
           {validationExecutionMeta && (
             <CollapsiblePanel title="执行层级" subtitle="ExecutionTierBadge" defaultOpen={false}>
@@ -1411,7 +1427,7 @@ export function WorkflowPage({
             <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel" defaultOpen={false}>
               <EnsembleReviewPanel
                 review={ensembleReview}
-                onRerunFromReview={currentRunId ? handleRerunFromReview : undefined}
+                onRerunFromReview={effectiveRunId ? handleRerunFromReview : undefined}
               />
             </CollapsiblePanel>
           )}
@@ -1422,7 +1438,7 @@ export function WorkflowPage({
             </CollapsiblePanel>
           )}
 
-          {projectId && currentRunId && selectedNode && (
+          {projectId && effectiveRunId && selectedNode && (
             <CollapsiblePanel
               title="阶段人工介入"
               subtitle={selectedNode.name}
@@ -1430,7 +1446,7 @@ export function WorkflowPage({
             >
               <StageHumanLoopPanel
                 projectId={projectId}
-                runId={currentRunId}
+                runId={effectiveRunId}
                 nodeId={selectedNode.id}
                 researchQuestion={researchQuestion}
                 inputData={selectedNode.input_data}
@@ -1440,20 +1456,15 @@ export function WorkflowPage({
                 humanFeedback={selectedNode.human_feedback}
                 editedAt={selectedNode.edited_at}
                 revisionHistory={selectedNode.revision_history}
-                onUpdated={() => refreshFromRunDetail(currentRunId)}
+                onUpdated={() => refreshFromRunDetail(effectiveRunId)}
                 onRerunStarted={(newRunId) => {
                   setCurrentRunId(newRunId);
                   currentRunIdRef.current = newRunId;
+                  rememberLatestRunId(newRunId);
                   if (projectId) setActiveRunId(projectId, newRunId);
                   startPolling(newRunId);
                 }}
               />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNode && selectedNode.status === 'human_review_required' && (
-            <CollapsiblePanel title="人工确认" defaultOpen>
-              <HumanInLoopCard />
             </CollapsiblePanel>
           )}
         </div>

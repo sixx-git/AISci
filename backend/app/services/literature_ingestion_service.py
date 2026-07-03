@@ -23,6 +23,15 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def coerce_authors_text(authors: Any) -> str:
+    """将作者字段规范为 Text 列可存储的字符串（多源检索常返回 list）。"""
+    if authors is None:
+        return ""
+    if isinstance(authors, list):
+        return ", ".join(str(a).strip() for a in authors if a is not None and str(a).strip())
+    return str(authors).strip()
+
+
 class LiteratureIngestionService:
     """文献统一导入服务"""
 
@@ -187,7 +196,7 @@ class LiteratureIngestionService:
             file_type="pdf",
             file_size=0,
             title=paper.get("title", ""),
-            authors=paper.get("authors", ""),
+            authors=coerce_authors_text(paper.get("authors", "")),
             abstract=paper.get("abstract", ""),
             doi=paper.get("doi"),
             publication_date=published_at,
@@ -397,7 +406,7 @@ class LiteratureIngestionService:
             file_type="bibtex",
             file_size=0,
             title=entry.get("title", ""),
-            authors=entry.get("authors", ""),
+            authors=coerce_authors_text(entry.get("authors", "")),
             abstract=entry.get("abstract", ""),
             doi=entry.get("doi"),
             publication_date=published_at,

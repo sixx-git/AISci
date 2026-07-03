@@ -1,4 +1,4 @@
-import { GitCompare } from 'lucide-react';
+﻿import { GitCompare } from 'lucide-react';
 import type { IterationSnapshot } from '@/types';
 
 interface VersionComparePanelProps {
@@ -46,7 +46,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
               key={`${before.label}-${after.label}`}
               className="p-3 rounded border border-bp-border/80 bg-bp-base/40"
             >
-              <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                 <span className="text-bp-muted">{before.label || `R${before.round}`}</span>
                 <span className="text-bp-muted">→</span>
                 <span className="text-bp-text">{after.label || `R${after.round}`}</span>
@@ -63,7 +63,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
                 <CompareRow label="假设" changed={hypo.changed} text={hypo.preview} />
                 <CompareRow label="实验步骤" changed={steps.changed} text={steps.preview} />
                 <EvidenceCompareRow before={before} after={after} />
-                <div className="flex gap-4 text-[10px] text-bp-muted">
+                <div className="flex gap-4 text-xs text-bp-muted">
                   <span>沙箱: {String(before.sandbox_success ?? '—')} → {String(after.sandbox_success ?? '—')}</span>
                   <span>决策: {before.ensemble_decision || '—'} → {after.ensemble_decision || '—'}</span>
                 </div>
@@ -79,7 +79,7 @@ export function VersionComparePanel({ snapshots, title = '假设 / 计划版本�
 function CompareRow({ label, changed, text }: { label: string; changed: boolean; text: string }) {
   return (
     <div>
-      <p className="text-[10px] text-bp-muted mb-0.5">
+      <p className="text-xs text-bp-muted mb-0.5">
         {label}
         {changed && <span className="ml-1 text-bp-yellow">已变更</span>}
       </p>
@@ -102,18 +102,18 @@ function EvidenceCompareRow({ before, after }: { before: IterationSnapshot; afte
 
   return (
     <div>
-      <p className="text-[10px] text-bp-muted mb-0.5">
+      <p className="text-xs text-bp-muted mb-0.5">
         证据 / 可验证 spec
         {changed && <span className="ml-1 text-bp-green">已变更</span>}
       </p>
-      <p className="text-bp-muted text-[11px]">
+      <p className="text-bp-muted text-xs">
         fact {countBefore}→{countAfter}
         {before.evidence_level || after.evidence_level
           ? ` · 等级 ${before.evidence_level || '—'}→${after.evidence_level || '—'}`
           : ''}
       </p>
       {after.verifiable_primary_metric && (
-        <p className="text-bp-green/80 text-[10px] font-mono mt-0.5">
+        <p className="text-bp-green/80 text-xs font-mono mt-0.5">
           主指标 {after.verifiable_primary_metric}
         </p>
       )}

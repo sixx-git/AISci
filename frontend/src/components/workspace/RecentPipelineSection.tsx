@@ -1,88 +1,17 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Loader2, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/Card';
-import { pipelineService } from '@/services/pipelineService';
+import { StatusBadge } from '@/components/StatusBadge';
 import { formatDate } from '@/lib/utils';
-import { cn } from '@/lib/utils';
-import type { PipelineRunSummary, ProjectOverview } from '@/types';
-
-const RUN_STATUS_STYLE: Record<string, string> = {
-  completed: 'text-bp-green bg-bp-green/10 border-bp-green/20',
-  running: 'text-bp-cyan bg-bp-cyan-tint border-bp-cyan/20',
-  failed: 'text-danger-400 bg-danger-500/10 border-danger-500/20',
-  pending: 'text-bp-muted bg-bp-panel border-bp-border',
-};
-
-const RUN_STATUS_LABEL: Record<string, string> = {
-  completed: '已完成',
-  running: '运行中',
-  failed: '失败',
-  pending: '等待中',
-};
-
-export interface RecentPipelineRow {
-  projectId: string;
-  projectName: string;
-  run: PipelineRunSummary;
-}
+import { normalizeStatusKey, statusBadgeLabel } from '@/lib/projectStatus';
+import type { RecentPipelineRow } from '@/hooks/useLatestPipelineRuns';
 
 interface RecentPipelineSectionProps {
-  projects: ProjectOverview[];
+  rows: RecentPipelineRow[];
+  loading: boolean;
 }
 
-const MAX_PROJECTS_SCAN = 12;
-const MAX_ROWS = 6;
-
-export function RecentPipelineSection({ projects }: RecentPipelineSectionProps) {
-  const [rows, setRows] = useState<RecentPipelineRow[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      setRows([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      try {
-        const scan = projects.slice(0, MAX_PROJECTS_SCAN);
-        const results = await Promise.allSettled(
-          scan.map(async (p) => {
-            const res = await pipelineService.getRuns(p.id);
-            if (res.code !== 200 || !Array.isArray(res.data) || res.data.length === 0) {
-              return [] as RecentPipelineRow[];
-            }
-            const latest = [...res.data].sort(
-              (a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime(),
-            )[0];
-            return [{ projectId: p.id, projectName: p.name, run: latest }];
-          }),
-        );
-
-        const merged: RecentPipelineRow[] = [];
-        results.forEach((r) => {
-          if (r.status === 'fulfilled') merged.push(...r.value);
-        });
-
-        merged.sort(
-          (a, b) => new Date(b.run.created_at || '').getTime() - new Date(a.run.created_at || '').getTime(),
-        );
-
-        if (!cancelled) setRows(merged.slice(0, MAX_ROWS));
-      } catch {
-        if (!cancelled) setRows([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [projects]);
-
+export function RecentPipelineSection({ rows, loading }: RecentPipelineSectionProps) {
   if (!loading && rows.length === 0) return null;
 
   return (
@@ -111,8 +40,8 @@ export function RecentPipelineSection({ projects }: RecentPipelineSectionProps) 
             <tbody>
               {rows.map(({ projectId, projectName, run }) => {
                 const runId = run.run_id || run.id;
-                const statusKey = run.status || 'pending';
-                const statusCls = RUN_STATUS_STYLE[statusKey] ?? RUN_STATUS_STYLE.pending;
+                const rawStatus = run.status || 'pending';
+                const badgeStatus = normalizeStatusKey(rawStatus);
                 return (
                   <tr
                     key={`${projectId}-${runId}`}
@@ -125,9 +54,10 @@ export function RecentPipelineSection({ projects }: RecentPipelineSectionProps) 
                       {runId.slice(0, 8)}…
                     </td>
                     <td className="py-3 px-4">
-                      <span className={cn('text-[11px] px-2 py-0.5 rounded-bp border', statusCls)}>
-                        {RUN_STATUS_LABEL[statusKey] ?? statusKey}
-                      </span>
+                      <StatusBadge
+                        status={badgeStatus}
+                        label={statusBadgeLabel(badgeStatus, rawStatus, true)}
+                      />
                     </td>
                     <td className="py-3 px-4 text-xs text-bp-muted whitespace-nowrap">
                       {formatDate(run.created_at)}

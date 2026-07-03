@@ -1,4 +1,4 @@
-import { GitBranch, FileText, Target } from 'lucide-react';
+﻿import { GitBranch, FileText, Target } from 'lucide-react';
 import type { IterationSnapshot } from '@/types';
 
 interface EvidenceDiffPanelProps {
@@ -50,7 +50,7 @@ export function EvidenceDiffPanel({
               key={`evidence-${before.label}-${after.label}`}
               className="p-3 rounded border border-bp-border/80 bg-bp-base/40 text-xs"
             >
-              <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                 <span className="text-bp-muted">{before.label || `R${before.round}`}</span>
                 <span className="text-bp-muted">→</span>
                 <span className="text-bp-text">{after.label || `R${after.round}`}</span>
@@ -61,7 +61,7 @@ export function EvidenceDiffPanel({
                 )}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 text-[11px]">
+              <div className="grid gap-2 sm:grid-cols-2 text-xs">
                 <div>
                   <p className="text-bp-muted mb-1 flex items-center gap-1">
                     <FileText className="w-3 h-3" />
@@ -96,7 +96,7 @@ export function EvidenceDiffPanel({
                     {after.verifiable_spec_summary || before.verifiable_spec_summary || '—'}
                   </p>
                   {after.verifiable_primary_metric && (
-                    <p className="text-bp-green/90 mt-1 font-mono text-[10px]">
+                    <p className="text-bp-green/90 mt-1 font-mono text-xs">
                       主指标: {after.verifiable_primary_metric}
                     </p>
                   )}

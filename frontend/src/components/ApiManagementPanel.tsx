@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { KeyRound, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LlmConfigForm } from '@/components/settings/LlmConfigForm';
@@ -41,7 +41,7 @@ export function ApiManagementPanel() {
           'flex items-center gap-2 px-3 py-2 rounded-bp text-sm font-medium border transition-colors',
           open
             ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30'
-            : 'text-bp-muted border-transparent hover:text-bp-text hover:bg-bp-surface hover:border-bp-border',
+            : 'text-bp-muted border-transparent hover:text-bp-text hover:bg-bp-surface hover-accent-bottom',
         )}
         title="API 与模型配置"
       >
@@ -49,7 +49,7 @@ export function ApiManagementPanel() {
         <span className="hidden md:inline">API 管理</span>
         {config && (
           <span className={cn(
-            'hidden lg:inline text-[11px] px-1.5 py-0.5 rounded border max-w-[100px] truncate',
+            'hidden lg:inline text-xs px-1.5 py-0.5 rounded border max-w-[100px] truncate',
             keyConfigured
               ? 'bg-bp-green/10 text-bp-green border-bp-green/25'
               : 'bg-bp-yellow/10 text-bp-yellow border-bp-yellow/25',
@@ -64,7 +64,7 @@ export function ApiManagementPanel() {
         <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,22rem)] z-[60] rounded-bp border border-bp-border bg-bp-panel shadow-bp-glow-strong">
           <div className="px-4 py-3 border-b border-bp-border/80">
             <h3 className="text-sm font-semibold text-bp-text">API 配置</h3>
-            <p className="text-[11px] text-bp-muted mt-0.5">
+            <p className="text-xs text-bp-muted mt-0.5">
               Qwen 全模态模型，文本与视觉共用同一配置
             </p>
           </div>

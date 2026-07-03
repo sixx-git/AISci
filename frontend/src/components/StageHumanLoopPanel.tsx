@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Edit3, Save, MessageSquare, GraduationCap, Play, Tag, Loader2, History,
@@ -151,6 +151,7 @@ export function StageHumanLoopPanel({
         run_id: runId,
         stage,
         use_human_modified_output: true,
+        rerun_mode: 'from_stage_onward',
       });
       if (res.code === 200 && res.data?.run_id) {
         onRerunStarted?.(res.data.run_id);
@@ -182,7 +183,7 @@ export function StageHumanLoopPanel({
           </Button>
           <Button variant="secondary" className="text-xs" onClick={handleRerun} disabled={!!busy}>
             {busy === 'rerun' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Play className="w-3.5 h-3.5 mr-1" />}
-            从此阶段重跑
+            从此阶段继续后续流程
           </Button>
         </div>
 
@@ -255,7 +256,7 @@ export function StageHumanLoopPanel({
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {revisionHistory.slice().reverse().slice(0, 5).map((h) => (
-                <div key={String(h.id || h.at)} className="text-[11px] text-bp-muted border border-bp-border rounded p-2">
+                <div key={String(h.id || h.at)} className="text-xs text-bp-muted border border-bp-border rounded p-2">
                   <span className="text-bp-muted">{String(h.at || '')}</span>
                   {h.feedback ? ` · ${String(h.feedback)}` : ''}
                 </div>
@@ -292,7 +293,7 @@ function CollapsibleBlock({
         {open ? '▼' : '▶'} {title}
       </button>
       {open && (
-        <pre className="mt-1 text-[11px] text-bp-muted font-mono bg-bp-base/60 border border-bp-border rounded p-2 max-h-40 overflow-y-auto">
+        <pre className="mt-1 text-xs text-bp-muted font-mono bg-bp-base/60 border border-bp-border rounded p-2 max-h-40 overflow-y-auto">
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
@@ -304,7 +305,7 @@ function ReviewList({ title, items }: { title: string; items?: string[] }) {
   if (!items?.length) return null;
   return (
     <div>
-      <p className="text-[11px] text-bp-muted mb-1">{title}</p>
+      <p className="text-xs text-bp-muted mb-1">{title}</p>
       <ul className="text-xs text-bp-text space-y-0.5 list-disc list-inside">
         {items.map((item) => (
           <li key={item}>{item}</li>

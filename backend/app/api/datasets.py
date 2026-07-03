@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.project import Project
 from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
 from app.services.modeling_service import ModelingService
+from app.services.dataset_assistant_service import DatasetAssistantService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +21,11 @@ class ModelingRunRequest(BaseModel):
         description="任务类型: classification / regression / time_series / unknown",
     )
     research_task: Optional[str] = Field(None, description="用户研究任务描述")
+
+
+class DatasetAssistantChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="用户消息")
+    history: Optional[List[dict]] = Field(default_factory=list, description="对话历史 [{role, content}]")
 
 
 @router.post("/upload")
@@ -174,6 +180,22 @@ async def get_dataset_modeling_result(
     if not result:
         raise HTTPException(status_code=404, detail="暂无建模结果，请先运行自动建模")
     return {"code": 200, "data": result, "message": "success"}
+
+
+@router.post("/{dataset_id}/assistant/chat")
+async def dataset_assistant_chat(
+    dataset_id: str = Path(..., description="数据集 ID"),
+    request: DatasetAssistantChatRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """数据集对话助手：根据自然语言执行建模、预处理、质量分析或答疑"""
+    service = DatasetAssistantService(db)
+    result = await service.chat(
+        dataset_id=dataset_id,
+        message=request.message.strip(),
+        history=request.history or [],
+    )
+    return {"code": 200, "data": result, "message": "对话完成"}
 
 
 @router.put("/{dataset_id}/toggle-hypothesis")

@@ -97,6 +97,7 @@ async def rerun_from_stage(
             parent_run_id=body.run_id,
             from_stage=body.stage,
             use_human_modified_output=body.use_human_modified_output,
+            rerun_mode=body.rerun_mode,
         )
 
         def _bg():
@@ -111,13 +112,19 @@ async def rerun_from_stage(
 
         threading.Thread(target=_bg, daemon=True).start()
 
+        msg = (
+            f"已仅重跑阶段 {body.stage}"
+            if body.rerun_mode == "single_stage"
+            else f"已从 {body.stage} 起继续执行后续流程"
+        )
         return ResponseModel(
             code=200,
-            message=f"已从 {body.stage} 重新运行",
+            message=msg,
             data=RerunFromStageResponse(
                 run_id=new_run_id,
                 parent_run_id=body.run_id,
                 rerun_from_stage=body.stage,
+                rerun_mode=body.rerun_mode,
                 status="running",
             ),
         )
@@ -213,18 +220,13 @@ async def resume_hitl_gate(body: HitlGateResumeRequest, db: Session = Depends(ge
         )
 
         if result["action"] == "continue":
+            from app.api.pipeline import _execute_pipeline_background
 
-            def _bg():
-                bg_db = SessionLocal()
-                try:
-                    svc = get_pipeline_service(bg_db)
-                    svc.execute_pipeline_run(body.run_id)
-                except Exception as exc:
-                    logger.exception(f"HITL Gate 续跑失败: {exc}")
-                finally:
-                    bg_db.close()
-
-            threading.Thread(target=_bg, daemon=True).start()
+            threading.Thread(
+                target=_execute_pipeline_background,
+                args=(body.run_id,),
+                daemon=True,
+            ).start()
 
         elif result["action"] == "rerun":
             pipeline_service = get_pipeline_service(db)
@@ -234,18 +236,13 @@ async def resume_hitl_gate(body: HitlGateResumeRequest, db: Session = Depends(ge
                 parent_run_id=body.run_id,
                 from_stage=stage,
                 use_human_modified_output=True,
+                rerun_mode="from_stage_onward",
             )
             result["run_id"] = new_run_id
 
             def _bg_rerun():
-                bg_db = SessionLocal()
-                try:
-                    svc = get_pipeline_service(bg_db)
-                    svc.execute_pipeline_run(new_run_id)
-                except Exception as exc:
-                    logger.exception(f"HITL Gate 重跑失败: {exc}")
-                finally:
-                    bg_db.close()
+                from app.api.pipeline import _execute_pipeline_background
+                _execute_pipeline_background(new_run_id)
 
             threading.Thread(target=_bg_rerun, daemon=True).start()
 

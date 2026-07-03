@@ -17,6 +17,12 @@ export interface FeedbackSubmitResult {
   global_constraints?: string[];
   suggested_rerun_stages?: string[];
   side_effects?: Record<string, unknown>;
+  rerun?: {
+    run_id: string;
+    parent_run_id: string;
+    from_stage: string;
+    status: string;
+  };
 }
 
 const feedbackService = {
@@ -27,6 +33,7 @@ const feedbackService = {
     target?: string;
     payload?: Record<string, unknown>;
     trigger_rerun?: boolean;
+    run_id?: string;
   }): Promise<ApiResponse<FeedbackSubmitResult>> {
     const { data } = await api.post('/feedback/submit', payload);
     return data;

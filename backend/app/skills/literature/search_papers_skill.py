@@ -5,9 +5,12 @@ Semantic Scholar Skills、OpenAlex
 ——基于 research_question / keywords 搜索 arXiv、Semantic Scholar、
 OpenAlex、CrossRef，返回统一 paper metadata。
 """
+import asyncio
 import logging
 import json
 import hashlib
+import threading
+import time
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -20,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 PAPER_SOURCES = ["arxiv", "semantic_scholar", "openalex", "crossref"]
 REQUEST_TIMEOUT = 15
+SOURCE_INTERVAL_SEC = 2.0
+ARXIV_MIN_INTERVAL_SEC = 4.0
+HTTP_RETRY_MAX = 4
+HTTP_RETRY_BASE_DELAY_SEC = 5.0
+
+_arxiv_rate_lock = threading.Lock()
+_arxiv_last_request_at = 0.0
 
 API_CONFIG = {
     "semantic_scholar": {
@@ -94,7 +104,9 @@ class SearchPapersSkill(BaseSkill):
         source_status: Dict[str, dict] = {}
         source_warnings: List[str] = []
 
-        for source_name in sources:
+        for source_idx, source_name in enumerate(sources):
+            if source_idx > 0:
+                await asyncio.sleep(SOURCE_INTERVAL_SEC)
             try:
                 source_papers = await self._search_source(source_name, search_query, max_results)
                 for p in source_papers:
@@ -144,12 +156,7 @@ class SearchPapersSkill(BaseSkill):
             f"?search_query=all:{encoded_query}"
             f"&start=0&max_results={min(max_results, API_CONFIG['arxiv']['max_results'])}"
         )
-        req = urllib.request.Request(url, headers={"User-Agent": "AISci/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-                xml_data = resp.read().decode("utf-8")
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"arXiv API 不可达: {e}")
+        xml_data = await asyncio.to_thread(self._fetch_arxiv_xml_with_retry, url)
 
         root = ET.fromstring(xml_data)
         ns = {
@@ -205,7 +212,7 @@ class SearchPapersSkill(BaseSkill):
             "offset": 0,
         }
         url = f"{API_CONFIG['semantic_scholar']['search_url']}?{urllib.parse.urlencode(params)}"
-        data = await self._http_get_json(url)
+        data = await self._http_get_json(url, source_name="semantic_scholar")
         papers = []
         for item in data.get("data", []):
             authors_list = []
@@ -237,7 +244,7 @@ class SearchPapersSkill(BaseSkill):
             "filter": "has_abstract:true",
         }
         url = f"{API_CONFIG['openalex']['search_url']}?{urllib.parse.urlencode(params)}"
-        data = await self._http_get_json(url)
+        data = await self._http_get_json(url, source_name="openalex")
         papers = []
         for item in data.get("results", []):
             authors_list = []
@@ -288,7 +295,7 @@ class SearchPapersSkill(BaseSkill):
             "sort": "relevance",
         }
         url = f"{API_CONFIG['crossref']['search_url']}?{urllib.parse.urlencode(params)}"
-        data = await self._http_get_json(url)
+        data = await self._http_get_json(url, source_name="crossref")
         papers = []
         items = data.get("message", {}).get("items", [])
         for item in items:
@@ -319,17 +326,72 @@ class SearchPapersSkill(BaseSkill):
             })
         return papers
 
-    @staticmethod
-    async def _http_get_json(url: str) -> dict:
-        req = urllib.request.Request(url, headers={"User-Agent": "AISci/1.0 (mailto:dev@aiscilab.org)"})
-        try:
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", errors="replace")[:300]
-            raise RuntimeError(f"HTTP {e.code}: {body}")
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"网络不可达: {e}")
+    @classmethod
+    def _wait_arxiv_slot(cls) -> None:
+        global _arxiv_last_request_at
+        with _arxiv_rate_lock:
+            now = time.monotonic()
+            wait = ARXIV_MIN_INTERVAL_SEC - (now - _arxiv_last_request_at)
+            if wait > 0:
+                time.sleep(wait)
+            _arxiv_last_request_at = time.monotonic()
+
+    @classmethod
+    def _fetch_arxiv_xml_with_retry(cls, url: str) -> str:
+        last_error: Optional[Exception] = None
+        for attempt in range(HTTP_RETRY_MAX):
+            cls._wait_arxiv_slot()
+            req = urllib.request.Request(url, headers={"User-Agent": "AISci/1.0 (mailto:dev@aiscilab.org)"})
+            try:
+                with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+                    return resp.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")[:300]
+                last_error = RuntimeError(f"arXiv HTTP {e.code}: {body}")
+                if e.code == 429 and attempt < HTTP_RETRY_MAX - 1:
+                    delay = HTTP_RETRY_BASE_DELAY_SEC * (2 ** attempt)
+                    logger.warning("arXiv 429，%ss 后重试 (%d/%d)", delay, attempt + 1, HTTP_RETRY_MAX)
+                    time.sleep(delay)
+                    continue
+                raise last_error from e
+            except urllib.error.URLError as e:
+                last_error = RuntimeError(f"arXiv API 不可达: {e}")
+                if attempt < HTTP_RETRY_MAX - 1:
+                    time.sleep(HTTP_RETRY_BASE_DELAY_SEC * (attempt + 1))
+                    continue
+                raise last_error from e
+        raise last_error or RuntimeError("arXiv API 请求失败")
+
+    @classmethod
+    def _http_get_json_sync(cls, url: str, *, source_name: str = "api") -> dict:
+        last_error: Optional[Exception] = None
+        for attempt in range(HTTP_RETRY_MAX):
+            if source_name == "arxiv":
+                cls._wait_arxiv_slot()
+            req = urllib.request.Request(url, headers={"User-Agent": "AISci/1.0 (mailto:dev@aiscilab.org)"})
+            try:
+                with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")[:300]
+                last_error = RuntimeError(f"HTTP {e.code}: {body}")
+                if e.code in (429, 503) and attempt < HTTP_RETRY_MAX - 1:
+                    delay = HTTP_RETRY_BASE_DELAY_SEC * (2 ** attempt)
+                    logger.warning("%s HTTP %d，%ss 后重试 (%d/%d)", source_name, e.code, delay, attempt + 1, HTTP_RETRY_MAX)
+                    time.sleep(delay)
+                    continue
+                raise last_error from e
+            except urllib.error.URLError as e:
+                last_error = RuntimeError(f"网络不可达: {e}")
+                if attempt < HTTP_RETRY_MAX - 1:
+                    time.sleep(HTTP_RETRY_BASE_DELAY_SEC * (attempt + 1))
+                    continue
+                raise last_error from e
+        raise last_error or RuntimeError(f"{source_name} API 请求失败")
+
+    @classmethod
+    async def _http_get_json(cls, url: str, *, source_name: str = "api") -> dict:
+        return await asyncio.to_thread(cls._http_get_json_sync, url, source_name=source_name)
 
     @staticmethod
     def _generate_paper_key(paper: dict) -> Optional[str]:

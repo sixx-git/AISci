@@ -1,12 +1,18 @@
 """LLM 运行时配置（内存覆盖 .env，供 API 管理面板切换密钥/模型）"""
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional
 
 from app.core.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+_RUNTIME_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "llm_runtime.json"
 
 # 百炼 DashScope 真实 Qwen 模型 ID（OpenAI 兼容模式，文本/多模态统一）
 # https://help.aliyun.com/zh/model-studio/text-generation-model
@@ -55,6 +61,46 @@ class LlmRuntimeState:
 
 
 _state = LlmRuntimeState()
+
+
+def _load_persisted_state() -> None:
+    """启动时从磁盘恢复模型/API 覆盖（避免 uvicorn reload 后回退到 .env 默认 3.7）。"""
+    global _state
+    if not _RUNTIME_FILE.exists():
+        return
+    try:
+        raw = json.loads(_RUNTIME_FILE.read_text(encoding="utf-8"))
+        _state.use_env_api_key = bool(raw.get("use_env_api_key", True))
+        _state.api_key_override = raw.get("api_key_override") or None
+        _state.model_override = raw.get("model_override") or None
+        _state.base_url_override = raw.get("base_url_override") or None
+        if "use_mock_llm_override" in raw:
+            _state.use_mock_llm_override = raw.get("use_mock_llm_override")
+        if _state.model_override:
+            logger.info("已恢复 LLM 模型覆盖: %s", _state.model_override)
+    except Exception as exc:
+        logger.warning("读取 llm_runtime.json 失败: %s", exc)
+
+
+def _persist_state() -> None:
+    try:
+        _RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "use_env_api_key": _state.use_env_api_key,
+            "api_key_override": _state.api_key_override,
+            "model_override": _state.model_override,
+            "base_url_override": _state.base_url_override,
+            "use_mock_llm_override": _state.use_mock_llm_override,
+        }
+        _RUNTIME_FILE.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning("写入 llm_runtime.json 失败: %s", exc)
+
+
+_load_persisted_state()
 
 
 def mask_api_key(key: str) -> str:
@@ -128,6 +174,7 @@ def update_runtime(
         _state.base_url_override = base_url.strip() or None
     if use_mock_llm is not None:
         _state.use_mock_llm_override = use_mock_llm
+    _persist_state()
     return _state
 
 

@@ -3,7 +3,8 @@
 """
 import os
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, time
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import Optional, List
 from sqlalchemy.orm import Session
@@ -18,8 +19,10 @@ from app.schemas.research import (
     ReportGenerationRequest,
     ReportGenerationResponse,
     ReportCreate,
-    ReportDBResponse
+    ReportDBResponse,
+    ReportBrowseItem,
 )
+from app.schemas.common import PaginatedResponse, PageInfo
 from app.schemas.human_loop import ReportReviseRequest
 from app.services.report_service import ReportService
 from app.services.stage_chat_service import get_stage_chat_service
@@ -225,6 +228,63 @@ async def get_report_detail(
         return success(
             report,
             message="获取研究报告详情成功" if report else "报告不存在"
+        )
+    except Exception as e:
+        return error(str(e))
+
+
+def _parse_filter_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+    if not value or not str(value).strip():
+        return None
+    raw = str(value).strip()
+    try:
+        if "T" in raw:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt
+        parsed = datetime.strptime(raw[:10], "%Y-%m-%d")
+        if end_of_day:
+            return datetime.combine(parsed.date(), time(23, 59, 59))
+        return datetime.combine(parsed.date(), time.min)
+    except ValueError:
+        return None
+
+
+@router.get("/browse", response_model=ApiResponse[PaginatedResponse[ReportBrowseItem]])
+async def browse_reports(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(10, ge=1, le=50, description="每页数量"),
+    project_mode: Optional[str] = Query(
+        None,
+        description="项目模式: general | federated_learning",
+    ),
+    date_from: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    keyword: Optional[str] = Query(None, description="标题/项目名/研究问题关键词"),
+    db: Session = Depends(get_db),
+):
+    """报告中心：跨项目分页列表，支持时间与问题类型筛选。"""
+    try:
+        report_service = ReportService(db)
+        items, total = report_service.browse_reports(
+            page=page,
+            page_size=page_size,
+            project_mode=project_mode,
+            date_from=_parse_filter_date(date_from),
+            date_to=_parse_filter_date(date_to, end_of_day=True),
+            keyword=keyword,
+        )
+        total_pages = (total + page_size - 1) // page_size if total else 0
+        return success(
+            PaginatedResponse(
+                list=items,
+                pagination=PageInfo(
+                    page=page,
+                    page_size=page_size,
+                    total=total,
+                    total_pages=total_pages,
+                ),
+            ),
+            message=f"获取报告列表成功，共 {total} 条",
         )
     except Exception as e:
         return error(str(e))

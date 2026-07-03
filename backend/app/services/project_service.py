@@ -1,7 +1,9 @@
 """
 项目服务层
 """
+import logging
 import os
+import shutil
 import uuid
 from typing import List, Optional, Tuple
 from datetime import datetime
@@ -27,6 +29,7 @@ from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectQuery
 from app.services.document_parser import DocumentParser, ParserBackend
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class ProjectService:
@@ -136,15 +139,70 @@ class ProjectService:
         return project
     
     def delete_project(self, project_id: str) -> bool:
-        """删除项目"""
+        """删除项目及其关联资源（向量索引、Pipeline 记录、上传文件）。"""
         project = self.get_project(project_id)
         if not project:
             return False
-        
-        self.db.delete(project)
-        self.db.commit()
-        
+
+        from app.models.pipeline import PipelineRun, PipelineStageExecution, ProjectPromptOverride
+        from app.models.research import Evidence, SmallValidation, MultimodalAsset
+
+        try:
+            # 先清理无 ORM 级联、且会阻塞项目删除的关联表
+            self.db.query(Evidence).filter(Evidence.project_id == project_id).delete(
+                synchronize_session=False
+            )
+            self.db.query(SmallValidation).filter(SmallValidation.project_id == project_id).delete(
+                synchronize_session=False
+            )
+            self.db.query(MultimodalAsset).filter(MultimodalAsset.project_id == project_id).delete(
+                synchronize_session=False
+            )
+
+            self.db.query(PipelineRun).filter(PipelineRun.project_id == project_id).update(
+                {PipelineRun.final_report_id: None},
+                synchronize_session=False,
+            )
+
+            run_ids = [
+                row[0]
+                for row in self.db.query(PipelineRun.id).filter(PipelineRun.project_id == project_id).all()
+            ]
+            if run_ids:
+                self.db.query(PipelineStageExecution).filter(
+                    PipelineStageExecution.pipeline_run_id.in_(run_ids)
+                ).delete(synchronize_session=False)
+                self.db.query(PipelineRun).filter(PipelineRun.project_id == project_id).delete(
+                    synchronize_session=False
+                )
+
+            self.db.query(ProjectPromptOverride).filter(
+                ProjectPromptOverride.project_id == project_id
+            ).delete(synchronize_session=False)
+
+            self.db.delete(project)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("删除项目失败 project_id=%s", project_id)
+            raise
+
+        self._cleanup_project_storage(project_id)
         return True
+
+    def _cleanup_project_storage(self, project_id: str) -> None:
+        """删除向量索引与上传目录（不加载 embedding 模型）。"""
+        try:
+            from app.services.vector_store import delete_project_index_files
+            delete_project_index_files(project_id)
+        except Exception as exc:
+            logger.warning("删除项目向量索引失败 %s: %s", project_id, exc)
+
+        upload_root = settings.UPLOAD_DIR
+        for rel_path in (project_id, os.path.join("projects", project_id)):
+            target = os.path.join(upload_root, rel_path)
+            if os.path.isdir(target):
+                shutil.rmtree(target, ignore_errors=True)
 
 
 class DocumentService:

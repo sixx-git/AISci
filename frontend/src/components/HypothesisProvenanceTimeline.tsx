@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { BookOpen, Database, Image, Target, Link2, Loader2, ExternalLink } from 'lucide-react';
 import hypothesisService, { type ProvenanceTimelineStep } from '@/services/hypothesisService';
 
@@ -71,7 +71,7 @@ export function HypothesisProvenanceTimeline({
             <div className="flex items-center gap-1.5 mb-1.5">
               <Icon className="w-3.5 h-3.5 text-bp-cyan" />
               <span className="text-xs font-medium text-bp-text">{step.label}</span>
-              <span className="text-[10px] text-bp-muted">({step.count ?? step.items?.length ?? 0})</span>
+              <span className="text-xs text-bp-muted">({step.count ?? step.items?.length ?? 0})</span>
             </div>
             <div className="space-y-1.5">
               {(step.items || []).map((item, i) => (
@@ -106,9 +106,9 @@ function TimelineItem({
       <div className="p-2 rounded-bp border border-bp-cyan/15 bg-bp-cyan-tint">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-mono text-bp-cyan">{String(item.fact_id || '')}</p>
+            <p className="text-xs font-mono text-bp-cyan">{String(item.fact_id || '')}</p>
             {item.source_title ? (
-              <p className="text-[11px] text-bp-muted truncate">{String(item.source_title)}</p>
+              <p className="text-xs text-bp-muted truncate">{String(item.source_title)}</p>
             ) : null}
             {item.content ? (
               <p className="text-xs text-bp-text mt-0.5 line-clamp-2">{String(item.content)}</p>
@@ -118,7 +118,7 @@ function TimelineItem({
             <button
               type="button"
               onClick={() => onNavigateToLiterature(docId, chunkId)}
-              className="shrink-0 flex items-center gap-0.5 text-[10px] text-bp-cyan hover:text-bp-cyan"
+              className="shrink-0 flex items-center gap-0.5 text-xs text-bp-cyan hover:text-bp-cyan"
             >
               <ExternalLink className="w-3 h-3" />
               文献
@@ -132,7 +132,7 @@ function TimelineItem({
   if (step === 'multimodal') {
     return (
       <div className="p-2 rounded border border-bp-purple/15 bg-bp-purple/5">
-        <p className="text-[10px] font-mono text-bp-purple">{String(item.evidence_id || item.asset_id || '')}</p>
+        <p className="text-xs font-mono text-bp-purple">{String(item.evidence_id || item.asset_id || '')}</p>
         {item.content ? <p className="text-xs text-bp-text mt-0.5 line-clamp-2">{String(item.content)}</p> : null}
       </div>
     );
@@ -141,12 +141,12 @@ function TimelineItem({
   if (step === 'dataset') {
     return (
       <div className="p-2 rounded border border-bp-green/15 bg-bp-green/5">
-        <p className="text-[10px] font-mono text-bp-green">{String(item.ref || item.data_citation_id || '')}</p>
+        <p className="text-xs font-mono text-bp-green">{String(item.ref || item.data_citation_id || '')}</p>
         {item.table_row_id ? (
-          <p className="text-[10px] text-bp-muted mt-0.5">行 ID: {String(item.table_row_id)}</p>
+          <p className="text-xs text-bp-muted mt-0.5">行 ID: {String(item.table_row_id)}</p>
         ) : null}
         {item.source_title ? (
-          <p className="text-[11px] text-bp-muted truncate">{String(item.source_title)}</p>
+          <p className="text-xs text-bp-muted truncate">{String(item.source_title)}</p>
         ) : null}
       </div>
     );
@@ -157,7 +157,7 @@ function TimelineItem({
       <div className="p-2 rounded border border-bp-green/15 bg-bp-green/5">
         {item.claim ? <p className="text-xs text-bp-text">{String(item.claim)}</p> : null}
         {item.primary_metric ? (
-          <p className="text-[10px] font-mono text-bp-green mt-1">指标: {String(item.primary_metric)}</p>
+          <p className="text-xs font-mono text-bp-green mt-1">指标: {String(item.primary_metric)}</p>
         ) : null}
       </div>
     );

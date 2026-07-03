@@ -150,3 +150,13 @@ class PipelineRunResult(BaseModel):
     extra_metadata: Optional[Dict[str, Any]] = Field(None, description="闭环事件与质量趋势")
     created_at: datetime
     completed_at: Optional[datetime] = None
+
+
+class LoopDryRunRequest(BaseModel):
+    """Loop 决策 Dry-run 请求（不调 LLM）"""
+    run_options: Optional[Dict[str, Any]] = Field(default=None, description="与 Pipeline run options 相同")
+    quality_trend: Optional[List[Dict[str, Any]]] = Field(default=None, description="模拟用 CQS 趋势")
+    round_num: int = Field(default=2, ge=1, le=5, description="Discovery 轮次")
+    hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="可选：模拟 Accept 判断")
+    small_validation: Optional[Dict[str, Any]] = Field(default=None)
+    project_mode: str = Field(default="standard", description="standard | federated_learning")

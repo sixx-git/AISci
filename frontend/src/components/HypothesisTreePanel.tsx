@@ -1,4 +1,4 @@
-import { GitBranch, Scissors, Star } from 'lucide-react';
+﻿import { GitBranch, Scissors, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HypothesisTreeData } from '@/types';
 
@@ -53,7 +53,7 @@ export function HypothesisTreePanel({ tree, embedded = false, className }: Hypot
                   {branch.composite_score?.toFixed?.(1) ?? branch.composite_score}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5 text-[10px] text-bp-muted">
+              <div className="flex flex-wrap gap-1.5 text-xs text-bp-muted">
                 {branch.scores && Object.entries(branch.scores).map(([k, v]) => (
                   <span key={k} className="px-1.5 py-0.5 rounded-bp bg-bp-panel border border-bp-border">
                     {k}: {Number(v).toFixed(1)}
@@ -76,7 +76,7 @@ export function HypothesisTreePanel({ tree, embedded = false, className }: Hypot
 
       {pruned.length > 0 && (
         <div className="pt-2 border-t border-bp-border/80">
-          <p className="text-[11px] text-bp-muted mb-1.5 flex items-center gap-1">
+          <p className="text-xs text-bp-muted mb-1.5 flex items-center gap-1">
             <Scissors className="w-3 h-3" />
             已剪枝 {pruned.length} 条低分分支
           </p>
@@ -84,7 +84,7 @@ export function HypothesisTreePanel({ tree, embedded = false, className }: Hypot
             {pruned.slice(0, 6).map((p) => (
               <span
                 key={p.branch_id}
-                className="text-[10px] px-2 py-0.5 rounded-bp bg-danger-500/5 text-danger-400/80 border border-danger-500/10"
+                className="text-xs px-2 py-0.5 rounded-bp bg-danger-500/5 text-danger-400/80 border border-danger-500/10"
               >
                 #{p.index + 1} · {p.composite_score?.toFixed?.(1)}
               </span>
@@ -94,7 +94,7 @@ export function HypothesisTreePanel({ tree, embedded = false, className }: Hypot
       )}
 
       {tree.evidence_coverage && (
-        <div className="mt-3 text-[11px] text-bp-muted">
+        <div className="mt-3 text-xs text-bp-muted">
           证据覆盖: 已验证 {String(tree.evidence_coverage.verified_fact_refs ?? 0)}/
           {String(tree.evidence_coverage.total_fact_refs ?? 0)} 条 fact
           {tree.evidence_coverage.has_data_evidence ? ' · 含数据证据' : ''}

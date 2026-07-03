@@ -1,26 +1,28 @@
-import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX,
+  Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, Trash2,
 } from 'lucide-react';
 import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatusBadge } from '@/components/StatusBadge';
-import type { StatusType } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { RecentPipelineSection } from '@/components/workspace/RecentPipelineSection';
+import { useLatestPipelineRuns } from '@/hooks/useLatestPipelineRuns';
+import { statusBadgeLabel } from '@/lib/projectStatus';
 import type { ProjectOverview } from '@/types';
 
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
-  { value: 'draft', label: '草稿' },
+  { value: 'pending', label: '未开始' },
   { value: 'running', label: '运行中' },
   { value: 'completed', label: '已完成' },
+  { value: 'failed', label: '失败' },
 ] as const;
 
 const selectChevronStyle = {
@@ -37,6 +39,18 @@ export function Home() {
   const [projects, setProjects] = useState<ProjectOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const {
+    rows: recentPipelineRows,
+    loading: pipelineLoading,
+    getDisplayStatus,
+    pipelineStatusByProjectId,
+  } = useLatestPipelineRuns(projects);
+
+  const isApiSuccess = (response: { code?: number; message?: string }) =>
+    Number(response?.code) === 200 || Boolean(response?.message?.includes('成功'));
 
   useEffect(() => {
     let cancelled = false;
@@ -77,22 +91,46 @@ export function Home() {
       );
     }
     if (statusFilter) {
-      list = list.filter((p) => p.status === statusFilter);
+      list = list.filter((p) => getDisplayStatus(p) === statusFilter);
     }
     return list;
-  }, [search, statusFilter, projects]);
+  }, [search, statusFilter, projects, getDisplayStatus]);
 
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
   };
 
+  const handleDeleteProject = async (projectId: string, projectName: string) => {
+    if (!window.confirm(`确认删除项目「${projectName}」？此操作不可撤销。`)) {
+      return;
+    }
+    setDeletingId(projectId);
+    setDeleteError(null);
+    try {
+      const response = await projectService.deleteProject(projectId);
+      if (isApiSuccess(response)) {
+        setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      } else {
+        const msg = response.message || '删除项目失败';
+        setDeleteError(msg);
+        window.alert(msg);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '删除项目失败';
+      setDeleteError(msg);
+      window.alert(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const hasFilters = search.trim() !== '' || statusFilter !== '';
 
   const projectCount = projects.length;
-  const completedCount = projects.filter((p) => p.status === 'completed').length;
-  const runningCount = projects.filter((p) => p.status === 'running').length;
-  const draftCount = projects.filter((p) => p.status === 'draft').length;
+  const completedCount = projects.filter((p) => getDisplayStatus(p) === 'completed').length;
+  const runningCount = projects.filter((p) => getDisplayStatus(p) === 'running').length;
+  const pendingCount = projects.filter((p) => getDisplayStatus(p) === 'pending').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -100,9 +138,16 @@ export function Home() {
         title="项目工作台"
         subtitle="搜索、浏览和管理您的 AI 科研项目"
         actions={
-          <Link to="/projects/new">
-            <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/quick-report">
+              <Button variant="secondary" icon={<FlaskConical className="w-4 h-4" />}>
+                一键生成报告
+              </Button>
+            </Link>
+            <Link to="/projects/new">
+              <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
+            </Link>
+          </div>
         }
       />
 
@@ -155,13 +200,13 @@ export function Home() {
           <div className="text-bp-muted text-sm">运行中</div>
         </div>
         <div className="bp-metric-box">
-          <div className="text-bp-metric font-bold text-bp-muted">{draftCount}</div>
-          <div className="text-bp-muted text-sm">草稿</div>
+          <div className="text-bp-metric font-bold text-bp-muted">{pendingCount}</div>
+          <div className="text-bp-muted text-sm">未开始</div>
         </div>
       </div>
 
       {!loading && !error && projects.length > 0 && (
-        <RecentPipelineSection projects={projects} />
+        <RecentPipelineSection rows={recentPipelineRows} loading={pipelineLoading} />
       )}
 
       <div className="space-y-4">
@@ -171,6 +216,12 @@ export function Home() {
             <span className="text-sm text-bp-muted">共 {filtered.length} 个匹配结果</span>
           )}
         </div>
+
+        {deleteError && (
+          <div className="rounded-bp border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">
+            {deleteError}
+          </div>
+        )}
 
         {loading ? (
           <Card>
@@ -201,20 +252,36 @@ export function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((project) => (
-              <Link
-                key={project.id}
-                to={`/projects/${project.id}`}
-                className="block group"
-              >
-                <Card className="h-full hover:border-bp-cyan/40 transition-all duration-200 group-hover:shadow-bp-glow">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 bg-bp-cyan-tint border border-bp-cyan/20 rounded-bp flex items-center justify-center">
-                      <FlaskConical className="w-5 h-5 text-bp-cyan" />
-                    </div>
-                    <StatusBadge
-                      status={(project.status as StatusType) || 'draft'}
-                    />
+              <Card key={project.id} hover className="h-full transition-all duration-200 group-hover:shadow-bp-glow relative">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-10 h-10 bg-bp-cyan-tint border border-bp-cyan/20 rounded-bp flex items-center justify-center">
+                    <FlaskConical className="w-5 h-5 text-bp-cyan" />
                   </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge
+                      status={getDisplayStatus(project)}
+                      label={statusBadgeLabel(
+                        getDisplayStatus(project),
+                        pipelineStatusByProjectId.get(project.id)?.status,
+                        pipelineStatusByProjectId.has(project.id),
+                      )}
+                    />
+                    <button
+                      type="button"
+                      title="删除项目"
+                      disabled={deletingId === project.id}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void handleDeleteProject(project.id, project.name);
+                      }}
+                      className="p-1.5 rounded-bp text-bp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <Link to={`/projects/${project.id}`} className="block group">
                   <h3 className="font-semibold text-bp-text mb-2 group-hover:text-bp-cyan transition-colors">
                     {project.name}
                   </h3>
@@ -224,7 +291,7 @@ export function Home() {
                     </p>
                   )}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="bp-chip bp-chip-cyan text-[11px]">
+                    <span className="bp-chip bp-chip-cyan text-xs">
                       {project.research_field || '未知领域'}
                     </span>
                   </div>
@@ -236,8 +303,8 @@ export function Home() {
                     <span className="text-sm text-bp-cyan">进入项目</span>
                     <ArrowRight className="w-4 h-4 text-bp-cyan group-hover:translate-x-1 transition-transform" />
                   </div>
-                </Card>
-              </Link>
+                </Link>
+              </Card>
             ))}
           </div>
         )}

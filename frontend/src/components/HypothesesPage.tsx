@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+﻿import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Lightbulb, AlertTriangle,
@@ -552,7 +552,7 @@ function ScoringGuide() {
           <span className="text-sm shrink-0">{dim.icon}</span>
           <div>
             <p className="text-xs font-semibold text-bp-text mb-0.5">{dim.label}</p>
-            <p className="text-[11px] text-bp-muted leading-relaxed">{dim.desc}</p>
+            <p className="text-xs text-bp-muted leading-relaxed">{dim.desc}</p>
           </div>
         </div>
       ))}
@@ -570,7 +570,7 @@ function DecisionStat({ label, value, icon: Icon, color }: {
     <div className="p-2.5 rounded-bp border border-bp-border bg-bp-base/50">
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className={color} style={{ width: 15, height: 15 }} />
-        <span className="text-[11px] text-bp-muted">{label}</span>
+        <span className="text-xs text-bp-muted">{label}</span>
       </div>
       <span className="text-xl font-bold font-mono text-bp-text">{value}</span>
     </div>

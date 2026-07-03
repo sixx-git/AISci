@@ -27,6 +27,8 @@ export interface MentorReview {
   readiness_score?: number;
 }
 
+export type RerunMode = 'single_stage' | 'from_stage_onward';
+
 export const humanLoopService = {
   async getStageDetail(runId: string, stage: string): Promise<ApiResponse<StageHumanDetail>> {
     const { data } = await api.get<ApiResponse<StageHumanDetail>>(`/human-loop/stage/${runId}/${stage}`);
@@ -50,7 +52,8 @@ export const humanLoopService = {
     run_id: string;
     stage: string;
     use_human_modified_output?: boolean;
-  }): Promise<ApiResponse<{ run_id: string; parent_run_id: string; rerun_from_stage: string; status: string }>> {
+    rerun_mode?: RerunMode;
+  }): Promise<ApiResponse<{ run_id: string; parent_run_id: string; rerun_from_stage: string; rerun_mode?: string; status: string }>> {
     const { data } = await api.post('/human-loop/rerun-from-stage', payload);
     return data;
   },

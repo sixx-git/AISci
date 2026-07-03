@@ -98,7 +98,7 @@ class LiteratureMiningAgent:
     """文献挖掘智能体
 
     工作流程：
-      1. 检查项目是否有索引 / 有可用文献
+      1. Crawler+Selector 多源检索（扩展 query、引用网络）→ 自动入库建索引
       2. FAISS 检索 → 获取 Top-K 相关 Chunk
       3. 格式化 Chunk（含完整文献元数据）→ 送入 LLM
       4. LLM 输出结构化事实 + 证据 + citation_map
@@ -118,7 +118,7 @@ class LiteratureMiningAgent:
         """
         从项目文献库挖掘相关科学事实
 
-        当项目缺少文献时，自动从 arXiv 检索并导入。
+        当项目缺少文献或检索无结果时，自动运行文献发现流水线（多源检索 + 引用扩展）并导入。
 
         Args:
             project_id: 项目 ID
@@ -130,33 +130,77 @@ class LiteratureMiningAgent:
             LiteratureMiningResponse
         """
         try:
+            keywords = self._extract_keywords(research_question)
+            discovery_output: Dict[str, Any] = {}
+            corpus_meta: Dict[str, Any] = {}
+
+            if db is not None:
+                discovery_output, corpus_meta = self._discover_and_import_literature(
+                    project_id,
+                    research_question,
+                    db,
+                    keywords=keywords,
+                )
+
             vs = get_vector_store()
             has_index = vs.has_index(project_id)
 
-            if not has_index and db is not None:
-                logger.info(
-                    f"[文献挖掘] 项目 {project_id} 缺少文献，启动 arXiv 自动检索，"
-                    f"research_question='{research_question[:80]}...'"
-                )
-                self._auto_import_arxiv(project_id, research_question, db)
-                has_index = vs.has_index(project_id)
-
             if not has_index:
                 return self._empty_response(
-                    warning="当前项目缺少可引用文献，已尝试 arXiv 自动检索但未获取到有效文献。请手动上传 PDF 或导入 BibTeX 文献。"
+                    warning=(
+                        "当前项目缺少可引用文献，已运行多源文献发现但未获取到有效文献。"
+                        "请手动上传 PDF 或导入 BibTeX 文献。"
+                    ),
+                    discovery_output=discovery_output,
+                    corpus_meta=corpus_meta,
                 )
 
             # ── 1. FAISS 检索 ──
-            logger.info(f"开始检索文献片段: project_id={project_id}, query='{research_question[:60]}...', top_k={top_k}")
+            logger.info(
+                f"开始检索文献片段: project_id={project_id}, "
+                f"query='{research_question[:60]}...', top_k={top_k}"
+            )
             search_results = search_vector_store(
                 project_id=project_id,
                 query=research_question,
                 top_k=top_k,
             )
 
+            if not search_results and discovery_output.get("queries"):
+                fallback_query = " ".join(discovery_output["queries"][:2])
+                logger.info(f"[文献挖掘] 主 query 无结果，尝试扩展 query: {fallback_query[:80]}")
+                search_results = search_vector_store(
+                    project_id=project_id,
+                    query=fallback_query,
+                    top_k=top_k,
+                )
+
+            if not search_results and db is not None:
+                logger.info("[文献挖掘] 向量检索仍无结果，二次运行文献发现流水线")
+                discovery_output, corpus_meta = self._discover_and_import_literature(
+                    project_id,
+                    research_question,
+                    db,
+                    keywords=keywords,
+                    max_import=10,
+                    expand_citations=True,
+                )
+                if vs.has_index(project_id):
+                    search_results = search_vector_store(
+                        project_id=project_id,
+                        query=research_question,
+                        top_k=top_k,
+                    )
+
             if not search_results:
                 return self._empty_response(
-                    warning="已导入文献但未能检索到相关片段，请检查研究问题关键词是否匹配。"
+                    warning=(
+                        "已检索并尝试导入外部文献，但未能从文献库中匹配到相关片段。"
+                        "请检查研究问题关键词，或手动上传更相关的 PDF。"
+                    ),
+                    discovery_output=discovery_output,
+                    corpus_meta=corpus_meta,
+                    retrieved_papers=discovery_output.get("papers") or [],
                 )
 
             # ── 2. 格式化，（含完整元数据）→ 送入 Prompt ──
@@ -171,43 +215,42 @@ class LiteratureMiningAgent:
 
             # ── 5. 运行关联 Skill ──
             response.skill_outputs = self._run_skills_sync(
-                project_id, research_question, top_k, search_results
+                project_id, research_question, top_k, search_results, keywords=keywords
             )
 
-            search_output = response.skill_outputs.get("search_papers", {})
-            if search_output.get("success") and search_output.get("data") and db is not None:
-                from app.services.literature_corpus_service import ensure_corpora_from_search
-
-                corpus_meta = ensure_corpora_from_search(
-                    project_id,
-                    research_question,
-                    search_output.get("data"),
-                    db,
-                    max_import=5,
-                )
+            if discovery_output:
+                response.skill_outputs["literature_discovery"] = {
+                    "success": True,
+                    "data": discovery_output,
+                }
+            if corpus_meta:
                 response.skill_outputs["corpus_auto_import"] = corpus_meta
                 if corpus_meta.get("imported", 0) > 0:
                     response.retrieval_provenance = corpus_meta.get("retrieval_provenance")
-                    extra = (
-                        f"已从检索结果自动导入 {corpus_meta['imported']} 篇文献并索引"
-                    )
+                    extra = f"已从多源检索自动导入 {corpus_meta['imported']} 篇文献并索引"
                     response.warning = (
                         f"{response.warning}; {extra}" if response.warning else extra
                     )
+
+            if discovery_output.get("papers"):
+                response.retrieved_papers = discovery_output["papers"]
+                response.candidate_references_count = len(response.retrieved_papers)
 
             response.imported_documents = len(response.citation_map)
             response.evidence_facts = len(response.facts)
             response.verified_references_count = len(response.citation_map)
 
-            search_output = response.skill_outputs.get("search_papers", {})
-            if search_output.get("success") and search_output.get("data"):
-                response.retrieved_papers = search_output["data"].get("papers", [])
-                response.candidate_references_count = len(response.retrieved_papers)
-                if not response.citation_map:
-                    response.warning = (
-                        f"当前项目文献不足，自动搜索到 {response.candidate_references_count} "
-                        f"篇候选论文，但未导入文献库，不可作为 verified references。"
-                    )
+            if not response.retrieved_papers:
+                search_output = response.skill_outputs.get("search_papers", {})
+                if search_output.get("success") and search_output.get("data"):
+                    response.retrieved_papers = search_output["data"].get("papers", [])
+                    response.candidate_references_count = len(response.retrieved_papers)
+
+            if response.retrieved_papers and not response.citation_map:
+                response.warning = (
+                    f"当前项目文献不足，自动搜索到 {response.candidate_references_count} "
+                    f"篇候选论文，部分可能未导入文献库，不可全部作为 verified references。"
+                )
 
             logger.info(
                 f"文献挖掘完成: {len(response.facts)} 个事实, "
@@ -251,9 +294,25 @@ class LiteratureMiningAgent:
 
         if db is not None:
             try:
-                self._auto_import_arxiv(project_id, search_query, db)
+                understanding_keywords = self._extract_keywords(research_question)
+                for kw in understanding_keywords or []:
+                    if kw and str(kw).strip():
+                        parts.append(str(kw).strip())
+                search_query = " ".join(dict.fromkeys(parts))[:500]
+                merged_keywords = list(dict.fromkeys(
+                    list(keywords or [])
+                    + list(understanding_keywords or [])
+                    + [str(q) for q in (refinement_queries or []) if q]
+                ))[:12]
+                self._discover_and_import_literature(
+                    project_id,
+                    search_query,
+                    db,
+                    keywords=merged_keywords,
+                    max_import=8,
+                )
             except Exception as exc:
-                logger.warning(f"[Discovery R{discovery_round}] 补充 arXiv 导入失败: {exc}")
+                logger.warning(f"[Discovery R{discovery_round}] 补充文献发现失败: {exc}")
 
         vs = get_vector_store()
         if not vs.has_index(project_id):
@@ -410,6 +469,58 @@ class LiteratureMiningAgent:
         if fresh.get("warning"):
             out["warning"] = fresh["warning"]
         return out
+
+    @staticmethod
+    def _extract_keywords(research_question: str) -> List[str]:
+        keywords: List[str] = []
+        try:
+            from app.agents.problem_understanding_agent import get_problem_understanding_agent
+
+            agent = get_problem_understanding_agent()
+            analysis = agent.analyze(research_question=research_question)
+            if analysis.keywords:
+                keywords = list(analysis.keywords)
+        except Exception as ex:
+            logger.warning(f"[文献发现] 关键词提取失败: {ex}")
+        return keywords
+
+    def _discover_and_import_literature(
+        self,
+        project_id: str,
+        research_question: str,
+        db: Session,
+        *,
+        keywords: Optional[List[str]] = None,
+        max_import: int = 8,
+        expand_citations: bool = True,
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """PaSa/PaperSeek 式文献发现 → 自动入库建索引。"""
+        from app.services.literature_corpus_service import ensure_corpora_from_discovery
+        from app.skills.literature.literature_discovery_pipeline import run_literature_discovery_sync
+
+        logger.info(
+            f"[文献发现] 启动 Crawler+Selector: project={project_id}, "
+            f"question='{research_question[:80]}...'"
+        )
+        discovery = run_literature_discovery_sync(
+            research_question,
+            keywords=keywords,
+            max_results=30,
+            expand_citations=expand_citations,
+            use_llm_expand=True,
+        )
+        corpus_meta = ensure_corpora_from_discovery(
+            project_id,
+            research_question,
+            discovery,
+            db,
+            max_import=max_import,
+        )
+        logger.info(
+            f"[文献发现] 完成: candidates={discovery.get('candidate_count', 0)}, "
+            f"ranked={discovery.get('total', 0)}, imported={corpus_meta.get('imported', 0)}"
+        )
+        return discovery, corpus_meta
 
     def _auto_import_arxiv(
         self,
@@ -845,9 +956,21 @@ class LiteratureMiningAgent:
 
     # ────────── 空响应 ──────────
 
-    def _empty_response(self, warning: str = "") -> LiteratureMiningResponse:
+    def _empty_response(
+        self,
+        warning: str = "",
+        *,
+        discovery_output: Optional[Dict[str, Any]] = None,
+        corpus_meta: Optional[Dict[str, Any]] = None,
+        retrieved_papers: Optional[List[Dict[str, Any]]] = None,
+    ) -> LiteratureMiningResponse:
         """文献库为空时返回的友好提示"""
         default_warning = "未找到相关文献片段"
+        skill_outputs: Dict[str, Any] = {}
+        if discovery_output:
+            skill_outputs["literature_discovery"] = {"success": True, "data": discovery_output}
+        if corpus_meta:
+            skill_outputs["corpus_auto_import"] = corpus_meta
 
         return LiteratureMiningResponse(
             facts=[],
@@ -856,6 +979,10 @@ class LiteratureMiningAgent:
             citation_map=[],
             uncertain_points=[],
             warning=warning or default_warning,
+            skill_outputs=skill_outputs,
+            retrieved_papers=retrieved_papers or (discovery_output or {}).get("papers") or [],
+            candidate_references_count=len(retrieved_papers or (discovery_output or {}).get("papers") or []),
+            retrieval_provenance=(corpus_meta or {}).get("retrieval_provenance"),
         )
 
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/workspace/LoadingState';
@@ -101,8 +101,8 @@ export function PromptStageEditor({
         <span
           className={
             info?.has_override
-              ? 'text-[11px] px-2 py-0.5 rounded-bp border border-bp-yellow/30 bg-bp-yellow/10 text-bp-yellow'
-              : 'text-[11px] px-2 py-0.5 rounded-bp border border-bp-border bg-bp-panel/50 text-bp-muted'
+              ? 'text-xs px-2 py-0.5 rounded-bp border border-bp-yellow/30 bg-bp-yellow/10 text-bp-yellow'
+              : 'text-xs px-2 py-0.5 rounded-bp border border-bp-border bg-bp-panel/50 text-bp-muted'
           }
         >
           {info?.has_override ? '项目级覆盖' : '系统默认'}
@@ -127,7 +127,7 @@ export function PromptStageEditor({
             }}
             spellCheck={false}
           />
-          <p className="text-[11px] text-bp-muted mt-2">
+          <p className="text-xs text-bp-muted mt-2">
             支持 {'{{variable}}'} Jinja2 占位符。保存后，Pipeline 运行到该阶段时将使用覆盖模板；可从工作流「从此阶段重跑」生效。
             {info?.updated_at && (
               <span className="text-bp-muted"> · 上次更新 {new Date(info.updated_at).toLocaleString('zh-CN')}</span>

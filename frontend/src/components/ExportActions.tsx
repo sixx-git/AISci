@@ -29,7 +29,7 @@ export function ExportActions({ onAction, className }: ExportActionsProps) {
               onClick={() => onAction(act.type)}
               className={`
                 flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                border border-bp-border hover:border-bp-border
+                border border-bp-border hover-accent-left
                 transition-colors duration-150
                 ${act.type === 'generate'
                   ? 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30 hover:bg-bp-cyan/20'

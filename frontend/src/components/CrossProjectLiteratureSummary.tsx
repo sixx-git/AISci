@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FolderOpen, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/Card';
@@ -160,7 +160,7 @@ export function CrossProjectLiteratureSummary({ projects }: CrossProjectLiteratu
             </table>
           </div>
         )}
-        <p className="text-[11px] text-bp-muted mt-4">
+        <p className="text-xs text-bp-muted mt-4">
           上传与管理请在上方选择具体项目，或使用各项目工作台的文献库 Tab。
         </p>
       </Card>

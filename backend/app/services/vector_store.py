@@ -5,6 +5,7 @@
 import os
 import json
 import logging
+import shutil
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass
@@ -365,6 +366,26 @@ def get_vector_store() -> VectorStore:
     if _vector_store is None:
         _vector_store = VectorStore()
     return _vector_store
+
+
+def delete_project_index_files(project_id: str) -> bool:
+    """仅删除磁盘上的向量索引文件，避免为删除项目加载 embedding 模型。"""
+    global _vector_store
+    try:
+        if _vector_store is not None:
+            _vector_store._indexes.pop(project_id, None)
+            _vector_store._mappings.pop(project_id, None)
+            _vector_store._chunk_id_index.pop(project_id, None)
+
+        base = Path(settings.VECTOR_INDEXES_PATH) / project_id
+        if base.exists():
+            shutil.rmtree(base, ignore_errors=True)
+            logger.info("Deleted vector index files: %s", project_id)
+            return True
+        return False
+    except Exception as e:
+        logger.error("Failed to delete index files %s: %s", project_id, e, exc_info=True)
+        return False
 
 
 def build_vector_index(project_id: str, db: Optional[Session] = None) -> int:

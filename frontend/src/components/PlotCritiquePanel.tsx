@@ -1,4 +1,4 @@
-import { Image, AlertTriangle, RefreshCw } from 'lucide-react';
+﻿import { Image, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { PlotQualityData } from '@/types';
 
 interface PlotCritiquePanelProps {
@@ -32,7 +32,7 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
           </span>
         )}
         {critique?.degradation_reason && (
-          <span className="text-[10px] text-bp-muted block w-full mt-1">
+          <span className="text-xs text-bp-muted block w-full mt-1">
             {critique.degradation_reason}
             {critique.review_mode ? ` · 模式: ${critique.review_mode}` : ''}
           </span>
@@ -47,11 +47,11 @@ export function PlotCritiquePanel({ plotQuality }: PlotCritiquePanelProps) {
                 <span className="text-bp-text truncate">{String(c.plot_id)}</span>
                 <span className="font-mono text-bp-text">{Number(c.overall_score ?? 0).toFixed(1)}</span>
               </div>
-              <div className="text-[10px] text-bp-muted">
+              <div className="text-xs text-bp-muted">
                 reviewer: {String(c.reviewer ?? '—')} · misleading: {String(c.misleading_risk ?? '—')}
               </div>
               {(c.issues as string[] | undefined)?.slice(0, 2).map((issue, i) => (
-                <p key={i} className="text-[10px] text-danger-400/80 mt-0.5">• {issue}</p>
+                <p key={i} className="text-xs text-danger-400/80 mt-0.5">• {issue}</p>
               ))}
             </div>
           ))}

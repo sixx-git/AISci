@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 
 export interface Pareto3DPoint {
   method?: string;
@@ -84,14 +84,14 @@ export function FederatedPareto3DPanel({ data }: FederatedPareto3DPanelProps) {
   return (
     <div className="mb-4 p-3 rounded border border-bp-border bg-bp-base/50">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <p className="text-[11px] text-bp-muted">三维 Pareto 交互投影</p>
+        <p className="text-xs text-bp-muted">三维 Pareto 交互投影</p>
         <div className="flex gap-1">
           {(Object.keys(viewLabels) as Array<keyof typeof viewLabels>).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setView(k)}
-              className={`px-2 py-0.5 rounded text-[10px] ${
+              className={`px-2 py-0.5 rounded text-xs ${
                 view === k
                   ? 'bg-bp-purple/20 text-bp-purple border border-bp-purple/30'
                   : 'text-bp-muted border border-bp-border'
@@ -138,13 +138,13 @@ export function FederatedPareto3DPanel({ data }: FederatedPareto3DPanelProps) {
             );
           })}
         </svg>
-        <div className="absolute bottom-1 left-2 text-[9px] text-bp-muted">
+        <div className="absolute bottom-1 left-2 text-xs text-bp-muted">
           {viewLabels[view].x} · {viewLabels[view].y}
         </div>
       </div>
 
       {hoveredPoint && (
-        <div className="mt-2 p-2 rounded bg-bp-panel/80 text-[10px] text-bp-muted font-mono">
+        <div className="mt-2 p-2 rounded bg-bp-panel/80 text-xs text-bp-muted font-mono">
           <span className="text-bp-purple">{hoveredPoint.method}</span>
           {' · '}acc={hoveredPoint.accuracy?.toFixed(4)}
           {' · '}comm={hoveredPoint.communication_cost}
@@ -156,7 +156,7 @@ export function FederatedPareto3DPanel({ data }: FederatedPareto3DPanelProps) {
       )}
 
       {data?.best_tradeoff_method && (
-        <p className="text-[10px] text-bp-muted mt-1">
+        <p className="text-xs text-bp-muted mt-1">
           三维推荐权衡点：<span className="text-bp-purple">{data.best_tradeoff_method}</span>
         </p>
       )}

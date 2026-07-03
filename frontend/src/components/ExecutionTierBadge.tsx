@@ -1,4 +1,4 @@
-const TIER_STYLES: Record<string, string> = {
+﻿const TIER_STYLES: Record<string, string> = {
   real_sandbox: 'bg-bp-green/15 text-bp-green border-bp-green/30',
   real_sandbox_docker: 'bg-bp-green/15 text-bp-green border-bp-green/30',
   runtime_local: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/30',
@@ -31,12 +31,12 @@ export function ExecutionTierBadge({
   return (
     <div className="flex flex-wrap gap-2 mb-3">
       {executionTier && (
-        <span className={`text-[10px] px-2 py-1 rounded border ${tierStyle}`}>
+        <span className={`text-xs px-2 py-1 rounded border ${tierStyle}`}>
           执行层级: {executionTierLabel || executionTier}
         </span>
       )}
       {dataAuthenticity && (
-        <span className="text-[10px] px-2 py-1 rounded border border-bp-border bg-bp-base text-bp-text">
+        <span className="text-xs px-2 py-1 rounded border border-bp-border bg-bp-base text-bp-text">
           数据来源: {dataAuthenticityLabel || dataAuthenticity}
         </span>
       )}

@@ -6,29 +6,57 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.skills.literature.literature_discovery_pipeline import score_paper_relevance
+
 logger = logging.getLogger(__name__)
 
 
-def _score_paper_relevance(paper: Dict[str, Any], query: str) -> float:
-    q = (query or "").lower()
-    title = (paper.get("title") or "").lower()
-    abstract = (paper.get("abstract") or "").lower()
-    score = 0.0
-    for term in q.split()[:8]:
-        if len(term) < 3:
-            continue
-        if term in title:
-            score += 2.0
-        if term in abstract:
-            score += 0.5
-    if paper.get("arxiv_id") or paper.get("pdf_url"):
-        score += 1.0
-    if paper.get("citation_count"):
-        try:
-            score += min(1.0, float(paper["citation_count"]) / 100.0)
-        except (TypeError, ValueError):
-            pass
-    return score
+def _score_paper_relevance(
+    paper: Dict[str, Any],
+    query: str,
+    extra_terms: Optional[List[str]] = None,
+) -> float:
+    return score_paper_relevance(paper, query, extra_terms)
+
+
+def ensure_corpora_from_discovery(
+    project_id: str,
+    research_question: str,
+    discovery_output: Optional[Dict[str, Any]],
+    db: Session,
+    *,
+    max_import: int = 8,
+    auto_parse: bool = True,
+    min_score: float = 0.8,
+) -> Dict[str, Any]:
+    """将文献发现流水线（Crawler+Selector）结果自动导入文献库并索引。"""
+    queries = (discovery_output or {}).get("queries") or []
+    search_like = {
+        "papers": (discovery_output or {}).get("papers") or [],
+        "sources_searched": (discovery_output or {}).get("sources_searched") or [],
+        "queries": queries,
+        "discovery_mode": (discovery_output or {}).get("discovery_mode"),
+        "citation_expanded": (discovery_output or {}).get("citation_expanded", 0),
+    }
+    meta = ensure_corpora_from_search(
+        project_id,
+        research_question,
+        search_like,
+        db,
+        max_import=max_import,
+        auto_parse=auto_parse,
+        min_score=min_score,
+        extra_terms=queries,
+    )
+    if discovery_output:
+        meta["discovery"] = {
+            "queries": queries,
+            "candidate_count": discovery_output.get("candidate_count"),
+            "citation_expanded": discovery_output.get("citation_expanded"),
+            "per_query_status": discovery_output.get("per_query_status"),
+            "warnings": discovery_output.get("warnings"),
+        }
+    return meta
 
 
 def ensure_corpora_from_search(
@@ -37,8 +65,10 @@ def ensure_corpora_from_search(
     search_papers_output: Optional[Dict[str, Any]],
     db: Session,
     *,
-    max_import: int = 5,
+    max_import: int = 8,
     auto_parse: bool = True,
+    min_score: float = 0.8,
+    extra_terms: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """将 search_papers 高相关结果自动导入文献库并索引。"""
     from app.models import SourceType
@@ -49,17 +79,25 @@ def ensure_corpora_from_search(
     if not papers:
         return {"imported": 0, "skipped": True, "reason": "无 search_papers 结果"}
 
+    terms = list(extra_terms or [])
+    if (search_papers_output or {}).get("queries"):
+        terms.extend((search_papers_output or {}).get("queries") or [])
+
     ranked = sorted(
         papers,
-        key=lambda p: _score_paper_relevance(p, research_question),
+        key=lambda p: _score_paper_relevance(p, research_question, terms),
         reverse=True,
-    )[: max_import * 2]
+    )[: max_import * 3]
+
+    effective_min = min_score
+    if len(ranked) < 3:
+        effective_min = min(min_score, 0.3)
 
     to_import: List[Dict[str, Any]] = []
     for p in ranked:
         if len(to_import) >= max_import:
             break
-        if _score_paper_relevance(p, research_question) < 1.0:
+        if _score_paper_relevance(p, research_question, terms) < effective_min:
             continue
         ext_id = p.get("external_id") or p.get("arxiv_id") or p.get("doi") or ""
         if not ext_id and not p.get("title"):
@@ -125,7 +163,9 @@ def ensure_corpora_from_search(
         "import_results": import_results[:10],
         "retrieval_provenance": {
             "query": research_question[:200],
+            "expanded_queries": terms[:8],
             "source_api": (search_papers_output or {}).get("sources_searched") or [],
+            "discovery_mode": (search_papers_output or {}).get("discovery_mode"),
             "imported_ids": imported_ids,
             "auto_parse": auto_parse,
         },

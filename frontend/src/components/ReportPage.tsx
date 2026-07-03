@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
-import { MarkdownPreview } from './MarkdownPreview';
+import { ReportPdfPreview, ReportPreviewHeader } from './ReportPdfPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
 import { QualityCheckCard } from './QualityCheckCard';
@@ -252,7 +252,7 @@ export function ReportPage({
         <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
         <div className="flex flex-wrap items-center gap-2 mb-1">
           <p className="text-bp-muted text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
-          <span className={`text-[11px] px-2 py-0.5 rounded border ${
+          <span className={`text-xs px-2 py-0.5 rounded border ${
             projectMode === 'federated_learning'
               ? 'border-bp-cyan/30 bg-bp-cyan-tint text-bp-cyan'
               : 'border-bp-border bg-bp-panel text-bp-muted'
@@ -262,7 +262,7 @@ export function ReportPage({
           <button
             type="button"
             onClick={() => navigate(`/projects/${projectId}?tab=knowledge_graph`)}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-bp border border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan hover:bg-bp-cyan/20 transition-colors"
+            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-bp border border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan hover:bg-bp-cyan/20 transition-colors"
           >
             <Network className="w-3 h-3" />
             查看知识图谱
@@ -404,7 +404,7 @@ export function ReportPage({
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/documents')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-panel border border-bp-border text-xs text-bp-muted hover:text-bp-text hover:border-bp-border transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-panel border border-bp-border text-xs text-bp-muted hover:text-bp-text hover-accent-left transition-colors"
               title="前往文献库导入文献"
             >
               <BookOpen className="w-3.5 h-3.5" />
@@ -415,30 +415,24 @@ export function ReportPage({
         </Card>
       </div>
 
-      {/* 主体：左侧 TOC + 预览 + 右侧检查 */}
+      {/* 主体：最左 TOC · 中间 PDF 预览 · 右侧检查 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <ReportTableOfContents
-              sections={tocSections}
-              className="md:w-52 shrink-0"
+        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:self-start">
+          <ReportTableOfContents
+            sections={tocSections}
+            previewMode={pdfFailed ? 'markdown' : 'pdf'}
+          />
+        </div>
+
+        <div className="lg:col-span-6 space-y-4">
+          <Card className="min-w-0">
+            <ReportPreviewHeader mode={pdfFailed ? 'markdown' : 'pdf'} />
+            <ReportPdfPreview
+              reportId={report.id}
+              markdownContent={report.markdownContent}
+              pdfSuccess={report.pdfSuccess}
             />
-            <Card className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-4 h-4 text-bp-cyan" />
-                <div>
-                  <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
-                  <p className="text-xs text-bp-muted">Markdown 格式 · 科学假设与研究计划</p>
-                </div>
-              </div>
-              <div
-                id="report-markdown-preview"
-                className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]"
-              >
-                <MarkdownPreview content={report.markdownContent} />
-              </div>
-            </Card>
-          </div>
+          </Card>
 
           {/* ── 数据图表区域 ── */}
           {report.plots && report.plots.length > 0 && (
@@ -465,22 +459,22 @@ export function ReportPage({
                         <p className="text-xs text-bp-muted mt-0.5 line-clamp-1">{plot.description}</p>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-bp-surface/50 text-bp-muted">
+                        <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-bp-surface/50 text-bp-muted">
                           {plot.type}
                         </span>
                         {plot.is_generated_from_real_data ? (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-green/15 text-bp-green">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-green/15 text-bp-green">
                             <CheckCircle2 className="w-2.5 h-2.5" />
                             真实数据
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-yellow/15 text-bp-yellow">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-yellow/15 text-bp-yellow">
                             <AlertTriangle className="w-2.5 h-2.5" />
                             非真实数据
                           </span>
                         )}
                         {plot.source_dataset_id && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-bp-cyan-tint text-bp-cyan">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-cyan-tint text-bp-cyan">
                             <Database className="w-2.5 h-2.5" />
                             {plot.source_dataset_id.slice(0, 8)}
                           </span>
@@ -506,7 +500,7 @@ export function ReportPage({
                     </div>
                     {plot.markdown_embed && (
                       <div className="px-3 py-1.5 border-t border-bp-border/60 bg-bp-base/30">
-                        <code className="text-[10px] text-bp-muted break-all">{plot.markdown_embed}</code>
+                        <code className="text-xs text-bp-muted break-all">{plot.markdown_embed}</code>
                       </div>
                     )}
                   </div>
@@ -570,7 +564,7 @@ export function ReportPage({
                 onChange={(e) => setMentorNotes(e.target.value)}
               />
               {mentorReview && (
-                <div className="mb-3 p-2 rounded-bp border border-bp-yellow/20 bg-bp-yellow/5 text-[11px] space-y-1.5 max-h-48 overflow-y-auto">
+                <div className="mb-3 p-2 rounded-bp border border-bp-yellow/20 bg-bp-yellow/5 text-xs space-y-1.5 max-h-48 overflow-y-auto">
                   {mentorReview.overall_assessment && (
                     <p className="text-bp-yellow/90">{mentorReview.overall_assessment}</p>
                   )}
@@ -601,7 +595,7 @@ export function ReportPage({
                   type="button"
                   onClick={() => setReviseScope('full')}
                   className={cn(
-                    'flex-1 text-[11px] py-1.5 rounded-lg border',
+                    'flex-1 text-xs py-1.5 rounded-lg border',
                     reviseScope === 'full'
                       ? 'border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan'
                       : 'border-bp-border text-bp-muted',
@@ -613,7 +607,7 @@ export function ReportPage({
                   type="button"
                   onClick={() => setReviseScope('section')}
                   className={cn(
-                    'flex-1 text-[11px] py-1.5 rounded-lg border',
+                    'flex-1 text-xs py-1.5 rounded-lg border',
                     reviseScope === 'section'
                       ? 'border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan'
                       : 'border-bp-border text-bp-muted',
@@ -626,7 +620,7 @@ export function ReportPage({
               {reviseScope === 'section' && (
                 <div className="mb-2 max-h-28 overflow-y-auto grid grid-cols-1 gap-1">
                   {REPORT_SECTION_OPTIONS.map((opt) => (
-                    <label key={opt.key} className="flex items-center gap-2 text-[11px] text-bp-muted cursor-pointer">
+                    <label key={opt.key} className="flex items-center gap-2 text-xs text-bp-muted cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedSections.includes(opt.key)}
@@ -665,16 +659,16 @@ export function ReportPage({
               </button>
 
               {lastChatReply && (
-                <p className="mt-2 text-[11px] text-bp-green/90 border border-bp-green/20 rounded-bp p-2">
+                <p className="mt-2 text-xs text-bp-green/90 border border-bp-green/20 rounded-bp p-2">
                   {lastChatReply}
                 </p>
               )}
 
               {chatHistory.length > 0 && (
                 <div className="mt-3 space-y-1.5 max-h-44 overflow-y-auto">
-                  <p className="text-[11px] text-bp-muted">对话记录 ({chatHistory.length})</p>
+                  <p className="text-xs text-bp-muted">对话记录 ({chatHistory.length})</p>
                   {chatHistory.slice().reverse().map((h) => (
-                    <div key={String(h.id || h.at)} className="text-[10px] border border-bp-border rounded p-2 space-y-1">
+                    <div key={String(h.id || h.at)} className="text-xs border border-bp-border rounded p-2 space-y-1">
                       <div className="text-bp-muted">{String(h.at || '')}</div>
                       <div className="text-bp-cyan/90">你：{String(h.user_message || '')}</div>
                       {h.assistant_explanation ? (
@@ -693,14 +687,14 @@ export function ReportPage({
                   <button
                     type="button"
                     onClick={() => setShowHistory(!showHistory)}
-                    className="text-[11px] text-bp-muted hover:text-bp-text"
+                    className="text-xs text-bp-muted hover:text-bp-text"
                   >
                     {showHistory ? '隐藏' : '查看'}修订快照 ({revisionHistory.length})
                   </button>
                   {showHistory && (
                     <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                       {revisionHistory.slice().reverse().map((h) => (
-                        <div key={String(h.id || h.at)} className="text-[10px] text-bp-muted border border-bp-border rounded p-2">
+                        <div key={String(h.id || h.at)} className="text-xs text-bp-muted border border-bp-border rounded p-2">
                           <div className="text-bp-muted">{String(h.at || '')}</div>
                           <div className="text-bp-text mt-0.5">{String(h.user_message || '')}</div>
                         </div>

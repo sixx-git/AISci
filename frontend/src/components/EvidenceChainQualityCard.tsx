@@ -1,4 +1,4 @@
-import { Layers, Link2, CheckCircle, AlertTriangle } from 'lucide-react';
+﻿import { Layers, Link2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
 import type { ComplianceCheck } from '@/types';
@@ -66,7 +66,7 @@ export function EvidenceChainQualityCard({
             >
               <div className="flex items-center gap-1.5 mb-1">
                 <Icon className={cn('w-3.5 h-3.5', m.color)} />
-                <span className="text-[10px] text-bp-muted">{m.label}</span>
+                <span className="text-xs text-bp-muted">{m.label}</span>
               </div>
               <p className={cn('text-lg font-mono font-bold', m.color)}>{m.value}</p>
             </div>
@@ -81,7 +81,7 @@ export function EvidenceChainQualityCard({
             <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-danger-300">虚构引用风险</p>
-              <p className="text-[11px] text-danger-300/70 mt-0.5">
+              <p className="text-xs text-danger-300/70 mt-0.5">
                 当前报告没有任何经过文献库验证的真实引用。所有引用均由 LLM 编造，不符合比赛规范。
               </p>
             </div>
@@ -95,7 +95,7 @@ export function EvidenceChainQualityCard({
             <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-yellow">部分引用存疑</p>
-              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
+              <p className="text-xs text-bp-yellow/70 mt-0.5">
                 发现 {cc?.references_suspicious} 条引用未在文献库中找到匹配，建议核实后补充。
               </p>
             </div>
@@ -109,7 +109,7 @@ export function EvidenceChainQualityCard({
             <CheckCircle className="w-4 h-4 text-bp-green shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-green">引用验证通过</p>
-              <p className="text-[11px] text-bp-green/70 mt-0.5">
+              <p className="text-xs text-bp-green/70 mt-0.5">
                 全部 {cc?.references_verified} 条引用均可追溯至文献库中的真实文献。
               </p>
             </div>

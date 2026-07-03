@@ -155,11 +155,17 @@ def delete_project(
     service: ProjectService = Depends(get_project_service)
 ):
     """删除项目"""
-    success = service.delete_project(project_id)
+    try:
+        success = service.delete_project(project_id)
+    except Exception as exc:
+        logger.exception("删除项目 API 失败 project_id=%s", project_id)
+        raise HTTPException(status_code=500, detail=f"删除项目失败: {exc}") from exc
+
     if not success:
         raise HTTPException(status_code=404, detail="项目不存在")
     
     return success_response(
+        data=True,
         message="项目删除成功"
     )
 

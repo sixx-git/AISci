@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { AlertTriangle, Play, RefreshCw, XCircle } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -63,7 +63,7 @@ export function HitlGatePanel({
             阶段「{gate?.stage_label || gate?.stage || '—'}」已完成。请审阅结果后选择继续、从本阶段重跑或终止。
           </p>
           {gate?.paused_at && (
-            <p className="text-[10px] text-bp-muted mt-1">暂停于 {gate.paused_at}</p>
+            <p className="text-xs text-bp-muted mt-1">暂停于 {gate.paused_at}</p>
           )}
         </div>
       </div>

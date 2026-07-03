@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Shield, BarChart3, BookOpen, AlertCircle, FlaskConical, Loader2 } from 'lucide-react';
+﻿import { AlertTriangle, CheckCircle, Shield, BarChart3, BookOpen, AlertCircle, FlaskConical, Loader2 } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
 import type { ComplianceCheck } from '@/types';
@@ -63,7 +63,7 @@ export function QualityCheckCard({
             <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-yellow">质量检查未完成</p>
-              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
+              <p className="text-xs text-bp-yellow/70 mt-0.5">
                 {String(qc.error || '未知错误')}
               </p>
             </div>
@@ -109,10 +109,10 @@ export function QualityCheckCard({
           </span>
         </div>
         {!passed && score >= 60 && (
-          <p className="text-[10px] text-bp-yellow/70">存在关键问题需整改后重新检查</p>
+          <p className="text-xs text-bp-yellow/70">存在关键问题需整改后重新检查</p>
         )}
         {!passed && score < 60 && (
-          <p className="text-[10px] text-danger-300/70">报告质量未达标，建议补充文献、数据或实验结果。</p>
+          <p className="text-xs text-danger-300/70">报告质量未达标，建议补充文献、数据或实验结果。</p>
         )}
       </div>
 
@@ -120,7 +120,7 @@ export function QualityCheckCard({
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <BookOpen className="w-3.5 h-3.5 text-bp-cyan" />
-            <span className="text-[10px] text-bp-muted">已验证引用</span>
+            <span className="text-xs text-bp-muted">已验证引用</span>
           </div>
           <p className={cn('text-lg font-mono font-bold', refsVerified > 0 ? 'text-bp-cyan' : 'text-danger-400')}>
             {refsVerified}
@@ -129,7 +129,7 @@ export function QualityCheckCard({
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <BarChart3 className="w-3.5 h-3.5 text-bp-green" />
-            <span className="text-[10px] text-bp-muted">真实图表</span>
+            <span className="text-xs text-bp-muted">真实图表</span>
           </div>
           <p className={cn('text-sm font-mono font-bold', hasRealPlots ? 'text-bp-green' : 'text-danger-400')}>
             {hasRealPlots ? '是' : '否'}
@@ -138,7 +138,7 @@ export function QualityCheckCard({
         <div className="p-2.5 rounded-lg bg-bp-panel/60 border border-bp-border/50">
           <div className="flex items-center gap-1.5 mb-1">
             <FlaskConical className="w-3.5 h-3.5 text-bp-purple" />
-            <span className="text-[10px] text-bp-muted">实验结果</span>
+            <span className="text-xs text-bp-muted">实验结果</span>
           </div>
           <p className={cn('text-sm font-mono font-bold', hasActualOrSimulated ? 'text-bp-purple' : 'text-danger-400')}>
             {hasActualOrSimulated ? '是' : '否'}
@@ -152,7 +152,7 @@ export function QualityCheckCard({
             <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-danger-300">参考文献未验证</p>
-              <p className="text-[11px] text-danger-300/70 mt-0.5">
+              <p className="text-xs text-danger-300/70 mt-0.5">
                 参考文献未验证，不符合赛题要求。
               </p>
             </div>
@@ -166,7 +166,7 @@ export function QualityCheckCard({
             <BarChart3 className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-yellow">缺少真实数据图表</p>
-              <p className="text-[11px] text-bp-yellow/70 mt-0.5">
+              <p className="text-xs text-bp-yellow/70 mt-0.5">
                 当前报告缺少真实数据图表。
               </p>
             </div>
@@ -180,7 +180,7 @@ export function QualityCheckCard({
             <AlertCircle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-danger-300">报告质量未达标</p>
-              <p className="text-[11px] text-danger-300/70 mt-0.5">
+              <p className="text-xs text-danger-300/70 mt-0.5">
                 报告质量未达标，建议补充文献、数据或实验结果。
               </p>
             </div>
@@ -194,7 +194,7 @@ export function QualityCheckCard({
             <AlertCircle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-danger-300 mb-1">关键问题 ({criticalIssues.length})</p>
-              <ul className="list-disc list-inside text-[11px] text-danger-300/70 space-y-0.5">
+              <ul className="list-disc list-inside text-xs text-danger-300/70 space-y-0.5">
                 {criticalIssues.slice(0, 4).map((issue, i) => (
                   <li key={i}>{issue}</li>
                 ))}
@@ -213,7 +213,7 @@ export function QualityCheckCard({
             <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-yellow mb-1">缺失字段 ({missingFields.length})</p>
-              <p className="text-[11px] text-bp-yellow/70">
+              <p className="text-xs text-bp-yellow/70">
                 {missingFields.join('、')}
               </p>
             </div>
@@ -227,7 +227,7 @@ export function QualityCheckCard({
             <AlertTriangle className="w-4 h-4 text-bp-muted shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-text mb-1">警告 ({warnings.length})</p>
-              <ul className="list-disc list-inside text-[11px] text-bp-muted space-y-0.5">
+              <ul className="list-disc list-inside text-xs text-bp-muted space-y-0.5">
                 {warnings.slice(0, 3).map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
@@ -243,7 +243,7 @@ export function QualityCheckCard({
             <CheckCircle className="w-4 h-4 text-bp-cyan shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-bp-cyan mb-1">改进建议</p>
-              <ul className="list-disc list-inside text-[11px] text-bp-cyan/70 space-y-0.5">
+              <ul className="list-disc list-inside text-xs text-bp-cyan/70 space-y-0.5">
                 {recommendations.slice(0, 4).map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}

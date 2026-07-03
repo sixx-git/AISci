@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { X, AlertCircle, BarChart3, Terminal, FileCode } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RUN_LOG_STATUS_BADGE } from '@/lib/runLogStatus';
@@ -41,7 +41,7 @@ export function RunLogDetail({ log, onClose, showClose = false }: RunLogDetailPr
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-bp-text flex items-center gap-2 flex-wrap">
             <span className="font-mono text-sm text-bp-cyan truncate">{log.id}</span>
-            <span className={cn('text-[11px] px-2 py-0.5 rounded-bp border font-medium shrink-0', sc.className)}>
+            <span className={cn('text-xs px-2 py-0.5 rounded-bp border font-medium shrink-0', sc.className)}>
               {sc.label}
             </span>
           </h3>
@@ -127,7 +127,7 @@ export function RunLogDetail({ log, onClose, showClose = false }: RunLogDetailPr
 function InfoItem({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div className={cn('p-2.5 rounded-bp bg-bp-panel/50 border border-bp-border', className)}>
-      <div className="text-[10px] text-bp-muted uppercase tracking-wide mb-0.5">{label}</div>
+      <div className="text-xs text-bp-muted uppercase tracking-wide mb-0.5">{label}</div>
       <div className="text-xs text-bp-text font-mono truncate" title={value}>{value}</div>
     </div>
   );

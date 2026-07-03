@@ -25,7 +25,7 @@ export function HumanInLoopCard({ className }: HumanInLoopCardProps) {
         ].map((item) => (
           <button
             key={item.label}
-            className="w-full flex items-start gap-2 p-2.5 rounded-lg border border-bp-yellow/15 bg-bp-yellow/5 hover:border-bp-yellow/30 hover:bg-bp-yellow/10 transition-all text-left"
+            className="w-full flex items-start gap-2 p-2.5 rounded-lg border border-bp-yellow/15 bg-bp-yellow/5 hover-accent-left-yellow hover:bg-bp-yellow/10 transition-all text-left"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-bp-yellow mt-1.5 shrink-0" />
             <div>

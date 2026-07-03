@@ -1,4 +1,4 @@
-import { CheckCircle, AlertTriangle, XCircle, Shield } from 'lucide-react';
+﻿import { CheckCircle, AlertTriangle, XCircle, Shield } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
 import type { ComplianceCheck, ReportSection } from '@/types';
@@ -61,15 +61,15 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         <div className="grid grid-cols-3 gap-2 mb-3">
           <div className="text-center p-2 rounded-lg bg-bp-green/5 border border-bp-green/10">
             <p className="text-lg font-mono font-bold text-bp-green">{completedCount}</p>
-            <p className="text-[10px] text-bp-muted">已完成</p>
+            <p className="text-xs text-bp-muted">已完成</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-danger-500/5 border border-danger-500/10">
             <p className="text-lg font-mono font-bold text-danger-400">{missingCount}</p>
-            <p className="text-[10px] text-bp-muted">缺失</p>
+            <p className="text-xs text-bp-muted">缺失</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-bp-yellow/5 border border-bp-yellow/10">
             <p className="text-lg font-mono font-bold text-bp-yellow">{reviewCount}</p>
-            <p className="text-[10px] text-bp-muted">需人工确认</p>
+            <p className="text-xs text-bp-muted">需人工确认</p>
           </div>
         </div>
 
@@ -77,25 +77,25 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         {cc && (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
-              <p className="text-[10px] text-bp-muted mb-0.5">Evidence 事实数</p>
+              <p className="text-xs text-bp-muted mb-0.5">Evidence 事实数</p>
               <p className="text-sm font-mono font-bold text-bp-purple">
                 {cc.evidence_fact_count}
               </p>
             </div>
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
-              <p className="text-[10px] text-bp-muted mb-0.5">有证据假设数</p>
+              <p className="text-xs text-bp-muted mb-0.5">有证据假设数</p>
               <p className="text-sm font-mono font-bold text-bp-green">
                 {cc.hypothesis_with_evidence_count}
               </p>
             </div>
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
-              <p className="text-[10px] text-bp-muted mb-0.5">已验证引用</p>
+              <p className="text-xs text-bp-muted mb-0.5">已验证引用</p>
               <p className="text-sm font-mono font-bold text-bp-cyan">
                 {cc.references_verified}
               </p>
             </div>
             <div className="p-2 rounded-lg bg-bp-panel/60 border border-bp-border/50">
-              <p className="text-[10px] text-bp-muted mb-0.5">含实际/模拟结果</p>
+              <p className="text-xs text-bp-muted mb-0.5">含实际/模拟结果</p>
               <p className="text-sm font-mono font-bold">
                 {cc.has_actual_or_simulated_result
                   ? <span className="text-bp-green">有</span>
@@ -108,12 +108,12 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         {/* Skill 评估指标 */}
         {cc && (cc.novelty_score != null || cc.experiment_sanity_check) && (
           <div className="mb-3 p-3 rounded-lg bg-bp-purple/5 border border-bp-purple/15">
-            <p className="text-[10px] text-bp-purple font-semibold mb-2 uppercase tracking-wide">
+            <p className="text-xs text-bp-purple font-semibold mb-2 uppercase tracking-wide">
               Skill 评估
             </p>
             {cc.novelty_score != null && (
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-bp-muted">新颖性评分</span>
+                <span className="text-xs text-bp-muted">新颖性评分</span>
                 <span className={cn(
                   'text-xs font-mono font-bold',
                   cc.novelty_score >= 7 ? 'text-bp-green' :
@@ -126,9 +126,9 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             {cc.experiment_sanity_check && (
               <div className="space-y-1 mt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-bp-muted">实验可执行性</span>
+                  <span className="text-xs text-bp-muted">实验可执行性</span>
                   <span className={cn(
-                    'text-[10px] font-medium',
+                    'text-xs font-medium',
                     cc.experiment_sanity_check.executable
                       ? 'text-bp-green' : 'text-danger-400',
                   )}>
@@ -136,12 +136,12 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                   </span>
                 </div>
                 {cc.experiment_sanity_check.missing_items?.length > 0 && (
-                  <p className="text-[9px] text-danger-400/70 leading-relaxed">
+                  <p className="text-xs text-danger-400/70 leading-relaxed">
                     缺失: {cc.experiment_sanity_check.missing_items.join(', ')}
                   </p>
                 )}
                 {cc.experiment_sanity_check.recommendations?.length > 0 && (
-                  <p className="text-[9px] text-bp-purple/70 leading-relaxed">
+                  <p className="text-xs text-bp-purple/70 leading-relaxed">
                     建议: {cc.experiment_sanity_check.recommendations.slice(0, 2).join('; ')}
                   </p>
                 )}
@@ -163,7 +163,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-bp-text">{s.label}</span>
                   <span className={cn(
-                    'text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1',
+                    'text-xs px-2 py-0.5 rounded-full border font-medium flex items-center gap-1',
                     cfg.className,
                   )}>
                     <Icon className="w-3 h-3" />
@@ -171,7 +171,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
                   </span>
                 </div>
                 {s.note && (
-                  <p className="text-[11px] text-bp-muted leading-relaxed ml-0">{s.note}</p>
+                  <p className="text-xs text-bp-muted leading-relaxed ml-0">{s.note}</p>
                 )}
               </div>
             );
@@ -206,16 +206,16 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
               References 合规声明
             </h4>
             {cc && cc.references_verified === 0 ? (
-              <p className="text-[11px] text-danger-300/80 mt-1 leading-relaxed">
+              <p className="text-xs text-danger-300/80 mt-1 leading-relaxed">
                 当前报告缺少真实文献引用，请先上传 PDF 或导入 arXiv 文献。
               </p>
             ) : (
-              <p className="text-[11px] text-bp-yellow/70 mt-1 leading-relaxed">
+              <p className="text-xs text-bp-yellow/70 mt-1 leading-relaxed">
                 参考文献仅来自文献库和证据链，禁止虚构引用。
               </p>
             )}
             {cc && (
-              <div className="mt-2 flex items-center gap-3 text-[10px]">
+              <div className="mt-2 flex items-center gap-3 text-xs">
                 <span className={cc.references_verified > 0 ? 'text-bp-green' : 'text-danger-400'}>
                   已验证 {cc.references_verified} 条
                 </span>
@@ -241,7 +241,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
               </h4>
               <ul className="space-y-1">
                 {warnings.map((w, i) => (
-                  <li key={i} className="text-[10px] text-bp-yellow/70 leading-relaxed">
+                  <li key={i} className="text-xs text-bp-yellow/70 leading-relaxed">
                     {w}
                   </li>
                 ))}

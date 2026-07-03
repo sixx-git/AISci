@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal, init_db
 from app.schemas.common import ResponseModel
+from app.schemas.human_loop import RerunFromStageRequest, RerunFromStageResponse
 from app.schemas.pipeline import (
     PipelineRunRequest,
     PipelineRunResult,
@@ -23,8 +24,14 @@ from app.schemas.pipeline import (
     PipelineStageLog,
     PipelineStageStatus,
     PipelineStage,
+    LoopDryRunRequest,
 )
-from app.schemas.human_loop import RerunFromStageRequest, RerunFromStageResponse
+from app.schemas.project import (
+    QuickReportRequest,
+    QuickReportResponse,
+    QuickReportResumeRequest,
+    QuickReportStatusResponse,
+)
 from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus as DB_PipelineStatus, PipelineStage as DB_PipelineStage
 from app.services.pipeline_service import get_pipeline_service, PipelineService
 
@@ -436,14 +443,16 @@ async def rerun_from_stage(
     body: RerunFromStageRequest,
     db: Session = Depends(get_db),
 ):
-    """从指定阶段重新运行 Pipeline（保留之前阶段结果）。"""
+    """从指定阶段重新运行：默认仅重跑本阶段（保留上下游结果）。"""
     try:
         pipeline_service = get_pipeline_service(db)
+        rerun_mode = getattr(body, "rerun_mode", None) or "single_stage"
         new_run_id = pipeline_service.start_rerun_from_stage(
             project_id=body.project_id,
             parent_run_id=body.run_id,
             from_stage=body.stage,
             use_human_modified_output=body.use_human_modified_output,
+            rerun_mode=rerun_mode,
         )
         thread = threading.Thread(
             target=_execute_pipeline_background,
@@ -451,13 +460,19 @@ async def rerun_from_stage(
             daemon=True,
         )
         thread.start()
+        msg = (
+            f"已仅重跑阶段 {body.stage}"
+            if body.rerun_mode == "single_stage"
+            else f"已从 {body.stage} 起继续执行后续流程"
+        )
         return ResponseModel(
             code=200,
-            message=f"已从 {body.stage} 重新运行",
+            message=msg,
             data=RerunFromStageResponse(
                 run_id=new_run_id,
                 parent_run_id=body.run_id,
                 rerun_from_stage=body.stage,
+                rerun_mode=body.rerun_mode,
                 status="running",
             ),
         )
@@ -521,6 +536,81 @@ async def get_run_debug(
             "hint": hint,
         }
     )
+
+
+@router.post("/quick-report", response_model=ResponseModel[QuickReportResponse])
+async def start_quick_report(body: QuickReportRequest, db: Session = Depends(get_db)):
+    """一键生成报告：创建项目并自动跑 Discovery 全流程（仅数据上传时暂停）。"""
+    from app.services.quick_report_service import get_quick_report_service
+
+    try:
+        result = get_quick_report_service(db).start(body)
+        run_id = result["run_id"]
+
+        thread = threading.Thread(
+            target=_execute_pipeline_background,
+            args=(run_id,),
+            daemon=True,
+        )
+        thread.start()
+
+        return ResponseModel(
+            code=200,
+            message="一键报告已启动",
+            data=QuickReportResponse(**result),
+        )
+    except Exception as e:
+        logger.exception("一键报告启动失败")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quick-report/status/{run_id}", response_model=ResponseModel[QuickReportStatusResponse])
+async def get_quick_report_status(run_id: str, db: Session = Depends(get_db)):
+    from app.services.quick_report_service import get_quick_report_service
+
+    try:
+        data = get_quick_report_service(db).get_status(run_id)
+        return ResponseModel(code=200, message="获取成功", data=QuickReportStatusResponse(**data))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/quick-report/resume", response_model=ResponseModel[dict])
+async def resume_quick_report(body: QuickReportResumeRequest, db: Session = Depends(get_db)):
+    """上传外部数据集后继续一键报告流程。"""
+    try:
+        svc = get_pipeline_service(db)
+        result = svc.resume_after_data_upload(body.run_id, force=body.force)
+
+        def _bg():
+            bg_db = SessionLocal()
+            try:
+                get_pipeline_service(bg_db).execute_pipeline_run(body.run_id)
+            except Exception as exc:
+                logger.exception("一键报告续跑失败: %s", exc)
+            finally:
+                bg_db.close()
+
+        threading.Thread(target=_bg, daemon=True).start()
+        return ResponseModel(code=200, message="已继续生成报告", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/loop-dry-run")
+async def loop_dry_run(body: LoopDryRunRequest):
+    """模拟 Loop 决策逻辑（停滞 / Gap 阈值 / Teaching 配置），不调用 LLM。"""
+    from app.services.loops.dry_run import simulate_loop_decisions
+
+    result = simulate_loop_decisions(
+        run_options=body.run_options,
+        quality_trend=body.quality_trend,
+        round_num=body.round_num,
+        hypothesis_review=body.hypothesis_review,
+        small_validation=body.small_validation,
+        project_mode=body.project_mode,
+    )
+    return ResponseModel(code=200, message="Dry-run 完成", data=result)
 
 
 @router.get("/audit-export/{run_id}")

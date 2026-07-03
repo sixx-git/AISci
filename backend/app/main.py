@@ -132,7 +132,11 @@ async def startup_event():
         print("    [WARN] Pipeline 运行时会因缺少 API Key 而失败")
         print("    [WARN] 如需在无 API Key 时跑通 Pipeline，请在 .env 中设置 USE_MOCK_LLM=true")
     else:
-        print(f"    [OK] 千问模型: {settings.QWEN_MODEL}")
+        from app.core.llm_runtime import get_effective_model
+        eff = get_effective_model()
+        print(f"    [OK] 千问模型: {eff}")
+        if eff != settings.QWEN_MODEL:
+            print(f"    [OK] .env 默认: {settings.QWEN_MODEL}（已被运行时覆盖）")
         print(f"    [OK] API 地址: {settings.QWEN_BASE_URL}")
         print(f"    [OK] API Key: 已配置 ({len(settings.QWEN_API_KEY)} 字符)")
     print()

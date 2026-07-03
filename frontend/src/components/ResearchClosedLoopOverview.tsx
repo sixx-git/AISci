@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Orbit, Play, Lightbulb, BookOpen, Database, GitBranch,
   ChevronRight, FileText, FlaskConical,
@@ -6,6 +6,8 @@ import {
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
+import { GapLoopHistoryPanel } from '@/components/GapLoopHistoryPanel';
+import { LoopDependencyGraph } from '@/components/LoopDependencyGraph';
 import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
@@ -34,7 +36,19 @@ interface ResearchClosedLoopOverviewProps {
   revalidateKey?: number;
 }
 
-const FLOW_STEPS = [
+const PIPELINE_STAGES = [
+  { key: 'problem_understanding', label: 'P0 问题理解', tab: 'questions' },
+  { key: 'literature_mining', label: 'P1 文献挖掘', tab: 'literature' },
+  { key: 'data_acquisition', label: 'P2 数据采集', tab: 'datasets' },
+  { key: 'knowledge_gap', label: 'P3 知识缺口', tab: 'knowledge_graph' },
+  { key: 'hypothesis_generation', label: 'P4 假设生成', tab: 'hypotheses' },
+  { key: 'hypothesis_review', label: 'P5 假设评估', tab: 'hypotheses' },
+  { key: 'experiment_design', label: 'P6 实验设计', tab: 'experiments' },
+  { key: 'small_validation', label: 'P7 小样验证', tab: 'experiments' },
+  { key: 'report_generation', label: 'P8 报告生成', tab: 'reports' },
+] as const;
+
+const MACRO_FLOW_STEPS = [
   { key: 'problem_understanding', label: '问题理解', tab: 'questions' },
   { key: 'literature_mining', label: '知识整合', tab: 'literature' },
   { key: 'hypothesis_generation', label: '假设生成', tab: 'hypotheses' },
@@ -82,6 +96,7 @@ export function ResearchClosedLoopOverview({
   const [hypotheses, setHypotheses] = useState<BackendHypothesis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [flowView, setFlowView] = useState<'micro' | 'macro'>('micro');
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -158,6 +173,16 @@ export function ResearchClosedLoopOverview({
 
   const versionSnapshots = useMemo(() => extra?.version_snapshots ?? [], [extra]);
 
+  const pipelineMode = (extra?.run_options?.pipeline_mode as string | undefined) || 'teaching';
+
+  const gapLoopFromStage = useMemo(() => {
+    const da = runDetail?.stages?.find((s) => s.stage === 'data_acquisition');
+    const out = da?.output_data as Record<string, unknown> | undefined;
+    const nested = out?.data_acquisition as Record<string, unknown> | undefined;
+    const details = nested?.step_details as Record<string, unknown> | undefined;
+    return details?.gap_loop as Array<Record<string, unknown>> | undefined;
+  }, [runDetail]);
+
   const verifiableValidation = useMemo(() => {
     const validationOut = runDetail?.small_validation as Record<string, unknown> | undefined;
     if (!validationOut) {
@@ -207,10 +232,45 @@ export function ResearchClosedLoopOverview({
     <div className="space-y-4">
       <Card
         title="科研闭环总览"
-        subtitle="问题理解 → 知识整合 → 假设生成 → 证据梳理 → 研究计划 → 反馈修正"
+        subtitle="九阶段 Pipeline · Discovery / Teaching 双模式 · CQS 质量趋势"
       >
+        <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint/40 text-xs text-bp-muted leading-relaxed">
+          <strong className="text-bp-text">Teaching</strong>：各阶段可 HITL 人工审核 Gate，验证失败时最多 1 轮自动精化。
+          <span className="mx-2 text-bp-border">|</span>
+          <strong className="text-bp-text">Discovery</strong>：关闭 HITL，未 Accept 时自动多轮文献回退与假设→实验→报告迭代（CQS 停滞则停止）。
+          {pipelineMode && (
+            <span className="ml-2 text-bp-cyan">当前运行：{pipelineMode === 'discovery' ? 'Discovery' : 'Teaching'}</span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <p className="text-xs text-bp-muted">流程视图</p>
+          <div className="flex rounded-bp border border-bp-border overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => setFlowView('micro')}
+              className={cn(
+                'px-2 py-1',
+                flowView === 'micro' ? 'bg-bp-cyan-tint text-bp-cyan' : 'text-bp-muted',
+              )}
+            >
+              9 阶段
+            </button>
+            <button
+              type="button"
+              onClick={() => setFlowView('macro')}
+              className={cn(
+                'px-2 py-1 border-l border-bp-border',
+                flowView === 'macro' ? 'bg-bp-cyan-tint text-bp-cyan' : 'text-bp-muted',
+              )}
+            >
+              6 步宏观
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 mb-6">
-          {FLOW_STEPS.map((step, idx) => {
+          {(flowView === 'micro' ? PIPELINE_STAGES : MACRO_FLOW_STEPS).map((step, idx, arr) => {
             const status = stageStatus(runDetail, step.key);
             return (
               <div key={step.key} className="flex items-center gap-2">
@@ -224,7 +284,7 @@ export function ResearchClosedLoopOverview({
                 >
                   {step.label}
                 </button>
-                {idx < FLOW_STEPS.length - 1 && (
+                {idx < arr.length - 1 && (
                   <ChevronRight className="w-3.5 h-3.5 text-bp-muted shrink-0" />
                 )}
               </div>
@@ -344,6 +404,19 @@ export function ResearchClosedLoopOverview({
 
       {hasTimeline && (
         <CollapsiblePanel
+          title="跨环依赖图"
+          subtitle="Discovery · Gap · Teaching · 证据迭代"
+          defaultOpen={false}
+        >
+          <LoopDependencyGraph
+            events={extra?.closed_loop_events}
+            decisions={extra?.closed_loop_decisions}
+          />
+        </CollapsiblePanel>
+      )}
+
+      {hasTimeline && (
+        <CollapsiblePanel
           title="闭环时间线"
           subtitle="质量趋势 · 决策事件"
           defaultOpen
@@ -354,6 +427,12 @@ export function ResearchClosedLoopOverview({
             decisions={extra?.closed_loop_decisions}
             runId={selectedRunId}
           />
+        </CollapsiblePanel>
+      )}
+
+      {(extra?.closed_loop_events?.some((e) => e.type === 'data_gap_loop') || (gapLoopFromStage?.length ?? 0) > 0) && (
+        <CollapsiblePanel title="Gap 补搜历史" subtitle="DataAcquisition · gap_loop" defaultOpen={false}>
+          <GapLoopHistoryPanel events={extra?.closed_loop_events} gapLoop={gapLoopFromStage} />
         </CollapsiblePanel>
       )}
 
@@ -414,7 +493,11 @@ export function ResearchClosedLoopOverview({
       )}
 
       <CollapsiblePanel title="反馈中心" subtitle="FeedbackHubPanel" defaultOpen={false}>
-        <FeedbackHubPanel projectId={projectId} />
+        <FeedbackHubPanel
+          projectId={projectId}
+          latestRunId={selectedRunId}
+          onRerunStarted={loadRuns}
+        />
       </CollapsiblePanel>
     </div>
   );
@@ -442,7 +525,7 @@ function QuickLink({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-bp text-xs text-bp-cyan border border-bp-cyan/20 bg-bp-cyan-tint hover:border-bp-cyan/40 transition-colors"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-bp text-xs text-bp-cyan border border-bp-cyan/20 bg-bp-cyan-tint hover-accent-bottom transition-colors"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
