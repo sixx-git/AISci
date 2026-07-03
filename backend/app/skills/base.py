@@ -35,6 +35,38 @@ class BaseSkill(ABC):
     name: str = ""
     description: str = ""
     source_reference: Optional[str] = None
+    _skill_run_guarded: bool = False
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls is BaseSkill or getattr(cls, "_skill_run_guarded", False):
+            return
+
+        original_run = cls.__dict__.get("run")
+        if original_run is None:
+            return
+
+        async def guarded_run(
+            self,
+            input_data: Dict[str, Any],
+            context: Dict[str, Any],
+        ) -> SkillResult:
+            from app.services.skill_registry_service import is_skill_enabled, is_skill_locked
+
+            skill_name = getattr(self, "name", "") or self.__class__.__name__
+            if skill_name and not is_skill_locked(skill_name) and not is_skill_enabled(skill_name):
+                result = SkillResult(success=True)
+                result.data = {
+                    "skipped": True,
+                    "skill": skill_name,
+                    "reason": "disabled_in_registry",
+                }
+                result.add_warning(f"Skill「{skill_name}」已在技能管理中禁用，跳过执行")
+                return result
+            return await original_run(self, input_data, context)
+
+        cls.run = guarded_run  # type: ignore[method-assign, assignment]
+        cls._skill_run_guarded = True
 
     @abstractmethod
     async def run(self, input_data: Dict[str, Any], context: Dict[str, Any]) -> SkillResult:

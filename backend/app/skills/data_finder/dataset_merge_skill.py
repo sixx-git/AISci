@@ -9,6 +9,12 @@ from app.skills.base import BaseSkill, SkillResult
 from app.skills.data_finder._utils import new_id
 
 
+def _package_row_provenance(row_provenance: List[Dict[str, Any]]) -> Any:
+    if len(row_provenance) <= 200:
+        return row_provenance
+    return {"count": len(row_provenance), "sample": row_provenance[:50]}
+
+
 class DatasetMergeSkill(BaseSkill):
     name = "DatasetMerge"
     description = "合并对齐后的 CSV（纵向 stack 或按 key join）并附加 provenance"
@@ -115,12 +121,14 @@ class DatasetMergeSkill(BaseSkill):
             writer.writeheader()
             writer.writerows(all_rows)
 
+        prov_out: Any = _package_row_provenance(row_provenance)
+
         result.data = {
             "merge_id": merge_id,
             "merged_csv_path": merged_path,
             "row_count": len(all_rows),
             "columns": all_columns,
-            "row_provenance": row_provenance,
+            "row_provenance": prov_out,
             "merge_strategy": "stack",
         }
         return result
@@ -216,7 +224,7 @@ class DatasetMergeSkill(BaseSkill):
             "merged_csv_path": merged_path,
             "row_count": len(merged_rows),
             "columns": all_columns,
-            "row_provenance": row_provenance,
+            "row_provenance": _package_row_provenance(row_provenance),
             "merge_strategy": "join",
             "join_keys": join_keys,
         }

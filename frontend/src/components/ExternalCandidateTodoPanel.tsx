@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Database, ExternalLink, Upload, Loader2, CheckCircle2, AlertCircle, Clock,
 } from 'lucide-react';
@@ -66,7 +66,7 @@ export function ExternalCandidateTodoPanel({
         外部数据待办 · 下载后上传 ({manualList.length})
       </h4>
       <p className="text-xs text-bp-muted mb-3">
-        Kaggle / GEO / OpenAlex 等来源仅提供链接；下载 CSV 或表格文件后在本列表上传，系统将自动解析并纳入合并 CSV。
+        根据研究问题推荐的数据源仅提供下载链接。请下载后上传表格文件、化学结构文件（SDF/MOL/SMILES，含 ChEMBL 的 .sdf.gz），或将整个数据集目录打包为 ZIP；系统会自动解析并纳入合并。
       </p>
 
       {error && (
@@ -122,7 +122,7 @@ export function ExternalCandidateTodoPanel({
                 <input
                   ref={(el) => { fileRefs.current[cid] = el; }}
                   type="file"
-                  accept=".csv,.tsv,.txt,.xlsx,.xls"
+                  accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -137,7 +137,7 @@ export function ExternalCandidateTodoPanel({
                   disabled={!cid || isBusy || statusKey === 'processing'}
                   onClick={() => fileRefs.current[cid]?.click()}
                 >
-                  {statusKey === 'merged' ? '重新上传' : '上传文件'}
+                  {statusKey === 'merged' ? '重新上传' : '上传文件 / ZIP'}
                 </Button>
               </div>
 

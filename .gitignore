@@ -75,6 +75,8 @@ backend/build/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # =========================
 # Storage
@@ -112,6 +114,8 @@ frontend-debug-files/
 # =========================
 output/
 out/
+*.sdf.gz
+chembl_37.sdf.gz
 
 # =========================
 # OS files

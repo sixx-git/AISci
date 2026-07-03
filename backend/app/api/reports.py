@@ -24,10 +24,19 @@ from app.schemas.research import (
 )
 from app.schemas.common import PaginatedResponse, PageInfo
 from app.schemas.human_loop import ReportReviseRequest
-from app.services.report_service import ReportService
+from app.services.report_service import ReportService, enrich_report_for_response, report_to_db_response
 from app.services.stage_chat_service import get_stage_chat_service
 
 router = APIRouter(tags=["reports"])
+
+
+def _safe_report_download_filename(title: Optional[str], ext: str, fallback: str = "科学假设与研究计划") -> str:
+    import re
+
+    base = (title or fallback).strip()
+    base = re.sub(r'[\\/:*?"<>|]', "_", base)
+    base = re.sub(r"\s+", " ", base)[:100].strip() or fallback
+    return f"{base}.{ext.lstrip('.')}"
 settings = get_settings()
 
 
@@ -143,43 +152,38 @@ async def download_report_file(report_id: str, file_type: str, db: Session = Dep
         file_type: 文件类型 (pdf / md / tex)
     """
     try:
-        # 如果传入的是 DB UUID，查找对应的 pdf_path
+        from app.models.project import Report as ReportModel
+
+        db_report = None
         resolved_report_id = report_id
-        if '-' in report_id and len(report_id) > 20:
-            from app.models.project import Report as ReportModel
+        if "-" in report_id and len(report_id) > 20:
             db_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
             if db_report and db_report.pdf_path:
                 resolved_report_id = db_report.pdf_path
+
+        report_title = None
+        if db_report:
+            report_title = db_report.paper_title or db_report.title
 
         reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage", "reports")
         report_dir = os.path.join(reports_dir, resolved_report_id)
         
         if file_type == "pdf":
             file_path = os.path.join(report_dir, "report.pdf")
-            filename = "科学假设与研究计划.pdf"
+            filename = _safe_report_download_filename(report_title, "pdf")
             media_type = "application/pdf"
         elif file_type == "md":
             file_path = os.path.join(report_dir, "report.md")
-            filename = "科学假设与研究计划.md"
+            filename = _safe_report_download_filename(report_title, "md")
             media_type = "text/markdown"
         elif file_type == "tex":
             file_path = os.path.join(report_dir, "report.tex")
-            filename = "科学假设与研究计划.tex"
+            filename = _safe_report_download_filename(report_title, "tex")
             media_type = "application/x-tex"
         else:
             raise HTTPException(status_code=400, detail="不支持的文件类型")
         
-        # 检查文件是否存在
         if not os.path.exists(file_path):
-            # 如果 PDF 不存在，尝试返回 MD
-            if file_type == "pdf":
-                md_path = os.path.join(report_dir, "report.md")
-                if os.path.exists(md_path):
-                    return FileResponse(
-                        md_path,
-                        filename="科学假设与研究计划.md",
-                        media_type="text/markdown"
-                    )
             raise HTTPException(status_code=404, detail="文件不存在")
         
         return FileResponse(
@@ -206,7 +210,7 @@ async def get_latest_report(
         report = report_service.get_latest_report_by_project(project_id)
         
         return success(
-            report,
+            enrich_report_for_response(report, db) if report else None,
             message="获取最新研究报告成功" if report else "暂无研究报告"
         )
     except Exception as e:
@@ -226,7 +230,7 @@ async def get_report_detail(
         report = report_service.get_report_by_id(report_id)
         
         return success(
-            report,
+            enrich_report_for_response(report, db) if report else None,
             message="获取研究报告详情成功" if report else "报告不存在"
         )
     except Exception as e:
@@ -311,7 +315,7 @@ async def get_project_reports(
         )
         
         return success(
-            reports,
+            [report_to_db_response(r) for r in reports],
             message=f"获取研究报告列表成功，共 {len(reports)} 条"
         )
     except Exception as e:
@@ -331,6 +335,22 @@ async def revise_report(body: ReportReviseRequest, db: Session = Depends(get_db)
             apply_change=body.apply_change,
         )
         return success(result, message="报告已根据反馈更新")
+    except ValueError as e:
+        return error(str(e), code=400)
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/{report_id}/regenerate-pdf", response_model=ApiResponse[dict])
+async def regenerate_report_pdf_endpoint(report_id: str, db: Session = Depends(get_db)):
+    """为已有报告重新编译/生成 PDF。"""
+    try:
+        report_service = ReportService(db)
+        result = report_service.regenerate_pdf(report_id)
+        return success(
+            result,
+            message="PDF 重新生成成功" if result.get("pdf_success") else "PDF 生成失败",
+        )
     except ValueError as e:
         return error(str(e), code=400)
     except Exception as e:

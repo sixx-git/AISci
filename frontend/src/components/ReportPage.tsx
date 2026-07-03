@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare } from 'lucide-react';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -9,15 +9,13 @@ import { ReportPdfPreview, ReportPreviewHeader } from './ReportPdfPreview';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
 import { QualityCheckCard } from './QualityCheckCard';
-import { ExportActions } from './ExportActions';
-import type { ExportType } from './ExportActions';
 import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
 import humanLoopService, { type MentorReview } from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
 import { REPORT_SECTION_OPTIONS } from '@/config/reportSections';
-import { ReportTableOfContents } from '@/components/ReportTableOfContents';
-import type { ReportSection } from '@/types';
+import { countRealReferences } from '@/lib/reportCompliance';
+import { buildReportDownloadFilename } from '@/lib/reportExport';
 import { cn } from '@/lib/utils';
 
 interface ReportPageProps {
@@ -138,46 +136,20 @@ export function ReportPage({
     }
   }, [projectId, report?.id, reviseMessage, reviseScope, selectedSections, reloadReport, showAlert]);
 
-  const handleExport = useCallback(async (action: ExportType) => {
-    if (action === 'generate') {
-      showAlert('报告生成功能请通过工作流页面触发');
-      return;
-    }
-
-    if (action === 'copy') {
-      if (report?.markdownContent) {
-        try {
-          await navigator.clipboard.writeText(report.markdownContent);
-          showAlert('报告内容已复制到剪贴板');
-        } catch {
-          showAlert('复制失败，请手动复制');
-        }
-      }
-      return;
-    }
-
+  const handleExport = useCallback(async (fileType: 'pdf' | 'tex') => {
     if (!report?.id) {
       showAlert('暂无报告可导出');
       return;
     }
 
-    const fileType = action === 'markdown' ? 'md' : action === 'latex' ? 'tex' : 'pdf';
-    const downloadNames: Record<string, string> = {
-      md: '科学假设与研究计划.md',
-      tex: '科学假设与研究计划.tex',
-      pdf: '科学假设与研究计划.pdf',
-    };
-    const successLabels: Record<string, string> = {
-      md: 'Markdown',
-      tex: 'LaTeX',
-      pdf: 'PDF',
-    };
+    const downloadFilename = buildReportDownloadFilename(report.title, fileType);
+    const successLabels = { tex: 'LaTeX', pdf: 'PDF' } as const;
     try {
-      const blob = await reportService.download(report.id, fileType as 'pdf' | 'md' | 'tex');
+      const blob = await reportService.download(report.id, fileType);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = downloadNames[fileType];
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -229,15 +201,11 @@ export function ReportPage({
   }
 
   const sections = report.sections || [];
-  const tocSections: ReportSection[] = sections.length > 0
-    ? sections
-    : REPORT_SECTION_OPTIONS.map((opt) => ({
-        key: opt.key,
-        label: opt.label,
-        status: 'missing' as const,
-      }));
   const complianceCheck = report.complianceCheck;
-  const hasNoRefs = complianceCheck && !complianceCheck.has_references;
+  const realReferenceCount = countRealReferences(report.reportContent?.references);
+  const hasNoRefs = complianceCheck
+    && (complianceCheck.references_verified ?? 0) === 0
+    && realReferenceCount === 0;
   const hasOnlyExpected = complianceCheck?.result_type === 'expected_result' || complianceCheck?.result_type === 'none';
   const hasNoDatasets = complianceCheck && !complianceCheck.has_datasets;
   const hasNoSource = complianceCheck && !complianceCheck.has_source;
@@ -401,8 +369,9 @@ export function ReportPage({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => navigate('/documents')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-panel border border-bp-border text-xs text-bp-muted hover:text-bp-text hover-accent-left transition-colors"
               title="前往文献库导入文献"
@@ -410,23 +379,29 @@ export function ReportPage({
               <BookOpen className="w-3.5 h-3.5" />
               导入文献
             </button>
-            <ExportActions onAction={handleExport} className="w-full sm:w-auto" />
+            <button
+              type="button"
+              onClick={() => handleExport('tex')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-panel border border-bp-border text-xs text-bp-muted hover:text-bp-text hover-accent-left transition-colors"
+              title="导出 LaTeX 源文件"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              导出 LaTeX
+            </button>
           </div>
         </Card>
       </div>
 
-      {/* 主体：最左 TOC · 中间 PDF 预览 · 右侧检查 */}
+      {/* 主体：PDF 预览 · 右侧检查 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:self-start">
-          <ReportTableOfContents
-            sections={tocSections}
-            previewMode={pdfFailed ? 'markdown' : 'pdf'}
-          />
-        </div>
-
-        <div className="lg:col-span-6 space-y-4">
+        <div className="lg:col-span-8 space-y-4">
           <Card className="min-w-0">
-            <ReportPreviewHeader mode={pdfFailed ? 'markdown' : 'pdf'} />
+            <ReportPreviewHeader
+              mode={pdfFailed ? 'markdown' : 'pdf'}
+              title={report.title}
+              pdfAvailable={!pdfFailed}
+              onDownloadPdf={() => handleExport('pdf')}
+            />
             <ReportPdfPreview
               reportId={report.id}
               markdownContent={report.markdownContent}
@@ -538,6 +513,7 @@ export function ReportPage({
               sections={sections}
               complianceCheck={complianceCheck}
               warnings={warnings}
+              referencesRaw={report.reportContent?.references}
             />
             <QualityCheckCard
               complianceCheck={complianceCheck}

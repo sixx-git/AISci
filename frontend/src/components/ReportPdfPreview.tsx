@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { FileText, AlertTriangle } from 'lucide-react';
+import { FileText, AlertTriangle, Download } from 'lucide-react';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { MarkdownPreview } from './MarkdownPreview';
 import { reportService } from '@/services/reportService';
+import { getReportDisplayTitle } from '@/lib/reportExport';
 
 interface ReportPdfPreviewProps {
   reportId: string;
   markdownContent: string;
   pdfSuccess?: boolean;
 }
+
+const PREVIEW_HEIGHT = 'calc(100vh - 320px)';
 
 /** 报告 PDF 内嵌预览；无 PDF 时回退 Markdown */
 export function ReportPdfPreview({
@@ -27,7 +30,6 @@ export function ReportPdfPreview({
       return;
     }
 
-    let objectUrl: string | null = null;
     let cancelled = false;
 
     (async () => {
@@ -36,8 +38,11 @@ export function ReportPdfPreview({
       try {
         const blob = await reportService.download(reportId, 'pdf');
         if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPdfObjectUrl(objectUrl);
+        const objectUrl = URL.createObjectURL(blob);
+        setPdfObjectUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
       } catch {
         if (!cancelled) setUseFallback(true);
       } finally {
@@ -47,13 +52,19 @@ export function ReportPdfPreview({
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setPdfObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
     };
   }, [reportId, pdfSuccess]);
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-320px)] flex items-center justify-center">
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: PREVIEW_HEIGHT }}
+      >
         <LoadingState message="正在加载 PDF 预览…" />
       </div>
     );
@@ -70,7 +81,8 @@ export function ReportPdfPreview({
         )}
         <div
           id="report-markdown-preview"
-          className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto max-h-[calc(100vh-320px)]"
+          className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto"
+          style={{ maxHeight: PREVIEW_HEIGHT }}
         >
           <MarkdownPreview content={markdownContent} />
         </div>
@@ -85,23 +97,48 @@ export function ReportPdfPreview({
     >
       <iframe
         src={`${pdfObjectUrl}#toolbar=1&navpanes=0&view=FitH`}
-        className="w-full h-[calc(100vh-320px)] border-0"
+        className="w-full border-0"
+        style={{ height: PREVIEW_HEIGHT }}
         title="报告 PDF 预览"
       />
     </div>
   );
 }
 
-export function ReportPreviewHeader({ mode }: { mode: 'pdf' | 'markdown' }) {
+export function ReportPreviewHeader({
+  mode,
+  title,
+  onDownloadPdf,
+  pdfAvailable = true,
+}: {
+  mode: 'pdf' | 'markdown';
+  title?: string;
+  onDownloadPdf?: () => void;
+  pdfAvailable?: boolean;
+}) {
+  const displayTitle = getReportDisplayTitle(title);
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <FileText className="w-4 h-4 text-bp-cyan" />
-      <div>
-        <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
-        <p className="text-xs text-bp-muted">
-          {mode === 'pdf' ? 'PDF 格式' : 'Markdown 格式'} · 科学假设与研究计划
-        </p>
+    <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center gap-2 min-w-0">
+        <FileText className="w-4 h-4 text-bp-cyan shrink-0" />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
+          <p className="text-xs text-bp-muted truncate" title={displayTitle}>
+            {mode === 'pdf' ? 'PDF 格式' : 'Markdown 格式'} · {displayTitle}
+          </p>
+        </div>
       </div>
+      {mode === 'pdf' && pdfAvailable && onDownloadPdf && (
+        <button
+          type="button"
+          onClick={onDownloadPdf}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-bp-border bg-bp-panel text-bp-text hover:bg-bp-base transition-colors"
+          title={`下载：${displayTitle}.pdf`}
+        >
+          <Download className="w-3.5 h-3.5" />
+          下载 PDF
+        </button>
+      )}
     </div>
   );
 }

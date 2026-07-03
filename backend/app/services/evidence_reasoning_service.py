@@ -52,7 +52,14 @@ class EvidenceReasoningService:
         facts = literature_mining.get("facts", []) or []
         citation_map = literature_mining.get("citation_map", []) or []
         uncertain_points = literature_mining.get("uncertain_points", []) or []
-        imported = literature_mining.get("imported_documents", []) or []
+        imported_raw = literature_mining.get("imported_documents", [])
+        if isinstance(imported_raw, list):
+            imported = imported_raw
+        else:
+            imported = [
+                c for c in (literature_mining.get("citation_map") or [])
+                if isinstance(c, dict)
+            ]
         retrieved = literature_mining.get("retrieved_papers", []) or []
         mm_facts = list(multimodal_facts or literature_mining.get("multimodal_evidence") or [])
 
@@ -85,12 +92,28 @@ class EvidenceReasoningService:
         enriched["evidence_balance_score"] = chain.get("evidence_balance_score", 0.0)
         enriched["revision_history"] = chain.get("revision_history", [])
 
+        supporting_fact_ids = {
+            str(fid)
+            for fid in (hypothesis.get("supporting_fact_ids") or [])
+            if fid
+        }
+        for ev in chain.get("supporting_evidence", []):
+            eid = ev.get("evidence_id") or ev.get("fact_id")
+            if eid:
+                supporting_fact_ids.add(str(eid))
+        for rev in chain.get("revision_history", []):
+            for fid in rev.get("cited_fact_ids", []) or []:
+                if fid:
+                    supporting_fact_ids.add(str(fid))
+        if supporting_fact_ids:
+            enriched["supporting_fact_ids"] = list(supporting_fact_ids)
+
         if final_hypothesis and final_hypothesis != hypothesis.get("hypothesis"):
             enriched["hypothesis"] = final_hypothesis
 
         if chain.get("support_count", 0) >= 3:
             enriched["evidence_level"] = "high"
-        elif chain.get("support_count", 0) >= 1:
+        elif chain.get("support_count", 0) >= 1 or supporting_fact_ids:
             enriched["evidence_level"] = "medium"
         else:
             enriched["evidence_level"] = "low"

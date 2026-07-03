@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Upload, Database, Table2, Image, FileJson, FileText,
@@ -316,7 +316,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav"
+              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
               className="hidden"
               onChange={handleUpload}
               disabled={uploading}
@@ -664,7 +664,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav"
+              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
               onChange={handleUpload}
               disabled={uploading}
             />

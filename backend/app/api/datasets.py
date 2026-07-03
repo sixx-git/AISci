@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.project import Project
 from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
+from app.skills.data_finder.file_format_registry import is_allowed_upload_filename
 from app.services.modeling_service import ModelingService
 from app.services.dataset_assistant_service import DatasetAssistantService
 
@@ -34,11 +35,15 @@ async def upload_dataset(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in SUPPORTED_EXTENSIONS:
+    filename = file.filename or "unknown"
+    if not is_allowed_upload_filename(filename):
+        ext = os.path.splitext(filename)[1].lower()
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件格式 {ext}，支持的格式: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+            detail=(
+                f"不支持的文件格式 {ext}，支持: CSV/JSON/图像/音频/SDF/MOL/SMILES/ZIP 等 "
+                f"({', '.join(sorted(SUPPORTED_EXTENSIONS))} …)"
+            ),
         )
 
     content = await file.read()

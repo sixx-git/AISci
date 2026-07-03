@@ -1,7 +1,8 @@
-"""通用表格文件抽取 — CSV / TSV / XLSX"""
+"""通用表格文件抽取 — CSV / TSV / XLSX / JSON / JSONL"""
 from __future__ import annotations
 
 import csv
+import json
 import os
 from typing import Any, Dict, List
 
@@ -32,6 +33,10 @@ class TabularFileExtractionSkill(BaseSkill):
                 tables = [self._from_csv(file_path, source_title, output_dir, delimiter="\t" if ext == ".tsv" else ",")]
             elif ext in {".xlsx", ".xls"}:
                 tables = self._from_excel(file_path, source_title, output_dir)
+            elif ext == ".json":
+                tables = [self._from_json(file_path, source_title, output_dir)]
+            elif ext == ".jsonl":
+                tables = [self._from_jsonl(file_path, source_title, output_dir)]
             else:
                 result.add_warning(f"不支持的表格格式: {ext}")
         except Exception as exc:
@@ -136,3 +141,92 @@ class TabularFileExtractionSkill(BaseSkill):
             })
         wb.close()
         return tables
+
+    def _from_json(
+        self,
+        file_path: str,
+        source_title: str,
+        output_dir: str,
+    ) -> Dict[str, Any]:
+        with open(file_path, "r", encoding="utf-8-sig") as f:
+            payload = json.load(f)
+
+        rows: List[Dict[str, Any]] = []
+        if isinstance(payload, list):
+            for item in payload:
+                if isinstance(item, dict):
+                    rows.append({str(k): "" if v is None else str(v) for k, v in item.items()})
+        elif isinstance(payload, dict):
+            for key in ("questions", "scenes", "data", "records", "items", "results"):
+                block = payload.get(key)
+                if isinstance(block, list) and block and isinstance(block[0], dict):
+                    rows = [{str(k): "" if v is None else str(v) for k, v in item.items()} for item in block]
+                    break
+            if not rows:
+                rows = [{str(k): "" if v is None else str(v) for k, v in payload.items()}]
+
+        if not rows:
+            raise ValueError("JSON 中未找到可解析为表格的记录")
+
+        columns = list(dict.fromkeys(col for row in rows for col in row.keys()))
+        table_id = new_id("tbl")
+        out_dir = output_dir or os.path.dirname(file_path)
+        os.makedirs(out_dir, exist_ok=True)
+        csv_path = os.path.join(out_dir, f"{table_id}.csv")
+        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        return {
+            "table_id": table_id,
+            "source_title": source_title,
+            "caption": os.path.basename(file_path),
+            "csv_path": csv_path,
+            "columns": columns,
+            "row_count": len(rows),
+            "quality_score": min(1.0, 0.5 + 0.1 * len(columns)),
+            "extraction_method": "json_file",
+            "source_type": "tabular_file",
+        }
+
+    def _from_jsonl(
+        self,
+        file_path: str,
+        source_title: str,
+        output_dir: str,
+    ) -> Dict[str, Any]:
+        rows: List[Dict[str, Any]] = []
+        with open(file_path, "r", encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                item = json.loads(line)
+                if isinstance(item, dict):
+                    rows.append({str(k): "" if v is None else str(v) for k, v in item.items()})
+
+        if not rows:
+            raise ValueError("JSONL 中未找到可解析为表格的记录")
+
+        columns = list(dict.fromkeys(col for row in rows for col in row.keys()))
+        table_id = new_id("tbl")
+        out_dir = output_dir or os.path.dirname(file_path)
+        os.makedirs(out_dir, exist_ok=True)
+        csv_path = os.path.join(out_dir, f"{table_id}.csv")
+        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        return {
+            "table_id": table_id,
+            "source_title": source_title,
+            "caption": os.path.basename(file_path),
+            "csv_path": csv_path,
+            "columns": columns,
+            "row_count": len(rows),
+            "quality_score": min(1.0, 0.5 + 0.1 * len(columns)),
+            "extraction_method": "jsonl_file",
+            "source_type": "tabular_file",
+        }

@@ -10,13 +10,18 @@ from app.models.research import Dataset
 from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
+from app.skills.data_finder.file_format_registry import (
+    CHEMISTRY_EXTENSIONS,
+    is_allowed_upload_filename,
+    is_chemistry_format,
+)
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".md",
                         ".png", ".jpg", ".jpeg", ".tiff", ".webp", ".gif",
                         ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac",
-                        ".npy", ".npz"}
+                        ".npy", ".npz", ".zip"} | CHEMISTRY_EXTENSIONS
 TABULAR_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff"}
 TIME_SERIES_EXTENSIONS = {".wav", ".npy", ".npz"}
@@ -36,6 +41,8 @@ class DatasetService:
         self.db = db
 
     def _detect_data_type(self, filename: str) -> str:
+        if is_chemistry_format(filename):
+            return "chem_structure"
         ext = os.path.splitext(filename)[1].lower()
         if ext in TABULAR_EXTENSIONS:
             return "tabular"
@@ -262,7 +269,44 @@ class DatasetService:
 
         if auto_analyze:
             try:
-                if data_type == "tabular":
+                if data_type == "chem_structure":
+                    import asyncio
+                    from app.skills.data_finder.structured_file_extraction_skill import extract_tables_from_file
+
+                    tables = asyncio.run(extract_tables_from_file(
+                        file_path,
+                        source_title=filename,
+                        output_dir=os.path.dirname(file_path),
+                        filename=filename,
+                        max_records=10_000,
+                    ))
+                    if tables:
+                        csv_path = tables[0].get("csv_path")
+                        if csv_path and os.path.exists(csv_path):
+                            analysis = self.analyze_tabular_preview(csv_path)
+                            ds.n_rows = analysis.get("n_rows") or tables[0].get("row_count", 0)
+                            ds.n_columns = analysis.get("n_columns") or len(tables[0].get("columns", []))
+                            ds.columns_json = json.dumps(analysis.get("columns", tables[0].get("columns", [])), ensure_ascii=False)
+                            ds.dtypes_json = json.dumps(analysis.get("dtypes", {}), ensure_ascii=False)
+                            ds.missing_count = analysis.get("missing_count", 0)
+                            ds.missing_rate = analysis.get("missing_rate", 0.0)
+                            ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
+                            ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
+                            ds.extra_metadata = json.dumps({
+                                "derived_csv_path": csv_path,
+                                "extraction_method": "chem_structure",
+                                "source_format": tables[0].get("format"),
+                                "truncated": tables[0].get("truncated", False),
+                            }, ensure_ascii=False)
+                            ds.preprocessing_status = "completed"
+                        else:
+                            ds.n_rows = int(tables[0].get("row_count") or 0)
+                            ds.extra_metadata = json.dumps({"extraction": tables[0]}, ensure_ascii=False)
+                            ds.preprocessing_status = "completed"
+                    else:
+                        ds.preprocessing_status = "failed"
+                        ds.extra_metadata = json.dumps({"error": "化学结构文件解析失败"}, ensure_ascii=False)
+                elif data_type == "tabular":
                     analysis = self.analyze_tabular_preview(file_path)
                     ds.n_rows = analysis.get("n_rows") or 0
                     ds.n_columns = analysis.get("n_columns") or 0

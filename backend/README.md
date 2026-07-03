@@ -180,5 +180,5 @@ pytest tests/test_batch*.py -v
 - [FastAPI 官方文档](https://fastapi.tiangolo.com/)
 - [数据库设计文档](./DATABASE.md)
 - [Prompt 模板索引](./prompts/README.md)
-- [PDF / LaTeX 导出](./PDF_EXPORT_SETUP.md)
+- [LaTeX / PDF 导出](../LATEX_EXPORT_SETUP.md)
 - [项目根目录 README](../README.md)

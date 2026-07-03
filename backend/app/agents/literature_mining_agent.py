@@ -217,6 +217,7 @@ class LiteratureMiningAgent:
             response.skill_outputs = self._run_skills_sync(
                 project_id, research_question, top_k, search_results, keywords=keywords
             )
+            response = self._merge_supplementary_facts(response, search_results)
 
             if discovery_output:
                 response.skill_outputs["literature_discovery"] = {
@@ -365,6 +366,7 @@ class LiteratureMiningAgent:
             search_results,
             keywords=list(keywords or [])[:8],
         )
+        response = self._merge_supplementary_facts(response, search_results)
 
         search_output = response.skill_outputs.get("search_papers", {})
         if search_output.get("success") and search_output.get("data"):
@@ -383,6 +385,9 @@ class LiteratureMiningAgent:
             search_query=search_query,
             supplementary_import=True,
         )
+        from app.services.literature_bundle_service import enrich_literature_mining
+
+        merged_dict = enrich_literature_mining(merged_dict)
         merged_dict["discovery_refresh"] = {
             **(merged_dict.get("discovery_refresh") or {}),
             "facts_before": prev_fact_count,
@@ -862,6 +867,48 @@ class LiteratureMiningAgent:
 
         # ── Pydantic 验证 ──
         return LiteratureMiningResponse(**result)
+
+    def _merge_supplementary_facts(
+        self,
+        response: LiteratureMiningResponse,
+        search_results: Optional[List[SearchResult]] = None,
+    ) -> LiteratureMiningResponse:
+        """合并 Skill 产出与检索 chunk 兜底事实，避免 LLM 校验后 facts 为空。"""
+        from app.services.literature_bundle_service import enrich_literature_mining
+
+        merged = enrich_literature_mining(response.model_dump())
+        facts = merged.get("facts") or []
+
+        if not facts and search_results:
+            fallback_facts: List[dict] = []
+            for i, sr in enumerate(search_results[:12], 1):
+                content = (sr.content or "").strip()
+                if not content or not sr.chunk_id:
+                    continue
+                fallback_facts.append(
+                    {
+                        "fact_id": f"chunk_fact_{i:03d}",
+                        "content": content[:500],
+                        "fact_text": content[:1000],
+                        "source_chunk_id": sr.chunk_id,
+                        "document_id": sr.document_id,
+                        "source_paper_title": sr.source_title,
+                        "page_number": sr.page_number,
+                        "quote_text": content[:300],
+                        "relevance_score": sr.similarity_score,
+                        "source": "vector_chunk",
+                    }
+                )
+            if fallback_facts:
+                merged["facts"] = fallback_facts
+                facts = fallback_facts
+                logger.info("LLM 未产出有效 facts，已从向量检索 chunk 生成 %d 条兜底事实", len(fallback_facts))
+
+        payload = {**response.model_dump(), **merged}
+        payload["facts"] = facts
+        payload["evidence_facts"] = len(facts)
+        payload["verified_references_count"] = len(payload.get("citation_map") or [])
+        return LiteratureMiningResponse(**payload)
 
     # ────────── Skills ──────────
 

@@ -55,11 +55,14 @@ class TestLatexExportService(unittest.TestCase):
         )
 
         self.assertIn("\\documentclass{article}", latex)
-        self.assertIn("\\usepackage[UTF8]{ctex}", latex)
+        self.assertIn("\\usepackage[UTF8,fontset=fandol]{ctex}", latex)
         self.assertIn("\\section{待研究问题}", latex)
         self.assertIn("\\section{解决思路}", latex)
         self.assertIn("\\section{实验设计}", latex)
         self.assertIn("\\section{实验结果}", latex)
+        self.assertIn("\\bibliographystyle{iclr2024_conference}", latex)
+        self.assertIn("\\label{fig:workflow}", latex)
+        self.assertIn("\\toprule", latex)
         self.assertIn("\\bibliography{references}", latex)
         self.assertIn("基于多模态数据的科学假设生成研究", latex)
 

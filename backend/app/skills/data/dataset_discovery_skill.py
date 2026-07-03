@@ -18,6 +18,126 @@ REQUEST_TIMEOUT = 15
 
 KNOWN_DATASETS = [
     {
+        "dataset_name": "PubMed / PubMed Central",
+        "source": "NCBI / NIH",
+        "license": "Public Domain / various",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/",
+        "task_type": "text_mining",
+        "modalities": ["text"],
+        "metadata_standard": "PubMed XML",
+        "description": "生物医学文献摘要与全文数据库",
+    },
+    {
+        "dataset_name": "GEO (Gene Expression Omnibus)",
+        "source": "NCBI",
+        "license": "Public Domain",
+        "url": "https://www.ncbi.nlm.nih.gov/geo/",
+        "task_type": "gene_expression_analysis",
+        "modalities": ["tabular", "genomics"],
+        "metadata_standard": "MINiML / SOFT",
+        "description": "基因表达综合数据库",
+    },
+    {
+        "dataset_name": "ChEMBL",
+        "source": "EBI",
+        "license": "CC BY-SA 3.0",
+        "url": "https://www.ebi.ac.uk/chembl/",
+        "task_type": "drug_discovery",
+        "modalities": ["tabular"],
+        "metadata_standard": "ChEMBL schema",
+        "description": "生物活性分子与药物靶点数据库，适用于纳米载药与靶向递送研究",
+    },
+    {
+        "dataset_name": "PubChem BioAssay",
+        "source": "NCBI",
+        "license": "Public Domain",
+        "url": "https://pubchem.ncbi.nlm.nih.gov/",
+        "task_type": "drug_discovery",
+        "modalities": ["tabular"],
+        "metadata_standard": "PubChem",
+        "description": "化合物生物活性与理化性质数据",
+    },
+    {
+        "dataset_name": "Protein Data Bank (PDB)",
+        "source": "rcsb.org",
+        "license": "CC0 1.0",
+        "url": "https://www.rcsb.org/",
+        "task_type": "structure_prediction",
+        "modalities": ["3d_structure"],
+        "metadata_standard": "mmCIF / PDB",
+        "description": "蛋白质 3D 结构数据库",
+    },
+    {
+        "dataset_name": "TCGA (The Cancer Genome Atlas)",
+        "source": "NCI",
+        "license": "Restricted / Data Use Agreement",
+        "url": "https://www.cancer.gov/tcga",
+        "task_type": "genomic_analysis",
+        "modalities": ["tabular", "genomics", "image"],
+        "metadata_standard": "TCGA metadata",
+        "description": "癌症基因组图谱，涵盖 33 种癌症类型",
+    },
+    {
+        "dataset_name": "MIMIC-III / MIMIC-IV",
+        "source": "PhysioNet",
+        "license": "PhysioNet Restricted",
+        "url": "https://physionet.org/content/mimiciii/",
+        "task_type": "clinical_prediction",
+        "modalities": ["tabular", "time_series", "text"],
+        "metadata_standard": "MIMIC schema",
+        "description": "重症监护病房临床数据集",
+    },
+    {
+        "dataset_name": "UCI Machine Learning Repository",
+        "source": "archive.ics.uci.edu",
+        "license": "various",
+        "url": "https://archive.ics.uci.edu/",
+        "task_type": "classification/regression",
+        "modalities": ["tabular"],
+        "metadata_standard": "UCI metadata",
+        "description": "经典表格数据集，涵盖生物、物理、金融等多个领域",
+    },
+    {
+        "dataset_name": "Hugging Face Datasets",
+        "source": "huggingface.co/datasets",
+        "license": "various",
+        "url": "https://huggingface.co/datasets",
+        "task_type": "various",
+        "modalities": ["text", "image", "audio", "tabular"],
+        "metadata_standard": "Croissant / HF metadata",
+        "description": "Hugging Face 数据集 Hub，可搜索 nanomedicine / drug delivery 等主题",
+    },
+    {
+        "dataset_name": "Zenodo",
+        "source": "zenodo.org",
+        "license": "various",
+        "url": "https://zenodo.org/",
+        "task_type": "research_data",
+        "modalities": ["tabular", "text", "image"],
+        "metadata_standard": "DataCite",
+        "description": "开放科研数据仓储，含纳米医学与药物递送专题数据集",
+    },
+    {
+        "dataset_name": "Kaggle Datasets",
+        "source": "kaggle.com",
+        "license": "various",
+        "url": "https://www.kaggle.com/datasets",
+        "task_type": "various",
+        "modalities": ["tabular", "image", "text", "time_series"],
+        "metadata_standard": "Kaggle metadata",
+        "description": "社区驱动的大规模开放数据集平台",
+    },
+    {
+        "dataset_name": "OpenML",
+        "source": "openml.org",
+        "license": "various",
+        "url": "https://www.openml.org/",
+        "task_type": "classification/regression",
+        "modalities": ["tabular"],
+        "metadata_standard": "OpenML / ARFF",
+        "description": "开放机器学习数据集和实验管理平台",
+    },
+    {
         "dataset_name": "ImageNet",
         "source": "image-net.org",
         "license": "Non-commercial research",
@@ -58,16 +178,6 @@ KNOWN_DATASETS = [
         "description": "手写数字识别基准数据集，28x28 灰度图",
     },
     {
-        "dataset_name": "PubMed / PubMed Central",
-        "source": "NCBI / NIH",
-        "license": "Public Domain / various",
-        "url": "https://pubmed.ncbi.nlm.nih.gov/",
-        "task_type": "text_mining",
-        "modalities": ["text"],
-        "metadata_standard": "PubMed XML",
-        "description": "生物医学文献摘要与全文数据库",
-    },
-    {
         "dataset_name": "SQuAD",
         "source": "Stanford",
         "license": "CC BY-SA 4.0",
@@ -87,89 +197,16 @@ KNOWN_DATASETS = [
         "metadata_standard": "TSV/JSON",
         "description": "自然语言理解多任务基准",
     },
-    {
-        "dataset_name": "UCI Machine Learning Repository",
-        "source": "archive.ics.uci.edu",
-        "license": "various",
-        "url": "https://archive.ics.uci.edu/",
-        "task_type": "classification/regression",
-        "modalities": ["tabular"],
-        "metadata_standard": "UCI metadata",
-        "description": "经典表格数据集，涵盖生物、物理、金融等多个领域",
-    },
-    {
-        "dataset_name": "Kaggle Datasets",
-        "source": "kaggle.com",
-        "license": "various",
-        "url": "https://www.kaggle.com/datasets",
-        "task_type": "various",
-        "modalities": ["tabular", "image", "text", "time_series"],
-        "metadata_standard": "Kaggle metadata",
-        "description": "社区驱动的大规模开放数据集平台",
-    },
-    {
-        "dataset_name": "OpenML",
-        "source": "openml.org",
-        "license": "various",
-        "url": "https://www.openml.org/",
-        "task_type": "classification/regression/clustering",
-        "modalities": ["tabular"],
-        "metadata_standard": "OpenML / ARFF",
-        "description": "开放机器学习数据集和实验管理平台",
-    },
-    {
-        "dataset_name": "Hugging Face Datasets",
-        "source": "huggingface.co/datasets",
-        "license": "various",
-        "url": "https://huggingface.co/datasets",
-        "task_type": "various",
-        "modalities": ["text", "image", "audio", "tabular"],
-        "metadata_standard": "Croissant / HF metadata",
-        "description": "Hugging Face 数据集 Hub，超过 10 万个数据集",
-    },
-    {
-        "dataset_name": "Protein Data Bank (PDB)",
-        "source": "rcsb.org",
-        "license": "CC0 1.0",
-        "url": "https://www.rcsb.org/",
-        "task_type": "structure_prediction",
-        "modalities": ["3d_structure"],
-        "metadata_standard": "mmCIF / PDB",
-        "description": "蛋白质 3D 结构数据库",
-    },
-    {
-        "dataset_name": "MIMIC-III / MIMIC-IV",
-        "source": "PhysioNet",
-        "license": "PhysioNet Restricted",
-        "url": "https://physionet.org/content/mimiciii/",
-        "task_type": "clinical_prediction",
-        "modalities": ["tabular", "time_series", "text"],
-        "metadata_standard": "MIMIC schema",
-        "description": "重症监护病房临床数据集",
-    },
-    {
-        "dataset_name": "GEO (Gene Expression Omnibus)",
-        "source": "NCBI",
-        "license": "Public Domain",
-        "url": "https://www.ncbi.nlm.nih.gov/geo/",
-        "task_type": "gene_expression_analysis",
-        "modalities": ["tabular", "genomics"],
-        "metadata_standard": "MINiML / SOFT",
-        "description": "基因表达综合数据库",
-    },
-    {
-        "dataset_name": "TCGA (The Cancer Genome Atlas)",
-        "source": "NCI",
-        "license": "Restricted / Data Use Agreement",
-        "url": "https://www.cancer.gov/tcga",
-        "task_type": "genomic_analysis",
-        "modalities": ["tabular", "genomics", "image"],
-        "metadata_standard": "TCGA metadata",
-        "description": "癌症基因组图谱，涵盖 33 种癌症类型",
-    },
 ]
 
 TASK_TYPE_KEYWORDS = {
+    "drug_discovery": [
+        "药物", "drug", "nanorobot", "nanomedicine", "纳米", "靶向", "targeted delivery",
+        "drug delivery", "载药", "chembl", "pubchem", "化合物",
+    ],
+    "research_data": [
+        "科研数据", "research data", "zenodo", "开放数据",
+    ],
     "image_classification": [
         "图像分类", "image classification", "图片分类", "物体识别",
     ],
@@ -204,6 +241,40 @@ TASK_TYPE_KEYWORDS = {
         "Kaggle", "OpenML", "Hugging Face", "huggingface",
     ],
 }
+
+# 查询含以下词时，排除纯计算机视觉基准数据集
+_CV_ONLY_DATASETS = frozenset({
+    "ImageNet", "CIFAR-10 / CIFAR-100", "COCO (Common Objects in Context)", "MNIST",
+})
+
+_BIOMED_QUERY_HINTS = (
+    "纳米", "nanorobot", "nanomedicine", "药物", "drug", "靶向", "delivery",
+    "生物", "bio", "medical", "clinical", "cancer", "蛋白", "protein", "基因",
+)
+
+_BIOMED_FALLBACK_NAMES = (
+    "PubMed / PubMed Central", "GEO (Gene Expression Omnibus)", "ChEMBL",
+    "PubChem BioAssay", "Zenodo", "Hugging Face Datasets", "UCI Machine Learning Repository",
+)
+
+
+def _is_biomed_query(query_terms: List[str]) -> bool:
+    blob = " ".join(query_terms).lower()
+    return any(h in blob for h in _BIOMED_QUERY_HINTS)
+
+
+def _should_exclude_dataset(ds: Dict[str, Any], query_terms: List[str]) -> bool:
+    if not _is_biomed_query(query_terms):
+        return False
+    name = ds.get("dataset_name", "")
+    if name in _CV_ONLY_DATASETS:
+        return True
+    modalities = set(ds.get("modalities") or [])
+    if modalities == {"image"} and ds.get("task_type") in (
+        "image_classification", "object_detection",
+    ):
+        return True
+    return False
 
 
 class DatasetDiscoverySkill(BaseSkill):
@@ -246,20 +317,23 @@ class DatasetDiscoverySkill(BaseSkill):
         query_terms.extend(k.lower() for k in keywords if isinstance(k, str) and k.strip())
 
         if not query_terms:
-            result.add_warning("缺少搜索关键词，返回通用推荐数据集")
+            result.add_warning("缺少搜索关键词，返回生物医学与通用科研数据平台推荐")
             entry = {
-                "datasets": KNOWN_DATASETS[:max_results],
-                "total": min(len(KNOWN_DATASETS), max_results),
+                "datasets": [ds for ds in KNOWN_DATASETS if ds["dataset_name"] in _BIOMED_FALLBACK_NAMES][:max_results],
+                "total": min(len(_BIOMED_FALLBACK_NAMES), max_results),
                 "matched_keywords": [],
-                "search_source": "local_knowledge_unfiltered",
+                "search_source": "local_knowledge_biomed_default",
             }
             result.data = entry
             return result
 
+        is_biomed = _is_biomed_query(query_terms)
         matched_keywords: set = set()
         scored_datasets: List[tuple] = []
 
         for ds in KNOWN_DATASETS:
+            if _should_exclude_dataset(ds, query_terms):
+                continue
             score = 0
             ds_text = (
                 f"{ds['dataset_name']} {ds.get('description', '')} "
@@ -298,8 +372,15 @@ class DatasetDiscoverySkill(BaseSkill):
         top_datasets = [ds for _, ds in scored_datasets[:max_results]]
 
         if not top_datasets:
-            top_datasets = KNOWN_DATASETS[:max_results]
-            result.add_warning("未找到精确匹配的数据集，返回通用推荐")
+            if is_biomed:
+                top_datasets = [
+                    ds for ds in KNOWN_DATASETS
+                    if ds["dataset_name"] in _BIOMED_FALLBACK_NAMES
+                ][:max_results]
+                result.add_warning("未找到精确匹配的数据集，已改为推荐生物医学/开放科研数据平台")
+            else:
+                top_datasets = KNOWN_DATASETS[:max_results]
+                result.add_warning("未找到精确匹配的数据集，返回通用推荐")
 
         online_results = await self._try_huggingface_search(query_terms, max_results)
 

@@ -10,6 +10,7 @@ from app.services.skill_registry_service import (
     list_agents,
     list_skills,
     set_skill_enabled,
+    SkillToggleError,
 )
 
 router = APIRouter()
@@ -33,7 +34,11 @@ async def get_skills(
 
 
 @router.get("/summary")
-async def skills_summary():
+async def skills_summary(
+    refresh: bool = Query(False, description="重新扫描 Skill 模块后再统计"),
+):
+    if refresh:
+        discover_skills(refresh=True)
     return {"code": 200, "data": get_summary(), "message": "success"}
 
 
@@ -44,7 +49,10 @@ async def skills_by_agent():
 
 @router.patch("/{skill_id}")
 async def toggle_skill(skill_id: str, body: SkillToggleRequest):
-    updated = set_skill_enabled(skill_id, body.enabled)
+    try:
+        updated = set_skill_enabled(skill_id, body.enabled)
+    except SkillToggleError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     if not updated:
         raise HTTPException(status_code=404, detail=f"Skill 不存在: {skill_id}")
     return {

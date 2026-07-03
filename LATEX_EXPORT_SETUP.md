@@ -10,7 +10,7 @@ LLM 结构化章节 → report.tex + references.bib → XeLaTeX 编译 → repor
 
 模板位于项目根目录 `latex_template/`，基于 `scientific_plan_template.tex`（ICLR 中文样式 + ctex）。
 
-Markdown / WeasyPrint 回退说明见 [backend/PDF_EXPORT_SETUP.md](./backend/PDF_EXPORT_SETUP.md)。
+Markdown / Playwright PDF 回退机制已合并入本文「回退机制」章节。
 
 ## 输出文件
 
@@ -80,6 +80,5 @@ GET /api/v1/reports/{report_id}/download/md
 
 ## 相关文档
 
-- [backend/PDF_EXPORT_SETUP.md](./backend/PDF_EXPORT_SETUP.md)
 - [backend/prompts/report_generation.md](./backend/prompts/report_generation.md)
 - [README.md](./README.md)

@@ -86,12 +86,14 @@ class QuickReportService:
             list_manual_candidates,
         )
         from app.services.data_finder_service import get_data_finder_service
+        from app.services.dataset_service import DatasetService
 
         run = self.db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         if not run:
             raise ValueError(f"Pipeline run 未找到: {run_id}")
 
         status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+        status_lower = status_val.lower()
         meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
         du_gate = meta.get("data_upload_gate") or {}
 
@@ -120,10 +122,17 @@ class QuickReportService:
             uploaded_count = 0
 
         awaiting = bool(du_gate.get("paused")) or (
-            status_val == "human_review_required" and bool(meta.get("data_upload_gate"))
+            status_lower == "human_review_required"
+            and (
+                bool(meta.get("data_upload_gate"))
+                or bool(meta.get("quick_report"))
+                or bool((run.input_data or {}).get("options", {}).get("enable_quick_report"))
+            )
         )
         final_report_id = meta.get("final_report_id")
-        can_resume = awaiting and uploaded_count >= 1
+        can_resume = awaiting and (uploaded_count >= 1 or bool(
+            DatasetService(self.db).get_project_datasets(run.project_id)
+        ))
 
         return {
             "run_id": run.run_id,

@@ -53,6 +53,14 @@ def _human_fields_from_stage(stage: PipelineStageExecution) -> dict:
 CHINA_TZ = timezone(timedelta(hours=8))
 STALE_TIMEOUT_MINUTES = 5
 STALE_STAGE_TIMEOUT_MINUTES = 30
+# 轻量阶段（单次 LLM）更短的卡死判定
+STALE_STAGE_TIMEOUT_BY_KEY: dict[str, int] = {
+    "PROBLEM_UNDERSTANDING": 5,
+    "LITERATURE_MINING": 12,
+    "DATA_ACQUISITION": 10,
+    "KNOWLEDGE_GAP": 10,
+    "HYPOTHESIS_GENERATION": 15,
+}
 
 PIPELINE_STAGES_ORDERED = [
     PipelineStage.PROBLEM_UNDERSTANDING,
@@ -77,6 +85,27 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_china(dt: datetime) -> datetime:
+    """统一按中国时区比较。SQLite 中 server_default 的 created_at 为 UTC  naive，优先用 started_at。"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=CHINA_TZ)
+    return dt.astimezone(CHINA_TZ)
+
+
+def _run_reference_time(run: PipelineRun) -> Optional[datetime]:
+    """用于计算 run 年龄的参考时间（优先 started_at，避免 created_at UTC 偏差）。"""
+    return run.started_at or run.created_at
+
+
+def _run_age_seconds(run: PipelineRun, now: Optional[datetime] = None) -> float:
+    ref = _run_reference_time(run)
+    if ref is None:
+        return 0.0
+    now = now or _now()
+    age = (now - _as_china(ref)).total_seconds()
+    return abs(age) if age < 0 else age
+
+
 def _safe_enum_value(enum_cls: Type[Enum], value: Any, default: Any = None) -> Any:
     if value is None:
         return default
@@ -98,30 +127,76 @@ def _safe_enum_value(enum_cls: Type[Enum], value: Any, default: Any = None) -> A
     return default
 
 
+def _stage_stale_timeout_minutes(stage_value: Any) -> int:
+    key = stage_value.value if hasattr(stage_value, "value") else str(stage_value)
+    return STALE_STAGE_TIMEOUT_BY_KEY.get(key.upper(), STALE_STAGE_TIMEOUT_MINUTES)
+
+
+_SERVER_BOOT_TIME: Optional[datetime] = None
+
+
+def set_server_boot_time(dt: datetime) -> None:
+    global _SERVER_BOOT_TIME
+    _SERVER_BOOT_TIME = dt
+
+
+def fail_orphaned_pipeline_runs(db: Session, boot_time: Optional[datetime] = None) -> int:
+    """服务重启后清理仍为 RUNNING 且启动于本次进程之前的 Pipeline。"""
+    from app.models.pipeline import PipelineRun as DBRun, PipelineStageExecution as DBStage
+    from app.models.pipeline import PipelineStatus as DBStatus
+
+    boot = boot_time or _SERVER_BOOT_TIME or _now()
+    orphans = db.query(DBRun).filter(DBRun.status == DBStatus.RUNNING).all()
+    if not orphans:
+        return 0
+
+    now = _now()
+    msg = "服务重启导致 Pipeline 后台任务中断，请重新运行。"
+    count = 0
+    for run in orphans:
+        started = run.started_at or run.created_at
+        if started and _as_china(started) >= boot:
+            continue
+        run.status = DBStatus.FAILED
+        run.error_message = msg
+        run.completed_at = now
+        stages = db.query(DBStage).filter(DBStage.pipeline_run_id == run.id).all()
+        for s in stages:
+            if s.status == DBStatus.RUNNING:
+                s.status = DBStatus.FAILED
+                s.error_message = msg
+                s.completed_at = now
+            elif s.status == DBStatus.PENDING and not any(
+                x.status == DBStatus.COMPLETED for x in stages
+            ):
+                pass
+        if stages and all(s.status == DBStatus.PENDING for s in stages):
+            stages[0].status = DBStatus.FAILED
+            stages[0].error_message = msg
+            stages[0].completed_at = now
+        count += 1
+        logger.warning("孤儿 Pipeline run 已标记失败 run_id=%s", run.run_id)
+    db.commit()
+    return count
+
+
 def _check_and_fail_stale_run(db: Session, run: PipelineRun) -> bool:
     """检测并标记僵尸 run。
 
     两种情况：
     1. running 超过 5 分钟但所有 stage 仍为 pending → 后台任务未启动
-    2. running 超过 30 分钟且某个 stage running 超过 30 分钟 → 阶段卡死
+    2. 某 stage running 超过阶段级时限 → 阶段卡死
 
     Returns:
         True 如果 run 已被标记为 stale/failed.
     """
     if run.status != DB_PipelineStatus.RUNNING:
         return False
-    if run.created_at is None:
+    if _run_reference_time(run) is None:
         return False
 
-    now_utc = _utc_now()
-    if run.created_at.tzinfo is not None:
-        db_time_utc = run.created_at.astimezone(timezone.utc)
-    else:
-        db_time_utc = run.created_at.replace(tzinfo=timezone.utc)
-
-    age_seconds = (now_utc - db_time_utc).total_seconds()
-    if age_seconds < 0:
-        age_seconds = abs(age_seconds)
+    now = _now()
+    age_seconds = _run_age_seconds(run, now)
 
     stages = db.query(PipelineStageExecution).filter(
         PipelineStageExecution.pipeline_run_id == run.id
@@ -141,31 +216,31 @@ def _check_and_fail_stale_run(db: Session, run: PipelineRun) -> bool:
         logger.warning(f"Stale run {run.run_id} 已自动标记为 FAILED (all pending, age={age_seconds:.0f}s)")
         return True
 
-    if age_seconds >= STALE_STAGE_TIMEOUT_MINUTES * 60:
-        stuck_stage = None
-        for s in stages:
-            if s.status == DB_PipelineStatus.RUNNING and s.started_at:
-                if s.started_at.tzinfo is not None:
-                    stage_start_utc = s.started_at.astimezone(timezone.utc)
-                else:
-                    stage_start_utc = s.started_at.replace(tzinfo=timezone.utc)
-                stage_age = (now_utc - stage_start_utc).total_seconds()
-                if stage_age >= STALE_STAGE_TIMEOUT_MINUTES * 60:
-                    stuck_stage = s
-                    break
+    stuck_stage = None
+    stuck_limit_min = STALE_STAGE_TIMEOUT_MINUTES
+    for s in stages:
+        if s.status == DB_PipelineStatus.RUNNING and s.started_at:
+            stage_age = (now - _as_china(s.started_at)).total_seconds()
+            if stage_age < 0:
+                stage_age = abs(stage_age)
+            limit_min = _stage_stale_timeout_minutes(s.stage)
+            if stage_age >= limit_min * 60:
+                stuck_stage = s
+                stuck_limit_min = limit_min
+                break
 
-        if stuck_stage:
-            stage_name = stuck_stage.stage.value if hasattr(stuck_stage.stage, 'value') else str(stuck_stage.stage)
-            run.status = DB_PipelineStatus.FAILED
-            run.failed_stage = stuck_stage.stage
-            run.error_message = f"阶段 {stage_name} 执行超时（超过 {STALE_STAGE_TIMEOUT_MINUTES} 分钟），进程可能已卡死"
-            run.completed_at = _now()
-            stuck_stage.status = DB_PipelineStatus.FAILED
-            stuck_stage.error_message = f"阶段执行超时（超过 {STALE_STAGE_TIMEOUT_MINUTES} 分钟）"
-            stuck_stage.completed_at = _now()
-            db.commit()
-            logger.warning(f"Stale run {run.run_id} 已自动标记为 FAILED (stuck stage={stage_name})")
-            return True
+    if stuck_stage:
+        stage_name = stuck_stage.stage.value if hasattr(stuck_stage.stage, 'value') else str(stuck_stage.stage)
+        run.status = DB_PipelineStatus.FAILED
+        run.failed_stage = stuck_stage.stage
+        run.error_message = f"阶段 {stage_name} 执行超时（超过 {stuck_limit_min} 分钟），进程可能已卡死"
+        run.completed_at = _now()
+        stuck_stage.status = DB_PipelineStatus.FAILED
+        stuck_stage.error_message = f"阶段执行超时（超过 {stuck_limit_min} 分钟）"
+        stuck_stage.completed_at = _now()
+        db.commit()
+        logger.warning(f"Stale run {run.run_id} 已自动标记为 FAILED (stuck stage={stage_name})")
+        return True
 
     return False
 
@@ -505,19 +580,12 @@ async def get_run_debug(
     all_pending = status_counts["pending"] == len(stages)
     is_stale = False
     hint = None
+    age_seconds = int(_run_age_seconds(run)) if _run_reference_time(run) else 0
 
     if run.status == DB_PipelineStatus.RUNNING and all_pending:
-        created_at = run.created_at
-        if created_at:
-            age = _now() - created_at.replace(tzinfo=CHINA_TZ) if created_at.tzinfo is None else _now() - created_at
-            age_seconds = int(age.total_seconds())
-            if age_seconds >= STALE_TIMEOUT_MINUTES * 60:
-                is_stale = True
-                hint = "run.status=running 但所有 stage 长时间 pending，后台任务可能未启动或已丢失"
-        else:
-            age_seconds = 0
-    else:
-        age_seconds = int((_now() - run.created_at.replace(tzinfo=CHINA_TZ) if run.created_at and run.created_at.tzinfo is None else (_now() - run.created_at) if run.created_at else timedelta()).total_seconds()) if run.created_at else 0
+        if age_seconds >= STALE_TIMEOUT_MINUTES * 60:
+            is_stale = True
+            hint = "run.status=running 但所有 stage 长时间 pending，后台任务可能未启动或已丢失"
 
     return ResponseModel(
         code=200,

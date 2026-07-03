@@ -153,7 +153,7 @@
 
 | 项 | 文件 |
 |----|------|
-| 报告 TOC | `ReportTableOfContents.tsx` / `ReportPage.tsx` |
+| 报告预览 | `ReportPage.tsx` / `ReportPdfPreview.tsx` |
 | 数据集 Tab 顺序 | `DatasetPage.tsx` |
 | Feedback / DataFinder / 文献 bp 色 | `FeedbackHubPanel` / `DataFinderPanel` / `LiteratureLibrary` |
 | 首页三态 + 品牌 | `Home.tsx` / `Navbar.tsx` |

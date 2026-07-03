@@ -458,5 +458,4 @@ Pipeline 9 阶段：问题理解→文献→数据采集→知识缺口→假设
 | [backend/tests/README.md](./backend/tests/README.md) | pytest 与 batch 回归 |
 | [frontend/README.md](./frontend/README.md) | 前端组件与页面 |
 | [storage/README.md](./storage/README.md) | 审计链、证据链、Data Finder 持久化 |
-| [LATEX_EXPORT_SETUP.md](./LATEX_EXPORT_SETUP.md) | LaTeX 报告导出 |
-| [backend/PDF_EXPORT_SETUP.md](./backend/PDF_EXPORT_SETUP.md) | PDF 回退导出 |
+| [LATEX_EXPORT_SETUP.md](./LATEX_EXPORT_SETUP.md) | LaTeX 报告导出与 PDF 回退 |

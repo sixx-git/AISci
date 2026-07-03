@@ -10,6 +10,7 @@ export interface SkillRecord {
   module_path: string;
   agents: string[];
   enabled: boolean;
+  locked?: boolean;
   source_reference?: string | null;
 }
 
@@ -17,6 +18,7 @@ export interface SkillSummary {
   total: number;
   enabled: number;
   disabled: number;
+  locked?: number;
   categories: { id: string; label: string; count: number }[];
   agents: string[];
 }
@@ -38,8 +40,10 @@ const skillService = {
     return res.data;
   },
 
-  async getSummary(): Promise<ApiResponse<SkillSummary>> {
-    const res = await api.get<ApiResponse<SkillSummary>>('/skills/summary');
+  async getSummary(refresh = false): Promise<ApiResponse<SkillSummary>> {
+    const res = await api.get<ApiResponse<SkillSummary>>('/skills/summary', {
+      params: refresh ? { refresh: true } : undefined,
+    });
     return res.data;
   },
 

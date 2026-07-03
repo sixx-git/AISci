@@ -73,10 +73,12 @@ class PdfEvidenceExtractionSkill(BaseSkill):
                     "fact_id": f"evfact_{i:03d}",
                     "content": sr.content[:500] if sr.content else "",
                     "document_id": sr.document_id,
-                    "chunk_id": sr.chunk_id,
+                    "source_chunk_id": sr.chunk_id,
+                "chunk_id": sr.chunk_id,
                     "page_number": sr.page_number,
                     "quote_text": sr.content[:300] if sr.content else "",
                     "source_title": sr.source_title,
+                    "source_paper_title": sr.source_title,
                     "relevance_score": sr.similarity_score,
                 })
 

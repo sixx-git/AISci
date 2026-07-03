@@ -2,9 +2,10 @@
 Report 服务
 处理研究报告的数据库操作
 """
+import json
 import logging
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -13,8 +14,85 @@ from app.models.project import Report, Project
 from app.schemas.research import ReportCreate, ReportDBResponse, ReportBrowseItem
 from app.core.database import get_db
 from app.core.project_modes import normalize_project_mode
+from app.services.latex_export_service import (
+    export_report_via_latex,
+    get_reports_storage_dir,
+    regenerate_report_pdf,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def report_pdf_exists(file_id: Optional[str]) -> bool:
+    """检查报告目录下是否已有有效 PDF。"""
+    if not file_id:
+        return False
+    pdf_path = get_reports_storage_dir() / file_id / "report.pdf"
+    return pdf_path.is_file() and pdf_path.stat().st_size > 0
+
+
+def report_to_db_response(
+    report: Report,
+    extra_metadata: Optional[Dict[str, Any]] = None,
+) -> ReportDBResponse:
+    """将 ORM Report 转为 API 响应（补齐 report_id / pdf_generated）。"""
+    file_id = report.pdf_path
+    extra = extra_metadata if extra_metadata is not None else (
+        report.extra_metadata if isinstance(report.extra_metadata, dict) else {}
+    )
+    pdf_generated = report_pdf_exists(file_id) or bool(extra.get("pdf_success"))
+
+    return ReportDBResponse(
+        id=report.id,
+        project_id=report.project_id,
+        hypothesis_id=report.hypothesis_id,
+        experiment_design_id=report.experiment_design_id,
+        small_validation_id=report.small_validation_id,
+        title=report.title,
+        paper_title=report.paper_title,
+        paper_abstract=report.paper_abstract,
+        markdown_content=report.markdown_content,
+        problem_statement=report.problem_statement,
+        rationale=report.rationale,
+        technical_details=report.technical_details,
+        datasets=report.datasets,
+        source=report.source,
+        target=report.target,
+        methods=report.methods,
+        experiments=report.experiments,
+        results=report.results,
+        references=report.references,
+        report_id=file_id,
+        pdf_generated=pdf_generated,
+        status=report.status,
+        version=report.version or 1,
+        extra_metadata=extra or None,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+    )
+
+
+def enrich_report_for_response(report: Report, db: Session) -> ReportDBResponse:
+    """读取报告时重算合规指标，对齐 Pipeline 文献阶段与 References 章节。"""
+    from app.models.pipeline import PipelineStage
+    from app.services._utils.pipeline_queries import get_latest_pipeline_run, get_literature_mining_output, get_stage_output
+    from app.services.literature_bundle_service import enrich_literature_mining
+    from app.services.report_compliance_service import enrich_report_extra_metadata
+
+    literature_mining = enrich_literature_mining(get_literature_mining_output(db, report.project_id))
+    hypotheses: List[Dict[str, Any]] = []
+    latest_run = get_latest_pipeline_run(db, report.project_id)
+    if latest_run:
+        hg = get_stage_output(db, latest_run.id, PipelineStage.HYPOTHESIS_GENERATION)
+        if isinstance(hg, dict):
+            hypotheses = hg.get("hypotheses") or []
+
+    extra = enrich_report_extra_metadata(
+        report,
+        literature_mining=literature_mining if isinstance(literature_mining, dict) else None,
+        hypotheses=hypotheses if isinstance(hypotheses, list) else [],
+    )
+    return report_to_db_response(report, extra_metadata=extra)
 
 
 class ReportService:
@@ -90,14 +168,23 @@ class ReportService:
     
     def get_latest_report_by_project(
         self,
-        project_id: str
+        project_id: str,
+        *,
+        ensure_pdf: bool = True,
     ) -> Optional[Report]:
-        """获取项目最新的研究报告"""
-        return self.db.query(Report).filter(
+        """获取项目最新的研究报告；可选在 PDF 缺失时自动补生成。"""
+        report = self.db.query(Report).filter(
             Report.project_id == project_id
         ).order_by(
             Report.created_at.desc()
         ).first()
+        if report and ensure_pdf and report.pdf_path and not report_pdf_exists(report.pdf_path):
+            try:
+                self.regenerate_pdf(report.id)
+                self.db.refresh(report)
+            except Exception as exc:
+                logger.warning("自动补生成 PDF 失败 report=%s: %s", report.id, exc)
+        return report
 
     def browse_reports(
         self,
@@ -197,6 +284,80 @@ class ReportService:
             logger.error(f"更新研究报告失败: {e}", exc_info=True)
             raise
     
+    def regenerate_pdf(
+        self,
+        report_id: str,
+        *,
+        citation_map: Optional[List[Dict[str, Any]]] = None,
+    ) -> dict:
+        """为已有报告按 LaTeX 模板重新导出 PDF。"""
+        db_report = self.get_report_by_id(report_id)
+        if not db_report:
+            raise ValueError("报告不存在")
+        file_id = db_report.pdf_path
+        if not file_id:
+            raise ValueError("报告未关联文件目录，无法生成 PDF")
+
+        refs = db_report.references
+        try:
+            refs_list = json.loads(refs) if isinstance(refs, str) and refs.strip().startswith("[") else refs
+        except json.JSONDecodeError:
+            refs_list = [refs] if refs else []
+
+        result = {
+            "title": db_report.title,
+            "paper_title": db_report.paper_title,
+            "paper_abstract": db_report.paper_abstract,
+            "markdown_content": db_report.markdown_content,
+            "plots": (db_report.extra_metadata or {}).get("plots", []),
+            "chapters": {
+                "problem_statement": db_report.problem_statement,
+                "rationale": db_report.rationale,
+                "technical_details": db_report.technical_details,
+                "datasets": db_report.datasets,
+                "source": db_report.source,
+                "target": db_report.target,
+                "methods": db_report.methods,
+                "experiments": db_report.experiments,
+                "results": db_report.results,
+                "references": refs_list if isinstance(refs_list, list) else [],
+            },
+        }
+        verified = list(citation_map or [])
+        if not verified and isinstance(refs_list, list):
+            verified = [{"title": r} for r in refs_list if isinstance(r, str)]
+
+        export_result = export_report_via_latex(
+            result=result,
+            output_dir=str(get_reports_storage_dir() / file_id),
+            project_info={"title": db_report.paper_title},
+            citation_map=citation_map or verified,
+            verified_references=verified,
+            fallback_markdown_pdf=True,
+        )
+        result_payload = {
+            "success": export_result.get("pdf_success", False),
+            "pdf_success": export_result.get("pdf_success", False),
+            "pdf_path": export_result.get("pdf_path"),
+            "warning": export_result.get("warning"),
+            "export_method": export_result.get("export_method"),
+        }
+
+        extra = dict(db_report.extra_metadata or {})
+        extra["pdf_success"] = result_payload.get("pdf_success", False)
+        if result_payload.get("export_method"):
+            extra["export_method"] = result_payload["export_method"]
+        if result_payload.get("warning"):
+            extra["pdf_warning"] = result_payload["warning"]
+        db_report.extra_metadata = extra
+        self.db.commit()
+        self.db.refresh(db_report)
+
+        return {
+            **result_payload,
+            "report": report_to_db_response(db_report),
+        }
+
     def delete_report(self, report_id: str) -> bool:
         """删除研究报告"""
         db_report = self.get_report_by_id(report_id)

@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Puzzle, Search, FilterX, RefreshCw, Loader2, Bot, ToggleLeft, ToggleRight,
+  Puzzle, Search, FilterX, RefreshCw, Loader2, Bot, ToggleLeft, ToggleRight, Lock,
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
@@ -11,12 +11,8 @@ import { EmptyState } from '@/components/EmptyState';
 import skillService, { type SkillRecord, type SkillSummary } from '@/services/skillService';
 import { cn } from '@/lib/utils';
 
-const selectChevronStyle = {
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 12px center',
-  paddingRight: '2.5rem',
-} as const;
+const filterSelectClass = 'input-field select-field w-full h-10 py-2 text-sm';
+const filterButtonClass = 'h-10 shrink-0';
 
 export function Skills() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
@@ -34,15 +30,13 @@ export function Skills() {
     setLoading(true);
     setError(null);
     try {
-      const [listRes, summaryRes] = await Promise.all([
-        skillService.list({
-          category: categoryFilter || undefined,
-          agent: agentFilter || undefined,
-          keyword: appliedKeyword || undefined,
-          refresh,
-        }),
-        skillService.getSummary(),
-      ]);
+      const listRes = await skillService.list({
+        category: categoryFilter || undefined,
+        agent: agentFilter || undefined,
+        keyword: appliedKeyword || undefined,
+        refresh,
+      });
+      const summaryRes = await skillService.getSummary(refresh);
       if (listRes.code === 200 && Array.isArray(listRes.data)) {
         setSkills(listRes.data);
       } else {
@@ -59,7 +53,7 @@ export function Skills() {
   }, [categoryFilter, agentFilter, appliedKeyword]);
 
   useEffect(() => {
-    load();
+    load(true);
   }, [load]);
 
   const categoryOptions = useMemo(
@@ -73,20 +67,16 @@ export function Skills() {
   );
 
   const handleToggle = async (skill: SkillRecord) => {
+    if (skill.locked) return;
     setTogglingId(skill.id);
     try {
       const res = await skillService.setEnabled(skill.id, !skill.enabled);
       if (res.code === 200 && res.data) {
         setSkills((prev) => prev.map((s) => (s.id === skill.id ? res.data! : s)));
-        setSummary((prev) => {
-          if (!prev) return prev;
-          const delta = res.data!.enabled ? 1 : -1;
-          return {
-            ...prev,
-            enabled: prev.enabled + delta,
-            disabled: prev.disabled - delta,
-          };
-        });
+        const summaryRes = await skillService.getSummary(true);
+        if (summaryRes.code === 200 && summaryRes.data) {
+          setSummary(summaryRes.data);
+        }
       }
     } catch {
       setError('切换状态失败');
@@ -101,11 +91,11 @@ export function Skills() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
         title="技能管理"
-        subtitle="查看与配置各智能体使用的 Skills，禁用后将在运行时跳过（逐步生效）"
+        subtitle="Pipeline 核心 Skill 已锁定不可禁用；其余 Skill 禁用后运行时将自动跳过"
       />
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <Card className="p-4 text-center">
             <div className="text-2xl font-bold font-mono text-bp-text">{summary.total}</div>
             <div className="text-xs text-bp-muted mt-1">技能总数</div>
@@ -117,6 +107,10 @@ export function Skills() {
           <Card className="p-4 text-center">
             <div className="text-2xl font-bold font-mono text-bp-yellow">{summary.disabled}</div>
             <div className="text-xs text-bp-muted mt-1">已禁用</div>
+          </Card>
+          <Card className="p-4 text-center">
+            <div className="text-2xl font-bold font-mono text-bp-cyan">{summary.locked ?? 0}</div>
+            <div className="text-xs text-bp-muted mt-1">核心锁定</div>
           </Card>
           <Card className="p-4 text-center">
             <div className="text-2xl font-bold font-mono text-bp-cyan">{summary.agents.length}</div>
@@ -132,8 +126,7 @@ export function Skills() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="input-field w-full py-2 text-sm"
-              style={selectChevronStyle}
+              className={filterSelectClass}
             >
               <option value="">全部分类</option>
               {categoryOptions.map((c) => (
@@ -146,8 +139,7 @@ export function Skills() {
             <select
               value={agentFilter}
               onChange={(e) => setAgentFilter(e.target.value)}
-              className="input-field w-full py-2 text-sm"
-              style={selectChevronStyle}
+              className={filterSelectClass}
             >
               <option value="">全部智能体</option>
               {agentOptions.map((a) => (
@@ -157,17 +149,18 @@ export function Skills() {
           </div>
           <div className="flex-[2] min-w-[200px]">
             <label className="text-xs text-bp-muted mb-1 block">搜索</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <input
                 value={keywordInput}
                 onChange={(e) => setKeywordInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && setAppliedKeyword(keywordInput.trim())}
                 placeholder="技能名称 / 描述"
-                className="input-field flex-1 py-2 text-sm"
+                className="input-field flex-1 h-10 py-2 text-sm"
               />
               <Button
                 variant="secondary"
                 size="sm"
+                className={filterButtonClass}
                 icon={<Search className="w-4 h-4" />}
                 onClick={() => setAppliedKeyword(keywordInput.trim())}
               >
@@ -175,31 +168,38 @@ export function Skills() {
               </Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            {hasFilters && (
+          <div className="flex flex-col min-w-0">
+            <label className="text-xs text-bp-muted mb-1 block invisible select-none" aria-hidden>
+              操作
+            </label>
+            <div className="flex gap-2 items-center h-10">
+              {hasFilters && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={filterButtonClass}
+                  icon={<FilterX className="w-4 h-4" />}
+                  onClick={() => {
+                    setCategoryFilter('');
+                    setAgentFilter('');
+                    setKeywordInput('');
+                    setAppliedKeyword('');
+                  }}
+                >
+                  清除
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<FilterX className="w-4 h-4" />}
-                onClick={() => {
-                  setCategoryFilter('');
-                  setAgentFilter('');
-                  setKeywordInput('');
-                  setAppliedKeyword('');
-                }}
+                className={filterButtonClass}
+                icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                onClick={() => load(true)}
+                disabled={loading}
               >
-                清除
+                刷新
               </Button>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              onClick={() => load(true)}
-              disabled={loading}
-            >
-              刷新
-            </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -243,6 +243,12 @@ export function Skills() {
                     >
                       {skill.enabled ? '已启用' : '已禁用'}
                     </span>
+                    {skill.locked && (
+                      <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-bp-panel text-bp-muted border border-bp-border">
+                        <Lock className="w-3 h-3" />
+                        核心
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-bp-muted leading-relaxed mb-2">
                     {skill.description || '（无描述）'}
@@ -264,21 +270,30 @@ export function Skills() {
                     {skill.module_path}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggle(skill)}
-                  disabled={togglingId === skill.id}
-                  className="shrink-0 p-1 rounded-bp hover:bg-bp-panel transition-colors disabled:opacity-50"
-                  title={skill.enabled ? '点击禁用' : '点击启用'}
-                >
-                  {togglingId === skill.id ? (
-                    <Loader2 className="w-8 h-8 animate-spin text-bp-muted" />
-                  ) : skill.enabled ? (
-                    <ToggleRight className="w-8 h-8 text-bp-green" />
-                  ) : (
-                    <ToggleLeft className="w-8 h-8 text-bp-muted" />
-                  )}
-                </button>
+                {skill.locked ? (
+                  <span
+                    className="shrink-0 p-1 rounded-bp text-bp-muted/60"
+                    title="Pipeline 核心 Skill，不可禁用"
+                  >
+                    <Lock className="w-8 h-8" />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(skill)}
+                    disabled={togglingId === skill.id}
+                    className="shrink-0 p-1 rounded-bp hover:bg-bp-panel transition-colors disabled:opacity-50"
+                    title={skill.enabled ? '点击禁用' : '点击启用'}
+                  >
+                    {togglingId === skill.id ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-bp-muted" />
+                    ) : skill.enabled ? (
+                      <ToggleRight className="w-8 h-8 text-bp-green" />
+                    ) : (
+                      <ToggleLeft className="w-8 h-8 text-bp-muted" />
+                    )}
+                  </button>
+                )}
               </div>
             </Card>
           ))}

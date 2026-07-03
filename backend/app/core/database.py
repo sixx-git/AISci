@@ -41,6 +41,10 @@ def init_db():
             connect_args=connect_args,
             echo=settings.DEBUG  # 调试模式下打印 SQL
         )
+        if settings.DATABASE_URL.startswith("sqlite"):
+            with engine.connect() as conn:
+                conn.exec_driver_sql("PRAGMA journal_mode=WAL")
+                conn.exec_driver_sql("PRAGMA busy_timeout=5000")
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     
     return engine, SessionLocal

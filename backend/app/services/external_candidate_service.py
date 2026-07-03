@@ -6,16 +6,21 @@ import logging
 import os
 import re
 import shutil
+import zipfile
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.skills.data_finder.file_format_registry import (
+    collect_parseable_files,
+    is_allowed_upload_filename,
+)
+
 logger = logging.getLogger(__name__)
 CHINA_TZ = timezone(timedelta(hours=8))
 
 MANUAL_AVAILABILITY = frozenset({"catalog_only", "metadata_only", "url_only"})
-ALLOWED_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
 STATUS_PENDING = "pending_download"
 STATUS_PROCESSING = "processing"
 STATUS_MERGED = "merged"
@@ -87,6 +92,41 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", base)[:120] or "upload.csv"
 
 
+def _collect_parseable_files(root_dir: str) -> List[str]:
+    return collect_parseable_files(root_dir)
+
+
+def _extract_zip_archive(zip_path: str, dest_dir: str) -> str:
+    os.makedirs(dest_dir, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            # 防止 Zip Slip
+            target = os.path.normpath(os.path.join(dest_dir, info.filename))
+            if not target.startswith(os.path.normpath(dest_dir) + os.sep):
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+    return dest_dir
+
+
+def _resolve_upload_targets(upload_dir: str, source_path: str, original_filename: str) -> Tuple[List[str], Optional[str]]:
+    """返回待解析文件列表及 ZIP 解压目录（若有）。"""
+    ext = os.path.splitext(original_filename)[1].lower()
+    if ext == ".zip":
+        extract_dir = os.path.join(upload_dir, "extracted")
+        if os.path.isdir(extract_dir):
+            shutil.rmtree(extract_dir, ignore_errors=True)
+        _extract_zip_archive(source_path, extract_dir)
+        files = _collect_parseable_files(extract_dir)
+        if not files:
+            raise ValueError("ZIP 内未找到可解析的 CSV/JSON/SDF/MOL/SMILES 等文件")
+        return files, extract_dir
+    return [source_path], None
+
+
 class ExternalCandidateService:
     def __init__(self, db: Session):
         self.db = db
@@ -106,9 +146,10 @@ class ExternalCandidateService:
         candidates = ensure_candidate_ids(results.get("external_candidates"))
         idx, cand = _find_candidate(candidates, candidate_id)
 
-        ext = os.path.splitext(original_filename)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"不支持的上传格式 {ext}，请使用 CSV/TSV/XLSX")
+        if not is_allowed_upload_filename(original_filename):
+            raise ValueError(
+                "不支持的上传格式，请使用 CSV/TSV/XLSX/JSON/ZIP/SDF/MOL/SMILES（含 .sdf.gz）"
+            )
 
         cand["user_upload_status"] = STATUS_PROCESSING
         cand["user_upload_filename"] = original_filename
@@ -124,25 +165,33 @@ class ExternalCandidateService:
         shutil.copy2(source_path, dest_path)
 
         try:
-            from app.skills.data_finder.tabular_file_extraction_skill import TabularFileExtractionSkill
+            from app.skills.data_finder.structured_file_extraction_skill import extract_tables_from_file
 
             tables_dir = os.path.join(self._df._project_dir(project_id), "tables")
             os.makedirs(tables_dir, exist_ok=True)
-            skill = TabularFileExtractionSkill()
-            extract_res = await skill.run(
-                {
-                    "file_path": dest_path,
-                    "source_title": cand.get("dataset_name") or original_filename,
-                    "output_dir": tables_dir,
-                },
-                {"stage": "external_candidate_upload"},
-            )
-            tables = extract_res.data.get("tables") or []
-            if not tables:
-                err = (extract_res.errors or extract_res.warnings or ["未能解析表格"])[0]
-                raise ValueError(str(err))
+            parse_targets, extract_dir = _resolve_upload_targets(upload_dir, dest_path, original_filename)
+            cand["user_upload_manifest"] = [os.path.relpath(p, upload_dir) for p in parse_targets[:20]]
+            if extract_dir:
+                cand["user_upload_extracted_dir"] = os.path.relpath(extract_dir, upload_dir)
 
-            tbl = dict(tables[0])
+            tbl = None
+            last_err = "未能解析文件"
+            for file_path in parse_targets:
+                tables = await extract_tables_from_file(
+                    file_path,
+                    source_title=cand.get("dataset_name") or original_filename,
+                    output_dir=tables_dir,
+                    filename=os.path.basename(file_path),
+                    context={"stage": "external_candidate_upload"},
+                )
+                if tables:
+                    tbl = dict(tables[0])
+                    tbl["source_file"] = os.path.relpath(file_path, upload_dir)
+                    break
+                last_err = "未能从该文件解析出表格数据"
+
+            if not tbl:
+                raise ValueError(str(last_err))
             tbl["candidate_id"] = candidate_id
             tbl["source_type"] = "user_upload_external"
             tbl["paper_id"] = ""

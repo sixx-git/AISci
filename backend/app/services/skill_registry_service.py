@@ -27,6 +27,7 @@ CATEGORY_LABELS: Dict[str, str] = {
     "federated_experiment": "联邦实验",
     "multimodal": "多模态",
     "evidence_reasoning": "证据推理",
+    "academic": "学术写作",
     "general": "通用",
 }
 
@@ -35,6 +36,8 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "文献挖掘 Agent": [
         "SearchPapers", "PdfEvidenceExtraction", "ArxivSearch",
         "CitationGrounding", "MultimodalDataLinking",
+        "PaperReading", "DeepResearch", "SourceTracing", "ResearchGenealogy",
+        "ClaudeScholar", "PaperSkill",
     ],
     "假设评审 Agent": ["HypothesisNoveltyReview"],
     "实验设计 Agent": [
@@ -45,8 +48,14 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "报告生成 Agent": [
         "CitationGrounding", "ReportChartGeneration",
         "ScientificPlot", "ReportQualityCheck",
+        "AcademicWritingSkills", "WriteChinese", "PaperWriter", "AcademicPaperSkills",
+        "EmpiricalPaper", "NaturePaper", "CCFASkill", "PaperPilot",
+        "PaperToPatent", "PaperToStoryboard", "Paper2Beamer",
     ],
-    "Pipeline 编排": ["QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop"],
+    "Pipeline 编排": [
+        "QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop",
+        "QuestionValidator", "AcademicResearchSkills", "ResearchSkills",
+    ],
     "数据建模服务": [
         "DatasetProfiling", "TaskTypeDetection", "DataPreprocessing",
         "BaselineModelTraining", "ModelEvaluation", "SelfCorrection",
@@ -57,7 +66,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "ExternalDatasetSearch", "FigureDataExtraction", "FigureVlmSeries", "PdfFigureCrop",
         "SupplementaryFetch", "SupplementaryExtraction", "PdfTableExtraction",
         "DataProvenance", "DatasetSchemaAlignment", "DatasetMerge", "EntityResolution",
-        "TabularFileExtraction",
+        "TabularFileExtraction", "ChemStructureExtraction", "StructuredFileExtraction",
     ],
     "知识图谱服务": [
         "KgSchemaGeneration", "ScientificEntityExtraction", "ScientificRelationExtraction",
@@ -75,11 +84,82 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "证据推理服务": [
         "EvidenceRetrieval", "EvidenceChainBuilder", "EvidenceStanceClassification",
         "ScientificClaimExtraction", "CitationIntegrityCheck", "CounterEvidenceRetrieval",
-        "HypothesisRevision",
+        "HypothesisRevision", "SourceTracing",
     ],
     "人在回路": ["MentorReview"],
     "图表质量": ["PlotVlmCritique", "ScientificPlot"],
 }
+
+# Pipeline 九阶段正常运行所依赖的核心 Skill（不可禁用）
+REQUIRED_SKILL_IDS: frozenset[str] = frozenset({
+    # Pipeline 编排
+    "QuestionAlignment",
+    # 文献挖掘 / 引用
+    "PdfEvidenceExtraction",
+    "SearchPapers",
+    "MultimodalDataLinking",
+    "CitationGrounding",
+    # 证据推理链
+    "IterativeHypothesisLoop",
+    "ScientificClaimExtraction",
+    "EvidenceRetrieval",
+    "CounterEvidenceRetrieval",
+    "EvidenceStanceClassification",
+    "HypothesisRevision",
+    "EvidenceChainBuilder",
+    "CitationIntegrityCheck",
+    # 多源数据采集
+    "DataRequirementUnderstanding",
+    "PaperDataLinkExtractor",
+    "TextFactsExtraction",
+    "ExternalDatasetSearch",
+    "FigureDataExtraction",
+    "FigureVlmSeries",
+    "PdfFigureCrop",
+    "SupplementaryFetch",
+    "SupplementaryExtraction",
+    "PdfTableExtraction",
+    "DataProvenance",
+    "DatasetSchemaAlignment",
+    "DatasetMerge",
+    "EntityResolution",
+    "TabularFileExtraction",
+    "ChemStructureExtraction",
+    "StructuredFileExtraction",
+    # 知识图谱
+    "KgSchemaGeneration",
+    "ScientificEntityExtraction",
+    "ScientificRelationExtraction",
+    "EvidenceGraphBuilder",
+    "GraphCommunitySummary",
+    "KgQualityReview",
+    "GraphReasoning",
+    "IncrementalGraphUpdate",
+    "HumanFeedbackUpdate",
+    "GraphRagRetrieval",
+    "KgExplanation",
+    # 假设评审
+    "HypothesisNoveltyReview",
+    "MentorReview",
+    # 实验设计
+    "ExperimentSanityCheck",
+    "MultimodalDataIngest",
+    "DatasetDiscovery",
+    # 小样验证
+    "PreliminaryAnalysis",
+    # 报告生成
+    "ReportChartGeneration",
+    "ScientificPlot",
+    "ReportQualityCheck",
+})
+
+
+class SkillToggleError(Exception):
+    """尝试修改锁定 Skill 的启用状态时抛出。"""
+
+    def __init__(self, skill_id: str, message: str):
+        self.skill_id = skill_id
+        super().__init__(message)
 
 
 @dataclass
@@ -92,6 +172,7 @@ class SkillRecord:
     module_path: str
     agents: List[str]
     enabled: bool
+    locked: bool = False
     source_reference: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -139,24 +220,43 @@ def _save_runtime(data: Dict[str, Any]) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def is_skill_locked(skill_id: str) -> bool:
+    return skill_id in REQUIRED_SKILL_IDS
+
+
+def _sanitize_runtime_disabled() -> None:
+    """从持久化配置中移除被锁定的 Skill，防止历史误禁用。"""
+    runtime = _load_runtime()
+    disabled = set(runtime.get("disabled", []))
+    cleaned = disabled - REQUIRED_SKILL_IDS
+    if cleaned != disabled:
+        runtime["disabled"] = sorted(cleaned)
+        _save_runtime(runtime)
+
+
+def _apply_record_state(record: SkillRecord, disabled: set[str]) -> SkillRecord:
+    locked = is_skill_locked(record.id)
+    enabled = True if locked else record.id not in disabled
+    return SkillRecord(**{**record.to_dict(), "locked": locked, "enabled": enabled})
+
+
 def is_skill_enabled(skill_id: str) -> bool:
+    if is_skill_locked(skill_id):
+        return True
     disabled = set(_load_runtime().get("disabled", []))
     return skill_id not in disabled
 
 
 def discover_skills(refresh: bool = False) -> List[SkillRecord]:
     global _discovered_cache
-    if _discovered_cache is not None and not refresh:
-        runtime = _load_runtime()
-        disabled = set(runtime.get("disabled", []))
-        return [
-            SkillRecord(**{**s.to_dict(), "enabled": s.id not in disabled})
-            for s in _discovered_cache
-        ]
-
-    skills_root = Path(__file__).resolve().parent.parent / "skills"
+    _sanitize_runtime_disabled()
     runtime = _load_runtime()
     disabled = set(runtime.get("disabled", []))
+
+    if _discovered_cache is not None and not refresh:
+        return [_apply_record_state(s, disabled) for s in _discovered_cache]
+
+    skills_root = Path(__file__).resolve().parent.parent / "skills"
     found: Dict[str, SkillRecord] = {}
 
     for py_file in sorted(skills_root.rglob("*_skill.py")):
@@ -177,6 +277,7 @@ def discover_skills(refresh: bool = False) -> List[SkillRecord]:
             if not skill_name or skill_name in found:
                 continue
             category = _category_from_module(module_path)
+            locked = is_skill_locked(skill_name)
             record = SkillRecord(
                 id=skill_name,
                 name=skill_name,
@@ -185,13 +286,14 @@ def discover_skills(refresh: bool = False) -> List[SkillRecord]:
                 category_label=CATEGORY_LABELS.get(category, category),
                 module_path=module_path,
                 agents=_consumers_for_skill(skill_name),
-                enabled=skill_name not in disabled,
+                enabled=True if locked else skill_name not in disabled,
+                locked=locked,
                 source_reference=getattr(cls, "source_reference", None),
             )
             found[skill_name] = record
 
     _discovered_cache = sorted(found.values(), key=lambda s: (s.category, s.name))
-    return list(_discovered_cache)
+    return [_apply_record_state(s, disabled) for s in _discovered_cache]
 
 
 def list_skills(
@@ -235,21 +337,25 @@ def set_skill_enabled(skill_id: str, enabled: bool) -> Optional[Dict[str, Any]]:
     if not target:
         return None
 
+    if target.locked:
+        raise SkillToggleError(
+            skill_id,
+            f"Skill「{skill_id}」为 Pipeline 核心能力，不可更改启用状态",
+        )
+
     runtime = _load_runtime()
     disabled = set(runtime.get("disabled", []))
     if enabled:
         disabled.discard(skill_id)
     else:
         disabled.add(skill_id)
-    runtime["disabled"] = sorted(disabled)
+    runtime["disabled"] = sorted(disabled - REQUIRED_SKILL_IDS)
     _save_runtime(runtime)
 
     global _discovered_cache
+    disabled = set(runtime.get("disabled", []))
     if _discovered_cache:
-        _discovered_cache = [
-            SkillRecord(**{**s.to_dict(), "enabled": s.id not in disabled})
-            for s in _discovered_cache
-        ]
+        _discovered_cache = [_apply_record_state(s, disabled) for s in _discovered_cache]
 
     updated = next((s for s in discover_skills() if s.id == skill_id), None)
     return updated.to_dict() if updated else None
@@ -258,11 +364,13 @@ def set_skill_enabled(skill_id: str, enabled: bool) -> Optional[Dict[str, Any]]:
 def get_summary() -> Dict[str, Any]:
     skills = discover_skills()
     enabled_count = sum(1 for s in skills if s.enabled)
+    locked_count = sum(1 for s in skills if s.locked)
     categories = sorted({s.category for s in skills})
     return {
         "total": len(skills),
         "enabled": enabled_count,
         "disabled": len(skills) - enabled_count,
+        "locked": locked_count,
         "categories": [
             {
                 "id": c,

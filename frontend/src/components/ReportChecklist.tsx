@@ -1,6 +1,7 @@
 ﻿import { CheckCircle, AlertTriangle, XCircle, Shield } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '@/lib/utils';
+import { countRealReferences } from '@/lib/reportCompliance';
 import type { ComplianceCheck, ReportSection } from '@/types';
 
 interface ReportChecklistProps {
@@ -8,22 +9,31 @@ interface ReportChecklistProps {
   complianceCheck?: ComplianceCheck;
   className?: string;
   warnings?: string[];
+  referencesRaw?: string;
 }
 
-const statusConfig: Record<ReportSection['status'], { icon: typeof CheckCircle; label: string; className: string }> = {
+const statusConfig: Record<'completed' | 'missing', { icon: typeof CheckCircle; label: string; className: string }> = {
   completed:  { icon: CheckCircle,  label: '已完成',  className: 'text-bp-green bg-bp-green/10 border-bp-green/20' },
   missing:    { icon: XCircle,      label: '缺失',    className: 'text-danger-400 bg-danger-500/10 border-danger-500/20' },
-  human_review: { icon: AlertTriangle, label: '需人工确认', className: 'text-bp-yellow bg-bp-yellow/10 border-bp-yellow/20' },
 };
 
-export function ReportChecklist({ sections, complianceCheck, className, warnings }: ReportChecklistProps) {
-  const completedCount = sections.filter(s => s.status === 'completed').length;
+function sectionDisplayStatus(status: ReportSection['status']): 'completed' | 'missing' {
+  if (status === 'missing') return 'missing';
+  return 'completed';
+}
+
+export function ReportChecklist({ sections, complianceCheck, className, warnings, referencesRaw }: ReportChecklistProps) {
+  const completedCount = sections.filter(
+    (s) => s.status === 'completed' || s.status === 'human_review',
+  ).length;
   const missingCount = sections.filter(s => s.status === 'missing').length;
-  const reviewCount = sections.filter(s => s.status === 'human_review').length;
   const totalItems = complianceCheck?.total_items ?? sections.length;
   const ratio = totalItems > 0 ? completedCount / totalItems : 0;
 
   const cc = complianceCheck;
+  const realReferenceCount = countRealReferences(referencesRaw);
+  const refsMissing = (cc?.references_verified ?? 0) === 0 && realReferenceCount === 0;
+  const refsPendingReview = (cc?.references_verified ?? 0) === 0 && realReferenceCount > 0;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -58,7 +68,7 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         </div>
 
         {/* 汇总统计 */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2 mb-3">
           <div className="text-center p-2 rounded-lg bg-bp-green/5 border border-bp-green/10">
             <p className="text-lg font-mono font-bold text-bp-green">{completedCount}</p>
             <p className="text-xs text-bp-muted">已完成</p>
@@ -66,10 +76,6 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
           <div className="text-center p-2 rounded-lg bg-danger-500/5 border border-danger-500/10">
             <p className="text-lg font-mono font-bold text-danger-400">{missingCount}</p>
             <p className="text-xs text-bp-muted">缺失</p>
-          </div>
-          <div className="text-center p-2 rounded-lg bg-bp-yellow/5 border border-bp-yellow/10">
-            <p className="text-lg font-mono font-bold text-bp-yellow">{reviewCount}</p>
-            <p className="text-xs text-bp-muted">需人工确认</p>
           </div>
         </div>
 
@@ -153,7 +159,8 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
         {/* 章节字段检查列表 */}
         <div className="space-y-1.5">
           {sections.map((s) => {
-            const cfg = statusConfig[s.status];
+            const displayStatus = sectionDisplayStatus(s.status);
+            const cfg = statusConfig[displayStatus];
             const Icon = cfg.icon;
             return (
               <div
@@ -182,32 +189,36 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
       {/* References 合规声明卡片 */}
       <Card className={cn(
         'border',
-        cc && cc.references_verified === 0
+        refsMissing
           ? 'bg-danger-500/[0.04] border-danger-500/20'
           : 'bg-bp-yellow/[0.03] border-bp-yellow/10',
       )}>
         <div className="flex items-start gap-2.5">
           <div className={cn(
             'w-8 h-8 rounded-lg border flex items-center justify-center shrink-0',
-            cc && cc.references_verified === 0
+            refsMissing
               ? 'bg-danger-500/10 border-danger-500/20'
               : 'bg-bp-yellow/10 border-bp-yellow/20',
           )}>
             <Shield className={cn(
               'w-4 h-4',
-              cc && cc.references_verified === 0 ? 'text-danger-400' : 'text-bp-yellow',
+              refsMissing ? 'text-danger-400' : 'text-bp-yellow',
             )} />
           </div>
           <div>
             <h4 className={cn(
               'text-xs font-semibold',
-              cc && cc.references_verified === 0 ? 'text-danger-300' : 'text-bp-yellow',
+              refsMissing ? 'text-danger-300' : 'text-bp-yellow',
             )}>
               References 合规声明
             </h4>
-            {cc && cc.references_verified === 0 ? (
+            {refsMissing ? (
               <p className="text-xs text-danger-300/80 mt-1 leading-relaxed">
                 当前报告缺少真实文献引用，请先上传 PDF 或导入 arXiv 文献。
+              </p>
+            ) : refsPendingReview ? (
+              <p className="text-xs text-bp-yellow/80 mt-1 leading-relaxed">
+                报告正文含 {realReferenceCount} 条参考文献，正在与文献库核对；若数值未更新请刷新页面或重新生成报告。
               </p>
             ) : (
               <p className="text-xs text-bp-yellow/70 mt-1 leading-relaxed">
@@ -216,8 +227,9 @@ export function ReportChecklist({ sections, complianceCheck, className, warnings
             )}
             {cc && (
               <div className="mt-2 flex items-center gap-3 text-xs">
-                <span className={cc.references_verified > 0 ? 'text-bp-green' : 'text-danger-400'}>
-                  已验证 {cc.references_verified} 条
+                <span className={(cc.references_verified ?? 0) > 0 ? 'text-bp-green' : refsPendingReview ? 'text-bp-yellow' : 'text-danger-400'}>
+                  已验证 {cc.references_verified ?? 0} 条
+                  {refsPendingReview && realReferenceCount > 0 ? `（正文 ${realReferenceCount} 条待核对）` : ''}
                 </span>
                 {cc.references_suspicious > 0 && (
                   <span className="text-danger-400">

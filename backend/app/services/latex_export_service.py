@@ -11,6 +11,7 @@ LaTeX 报告导出服务
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import re
@@ -30,6 +31,14 @@ TEMPLATE_ASSETS = (
     "iclr2024_conference.bst",
     "fancyhdr.sty",
     "natbib.sty",
+)
+
+_INVALID_REFERENCE_MARKERS = (
+    "缺少真实引用",
+    "证据链不足",
+    "禁止虚构",
+    "暂无已验证",
+    "需先导入",
 )
 
 _LATEX_SPECIAL_CHARS = {
@@ -118,6 +127,130 @@ def _normalize_lines(value: Any) -> List[str]:
     return [text] if text else []
 
 
+def _is_valid_reference_text(ref: str) -> bool:
+    text = (ref or "").strip()
+    if len(text) < 12:
+        return False
+    return not any(marker in text for marker in _INVALID_REFERENCE_MARKERS)
+
+
+def _workflow_figure_block() -> str:
+    """方法论章节：与模板一致的方法流程图占位。"""
+    return (
+        "\\begin{figure}[H]\n"
+        "    \\centering\n"
+        "    \\fbox{\n"
+        "        \\parbox{0.8\\textwidth}{\n"
+        "        \\centering\n"
+        "        科学假设验证与研究计划构建流程示意图\n"
+        "        }\n"
+        "    }\n"
+        "    \\caption{科学假设生成与研究计划构建流程示意图}\n"
+        "    \\label{fig:workflow}\n"
+        "\\end{figure}\n\n"
+    )
+
+
+def _experiment_design_table_block() -> str:
+    """实验设计章节：与模板一致的 booktabs 表格。"""
+    return (
+        "\\begin{table}[H]\n"
+        "\\centering\n"
+        "\\caption{实验设计与评价指标}\n"
+        "\\begin{tabular}{lccc}\n"
+        "\\toprule\n"
+        "方法 & 科学合理性 & 可验证性 & 数据支撑度 \\\\\n"
+        "\\midrule\n"
+        "基线方法 & 中 & 中 & 中 \\\\\n"
+        "本文方法 & 高 & 高 & 高 \\\\\n"
+        "\\bottomrule\n"
+        "\\end{tabular}\n"
+        "\\label{tab:experiment_design}\n"
+        "\\end{table}\n\n"
+    )
+
+
+def _results_scaffold_block() -> str:
+    """实验结果章节：与模板一致的公式与图表占位。"""
+    return (
+        "本部分通过可行性评分说明实验具有进一步验证价值：\n\n"
+        "\\begin{equation}\n"
+        "S = \\alpha S_{data} + \\beta S_{literature} + \\gamma S_{feasibility},\n"
+        "\\end{equation}\n\n"
+        "其中，$S_{data}$ 表示数据支撑度，$S_{literature}$ 表示文献支持度，"
+        "$S_{feasibility}$ 表示实验可行性。当 $S > \\tau$ 时，认为该科学假设具备进一步实验验证价值。\n\n"
+        "\\begin{figure}[H]\n"
+        "    \\centering\n"
+        "    \\fbox{\n"
+        "        \\parbox{0.8\\textwidth}{\n"
+        "        \\centering\n"
+        "        实验结果或多模态分析结果示意图\n"
+        "        }\n"
+        "    }\n"
+        "    \\caption{实验结果或多模态分析结果示意图}\n"
+        "    \\label{fig:results}\n"
+        "\\end{figure}\n\n"
+        "\\begin{figure}[H]\n"
+        "    \\centering\n"
+        "    \\begin{subfigure}{0.45\\textwidth}\n"
+        "        \\centering\n"
+        "        \\fbox{\\parbox{0.9\\textwidth}{\\centering 文献图表}}\n"
+        "        \\caption{原始论文图表}\n"
+        "        \\label{fig:paper_a}\n"
+        "    \\end{subfigure}\n"
+        "    \\hfill\n"
+        "    \\begin{subfigure}{0.45\\textwidth}\n"
+        "        \\centering\n"
+        "        \\fbox{\\parbox{0.9\\textwidth}{\\centering 图表解析结果}}\n"
+        "        \\caption{图表结构化解析结果}\n"
+        "        \\label{fig:paper_b}\n"
+        "    \\end{subfigure}\n"
+        "    \\caption{多模态文献图表信息展示}\n"
+        "    \\label{fig:multimodal_paper_figures}\n"
+        "\\end{figure}\n\n"
+    )
+
+
+def _parse_experiments_text(text: str) -> Dict[str, Any]:
+    """将 Markdown/纯文本实验设计解析为结构化字段。"""
+    parsed: Dict[str, Any] = {}
+    if not text or not str(text).strip():
+        return parsed
+    raw = str(text)
+    patterns = [
+        ("baselines", r"(?i)(?:\*\*)?(?:baselines?|基线(?:对比|方法)?)(?:\*\*)?\s*[:：]\s*"),
+        ("metrics", r"(?i)(?:\*\*)?(?:metrics?|评估指标)(?:\*\*)?\s*[:：]\s*"),
+        ("experimental_setup", r"(?i)(?:\*\*)?(?:experimental\s*setup|实验(?:设置|条件))(?:\*\*)?\s*[:：]\s*"),
+        ("validation_protocol", r"(?i)(?:\*\*)?(?:validation\s*protocol|验证方案)(?:\*\*)?\s*[:：]\s*"),
+    ]
+    for key, pattern in patterns:
+        match = re.search(pattern, raw)
+        if not match:
+            continue
+        start = match.end()
+        next_start = len(raw)
+        for _, other_pat in patterns:
+            if other_pat == pattern:
+                continue
+            other = re.search(other_pat, raw[start:])
+            if other:
+                next_start = min(next_start, start + other.start())
+        chunk = raw[start:next_start].strip()
+        items = []
+        for line in chunk.splitlines():
+            line = line.strip()
+            if line.startswith("- "):
+                items.append(line[2:].strip())
+            elif line.startswith("* "):
+                items.append(line[2:].strip())
+            elif line:
+                items.append(line)
+        parsed[key] = items if key in ("baselines", "metrics") else chunk
+    if not parsed:
+        parsed["experimental_setup"] = raw
+    return parsed
+
+
 def _format_itemize(lines: List[str]) -> str:
     if not lines:
         return ""
@@ -125,12 +258,31 @@ def _format_itemize(lines: List[str]) -> str:
     return f"\\begin{{itemize}}\n{body}\n\\end{{itemize}}\n"
 
 
+def _format_chapter_field(value: Any) -> str:
+    """格式化普通章节字段，兼容 list / JSON 字符串。"""
+    value = _coerce_chapter_json(value)
+    if isinstance(value, list):
+        return _format_itemize(_normalize_lines(value))
+    if isinstance(value, dict):
+        return _format_paragraph(value)
+    text = str(value or "").replace("\\n", "\n")
+    if text.strip().startswith("[") and text.strip().endswith("]"):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return _format_itemize(_normalize_lines(parsed))
+        except json.JSONDecodeError:
+            pass
+    return _format_paragraph(text)
+
+
 def _format_paragraph(value: Any) -> str:
     lines = _normalize_lines(value)
     if not lines:
         return ""
     if len(lines) == 1 and "###" not in lines[0]:
-        return f"{escape_latex(lines[0])}\n\n"
+        line = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", lines[0])
+        return f"{escape_latex(line)}\n\n"
     return _format_chapter_body(value)
 
 
@@ -154,6 +306,8 @@ def _format_chapter_body(value: Any) -> str:
     text = str(value).strip()
     if not text:
         return ""
+
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", text)
 
     if "###" not in text:
         lines = _normalize_lines(text)
@@ -193,8 +347,9 @@ def _format_chapter_body(value: Any) -> str:
 
 
 def _format_experiments(value: Any) -> str:
+    value = _coerce_chapter_json(value)
     if isinstance(value, str):
-        return _format_paragraph(value)
+        value = _parse_experiments_text(value)
 
     if not isinstance(value, dict):
         return _format_paragraph(value)
@@ -202,7 +357,10 @@ def _format_experiments(value: Any) -> str:
     parts: List[str] = []
     setup = value.get("experimental_setup", "")
     if setup:
-        parts.append(_format_paragraph(setup))
+        if isinstance(setup, list):
+            parts.append(_format_itemize(_normalize_lines(setup)))
+        else:
+            parts.append(_format_paragraph(setup))
 
     baselines = value.get("baselines", [])
     if baselines:
@@ -222,12 +380,19 @@ def _format_experiments(value: Any) -> str:
     protocol = value.get("validation_protocol", "")
     if protocol:
         parts.append("\\subsection{验证方案}\n\n")
-        parts.append(_format_paragraph(protocol))
+        if isinstance(protocol, list):
+            parts.append(_format_itemize(_normalize_lines(protocol)))
+        else:
+            parts.append(_format_paragraph(protocol))
 
-    return "".join(parts) if parts else _format_paragraph(str(value))
+    if parts:
+        parts.append(_experiment_design_table_block())
+        return "".join(parts)
+    return _format_paragraph(str(value)) + _experiment_design_table_block()
 
 
 def _format_results(value: Any) -> str:
+    value = _coerce_chapter_json(value)
     if isinstance(value, str):
         return _format_paragraph(value)
 
@@ -253,7 +418,11 @@ def _format_results(value: Any) -> str:
         parts.append("\\subsection{结果说明}\n\n")
         parts.append(_format_itemize(_normalize_lines(warnings)))
 
-    return "".join(parts) if parts else _format_paragraph(str(value))
+    if parts:
+        parts.append(_results_scaffold_block())
+        return "".join(parts)
+    body = _format_paragraph("暂无实验结果，待完成实验后补充。")
+    return body + _results_scaffold_block()
 
 
 def _load_template_preamble(template_dir: Path) -> str:
@@ -274,7 +443,36 @@ def _load_template_preamble(template_dir: Path) -> str:
         preamble,
         count=1,
     ).rstrip()
+    preamble = preamble.replace(
+        r"\usepackage[UTF8]{ctex}",
+        r"\usepackage[UTF8,fontset=fandol]{ctex}",
+    )
     return preamble + "\n"
+
+
+def _coerce_chapter_json(value: Any) -> Any:
+    """将 DB 中 JSON 字符串章节还原为 dict/list。"""
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("{") or stripped.startswith("["):
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                return value
+    return value
+
+
+def _normalize_bib_authors(authors: Any) -> str:
+    if isinstance(authors, list):
+        parts = [str(a).strip() for a in authors if str(a).strip()]
+    else:
+        raw = str(authors or "Unknown").strip()
+        if " and " in raw:
+            return escape_latex(raw).replace("\\", "")
+        parts = [p.strip() for p in re.split(r",|;", raw) if p.strip()]
+    if not parts:
+        return "Unknown"
+    return escape_latex(" and ".join(parts)).replace("\\", "")
 
 
 def _build_author_block(project_info: Dict[str, Any]) -> str:
@@ -303,8 +501,14 @@ def _build_references_bib(
     entries: List[str] = []
     keys: List[str] = []
     seen_keys: set[str] = set()
+    seen_titles: set[str] = set()
 
-    def add_entry(key: str, fields: Dict[str, str]) -> None:
+    def add_entry(entry_type: str, key: str, fields: Dict[str, str]) -> None:
+        title_key = (fields.get("title") or fields.get("note") or "").strip().lower()
+        if title_key and title_key in seen_titles:
+            return
+        if title_key:
+            seen_titles.add(title_key)
         base_key = key
         suffix = 1
         while key in seen_keys:
@@ -313,46 +517,57 @@ def _build_references_bib(
         seen_keys.add(key)
         keys.append(key)
         field_lines = ",\n  ".join(f"{k} = {{{v}}}" for k, v in fields.items() if v)
-        entries.append(f"@misc{{{key},\n  {field_lines}\n}}")
+        entries.append(f"@{entry_type}{{{key},\n  {field_lines}\n}}")
 
     idx = 1
     for cit in (citation_map or []):
         title = cit.get("paper_title") or cit.get("title") or ""
-        if not title:
+        if not title or not _is_valid_reference_text(title):
             continue
         key = _make_bib_key(idx, cit.get("external_id") or cit.get("doi") or title[:20])
+        authors = _normalize_bib_authors(cit.get("authors", "Unknown"))
+        url = cit.get("source_url") or cit.get("url") or ""
         fields = {
             "title": escape_latex(title).replace("\\", ""),
-            "author": escape_latex(cit.get("authors", "Unknown")).replace("\\", ""),
+            "author": authors,
             "year": str(cit.get("year", "")),
             "doi": escape_latex(cit.get("doi", "")).replace("\\", ""),
-            "url": escape_latex(cit.get("source_url", "")).replace("\\", ""),
-            "note": escape_latex(cit.get("journal", "")).replace("\\", ""),
+            "url": escape_latex(url).replace("\\", ""),
+            "journal": escape_latex(cit.get("journal", "")).replace("\\", ""),
         }
-        add_entry(key, {k: v for k, v in fields.items() if v})
+        if "arxiv" in str(url).lower() or cit.get("source") == "arxiv":
+            fields["eprint"] = escape_latex(
+                cit.get("external_id") or str(url).rstrip("/").split("/")[-1]
+            ).replace("\\", "")
+            fields["archivePrefix"] = "arXiv"
+        add_entry("article", key, {k: v for k, v in fields.items() if v})
         idx += 1
 
     for vr in (verified_references or []):
-        title = vr.get("title") or ""
-        if not title:
+        title = vr.get("title") or vr.get("paper_title") or ""
+        if not title or not _is_valid_reference_text(title):
             continue
         key = _make_bib_key(idx, vr.get("external_id") or vr.get("doi") or title[:20])
+        authors = _normalize_bib_authors(vr.get("authors", "Unknown"))
         fields = {
             "title": escape_latex(title).replace("\\", ""),
-            "author": escape_latex(vr.get("authors", "Unknown")).replace("\\", ""),
+            "author": authors,
             "year": str(vr.get("year", "")),
             "doi": escape_latex(vr.get("doi", "")).replace("\\", ""),
+            "url": escape_latex(vr.get("source_url") or vr.get("url") or "").replace("\\", ""),
         }
-        add_entry(key, {k: v for k, v in fields.items() if v})
+        add_entry("article", key, {k: v for k, v in fields.items() if v})
         idx += 1
 
     refs = chapters.get("references", [])
     if isinstance(refs, list):
         for ref in refs:
-            if not ref or not isinstance(ref, str):
+            if not ref or not isinstance(ref, str) or not _is_valid_reference_text(ref):
+                continue
+            if any(title_key in ref.lower() for title_key in seen_titles):
                 continue
             key = _make_bib_key(idx, ref[:24])
-            add_entry(key, {"note": escape_latex(ref).replace("\\", "")})
+            add_entry("misc", key, {"note": escape_latex(ref).replace("\\", "")})
             idx += 1
 
     bib_content = "\n\n".join(entries)
@@ -422,6 +637,8 @@ def build_latex_document(
     plots: Optional[List[Dict[str, Any]]] = None,
     figure_files: Optional[List[Dict[str, str]]] = None,
     template_dir: Optional[Path] = None,
+    citation_map: Optional[List[Dict[str, Any]]] = None,
+    verified_references: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """从结构化报告结果生成完整 LaTeX 源码。"""
     template_dir = template_dir or get_latex_template_dir()
@@ -440,19 +657,20 @@ def build_latex_document(
         abstract,
         "\n\\end{abstract}\n\n",
         "\\section{待研究问题}\n\n",
-        _format_paragraph(chapters.get("problem_statement", "")),
+        _format_chapter_field(chapters.get("problem_statement", "")),
         "\\section{解决思路}\n\n",
-        _format_paragraph(chapters.get("rationale", "")),
+        _format_chapter_field(chapters.get("rationale", "")),
         "\\section{必要的技术手段}\n\n",
-        _format_paragraph(chapters.get("technical_details", "")),
+        _format_chapter_field(chapters.get("technical_details", "")),
         "\\section{数据集}\n\n",
-        _format_paragraph(chapters.get("datasets", "")),
+        _format_chapter_field(chapters.get("datasets", "")),
         "\\subsection{历史数据}\n\n",
-        _format_paragraph(chapters.get("source", "")),
+        _format_chapter_field(chapters.get("source", "")),
         "\\subsection{目标数据}\n\n",
-        _format_paragraph(chapters.get("target", "")),
+        _format_chapter_field(chapters.get("target", "")),
         "\\section{方法论}\n\n",
-        _format_paragraph(chapters.get("methods", "")),
+        _format_chapter_field(chapters.get("methods", "")),
+        _workflow_figure_block(),
         "\\section{实验设计}\n\n",
         _format_experiments(chapters.get("experiments", "")),
         "\\section{实验结果}\n\n",
@@ -461,17 +679,17 @@ def build_latex_document(
 
     if figure_files:
         body_parts.append(_build_figures_section(figure_files))
-    elif plots:
-        body_parts.append(
-            "\\subsection{数据图表}\n\n"
-            "当前图表尚未写入 LaTeX 目录，请重新导出 PDF 以嵌入图表。\n\n"
-        )
 
     refs = chapters.get("references", [])
-    if refs:
+    has_bib = bool(
+        [r for r in (refs if isinstance(refs, list) else []) if _is_valid_reference_text(str(r))]
+        or citation_map
+        or verified_references
+    )
+    if has_bib:
         body_parts.append("\\nocite{*}\n\\bibliography{references}\n")
     else:
-        body_parts.append("\\section{参考文献}\n\n")
+        body_parts.append("\\section{参考论文}\n\n")
         body_parts.append("暂无已验证参考文献。\n")
 
     body = "".join(body_parts)
@@ -493,20 +711,99 @@ def copy_template_assets(output_dir: Path, template_dir: Optional[Path] = None) 
             shutil.copy2(src, output_dir / name)
 
 
+def _texlive_xelatex_candidates() -> List[str]:
+    """枚举常见 TeX Live / MiKTeX 安装路径下的 xelatex。"""
+    candidates: List[str] = []
+
+    explicit = os.environ.get("XELATEX_PATH", "").strip()
+    if explicit:
+        candidates.append(explicit)
+
+    texlive_roots = [
+        os.environ.get("TEXLIVE_ROOT", "").strip(),
+        r"C:\texlive",
+        r"D:\texlive",
+        r"D:\Software\texlive",
+        os.path.expanduser(r"~\texlive"),
+    ]
+    for root in texlive_roots:
+        if not root or not os.path.isdir(root):
+            continue
+        try:
+            year_dirs = sorted(
+                (p for p in Path(root).iterdir() if p.is_dir()),
+                key=lambda p: p.name,
+                reverse=True,
+            )
+        except OSError:
+            continue
+        for year_dir in year_dirs:
+            candidates.append(str(year_dir / "bin" / "windows" / "xelatex.exe"))
+
+    candidates.extend(
+        [
+            r"C:\texlive\2026\bin\windows\xelatex.exe",
+            r"C:\texlive\2025\bin\windows\xelatex.exe",
+            r"C:\texlive\2024\bin\windows\xelatex.exe",
+            r"C:\texlive\2023\bin\windows\xelatex.exe",
+            r"D:\Software\texlive\2026\bin\windows\xelatex.exe",
+            r"D:\Software\texlive\2025\bin\windows\xelatex.exe",
+            r"C:\Program Files\MiKTeX\miktex\bin\x64\xelatex.exe",
+            r"C:\Program Files (x86)\MiKTeX\miktex\bin\x64\xelatex.exe",
+            os.path.expanduser(r"~\AppData\Local\Programs\MiKTeX\miktex\bin\x64\xelatex.exe"),
+        ]
+    )
+
+    if os.name == "nt":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TeXLive2026",
+            ) as key:
+                uninstall, _ = winreg.QueryValueEx(key, "UninstallString")
+                # e.g. "D:\Software\texlive\2026\tlpkg\installer\uninst.bat"
+                tex_root = Path(uninstall.strip('"')).parents[2]
+                candidates.append(str(tex_root / "bin" / "windows" / "xelatex.exe"))
+        except OSError:
+            pass
+
+    return candidates
+
+
 def _find_xelatex() -> Optional[str]:
     cmd = os.environ.get("XELATEX_COMMAND", "xelatex")
     path = shutil.which(cmd)
     if path:
         return path
-    common = [
-        r"C:\texlive\2024\bin\windows\xelatex.exe",
-        r"C:\texlive\2023\bin\windows\xelatex.exe",
-        r"C:\Program Files\MiKTeX\miktex\bin\x64\xelatex.exe",
-    ]
-    for candidate in common:
-        if os.path.exists(candidate):
+    for candidate in _texlive_xelatex_candidates():
+        if candidate and os.path.exists(candidate):
             return candidate
     return None
+
+
+def _find_bibtex(xelatex_path: Optional[str] = None) -> Optional[str]:
+    path = shutil.which("bibtex")
+    if path:
+        return path
+    if xelatex_path:
+        sibling = Path(xelatex_path).with_name("bibtex.exe")
+        if sibling.exists():
+            return str(sibling)
+    return None
+
+
+def _texlive_subprocess_env(xelatex_path: str) -> Dict[str, str]:
+    """为 TeX Live 子进程准备环境变量（修复 Windows fontconfig/kpathsea）。"""
+    env = os.environ.copy()
+    tex_root = Path(xelatex_path).resolve().parents[2]
+    texmf_var = tex_root / "texmf-var"
+    texmf_var.mkdir(parents=True, exist_ok=True)
+    (texmf_var / "fonts" / "cache").mkdir(parents=True, exist_ok=True)
+    env["TEXMFVAR"] = str(texmf_var)
+    env["TEXMFSYSVAR"] = str(texmf_var)
+    return env
 
 
 def compile_latex_to_pdf(
@@ -522,7 +819,7 @@ def compile_latex_to_pdf(
             "warning": "未找到 XeLaTeX，请安装 TeX Live 或 MiKTeX 并将 xelatex 加入 PATH",
         }
 
-    bibtex = shutil.which("bibtex")
+    bibtex = _find_bibtex(xelatex)
     tex_path = work_dir / tex_filename
     pdf_path = work_dir / "report.pdf"
 
@@ -546,6 +843,7 @@ def compile_latex_to_pdf(
     commands.append([xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_filename])
 
     log_chunks: List[str] = []
+    tex_env = _texlive_subprocess_env(xelatex)
     for cmd in commands:
         try:
             proc = subprocess.run(
@@ -556,6 +854,7 @@ def compile_latex_to_pdf(
                 encoding="utf-8",
                 errors="replace",
                 timeout=timeout,
+                env=tex_env,
             )
             log_chunks.append(f"$ {' '.join(cmd)}\n{proc.stdout}\n{proc.stderr}")
             if proc.returncode != 0:
@@ -633,6 +932,8 @@ def export_report_via_latex(
         plots=result.get("plots"),
         figure_files=figure_files,
         template_dir=template_dir,
+        citation_map=citation_map,
+        verified_references=verified_references,
     )
 
     tex_path = work_dir / "report.tex"
@@ -682,5 +983,93 @@ def export_report_via_latex(
         "pdf_path": None,
         "pdf_success": False,
         "warning": warning,
+        "export_method": "latex",
+    }
+
+
+def get_reports_storage_dir() -> Path:
+    """报告文件根目录 backend/storage/reports。"""
+    return Path(__file__).resolve().parents[2] / "storage" / "reports"
+
+
+def regenerate_report_pdf(
+    report_file_id: str,
+    *,
+    markdown_content: Optional[str] = None,
+    fallback_markdown_pdf: bool = True,
+) -> Dict[str, Any]:
+    """
+    为已存在的报告目录重新生成 PDF。
+    优先 LaTeX 编译，失败则回退 Markdown → HTML → PDF。
+    """
+    work_dir = get_reports_storage_dir() / report_file_id
+    if not work_dir.is_dir():
+        return {
+            "success": False,
+            "pdf_success": False,
+            "pdf_path": None,
+            "warning": f"报告目录不存在: {work_dir}",
+            "export_method": None,
+        }
+
+    tex_path = work_dir / "report.tex"
+    pdf_path = work_dir / "report.pdf"
+
+    if tex_path.exists():
+        compile_result = compile_latex_to_pdf(work_dir)
+        if compile_result.get("success"):
+            return {
+                "success": True,
+                "pdf_success": True,
+                "pdf_path": str(pdf_path),
+                "warning": None,
+                "export_method": "latex",
+            }
+        warning = compile_result.get("warning") or "LaTeX 编译失败"
+        logger.warning("重新编译 LaTeX 失败: %s", warning)
+    else:
+        warning = "report.tex 不存在"
+
+    if not fallback_markdown_pdf:
+        return {
+            "success": False,
+            "pdf_success": False,
+            "pdf_path": None,
+            "warning": warning,
+            "export_method": "latex",
+        }
+
+    md_text = markdown_content
+    if not md_text:
+        md_path = work_dir / "report.md"
+        if md_path.exists():
+            md_text = md_path.read_text(encoding="utf-8")
+
+    if not md_text or not md_text.strip():
+        return {
+            "success": False,
+            "pdf_success": False,
+            "pdf_path": None,
+            "warning": f"{warning}；且无 Markdown 内容可回退",
+            "export_method": "latex",
+        }
+
+    from app.services.pdf_export_service import export_markdown_to_pdf
+
+    md_result = export_markdown_to_pdf(md_text, str(pdf_path))
+    if md_result.get("success"):
+        return {
+            "success": True,
+            "pdf_success": True,
+            "pdf_path": md_result.get("pdf_path"),
+            "warning": f"LaTeX 编译失败，已回退 Markdown PDF：{warning}",
+            "export_method": "markdown_fallback",
+        }
+
+    return {
+        "success": False,
+        "pdf_success": False,
+        "pdf_path": None,
+        "warning": md_result.get("warning") or warning,
         "export_method": "latex",
     }

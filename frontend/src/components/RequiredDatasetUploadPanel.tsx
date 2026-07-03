@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Database, ExternalLink, Upload, Loader2, CheckCircle2, AlertCircle, Clock, ArrowRight,
 } from 'lucide-react';
@@ -142,8 +142,8 @@ export function RequiredDatasetUploadPanel({
       className="border-bp-yellow/20"
     >
       <p className="text-sm text-bp-muted mb-4">
-        系统在多源数据挖掘阶段检索到以下数据集。请打开下载链接获取 CSV / 表格文件，在本页上传至少
-        <strong className="text-bp-text"> 1 个</strong> 数据集后，即可继续假设生成与报告流程。
+        系统根据研究问题推荐以下数据源。请下载后上传表格/化学结构文件（如 ChEMBL 的 chembl_37.sdf.gz），或将多文件目录打包为 ZIP；上传至少
+        <strong className="text-bp-text"> 1 个</strong> 数据集后可继续假设生成与报告流程。
       </p>
 
       {error && (
@@ -213,7 +213,7 @@ export function RequiredDatasetUploadPanel({
                     <input
                       ref={(el) => { fileRefs.current[cid] = el; }}
                       type="file"
-                      accept=".csv,.tsv,.txt,.xlsx,.xls"
+                      accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
@@ -228,7 +228,7 @@ export function RequiredDatasetUploadPanel({
                       disabled={!cid || isBusy || statusKey === 'processing'}
                       onClick={() => fileRefs.current[cid]?.click()}
                     >
-                      {statusKey === 'merged' ? '重新上传' : '选择文件'}
+                      {statusKey === 'merged' ? '重新上传' : '文件 / ZIP'}
                     </Button>
                   </td>
                 </tr>

@@ -297,11 +297,22 @@ class QwenClient:
             last_error = None
 
             for attempt in range(1, max_attempts + 1):
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                future = executor.submit(func, self, *args, **kwargs)
+
+                def _shutdown_executor(wait: bool) -> None:
+                    try:
+                        executor.shutdown(wait=wait, cancel_futures=not wait)
+                    except TypeError:
+                        executor.shutdown(wait=wait)
+
                 try:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(func, self, *args, **kwargs)
-                        return future.result(timeout=timeout)
+                    result = future.result(timeout=timeout)
+                    _shutdown_executor(wait=True)
+                    return result
                 except concurrent.futures.TimeoutError:
+                    future.cancel()
+                    _shutdown_executor(wait=False)
                     last_error = QwenTimeoutError(
                         f"LLM call exceeded {timeout}s total (attempt {attempt}/{max_attempts})"
                     )
@@ -315,9 +326,11 @@ class QwenClient:
                         time.sleep(wait_s)
                     continue
                 except APIStatusError as e:
+                    _shutdown_executor(wait=False)
                     logger.error(f"Qwen API Status Error: {e.status_code} - {e.message}")
                     raise QwenAPIError(f"API Error: {e.status_code} - {e.message}") from e
                 except APIConnectionError as e:
+                    _shutdown_executor(wait=False)
                     last_error = QwenAPIError(f"Connection Error: {str(e)}")
                     logger.warning(
                         f"Qwen API Connection Error: {str(e)} "
@@ -329,6 +342,7 @@ class QwenClient:
                         time.sleep(wait_s)
                     continue
                 except APITimeoutError as e:
+                    _shutdown_executor(wait=False)
                     last_error = QwenTimeoutError(f"Timeout: {str(e)}")
                     logger.warning(
                         f"Qwen API Timeout Error: {str(e)} "
@@ -340,9 +354,11 @@ class QwenClient:
                         time.sleep(wait_s)
                     continue
                 except APIError as e:
+                    _shutdown_executor(wait=False)
                     logger.error(f"Qwen API Error: {str(e)}")
                     raise QwenAPIError(f"API Error: {str(e)}") from e
                 except Exception as e:
+                    _shutdown_executor(wait=False)
                     logger.error(f"Unexpected Qwen API Error: {str(e)}")
                     raise QwenAPIError(f"Unexpected Error: {str(e)}") from e
 

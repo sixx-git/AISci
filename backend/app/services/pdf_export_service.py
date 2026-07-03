@@ -156,32 +156,53 @@ def _build_html_document(html_body: str, css_path: Optional[str] = None) -> str:
 
 # ── Playwright 导出 ───────────────────────────────────────────
 
+def _launch_playwright_browser(playwright):
+    """优先使用系统 Chrome/Edge，回退到 Playwright 自带 Chromium。"""
+    launch_args = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+    ]
+    env_channel = os.environ.get("PLAYWRIGHT_BROWSER_CHANNEL", "").strip()
+    channels = [env_channel] if env_channel else []
+    channels.extend(["chrome", "msedge", None])
+
+    last_error: Optional[Exception] = None
+    for channel in channels:
+        try:
+            if channel:
+                return playwright.chromium.launch(channel=channel, args=launch_args)
+            return playwright.chromium.launch(args=launch_args)
+        except Exception as exc:
+            last_error = exc
+            logger.debug("Playwright 启动失败 channel=%s: %s", channel, exc)
+    raise RuntimeError(
+        "无法启动浏览器生成 PDF。"
+        "请安装 Google Chrome / Microsoft Edge，或执行: python -m playwright install chromium"
+    ) from last_error
+
+
 def _export_via_playwright(full_html: str, output_path: str) -> None:
     """
-    使用 Playwright Chromium 将 HTML 渲染为 PDF。
-    首次使用需执行: python -m playwright install chromium
+    使用 Playwright 将 HTML 渲染为 PDF（优先系统 Chrome/Edge）。
+    若均不可用，可执行: python -m playwright install chromium
     """
     from playwright.sync_api import sync_playwright
 
+    tmp_html: Optional[str] = None
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-            ]
-        )
+        browser = _launch_playwright_browser(p)
         try:
             page = browser.new_page()
-            # 用临时文件绕过数据 URI 长度限制
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".html", encoding="utf-8", delete=False
             ) as f:
                 f.write(full_html)
                 tmp_html = f.name
 
-            page.goto(f"file:///{tmp_html.replace(os.sep, '/')}", wait_until="networkidle")
+            file_url = f"file:///{tmp_html.replace(os.sep, '/')}"
+            page.goto(file_url, wait_until="networkidle")
             page.pdf(
                 path=output_path,
                 format="A4",
@@ -190,7 +211,7 @@ def _export_via_playwright(full_html: str, output_path: str) -> None:
             )
         finally:
             browser.close()
-            if os.path.exists(tmp_html):
+            if tmp_html and os.path.exists(tmp_html):
                 os.unlink(tmp_html)
 
 

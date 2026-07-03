@@ -6,6 +6,7 @@
 import logging
 import json
 import os
+import re
 import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
@@ -13,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.services.latex_export_service import export_report_via_latex
+from app.services.report_content_sanitizer import sanitize_report_result
 
 CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
@@ -147,21 +149,31 @@ class ReportGenerationAgent:
             )
             logger.info(f"[报告生成] 步骤1完成: LLM 已返回 (chapters_keys={list(result_dict.get('chapters', {}).keys())})")
 
+            result_dict = self._enrich_report_with_data_context(result_dict, data_context or {})
+            result_dict = self._inject_verified_bibliography(
+                result_dict, citation_map, verified_references or [], literature_facts
+            )
+            if data_context and data_context.get("data_finder_results"):
+                result_dict = self._enrich_report_with_data_finder(
+                    result_dict, data_context["data_finder_results"]
+                )
+
+            result_dict = self._apply_evidence_chain_references(result_dict, all_hypotheses)
+
             result = self._validate_and_normalize_result(
                 result_dict, literature_facts, citation_map, all_hypotheses,
                 novelty_review_skill_outputs, sanity_check_skill_outputs,
                 evidence_facts or [], verified_references or [],
             )
             result = self._enrich_rationale_with_evidence_chains(result, all_hypotheses)
-            result = self._apply_evidence_chain_references(result, all_hypotheses)
-            if data_context and data_context.get("data_finder_results"):
-                result = self._enrich_report_with_data_finder(result, data_context["data_finder_results"])
             if data_context and data_context.get("multimodal_evidence"):
                 result = self._enrich_report_with_multimodal_evidence(result, data_context["multimodal_evidence"])
             logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
+            result = sanitize_report_result(result)
+
             if pipeline_run_info:
-                result = self._append_run_summary_to_report(result, pipeline_run_info)
+                result["run_summary"] = self._build_run_summary_content(pipeline_run_info)
 
             file_info = self._save_report_files(result, project_info)
             result.update(file_info)
@@ -189,6 +201,7 @@ class ReportGenerationAgent:
             result = self._enrich_results_with_categorized(
                 result, small_validation, preliminary_analysis_skill_outputs
             )
+            result = sanitize_report_result(result)
 
             modeling_charts = []
             if small_validation:
@@ -226,10 +239,27 @@ class ReportGenerationAgent:
 
             # ── 报告质量检查 ──
             logger.info(f"[报告生成] 步骤5: 开始质量检查")
+            refs_for_qc = result.get("chapters", {}).get("references") or []
+            if not isinstance(refs_for_qc, list):
+                refs_for_qc = [refs_for_qc] if refs_for_qc else []
+            compliance_before_qc = result.get("compliance_check") or {}
+            refs_verified_for_qc = int(compliance_before_qc.get("references_verified") or 0)
+            if refs_verified_for_qc == 0 and (citation_map or verified_references):
+                from app.services.report_compliance_service import reconcile_reference_check
+
+                ref_check_qc = reconcile_reference_check(
+                    refs_for_qc,
+                    citation_map,
+                    verified_references,
+                    evidence_facts or literature_facts,
+                )
+                refs_verified_for_qc = ref_check_qc.get("verified_count", 0)
+
             quality_check_output = self._run_quality_check_sync(
                 result,
                 verified_references,
                 result.get("chart_skill_outputs", {}),
+                references_verified=refs_verified_for_qc,
             )
             compliance = result.get("compliance_check", {})
             if isinstance(compliance, dict):
@@ -246,20 +276,25 @@ class ReportGenerationAgent:
 
             chapters = result.get("chapters", {})
             if refs_verified_val == 0:
-                if not chapters.get("references"):
-                    chapters["references"] = []
-                placeholder_note = "缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。"
-                if placeholder_note not in chapters["references"]:
-                    chapters["references"].insert(0, placeholder_note)
-                markdown = result.get("markdown_content", "")
-                if "缺少真实引用" not in markdown:
-                    warning_section = (
-                        "\n\n---\n\n## ⚠️ 参考文献提醒\n\n"
-                        "**缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。**\n\n"
-                        "当前报告参考文献均由 LLM 自行生成，未在文献库中找到可验证的真实文献。"
-                        "请前往文献库导入真实文献后重新生成报告。\n"
-                    )
-                    result["markdown_content"] = markdown + warning_section
+                corpus_refs = chapters.get("references") or []
+                has_corpus = bool(corpus_refs) and not any(
+                    "缺少真实引用" in str(r) for r in corpus_refs
+                )
+                if not has_corpus:
+                    if not chapters.get("references"):
+                        chapters["references"] = []
+                    placeholder_note = "缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。"
+                    if placeholder_note not in chapters["references"]:
+                        chapters["references"].insert(0, placeholder_note)
+                    markdown = result.get("markdown_content", "")
+                    if "缺少真实引用" not in markdown:
+                        warning_section = (
+                            "\n\n---\n\n## ⚠️ 参考文献提醒\n\n"
+                            "**缺少真实引用，需先导入 arXiv/BibTeX/PDF 文献。**\n\n"
+                            "当前报告参考文献未在文献库中找到可验证条目。"
+                            "请前往文献库导入真实文献后重新生成报告。\n"
+                        )
+                        result["markdown_content"] = markdown + warning_section
 
             if not has_real_plots:
                 markdown = result.get("markdown_content", "")
@@ -274,7 +309,22 @@ class ReportGenerationAgent:
 
             result["chapters"] = chapters
 
+            from app.services.report_compliance_service import refresh_compliance_metrics
+
+            final_refs = chapters.get("references") or []
+            if not isinstance(final_refs, list):
+                final_refs = [final_refs] if final_refs else []
+            result["compliance_check"] = refresh_compliance_metrics(
+                result.get("compliance_check"),
+                references=final_refs,
+                citation_map=citation_map,
+                verified_references=verified_references,
+                literature_facts=evidence_facts or literature_facts,
+                hypotheses=all_hypotheses,
+            )
+
             # ── 同步 Markdown，并基于 LaTeX 模板导出 PDF ──
+            result = sanitize_report_result(result)
             self._write_markdown_file(result)
             export_info = self._export_report_pdf(
                 result,
@@ -427,8 +477,15 @@ class ReportGenerationAgent:
 
         if ref_check["suspicious_count"] > 0 and ref_check["verified_count"] == 0:
             logger.warning(f"参考文献全不可验证: {ref_check['suspicious_count']} 条可疑")
-            chapters["references"] = []
-            ref_check["references_replaced"] = True
+            corpus_refs = self._format_corpus_references(citation_map, verified_references or [])
+            if corpus_refs:
+                chapters["references"] = corpus_refs
+                ref_check["references_replaced"] = True
+                ref_check["verified_count"] = len(corpus_refs)
+                ref_check["note"] = "已替换为文献库/检索到的可验证引用"
+            else:
+                chapters["references"] = []
+                ref_check["references_replaced"] = True
 
         result_dict["evidence_facts"] = evidence_facts or []
         result_dict["plots"] = result_dict.get("plots", [])
@@ -572,6 +629,7 @@ class ReportGenerationAgent:
         result_dict: Dict[str, Any],
         verified_references: Optional[List[Dict[str, Any]]],
         chart_skill_outputs: Dict[str, Any],
+        references_verified: Optional[int] = None,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -585,7 +643,11 @@ class ReportGenerationAgent:
                     has_real_plots = any(
                         c.get("is_generated_from_real_data") for c in charts
                     )
-                references_verified = len(verified_references or [])
+                references_verified = (
+                    references_verified
+                    if references_verified is not None
+                    else len(verified_references or [])
+                )
 
                 qc_skill = ReportQualityCheckSkill()
                 qc_result = await qc_skill.run(
@@ -670,6 +732,143 @@ class ReportGenerationAgent:
         )
 
         chapters["rationale"] = "".join(rationale_parts)
+        result["chapters"] = chapters
+        return result
+
+    @staticmethod
+    def _format_corpus_references(
+        citation_map: List[Dict[str, Any]],
+        verified_references: List[Dict[str, Any]],
+    ) -> List[str]:
+        refs: List[str] = []
+        seen: set = set()
+        for item in list(verified_references or []) + list(citation_map or []):
+            if not isinstance(item, dict):
+                continue
+            title = (item.get("title") or item.get("paper_title") or "").strip()
+            if not title or title.lower() in seen:
+                continue
+            seen.add(title.lower())
+            authors = item.get("authors") or ""
+            if isinstance(authors, list):
+                authors = ", ".join(str(a) for a in authors if a)
+            year = item.get("year") or item.get("publication_year") or ""
+            doi = item.get("doi") or ""
+            url = item.get("source_url") or item.get("url") or ""
+            line = title
+            if authors:
+                line = f"{authors}. {line}"
+            if year:
+                line += f" ({year})"
+            if doi:
+                line += f". DOI: {doi}"
+            elif url:
+                line += f". {url}"
+            refs.append(line)
+        return refs
+
+    def _inject_verified_bibliography(
+        self,
+        result: Dict[str, Any],
+        citation_map: List[Dict[str, Any]],
+        verified_references: List[Dict[str, Any]],
+        literature_facts: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        corpus_refs = self._format_corpus_references(citation_map, verified_references)
+        existing = chapters.get("references") or []
+        if not isinstance(existing, list):
+            existing = [existing] if existing else []
+
+        if corpus_refs:
+            chapters["references"] = corpus_refs
+            md = result.get("markdown_content", "")
+            if md and "## 12. References" in md:
+                ref_block = "\n".join(f"- {r}" for r in corpus_refs)
+                md = re.sub(
+                    r"(## 12\. References\n)(.*?)(?=\n## |\Z)",
+                    rf"\1{ref_block}\n",
+                    md,
+                    count=1,
+                    flags=re.DOTALL,
+                )
+                result["markdown_content"] = md
+
+        source_text = chapters.get("source") or ""
+        if isinstance(source_text, list):
+            source_text = "\n".join(str(x) for x in source_text)
+        if literature_facts:
+            source_text += "\n\n【文献库抽取事实】\n"
+            for fact in literature_facts[:8]:
+                if not isinstance(fact, dict):
+                    continue
+                title = fact.get("source_paper_title") or fact.get("source_title") or "未知文献"
+                snippet = (fact.get("fact") or fact.get("quote_text") or "").strip()
+                if snippet:
+                    source_text += f"- {title}: {snippet[:220]}\n"
+        if citation_map:
+            source_text += "\n\n【已检索/入库文献】\n"
+            for cit in citation_map[:10]:
+                if not isinstance(cit, dict):
+                    continue
+                title = cit.get("title") or cit.get("paper_title") or ""
+                if title:
+                    source_text += f"- {title}\n"
+        chapters["source"] = source_text.strip()
+        result["chapters"] = chapters
+        return result
+
+    @staticmethod
+    def _enrich_report_with_data_context(
+        result: Dict[str, Any],
+        data_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not data_context:
+            return result
+        chapters = result.get("chapters", {})
+        if not isinstance(chapters, dict):
+            return result
+
+        datasets_text = chapters.get("datasets") or ""
+        if isinstance(datasets_text, list):
+            datasets_text = "\n".join(str(x) for x in datasets_text)
+
+        project_datasets = data_context.get("datasets") or []
+        if project_datasets:
+            datasets_text += "\n\n【项目已上传数据集】\n"
+            for ds in project_datasets[:10]:
+                if not isinstance(ds, dict):
+                    continue
+                datasets_text += (
+                    f"- {ds.get('filename', 'dataset')}: "
+                    f"{ds.get('n_rows', 0)} 行 × {ds.get('n_columns', 0)} 列, "
+                    f"类型={ds.get('data_type', 'unknown')}, 来源={ds.get('source_type', 'upload')}\n"
+                )
+
+        recommended = data_context.get("recommended_datasets") or []
+        if recommended:
+            datasets_text += "\n\n【推荐外部数据库/数据集】\n"
+            for cand in recommended[:12]:
+                if not isinstance(cand, dict):
+                    continue
+                name = cand.get("dataset_name") or cand.get("name") or "未命名数据集"
+                platform = cand.get("source_platform") or cand.get("catalog_source") or ""
+                desc = (cand.get("description") or "")[:160]
+                status = cand.get("user_upload_status") or cand.get("availability") or ""
+                datasets_text += f"- {name} ({platform}) [{status}]: {desc}\n"
+
+        uploaded_ext = data_context.get("uploaded_external_datasets") or []
+        if uploaded_ext:
+            datasets_text += "\n\n【用户已上传的外部数据】\n"
+            for item in uploaded_ext:
+                datasets_text += f"- {item.get('dataset_name') or item.get('filename')}\n"
+
+        if datasets_text.strip():
+            chapters["datasets"] = datasets_text.strip()
+
         result["chapters"] = chapters
         return result
 
@@ -1486,10 +1685,10 @@ class ReportGenerationAgent:
                 sandbox_exec = actual.get("sandbox_execution") or {}
                 sandbox_success = bool(sandbox_exec.get("success"))
                 if sandbox_success:
-                    enriched += "### Experiment Run（沙箱实测）\n\n"
+                    enriched += "### Experiment Run（初步实验验证）\n\n"
                     enriched += "- 执行状态: 成功\n"
-                    enriched += f"- 耗时: {sandbox_exec.get('duration_ms', '-')} ms\n"
-                    enriched += f"- 产物目录: `{sandbox_exec.get('artifact_dir', '-')}`\n"
+                    if sandbox_exec.get("duration_ms"):
+                        enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
                     metrics = sandbox_exec.get("metrics") or actual.get("sandbox_metrics") or {}
                     if isinstance(metrics, dict) and metrics:
                         enriched += "- 实测指标:\n"
@@ -1497,7 +1696,7 @@ class ReportGenerationAgent:
                             if k not in ("stdout_preview", "note"):
                                 enriched += f"  - {k}: {v}\n"
                     enriched += "\n"
-                    enriched += "> 以下 Results 以沙箱实测为准；LLM 模拟/预期结果已降级展示。\n\n"
+                    enriched += "> 以下 Results 以初步实验验证为准；模拟/预期结果仅作参考。\n\n"
 
                 modeling_result = actual.get("modeling_result")
                 if modeling_result and isinstance(modeling_result, dict):
@@ -1542,7 +1741,7 @@ class ReportGenerationAgent:
                     enriched += f"- 模拟数据已生成\n"
                     if simulated.get("assumptions"):
                         enriched += f"- 模拟假设: {simulated.get('assumptions', '')[:200]}\n"
-                    enriched += f"- 说明: {simulated.get('note', 'LLM 生成的模拟数据')}\n\n"
+                    enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
 
                 expected = sv_results.get("expected_results", {})
                 if expected and isinstance(expected, dict) and expected.get("hypothesis"):

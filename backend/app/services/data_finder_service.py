@@ -316,6 +316,87 @@ class DataFinderService:
         self.save_results(project_id, payload)
         return payload
 
+    async def run_search_quick(
+        self,
+        project_id: str,
+        research_question: str,
+        selected_hypothesis: str = "",
+        project_mode: str = "general",
+    ) -> Dict[str, Any]:
+        """一键报告轻量发现：仅理解数据需求 + 外部数据集检索，跳过图表/VLM/文献再发现。"""
+        project_mode = normalize_project_mode(project_mode)
+        ctx = {"stage": "data_finder_quick", "project_id": project_id}
+        user_hints = self._load_project_data_spec_hints(project_id)
+
+        req_skill = DataRequirementUnderstandingSkill()
+        req_res = await req_skill.run(
+            {
+                "research_question": research_question,
+                "selected_hypothesis": selected_hypothesis,
+                "project_mode": project_mode,
+                "user_data_spec_hints": user_hints,
+            },
+            ctx,
+        )
+        data_requirements = req_res.data
+        data_spec = data_requirements.get("data_spec") or empty_data_spec(
+            research_question, project_mode_to_scenario(project_mode),
+        )
+        data_spec = apply_data_spec_hints(data_spec, user_hints)
+        data_requirements["data_spec"] = data_spec
+
+        ext_skill = ExternalDatasetSearchSkill()
+        ext_res = await ext_skill.run(
+            {
+                "research_question": research_question,
+                "dataset_keywords": data_requirements.get("dataset_keywords", []),
+            },
+            ctx,
+        )
+
+        from app.services.data_sources.registry import search_all as registry_search
+        from app.services.data_sources.base import normalize_legacy_candidate
+        from app.services.external_candidate_service import ensure_candidate_ids
+
+        reg_res = await registry_search(research_question, data_spec, limit_per_source=3)
+        ext_candidates = [
+            normalize_legacy_candidate(c) for c in ext_res.data.get("candidates", [])
+        ]
+        seen_keys = {(c.get("dataset_name") or c.get("url") or "").lower() for c in ext_candidates}
+        for c in reg_res.get("candidates", []):
+            nc = normalize_legacy_candidate(c)
+            key = (nc.get("dataset_name") or nc.get("url") or "").lower()
+            if key and key not in seen_keys:
+                seen_keys.add(key)
+                ext_candidates.append(nc)
+        ext_candidates = ensure_candidate_ids(ext_candidates)
+
+        assets_index = build_assets_index({
+            "extracted_tables": [],
+            "figures": [],
+            "external_candidates": ext_candidates,
+        })
+        payload = {
+            "project_id": project_id,
+            "project_mode": project_mode,
+            "data_spec": data_spec,
+            "data_requirements": data_requirements,
+            "literature_discovery": None,
+            "text_facts": [],
+            "paper_extractions": [],
+            "external_candidates": ext_candidates,
+            "figures": [],
+            "assets_index": assets_index,
+            "extracted_tables": [],
+            "alignments": [],
+            "provenance": [],
+            "merged": None,
+            "warnings": list(ext_res.warnings or []) + list(reg_res.get("warnings") or []),
+            "quick_search": True,
+        }
+        self.save_results(project_id, payload)
+        return payload
+
     async def run_fetch_supplementary(self, project_id: str) -> Dict[str, Any]:
         """下载并解析论文补充材料链接。"""
         results = self.load_results(project_id) or {}
@@ -395,13 +476,23 @@ class DataFinderService:
         steps: Dict[str, Any] = {}
         step_meta: Dict[str, Dict[str, Any]] = {}
         gap_opts = gap_options or {}
+        quick_fast = bool(gap_opts.get("quick_report_fast"))
 
-        await _timed_async_step(
-            steps, step_meta, "discover",
-            self.run_search(project_id, research_question, selected_hypothesis, project_mode),
+        discover_coro = (
+            self.run_search_quick(project_id, research_question, selected_hypothesis, project_mode)
+            if quick_fast
+            else self.run_search(project_id, research_question, selected_hypothesis, project_mode)
         )
-        await _timed_async_step(steps, step_meta, "fetch_supplementary", self.run_fetch_supplementary(project_id))
-        await _timed_async_step(steps, step_meta, "extract", self.run_extract_tables(project_id))
+        await _timed_async_step(steps, step_meta, "discover", discover_coro)
+
+        if quick_fast:
+            steps["fetch_supplementary"] = {"skipped": True, "reason": "quick_report"}
+            steps["extract"] = {"skipped": True, "reason": "quick_report"}
+            step_meta["fetch_supplementary"] = {"duration_ms": 0, "error_code": None}
+            step_meta["extract"] = {"duration_ms": 0, "error_code": None}
+        else:
+            await _timed_async_step(steps, step_meta, "fetch_supplementary", self.run_fetch_supplementary(project_id))
+            await _timed_async_step(steps, step_meta, "extract", self.run_extract_tables(project_id))
 
         results = self.load_results(project_id) or {}
 

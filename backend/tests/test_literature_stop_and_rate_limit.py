@@ -21,6 +21,9 @@ class TestLiteratureValidation:
         with pytest.raises(LiteratureNotFoundError, match="未找到相关文献"):
             PipelineService._validate_literature_results({})
 
+    def test_empty_literature_allowed_for_quick_report(self):
+        PipelineService._validate_literature_results({}, allow_empty=True)
+
     def test_facts_present_passes(self):
         PipelineService._validate_literature_results({"facts": [{"fact_id": "f1", "content": "x"}]})
 

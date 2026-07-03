@@ -9,6 +9,7 @@ import threading
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 CHINA_TZ = timezone(timedelta(hours=8))
 
@@ -403,12 +404,16 @@ class PipelineService:
                 pass
 
         du_gate = meta.get("data_upload_gate") or {}
-        if du_gate.get("resumed") and meta.get("pipeline_checkpoint"):
-            self._checkpoint_resume = dict(meta["pipeline_checkpoint"])
+        cp = meta.get("pipeline_checkpoint")
+        if cp and (
+            du_gate.get("resumed")
+            or (not du_gate.get("paused") and du_gate.get("continued_at"))
+        ):
+            self._checkpoint_resume = dict(cp)
             du_gate["resumed"] = False
             du_gate["paused"] = False
             meta["data_upload_gate"] = du_gate
-            self.db_pipeline_run.extra_metadata = meta
+            self._persist_extra_metadata(meta)
             try:
                 self.db.commit()
             except Exception:
@@ -432,6 +437,44 @@ class PipelineService:
         if self.db_pipeline_run and isinstance(self.db_pipeline_run.input_data, dict):
             input_data = self.db_pipeline_run.input_data
         return resolve_run_options(input_data.get("options"))
+
+    def _is_quick_report_run(self) -> bool:
+        if self._run_options.get("enable_quick_report"):
+            return True
+        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        if meta.get("quick_report"):
+            return True
+        input_data = self.db_pipeline_run.input_data if isinstance(self.db_pipeline_run.input_data, dict) else {}
+        opts = input_data.get("options") if isinstance(input_data.get("options"), dict) else {}
+        return bool(opts.get("enable_quick_report"))
+
+    def _persist_extra_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+        """合并写入 extra_metadata（SQLite JSON 列需 flag_modified）。"""
+        merged = dict(self.db_pipeline_run.extra_metadata or {})
+        merged.update(meta)
+        self.db_pipeline_run.extra_metadata = merged
+        flag_modified(self.db_pipeline_run, "extra_metadata")
+        return merged
+
+    def _rebuild_checkpoint_from_stages(self) -> Dict[str, Any]:
+        """从已完成阶段 output 重建 checkpoint（元数据丢失时的兜底）。"""
+        results: Dict[str, Any] = {}
+        if not self.db_pipeline_run:
+            return {"results": results, "resume_phase": "after_data_acquisition"}
+        stages = (
+            self.db.query(DB_PipelineStageExecution)
+            .filter(DB_PipelineStageExecution.pipeline_run_id == self.db_pipeline_run.id)
+            .order_by(DB_PipelineStageExecution.stage_order)
+            .all()
+        )
+        key_by_stage = {d["db_stage_enum"]: d["key"] for d in STAGE_DEFS}
+        for s in stages:
+            if s.status != DB_PipelineStatus.COMPLETED or not s.output_data:
+                continue
+            key = key_by_stage.get(s.stage)
+            if key:
+                results[key] = s.output_data
+        return {"results": self._checkpoint_safe_results(results), "resume_phase": "after_data_acquisition"}
 
     def _exec_ideation_novelty(
         self,
@@ -753,7 +796,7 @@ class PipelineService:
             top_k=15,
             db=self.db,
         )
-        return self._safe_model_dump(response)
+        return self._enrich_literature_mining(self._safe_model_dump(response))
 
     def _discovery_rollback_to_ideation(
         self,
@@ -1832,20 +1875,23 @@ class PipelineService:
     ) -> Dict[str, Any]:
         from app.services.data_finder_service import get_data_finder_service
 
+        from app.services.data_finder_slim import slim_data_acquisition_output, slim_data_finder_payload
+
         final = get_data_finder_service(self.db).load_results(project_id) or {}
+        slim_final = slim_data_finder_payload(final)
         da = final.get("data_acquisition") or {}
         output = {
             "data_acquisition": da,
-            "search": final,
-            "extract": final,
-            "paper_link_extractions": final.get("paper_extractions", []),
+            "search": slim_final,
+            "extract": slim_final,
+            "paper_link_extractions": final.get("paper_extractions", [])[:20],
             "refinement_queries": results.get("data_acquisition", {}).get("refinement_queries", [])
             if isinstance(results.get("data_acquisition"), dict)
             else [],
             "gap_enrichment": final.get("gap_enrichment") or {},
         }
-        results["data_acquisition"] = output
-        results["data_finder"] = output
+        results["data_acquisition"] = slim_data_acquisition_output(output)
+        results["data_finder"] = results["data_acquisition"]
         return results
 
     def resume_after_data_upload(self, run_id: str, *, force: bool = False) -> Dict[str, Any]:
@@ -1858,14 +1904,30 @@ class PipelineService:
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
         gate = dict(meta.get("data_upload_gate") or {})
+        status_val = self.db_pipeline_run.status
         if not gate.get("paused"):
-            raise ValueError("Pipeline 未处于数据上传等待状态")
+            if (
+                self._is_quick_report_run()
+                and status_val == DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
+            ):
+                gate.setdefault("paused", True)
+                gate.setdefault("resume_phase", "after_data_acquisition")
+                if not meta.get("pipeline_checkpoint"):
+                    meta["pipeline_checkpoint"] = self._rebuild_checkpoint_from_stages()
+                meta["data_upload_gate"] = gate
+                self._persist_extra_metadata(meta)
+                self.db.commit()
+            else:
+                raise ValueError("Pipeline 未处于数据上传等待状态")
 
         project_id = self.db_pipeline_run.project_id or ""
         pending = self._pending_manual_upload_count(project_id)
         uploaded = self._uploaded_manual_count(project_id)
+        from app.services.dataset_service import DatasetService
+
+        project_datasets = DatasetService(self.db).get_project_datasets(project_id)
         if not force:
-            if uploaded < 1:
+            if uploaded < 1 and not project_datasets:
                 raise ValueError("请至少上传一个数据集后再继续生成报告")
 
         checkpoint = dict(meta.get("pipeline_checkpoint") or {})
@@ -1895,7 +1957,7 @@ class PipelineService:
             "resume_phase": "after_data_acquisition",
         }
         self.db_pipeline_run.status = DB_PipelineStatus.RUNNING
-        self.db_pipeline_run.extra_metadata = meta
+        self._persist_extra_metadata(meta)
         self.db.commit()
 
         return {
@@ -1909,7 +1971,10 @@ class PipelineService:
         if not self._run_options.get("enable_quick_report"):
             return
         pending = self._pending_manual_upload_count(project_id)
-        if pending <= 0:
+        from app.services.dataset_service import DatasetService
+
+        has_project_data = bool(DatasetService(self.db).get_project_datasets(project_id))
+        if pending <= 0 and has_project_data:
             return
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
@@ -1919,22 +1984,28 @@ class PipelineService:
             "pending_count": pending,
             "paused_at": datetime.now(CHINA_TZ).isoformat(),
             "resume_phase": "after_data_acquisition",
+            "require_user_upload": pending <= 0,
         })
-        meta["data_upload_gate"] = gate
-        meta["pipeline_checkpoint"] = {
+        checkpoint = {
             "results": self._checkpoint_safe_results(results),
             "resume_phase": "after_data_acquisition",
         }
+        self._persist_extra_metadata({
+            "data_upload_gate": gate,
+            "pipeline_checkpoint": checkpoint,
+            "quick_report": True,
+        })
         self.db_pipeline_run.status = DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
         self.db_pipeline_run.current_stage = "data_acquisition"
-        self.db_pipeline_run.extra_metadata = meta
         self.db.commit()
+        summary = (
+            f"一键报告：{pending} 个外部数据集需下载后上传"
+            if pending > 0
+            else "一键报告：请上传研究数据后继续生成报告"
+        )
         self._record_closed_loop_event(
             "data_upload_pause",
-            {
-                "pending_count": pending,
-                "summary": f"一键报告：{pending} 个外部数据集需下载后上传",
-            },
+            {"pending_count": pending, "summary": summary},
         )
         raise DataUploadPause(pending)
 
@@ -1951,15 +2022,9 @@ class PipelineService:
         return stage_key not in cleared
 
     def _checkpoint_safe_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        safe: Dict[str, Any] = {}
-        for key, val in results.items():
-            if isinstance(val, (dict, list, str, int, float, bool)) or val is None:
-                try:
-                    json.dumps(val, ensure_ascii=False)
-                    safe[key] = val
-                except (TypeError, ValueError):
-                    safe[key] = str(val)[:2000]
-        return safe
+        from app.services.data_finder_slim import slim_results_for_checkpoint
+
+        return slim_results_for_checkpoint(results)
 
     def _maybe_pause_for_hitl_gate(self, stage_key: str, results: Dict[str, Any]) -> None:
         if not self._should_hitl_gate(stage_key):
@@ -2192,6 +2257,43 @@ class PipelineService:
         result = agent.analyze(research_question=research_question)
         return self._safe_model_dump(result)
     
+    def _normalize_literature_bundle(
+        self, literature_mining: Optional[Dict[str, Any]]
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        from app.services.literature_bundle_service import normalize_literature_bundle
+
+        return normalize_literature_bundle(literature_mining)
+
+    def _enrich_literature_mining(self, literature_mining: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        from app.services.literature_bundle_service import enrich_literature_mining
+
+        return enrich_literature_mining(literature_mining)
+
+    def _merge_data_acquisition_context(
+        self,
+        data_context: Dict[str, Any],
+        results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """把数据采集阶段产物并入报告 data_context。"""
+        da = results.get("data_acquisition") or {}
+        extract = da.get("extract") if isinstance(da.get("extract"), dict) else {}
+        if extract:
+            data_context = {**data_context, "data_finder_results": extract}
+
+        candidates = list(extract.get("external_candidates") or [])
+        if candidates:
+            data_context["recommended_datasets"] = candidates
+
+        uploaded = []
+        for cand in candidates:
+            status = (cand.get("user_upload_status") or "").lower()
+            if status in ("uploaded", "accepted", "ready"):
+                uploaded.append(cand)
+        if uploaded:
+            data_context["uploaded_external_datasets"] = uploaded
+
+        return data_context
+
     def _exec_literature_mining(self, project_id: str, research_question: str):
         agent = get_literature_mining_agent()
         result = agent.mine(project_id=project_id, research_question=research_question, db=self.db)
@@ -2210,13 +2312,19 @@ class PipelineService:
             self._exec_multimodal_sync(project_id, research_question, results)
         except Exception as mm_err:
             logger.warning(f"多模态 evidence 同步失败: {mm_err}")
-        lm = results.get("literature_mining") or {}
-        self._validate_literature_results(lm)
+        lm = self._enrich_literature_mining(results.get("literature_mining") or {})
+        results["literature_mining"] = lm
+        allow_empty = bool(self._run_options.get("enable_quick_report"))
+        self._validate_literature_results(lm, allow_empty=allow_empty)
         return lm
 
     @staticmethod
-    def _validate_literature_results(literature_mining: Dict[str, Any]) -> None:
-        """未检索到可用文献时抛出 LiteratureNotFoundError。"""
+    def _validate_literature_results(
+        literature_mining: Dict[str, Any],
+        *,
+        allow_empty: bool = False,
+    ) -> None:
+        """未检索到可用文献时抛出 LiteratureNotFoundError（一键报告 allow_empty 时仅警告）。"""
         if not isinstance(literature_mining, dict):
             raise LiteratureNotFoundError("文献挖掘结果无效")
 
@@ -2239,6 +2347,9 @@ class PipelineService:
 
         warning = (literature_mining.get("warning") or "").strip()
         message = warning or "未找到相关文献，工作流已停止"
+        if allow_empty:
+            logger.warning("文献为空但 allow_empty=True，继续 Pipeline: %s", message)
+            return
         raise LiteratureNotFoundError(message)
 
     def _exec_multimodal_sync(self, project_id: str, research_question: str, results: Dict[str, Any]) -> Dict[str, Any]:
@@ -2305,19 +2416,33 @@ class PipelineService:
             search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
 
         gap_options = {
-            "enable_gap_search": self._run_options.get("enable_gap_search", True),
-            "auto_import": self._run_options.get("enable_hf_auto_import", True),
+            "enable_gap_search": (
+                False
+                if self._run_options.get("enable_quick_report")
+                else self._run_options.get("enable_gap_search", True)
+            ),
+            "auto_import": (
+                False
+                if self._run_options.get("enable_quick_report")
+                else self._run_options.get("enable_hf_auto_import", True)
+            ),
             "coverage_gap_threshold": self._run_options.get("coverage_gap_threshold"),
             "data_spec_gap_threshold": self._run_options.get("data_spec_gap_threshold"),
             "max_gap_rounds": self._run_options.get("max_gap_rounds"),
             "refinement_queries": refinement_queries,
+            "quick_report_fast": bool(self._run_options.get("enable_quick_report")),
         }
+        auto_import = (
+            False
+            if self._run_options.get("enable_quick_report")
+            else self._run_options.get("enable_hf_auto_import", True)
+        )
         final = service.run_data_acquisition_sync(
             project_id=project_id,
             research_question=search_query,
             selected_hypothesis=selected_hypothesis or "",
             project_mode=project_mode,
-            auto_import=self._run_options.get("enable_hf_auto_import", True),
+            auto_import=auto_import,
             gap_options=gap_options,
         )
 
@@ -2337,21 +2462,25 @@ class PipelineService:
                     metadata={"rounds": gap_meta.get("rounds")},
                 )
 
+        from app.services.data_finder_slim import slim_data_acquisition_output, slim_data_finder_payload
+
+        slim_final = slim_data_finder_payload(final)
         output = {
             "data_acquisition": final.get("data_acquisition", {}),
-            "search": final,
-            "extract": final,
-            "paper_link_extractions": final.get("paper_extractions", []),
+            "search": slim_final,
+            "extract": slim_final,
+            "paper_link_extractions": final.get("paper_extractions", [])[:20],
             "refinement_queries": refinement_queries or [],
             "gap_enrichment": gap_meta,
         }
-        results["data_acquisition"] = output
-        results["data_finder"] = output
+        slim_output = slim_data_acquisition_output(output)
+        results["data_acquisition"] = slim_output
+        results["data_finder"] = slim_output
         logger.info(
             f"[DataAcquisition] 完成: tables={len(final.get('extracted_tables', []))} "
             f"merged={(final.get('merged') or {}).get('row_count')}"
         )
-        return output
+        return slim_output
 
     def _exec_data_finder(
         self,
@@ -2413,7 +2542,7 @@ class PipelineService:
         project_id: str = "",
     ) -> dict:
         agent = get_knowledge_gap_agent()
-        lm = literature_mining or {}
+        lm = self._enrich_literature_mining(literature_mining)
         facts = lm.get("facts", [])
         uncertain_points = lm.get("uncertain_points", [])
         result = agent.analyze(facts=facts, uncertain_points=uncertain_points)
@@ -2466,7 +2595,7 @@ class PipelineService:
     ) -> dict:
         agent = get_hypothesis_generation_agent()
         pu = problem_understanding or {}
-        lm = literature_mining or {}
+        lm = self._enrich_literature_mining(literature_mining)
         kg = knowledge_gap or {}
         research_question = pu.get("research_question", "")
         num_ideas = int(self._run_options.get("num_ideas", 3))
@@ -3009,16 +3138,15 @@ class PipelineService:
     ) -> dict:
         agent = get_report_generation_agent()
         pu = results.get("problem_understanding", {})
-        lm = results.get("literature_mining", {})
+        lm = self._enrich_literature_mining(results.get("literature_mining", {}))
+        results["literature_mining"] = lm
         kg = results.get("knowledge_gap", {})
         hg = results.get("hypothesis_generation", {})
         hr = results.get("hypothesis_review", {})
         ed = results.get("experiment_design", {})
         sv = results.get("small_validation", {})
 
-        evidence_facts = lm.get("facts", []) if isinstance(lm.get("facts"), list) else []
-        citation_map = lm.get("citation_map", []) if isinstance(lm.get("citation_map"), list) else []
-        verified_references = lm.get("verified_references", []) if isinstance(lm.get("verified_references"), list) else citation_map
+        evidence_facts, citation_map, verified_references = self._normalize_literature_bundle(lm)
         
         project_info = {
             "title": "研究项目",
@@ -3038,6 +3166,7 @@ class PipelineService:
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         if project_id:
             data_context = self._build_data_context(project_id)
+        data_context = self._merge_data_acquisition_context(data_context, results)
         hg_input = hg.get("input_data") or hg
         if isinstance(hg_input, dict) and hg_input.get("data_context"):
             data_context = {**data_context, **hg_input.get("data_context", {})}
@@ -3115,7 +3244,8 @@ class PipelineService:
         from app.services.evidence_reasoning_service import get_evidence_reasoning_service
 
         hg = results.get("hypothesis_generation", {})
-        lm = results.get("literature_mining", {})
+        lm = self._enrich_literature_mining(results.get("literature_mining", {}))
+        results["literature_mining"] = lm
         hypotheses = hg.get("hypotheses", [])
         if not hypotheses:
             return {}
@@ -3125,7 +3255,6 @@ class PipelineService:
             data_ctx = self._build_data_context(project_id)
             multimodal_facts = list(data_ctx.get("multimodal_evidence") or [])
             if multimodal_facts:
-                lm = dict(lm or {})
                 lm["multimodal_evidence"] = multimodal_facts
                 results["literature_mining"] = lm
         except Exception:
@@ -3323,6 +3452,9 @@ class PipelineService:
     
     def _create_stage_execution(self, order: int, stage: DB_PipelineStage, input_data: Dict[str, Any]) -> DB_PipelineStageExecution:
         """创建或更新阶段执行记录"""
+        from app.services.data_finder_slim import slim_stage_input
+
+        input_data = slim_stage_input(input_data)
         now = datetime.now(CHINA_TZ)
         existing = self.db_stage_executions.get(order)
         if existing:
@@ -3436,7 +3568,7 @@ class PipelineService:
         """记录闭环迭代事件，供前端展示质量趋势。"""
         if not self.db_pipeline_run:
             return
-        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        meta = dict(self.db_pipeline_run.extra_metadata or {})
         events = list(meta.get("closed_loop_events") or [])
         from datetime import datetime, timezone, timedelta
         events.append({
@@ -3450,7 +3582,7 @@ class PipelineService:
         for entry in entries:
             trend.append(enrich_quality_trend_entry(entry, event_type, payload))
         meta["quality_trend"] = trend[-15:]
-        self.db_pipeline_run.extra_metadata = meta
+        self._persist_extra_metadata(meta)
         if events:
             self._persist_audit_record("closed_loop_event", events[-1])
         if trend:
@@ -3514,6 +3646,10 @@ class PipelineService:
         extra_meta = report_data.get("compliance_check") or {}
         if report_data.get("plots"):
             extra_meta["plots"] = report_data["plots"]
+        if "pdf_success" in report_data:
+            extra_meta["pdf_success"] = report_data.get("pdf_success", False)
+        if report_data.get("export_method"):
+            extra_meta["export_method"] = report_data["export_method"]
 
         report = Report(
             id=report_id,

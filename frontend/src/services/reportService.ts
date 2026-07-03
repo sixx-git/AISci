@@ -1,5 +1,6 @@
 import api from '@/lib/api';
 import type { ApiResponse, ReportData } from '@/types';
+import { extractComplianceCheck, reconcileComplianceForDisplay } from '@/lib/reportCompliance';
 
 /** 后端 ReportDBResponse 原始格式 */
 interface ReportDbRaw {
@@ -20,6 +21,7 @@ interface ReportDbRaw {
   results: string;
   references: string;
   report_id?: string;
+  pdf_path?: string;
   pdf_generated?: boolean;
   status: string;
   version: number;
@@ -32,9 +34,8 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
   const extraMeta = (db.extra_metadata || {}) as Record<string, unknown>;
   const plots = (extraMeta.plots as ReportData['plots']) || [];
 
-  const complianceCheck = Object.keys(extraMeta).length > 0
-    ? (extraMeta as unknown as ReportData['complianceCheck'])
-    : undefined;
+  const rawCompliance = extractComplianceCheck(extraMeta);
+  const complianceCheck = reconcileComplianceForDisplay(rawCompliance, db.references);
 
   const reportContent: Record<string, string> = {
     title: db.title || '',
@@ -53,6 +54,9 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     markdown_content: db.markdown_content || '',
   };
 
+  const fileId = db.report_id || db.pdf_path;
+  const pdfGenerated = Boolean(db.pdf_generated);
+
   return {
     id: db.id,
     title: db.title || db.paper_title || '科学假设与研究计划',
@@ -61,9 +65,11 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     sections: complianceCheck?.items || [],
     complianceCheck,
     plots,
-    mdDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/md` : undefined,
-    texDownloadUrl: db.report_id ? `/api/v1/reports/download/${db.report_id}/tex` : undefined,
-    pdfDownloadUrl: db.report_id && db.pdf_generated ? `/api/v1/reports/download/${db.report_id}/pdf` : undefined,
+    pdfSuccess: pdfGenerated,
+    exportMethod: (extraMeta.export_method as string | undefined),
+    mdDownloadUrl: fileId ? `/api/v1/reports/download/${db.id}/md` : undefined,
+    texDownloadUrl: fileId ? `/api/v1/reports/download/${db.id}/tex` : undefined,
+    pdfDownloadUrl: fileId && pdfGenerated ? `/api/v1/reports/download/${db.id}/pdf` : undefined,
     extraMetadata: extraMeta,
     reportContent,
   };
@@ -105,10 +111,14 @@ export const reportService = {
 
   /** GET /api/v1/reports/download/:reportId/:fileType */
   async download(reportId: string, fileType: 'pdf' | 'md' | 'tex'): Promise<Blob> {
-    const { data } = await api.get(`/reports/download/${reportId}/${fileType}`, {
+    const response = await api.get(`/reports/download/${reportId}/${fileType}`, {
       responseType: 'blob',
     });
-    return data;
+    const contentType = String(response.headers['content-type'] || '');
+    if (fileType === 'pdf' && !contentType.includes('pdf')) {
+      throw new Error('响应不是 PDF 文件');
+    }
+    return response.data;
   },
 
   /** GET /api/v1/reports/browse — 报告中心分页列表 */

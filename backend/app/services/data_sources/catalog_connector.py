@@ -18,13 +18,18 @@ class CatalogConnector:
         limit: int = 5,
     ) -> List[CandidateHit]:
         keywords = list(data_spec.get("dataset_keywords") or [])
+        keywords.extend(data_spec.get("domain_keywords") or [])
         if data_spec.get("target_variables"):
             keywords.extend(data_spec.get("target_variables") or [])
+        if data_spec.get("entities_of_interest"):
+            keywords.extend(data_spec.get("entities_of_interest") or [])
+        modality_filter = list(data_spec.get("modality_filter") or data_spec.get("modalities") or [])
         discovery = DatasetDiscoverySkill()
         res = await discovery.run(
             {
                 "research_question": query,
                 "keywords": keywords,
+                "modality_filter": modality_filter,
                 "max_results": limit,
             },
             {},

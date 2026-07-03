@@ -1,6 +1,8 @@
 """
 FastAPI 应用入口
 """
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -117,6 +119,21 @@ async def startup_event():
     print("[1/3] 初始化数据库...")
     create_tables()
     print("    数据库表创建成功")
+
+    from app.core.database import SessionLocal
+    from app.api.pipeline import fail_orphaned_pipeline_runs, set_server_boot_time
+    from datetime import timezone, timedelta
+
+    boot_time = datetime.now(timezone(timedelta(hours=8)))
+    set_server_boot_time(boot_time)
+
+    db = SessionLocal()
+    try:
+        n = fail_orphaned_pipeline_runs(db, boot_time=boot_time)
+        if n:
+            print(f"    已清理 {n} 个中断的 Pipeline 运行")
+    finally:
+        db.close()
     print()
     
     # LLM 客户端初始化
