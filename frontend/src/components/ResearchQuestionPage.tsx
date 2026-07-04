@@ -12,6 +12,7 @@ import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { projectService } from '@/services/projectService';
 import { researchQuestionKey } from '@/lib/storageKeys';
+import type { ProjectOverview } from '@/types';
 
 // ============ 表单数据类型 ============
 export interface ResearchQuestionForm {
@@ -205,6 +206,59 @@ function formToApiPayload(form: ResearchQuestionForm): Record<string, unknown> {
   return payload;
 }
 
+function pickNonEmptyField(local: string, remote: unknown): string {
+  const trimmed = local.trim();
+  if (trimmed) return local;
+  const fromServer = String(remote ?? '').trim();
+  return fromServer || local;
+}
+
+function projectToForm(p: ProjectOverview, prev: ResearchQuestionForm): ResearchQuestionForm {
+  const hints = p.config?.data_spec_hints || {};
+  return {
+    ...prev,
+    researchDomain: pickNonEmptyField(prev.researchDomain, p.research_domain || p.research_field),
+    researchQuestion: pickNonEmptyField(prev.researchQuestion, p.research_question),
+    researchGoal: pickNonEmptyField(prev.researchGoal, p.research_goal),
+    background: pickNonEmptyField(prev.background, p.research_background),
+    dataSource: pickNonEmptyField(prev.dataSource, p.data_source),
+    constraints: pickNonEmptyField(prev.constraints, p.constraints),
+    expectedOutput: pickNonEmptyField(prev.expectedOutput, p.expected_output),
+    dataEntities: pickNonEmptyField(
+      prev.dataEntities,
+      Array.isArray(hints.entities_of_interest) ? (hints.entities_of_interest as string[]).join(', ') : '',
+    ),
+    dataTargetVariables: pickNonEmptyField(
+      prev.dataTargetVariables,
+      Array.isArray(hints.target_variables) ? (hints.target_variables as string[]).join(', ') : '',
+    ),
+    dataPreferredSources: pickNonEmptyField(
+      prev.dataPreferredSources,
+      Array.isArray(hints.preferred_sources) ? (hints.preferred_sources as string[]).join(', ') : '',
+    ),
+    dataMergeStrategy: pickNonEmptyField(
+      prev.dataMergeStrategy,
+      String(hints.merge_strategy_hint || 'auto'),
+    ) || 'auto',
+    dataNeedNote: pickNonEmptyField(prev.dataNeedNote, hints.data_need_note),
+    coverageGapThreshold: String(
+      p.config?.data_acquisition?.coverage_gap_threshold ?? prev.coverageGapThreshold,
+    ),
+    dataSpecGapThreshold: String(
+      p.config?.data_acquisition?.data_spec_gap_threshold ?? prev.dataSpecGapThreshold,
+    ),
+    maxGapRounds: String(
+      p.config?.data_acquisition?.max_gap_rounds ?? prev.maxGapRounds,
+    ),
+    autoLiteratureDiscovery:
+      p.config?.data_acquisition?.auto_literature_discovery === false
+        ? 'false'
+        : p.config?.data_acquisition?.auto_literature_discovery === true
+          ? 'true'
+          : prev.autoLiteratureDiscovery,
+  };
+}
+
 // ============ 状态类型 ============
 type SaveStatus =
   | { type: 'idle' }
@@ -261,6 +315,9 @@ interface ResearchQuestionPageProps {
   projectId: string;
   projectMode?: string;
   onSaved?: () => void;
+  /** Pipeline 运行中轮询后端，自动回填空字段 */
+  pollWhileRunning?: boolean;
+  revalidateKey?: number;
 }
 
 const FL_FORM_TEMPLATE: ResearchQuestionForm = {
@@ -307,13 +364,25 @@ const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
   autoLiteratureDiscovery: 'true',
 };
 
-export function ResearchQuestionPage({ projectId, projectMode, onSaved }: ResearchQuestionPageProps) {
+export function ResearchQuestionPage({
+  projectId,
+  projectMode,
+  onSaved,
+  pollWhileRunning = false,
+  revalidateKey = 0,
+}: ResearchQuestionPageProps) {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResearchQuestionForm>(() => loadDraft(projectId));
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: 'idle' });
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    if (!projectId || !pollWhileRunning) return undefined;
+    const timer = setInterval(() => setReloadTick((t) => t + 1), 2500);
+    return () => clearInterval(timer);
+  }, [projectId, pollWhileRunning]);
 
   useEffect(() => {
     if (!projectId) {
@@ -331,47 +400,11 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
         return;
       }
       const p = res.data;
-      const hints = p.config?.data_spec_hints || {};
-      setForm((prev) => ({
-        ...prev,
-        researchDomain: String(p.research_domain || p.research_field || prev.researchDomain),
-        researchQuestion: String(p.research_question || prev.researchQuestion),
-        researchGoal: String(p.research_goal || prev.researchGoal),
-        background: String(p.research_background || prev.background),
-        dataSource: String(p.data_source || prev.dataSource),
-        constraints: String(p.constraints || prev.constraints),
-        expectedOutput: String(p.expected_output || prev.expectedOutput),
-        dataEntities: Array.isArray(hints.entities_of_interest)
-          ? (hints.entities_of_interest as string[]).join(', ')
-          : prev.dataEntities,
-        dataTargetVariables: Array.isArray(hints.target_variables)
-          ? (hints.target_variables as string[]).join(', ')
-          : prev.dataTargetVariables,
-        dataPreferredSources: Array.isArray(hints.preferred_sources)
-          ? (hints.preferred_sources as string[]).join(', ')
-          : prev.dataPreferredSources,
-        dataMergeStrategy: String(hints.merge_strategy_hint || prev.dataMergeStrategy || 'auto'),
-        dataNeedNote: String(hints.data_need_note || prev.dataNeedNote),
-        coverageGapThreshold: String(
-          p.config?.data_acquisition?.coverage_gap_threshold ?? prev.coverageGapThreshold,
-        ),
-        dataSpecGapThreshold: String(
-          p.config?.data_acquisition?.data_spec_gap_threshold ?? prev.dataSpecGapThreshold,
-        ),
-        maxGapRounds: String(
-          p.config?.data_acquisition?.max_gap_rounds ?? prev.maxGapRounds,
-        ),
-        autoLiteratureDiscovery:
-          p.config?.data_acquisition?.auto_literature_discovery === false
-            ? 'false'
-            : p.config?.data_acquisition?.auto_literature_discovery === true
-              ? 'true'
-              : prev.autoLiteratureDiscovery,
-      }));
+      setForm((prev) => projectToForm(p, prev));
     }).catch((e) => {
       setPageError(e instanceof Error ? e.message : '加载项目信息失败');
     }).finally(() => setPageLoading(false));
-  }, [projectId, reloadTick]);
+  }, [projectId, reloadTick, revalidateKey]);
 
   const updateField = useCallback(
     (key: keyof ResearchQuestionForm, value: string) => {
@@ -771,9 +804,9 @@ export function ResearchQuestionPage({ projectId, projectMode, onSaved }: Resear
               </span>
             </div>
             <div className="flex justify-between">
-              <span>知识图谱节点</span>
+              <span>表单完整度</span>
               <span className="text-bp-muted font-mono">
-                {filledCount > 3 ? '~' + filledCount * 4 : '—'}
+                {filledCount}/{Object.keys(form).length}
               </span>
             </div>
           </div>

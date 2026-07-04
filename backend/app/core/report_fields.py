@@ -1,26 +1,29 @@
-"""报告 12 章节字段 — 人在回路局部修订共用"""
+"""报告章节字段 — 与 latex_template/scientific_plan_template.tex 对齐。"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
+# 与 latex_template 一致的中文章节标题（人在回路 / 合规检查 / 前端展示共用）
 REPORT_SECTION_FIELDS: List[Tuple[str, str]] = [
-    ("paper_title", "1. Paper Title"),
-    ("paper_abstract", "2. Paper Abstract"),
-    ("problem_statement", "3. Problem Statement"),
-    ("rationale", "4. Rationale"),
-    ("technical_details", "5. Technical Details"),
-    ("datasets", "6. Datasets"),
-    ("source", "7. Source"),
-    ("target", "8. Target"),
-    ("methods", "9. Methods"),
-    ("experiments", "10. Experiments"),
-    ("results", "11. Results"),
-    ("references", "12. References"),
+    ("paper_title", "论文标题"),
+    ("paper_abstract", "摘要"),
+    ("problem_statement", "待研究问题"),
+    ("rationale", "解决思路"),
+    ("technical_details", "必要的技术手段"),
+    ("datasets", "数据集"),
+    ("source", "历史数据"),
+    ("target", "目标数据"),
+    ("methods", "方法论"),
+    ("experiments", "实验设计"),
+    ("results", "实验结果"),
+    ("references", "参考文献"),
 ]
 
 REPORT_FIELD_KEYS = [k for k, _ in REPORT_SECTION_FIELDS] + ["markdown_content", "title"]
 
 REPORT_SECTION_KEY_SET = {k for k, _ in REPORT_SECTION_FIELDS}
+
+REPORT_SECTION_LABEL_MAP: Dict[str, str] = dict(REPORT_SECTION_FIELDS)
 
 
 def report_orm_to_dict(report: Any) -> Dict[str, str]:

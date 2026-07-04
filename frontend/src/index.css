@@ -201,6 +201,13 @@
     border: 1px solid color-mix(in srgb, var(--bp-purple) 30%, transparent);
   }
 
+  .badge-awaiting-data {
+    @apply badge;
+    background-color: color-mix(in srgb, var(--bp-yellow) 15%, transparent);
+    color: var(--bp-yellow);
+    border: 1px solid color-mix(in srgb, var(--bp-yellow) 30%, transparent);
+  }
+
   /* ---- 表格 ---- */
   .table-header {
     @apply font-medium uppercase tracking-wider;

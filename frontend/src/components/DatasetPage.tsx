@@ -192,7 +192,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       const res = await datasetService.uploadDataset(projectId, file);
       if (res.code === 200 && res.data) {
         setDatasets((prev) => [toSummary(res.data!), ...prev]);
-        showAlert(`上传成功: ${file.name}，已完成初步分析`);
+        const resumed = Boolean((res as { pipeline_resume?: unknown }).pipeline_resume);
+        showAlert(
+          resumed
+            ? `上传成功: ${file.name}，Pipeline 已自动继续`
+            : `上传成功: ${file.name}，已完成初步分析`,
+        );
         loadDataContext();
       } else {
         setError(res.message || '上传失败');
@@ -316,7 +321,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
+              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.fits,.fit,.fts,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
               className="hidden"
               onChange={handleUpload}
               disabled={uploading}
@@ -664,7 +669,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
+              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.fits,.fit,.fts,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
               onChange={handleUpload}
               disabled={uploading}
             />

@@ -24,7 +24,7 @@ from app.schemas.research import (
 )
 from app.schemas.common import PaginatedResponse, PageInfo
 from app.schemas.human_loop import ReportReviseRequest
-from app.services.report_service import ReportService, enrich_report_for_response, report_to_db_response
+from app.services.report_service import ReportService, merge_report_extra_metadata, enrich_report_for_response, report_to_db_response
 from app.services.stage_chat_service import get_stage_chat_service
 
 router = APIRouter(tags=["reports"])
@@ -46,7 +46,7 @@ def get_download_url(report_id: str, file_type: str) -> str:
     
     Args:
         report_id: 报告 ID
-        file_type: 文件类型 (pdf / md / tex)
+        file_type: 文件类型 (pdf / tex)
         
     Returns:
         下载地址
@@ -86,12 +86,10 @@ async def generate_report(
         pdf_success = report_result.get("pdf_success", False)
         
         # 构建下载地址
-        md_download_url = get_download_url(report_file_id, "md") if report_file_id else None
         pdf_download_url = get_download_url(report_file_id, "pdf") if report_file_id and pdf_success else None
         tex_download_url = get_download_url(report_file_id, "tex") if report_file_id else None
         
         # 更新结果包含下载地址
-        report_result["md_download_url"] = md_download_url
         report_result["pdf_download_url"] = pdf_download_url
         report_result["tex_download_url"] = tex_download_url
         
@@ -108,7 +106,7 @@ async def generate_report(
             title=report_result.get("title", "科学假设与研究计划"),
             paper_title=report_result.get("paper_title", "研究报告"),
             paper_abstract=report_result.get("paper_abstract", ""),
-            markdown_content=report_result.get("markdown_content", ""),
+            markdown_content="",
             problem_statement=chapters.get("problem_statement", ""),
             rationale=chapters.get("rationale", ""),
             technical_details=chapters.get("technical_details", ""),
@@ -123,7 +121,10 @@ async def generate_report(
             pdf_generated=pdf_success,
             status="generated",
             version=1,
-            extra_metadata=report_result.get("compliance_check", None)
+            extra_metadata=merge_report_extra_metadata(
+                report_result.get("compliance_check"),
+                report_result,
+            )
         )
         
         db_report = report_service.create_report(report_create)
@@ -149,7 +150,7 @@ async def download_report_file(report_id: str, file_type: str, db: Session = Dep
     
     Args:
         report_id: 报告文件 ID（支持 DB UUID 或文件目录名）
-        file_type: 文件类型 (pdf / md / tex)
+        file_type: 文件类型 (pdf / tex)
     """
     try:
         from app.models.project import Report as ReportModel
@@ -172,10 +173,6 @@ async def download_report_file(report_id: str, file_type: str, db: Session = Dep
             file_path = os.path.join(report_dir, "report.pdf")
             filename = _safe_report_download_filename(report_title, "pdf")
             media_type = "application/pdf"
-        elif file_type == "md":
-            file_path = os.path.join(report_dir, "report.md")
-            filename = _safe_report_download_filename(report_title, "md")
-            media_type = "text/markdown"
         elif file_type == "tex":
             file_path = os.path.join(report_dir, "report.tex")
             filename = _safe_report_download_filename(report_title, "tex")

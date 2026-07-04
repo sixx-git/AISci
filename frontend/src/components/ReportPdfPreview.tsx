@@ -1,32 +1,38 @@
 import { useEffect, useState } from 'react';
-import { FileText, AlertTriangle, Download } from 'lucide-react';
+import { FileText, AlertTriangle, Download, RefreshCw } from 'lucide-react';
 import { LoadingState } from '@/components/workspace/LoadingState';
-import { MarkdownPreview } from './MarkdownPreview';
 import { reportService } from '@/services/reportService';
 import { getReportDisplayTitle } from '@/lib/reportExport';
 
 interface ReportPdfPreviewProps {
   reportId: string;
-  markdownContent: string;
-  pdfSuccess?: boolean;
+  /** PDF 重新生成完成后递增，用于刷新 iframe */
+  refreshKey?: number;
+  onRegeneratePdf?: () => void | Promise<void>;
+  regenerating?: boolean;
 }
 
 const PREVIEW_HEIGHT = 'calc(100vh - 320px)';
 
-/** 报告 PDF 内嵌预览；无 PDF 时回退 Markdown */
+/** 报告预览：仅 LaTeX 模板 PDF */
 export function ReportPdfPreview({
   reportId,
-  markdownContent,
-  pdfSuccess,
+  refreshKey = 0,
+  onRegeneratePdf,
+  regenerating = false,
 }: ReportPdfPreviewProps) {
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [useFallback, setUseFallback] = useState(false);
+  const [pdfLoadFailed, setPdfLoadFailed] = useState(false);
 
   useEffect(() => {
-    if (!reportId || pdfSuccess === false) {
-      setUseFallback(true);
+    if (!reportId) {
+      setPdfObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
       setLoading(false);
+      setPdfLoadFailed(false);
       return;
     }
 
@@ -34,7 +40,7 @@ export function ReportPdfPreview({
 
     (async () => {
       setLoading(true);
-      setUseFallback(false);
+      setPdfLoadFailed(false);
       try {
         const blob = await reportService.download(reportId, 'pdf');
         if (cancelled) return;
@@ -44,7 +50,7 @@ export function ReportPdfPreview({
           return objectUrl;
         });
       } catch {
-        if (!cancelled) setUseFallback(true);
+        if (!cancelled) setPdfLoadFailed(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -57,66 +63,75 @@ export function ReportPdfPreview({
         return null;
       });
     };
-  }, [reportId, pdfSuccess]);
+  }, [reportId, refreshKey]);
 
-  if (loading) {
+  if (loading || regenerating) {
     return (
       <div
         className="flex items-center justify-center"
         style={{ minHeight: PREVIEW_HEIGHT }}
       >
-        <LoadingState message="正在加载 PDF 预览…" />
+        <LoadingState message={regenerating ? '正在生成 LaTeX PDF…' : '正在加载 PDF 预览…'} />
       </div>
     );
   }
 
-  if (useFallback || !pdfObjectUrl) {
+  if (pdfObjectUrl && !pdfLoadFailed) {
     return (
-      <div className="space-y-3">
-        {pdfSuccess === false && (
-          <div className="flex items-start gap-2 p-3 rounded-bp bg-bp-yellow/10 border border-bp-yellow/25 text-xs text-bp-yellow">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>PDF 未生成或加载失败，以下为 Markdown 预览。</span>
-          </div>
-        )}
-        <div
-          id="report-markdown-preview"
-          className="bg-bp-base/80 rounded-bp border border-bp-border p-6 overflow-auto"
-          style={{ maxHeight: PREVIEW_HEIGHT }}
-        >
-          <MarkdownPreview content={markdownContent} />
-        </div>
+      <div
+        id="report-pdf-preview"
+        className="rounded-bp border border-bp-border overflow-hidden bg-[#525659]"
+      >
+        <iframe
+          src={`${pdfObjectUrl}#toolbar=1&navpanes=0&view=FitH`}
+          className="w-full border-0"
+          style={{ height: PREVIEW_HEIGHT }}
+          title="LaTeX 模板报告 PDF 预览"
+        />
       </div>
     );
   }
 
   return (
     <div
-      id="report-pdf-preview"
-      className="rounded-bp border border-bp-border overflow-hidden bg-[#525659]"
+      className="flex flex-col items-center justify-center gap-4 p-8 rounded-bp border border-bp-border bg-bp-base/40 text-center"
+      style={{ minHeight: PREVIEW_HEIGHT }}
     >
-      <iframe
-        src={`${pdfObjectUrl}#toolbar=1&navpanes=0&view=FitH`}
-        className="w-full border-0"
-        style={{ height: PREVIEW_HEIGHT }}
-        title="报告 PDF 预览"
-      />
+      <AlertTriangle className="w-10 h-10 text-bp-yellow" />
+      <div className="space-y-1 max-w-md">
+        <p className="text-sm font-semibold text-bp-text">PDF 尚未生成或加载失败</p>
+        <p className="text-xs text-bp-muted leading-relaxed">
+          报告将使用 LaTeX 模板编译为 PDF。请重新生成 PDF 后在下方预览。
+        </p>
+      </div>
+      {onRegeneratePdf && (
+        <button
+          type="button"
+          onClick={() => void onRegeneratePdf()}
+          disabled={regenerating}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-bp-cyan/40 bg-bp-cyan/10 text-bp-cyan hover:bg-bp-cyan/20 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+          重新生成 PDF
+        </button>
+      )}
     </div>
   );
 }
 
 export function ReportPreviewHeader({
-  mode,
   title,
   onDownloadPdf,
-  pdfAvailable = true,
+  onRegeneratePdf,
+  regenerating = false,
 }: {
-  mode: 'pdf' | 'markdown';
   title?: string;
   onDownloadPdf?: () => void;
-  pdfAvailable?: boolean;
+  onRegeneratePdf?: () => void | Promise<void>;
+  regenerating?: boolean;
 }) {
   const displayTitle = getReportDisplayTitle(title);
+
   return (
     <div className="flex items-center justify-between gap-3 mb-4">
       <div className="flex items-center gap-2 min-w-0">
@@ -124,21 +139,35 @@ export function ReportPreviewHeader({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-bp-text">报告预览</h3>
           <p className="text-xs text-bp-muted truncate" title={displayTitle}>
-            {mode === 'pdf' ? 'PDF 格式' : 'Markdown 格式'} · {displayTitle}
+            LaTeX 模板 · PDF · {displayTitle}
           </p>
         </div>
       </div>
-      {mode === 'pdf' && pdfAvailable && onDownloadPdf && (
-        <button
-          type="button"
-          onClick={onDownloadPdf}
-          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-bp-border bg-bp-panel text-bp-text hover:bg-bp-base transition-colors"
-          title={`下载：${displayTitle}.pdf`}
-        >
-          <Download className="w-3.5 h-3.5" />
-          下载 PDF
-        </button>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {onRegeneratePdf && (
+          <button
+            type="button"
+            onClick={() => void onRegeneratePdf()}
+            disabled={regenerating}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-bp-border bg-bp-panel text-bp-text hover:bg-bp-base transition-colors disabled:opacity-50"
+            title="重新编译 LaTeX 并生成 PDF"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+            重新生成
+          </button>
+        )}
+        {onDownloadPdf && (
+          <button
+            type="button"
+            onClick={onDownloadPdf}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-bp-border bg-bp-panel text-bp-text hover:bg-bp-base transition-colors"
+            title={`下载：${displayTitle}.pdf`}
+          >
+            <Download className="w-3.5 h-3.5" />
+            下载 PDF
+          </button>
+        )}
+      </div>
     </div>
   );
 }

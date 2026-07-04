@@ -3,10 +3,12 @@ from app.skills.literature.arxiv_search_skill import ArxivSearchSkill
 from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.literature.search_papers_skill import SearchPapersSkill
+from app.skills.literature.paper_full_text_rag_skill import PaperFullTextRAGSkill
 
 __all__ = [
     "ArxivSearchSkill",
     "PdfEvidenceExtractionSkill",
     "CitationGroundingSkill",
     "SearchPapersSkill",
+    "PaperFullTextRAGSkill",
 ]

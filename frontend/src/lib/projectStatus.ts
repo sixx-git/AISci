@@ -16,7 +16,7 @@ export function normalizeStatusKey(raw?: string | null): StatusType {
       return 'failed';
     case 'human_review':
     case 'human_review_required':
-      return 'human_review';
+      return 'awaiting_data_upload';
     case 'archived':
       return 'archived';
     case 'draft':
@@ -55,5 +55,60 @@ export function statusBadgeLabel(
   if (status === 'pending' && raw === 'pending') return '等待中';
   if (status === 'pending' && !hasPipelineRun) return '未开始';
   if (status === 'failed' && raw === 'cancelled') return '已取消';
+  if (status === 'awaiting_data_upload') return '待上传数据';
   return undefined;
+}
+
+/** 统一中文状态文案（概览 / 列表） */
+export function statusTypeToChinese(status: StatusType): string {
+  switch (status) {
+    case 'completed':
+      return '已完成';
+    case 'running':
+      return '运行中';
+    case 'failed':
+      return '失败';
+    case 'awaiting_data_upload':
+    case 'human_review':
+      return '待上传数据';
+    case 'draft':
+      return '草稿';
+    case 'archived':
+      return '已归档';
+    case 'pending':
+    default:
+      return '未开始';
+  }
+}
+
+/** 最近一次 Pipeline 运行的展示文案 */
+export function formatLatestRunStatusLabel(
+  run?: { status?: string; failed_stage?: string | null } | null,
+  stageLabels?: Record<string, string>,
+): string {
+  if (!run?.status) return '无记录';
+  const normalized = normalizeStatusKey(run.status);
+  if (normalized === 'failed') {
+    const stageKey = (run.failed_stage || '').trim();
+    const stageLabel = stageKey
+      ? (stageLabels?.[stageKey] || stageKey)
+      : '';
+    return stageLabel ? `失败（${stageLabel}）` : '失败';
+  }
+  const custom = statusBadgeLabel(normalized, run.status, true);
+  return custom ?? statusTypeToChinese(normalized);
+}
+
+/** 项目展示状态中文（优先 Pipeline 运行状态） */
+export function formatProjectDisplayStatusLabel(
+  projectStatus?: string | null,
+  latestPipelineStatus?: string | null,
+): string {
+  const display = resolveProjectDisplayStatus(projectStatus, latestPipelineStatus);
+  const custom = statusBadgeLabel(
+    display,
+    latestPipelineStatus,
+    Boolean(latestPipelineStatus),
+  );
+  return custom ?? statusTypeToChinese(display);
 }

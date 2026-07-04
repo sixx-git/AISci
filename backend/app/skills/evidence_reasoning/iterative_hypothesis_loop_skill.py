@@ -11,6 +11,7 @@ from app.skills.evidence_reasoning.evidence_stance_classification_skill import E
 from app.skills.evidence_reasoning.hypothesis_revision_skill import HypothesisRevisionSkill
 from app.skills.evidence_reasoning.scientific_claim_extraction_skill import ScientificClaimExtractionSkill
 from app.skills.evidence_reasoning.citation_integrity_check_skill import CitationIntegrityCheckSkill
+from app.skills.evidence_reasoning.evidence_grounding_skill import EvidenceGroundingSkill
 
 
 class IterativeHypothesisLoopSkill(BaseSkill):
@@ -43,6 +44,7 @@ class IterativeHypothesisLoopSkill(BaseSkill):
         revision_skill = HypothesisRevisionSkill()
         builder_skill = EvidenceChainBuilderSkill()
         integrity_skill = CitationIntegrityCheckSkill()
+        grounding_skill = EvidenceGroundingSkill()
 
         for round_idx in range(1, max_rounds + 1):
             await claim_skill.run(
@@ -105,6 +107,19 @@ class IterativeHypothesisLoopSkill(BaseSkill):
             if round_idx >= max_rounds or (supporting and not counter):
                 break
 
+        grounding_res = await grounding_skill.run(
+            {
+                "hypothesis": current_hypothesis,
+                "supporting_evidence": supporting,
+                "counter_evidence": counter,
+                "facts": facts + multimodal_facts,
+                "rag_passages": input_data.get("rag_passages") or [],
+            },
+            context,
+        )
+        if grounding_res.data:
+            supporting = grounding_res.data.get("grounded_evidence", supporting)
+
         integrity_res = await integrity_skill.run(
             {
                 "supporting_evidence": supporting,
@@ -133,6 +148,7 @@ class IterativeHypothesisLoopSkill(BaseSkill):
 
         chain = builder_res.data.get("evidence_chain", {})
         chain["citation_integrity"] = integrity_res.data
+        chain["evidence_grounding"] = grounding_res.data
         if multimodal_facts:
             chain["multimodal_evidence_count"] = len(multimodal_facts)
             chain["multimodal_in_chain"] = sum(
@@ -145,5 +161,6 @@ class IterativeHypothesisLoopSkill(BaseSkill):
             "rounds_executed": len(revision_history),
         }
         result.warnings.extend(support_res.warnings)
+        result.warnings.extend(grounding_res.warnings)
         result.warnings.extend(integrity_res.warnings)
         return result

@@ -6,6 +6,7 @@ from app.skills.evidence_reasoning.evidence_chain_builder_skill import EvidenceC
 from app.skills.evidence_reasoning.hypothesis_revision_skill import HypothesisRevisionSkill
 from app.skills.evidence_reasoning.iterative_hypothesis_loop_skill import IterativeHypothesisLoopSkill
 from app.skills.evidence_reasoning.citation_integrity_check_skill import CitationIntegrityCheckSkill
+from app.skills.evidence_reasoning.evidence_grounding_skill import EvidenceGroundingSkill
 
 __all__ = [
     "ScientificClaimExtractionSkill",
@@ -16,4 +17,5 @@ __all__ = [
     "HypothesisRevisionSkill",
     "IterativeHypothesisLoopSkill",
     "CitationIntegrityCheckSkill",
+    "EvidenceGroundingSkill",
 ]

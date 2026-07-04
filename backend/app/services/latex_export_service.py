@@ -62,14 +62,50 @@ def get_latex_template_dir() -> Path:
     return DEFAULT_TEMPLATE_DIR
 
 
-def escape_latex(text: Any) -> str:
-    """转义 LaTeX 特殊字符，保留已有 LaTeX 命令的简单文本。"""
-    if text is None:
-        return ""
-    s = str(text)
-    if not s.strip():
-        return ""
+def _promote_inline_math_segment(text: str) -> str:
+    """在不含 $...$ 的文本段内提升伪 LaTeX 数学片段。"""
+    if not text:
+        return text
 
+    def _wrap(match: re.Match[str]) -> str:
+        inner = match.group(0).replace("\\_", "_")
+        return f"${inner}$"
+
+    greek_cmd = (
+        r"\\(?:Omega|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|nu|pi|rho|sigma|tau|"
+        r"phi|chi|psi|omega|Delta|Gamma|Lambda|Sigma|Phi|Psi|frac|sqrt|partial|nabla|cdot|"
+        r"times|leq|geq|neq|approx|equiv|infty|pm|mp|sum|int|prod)"
+        r"(?:\\_[A-Za-z0-9]+|_\{[^}]+\}|_[A-Za-z0-9]+|\{[^}]*\})*"
+    )
+    var_cmd = r"(?<![\\$])[A-Za-z]+(?:\\_[A-Za-z0-9]+|_\{[^}]+\}|_[A-Za-z0-9]+)"
+    text = re.sub(greek_cmd, _wrap, text)
+    parts = re.split(r"(\$[^$\n]+\$)", text)
+    rebuilt: List[str] = []
+    for part in parts:
+        if part.startswith("$") and part.endswith("$"):
+            rebuilt.append(part)
+        else:
+            rebuilt.append(re.sub(var_cmd, _wrap, part))
+    return "".join(rebuilt)
+
+
+def _promote_inline_math(text: str) -> str:
+    """将正文中的伪 LaTeX 数学片段（如 H\\_0、\\Omega\\_m）包裹为 $...$。"""
+    if not text:
+        return text
+    if "$" not in text:
+        return _promote_inline_math_segment(text)
+    parts = re.split(r"(\$[^$\n]+\$)", text)
+    return "".join(
+        part if part.startswith("$") and part.endswith("$") else _promote_inline_math_segment(part)
+        for part in parts
+    )
+
+
+def _escape_plain_latex(s: str) -> str:
+    """转义 LaTeX 特殊字符（不含 $...$ 数学片段）。"""
+    if not s:
+        return ""
     out: List[str] = []
     i = 0
     while i < len(s):
@@ -99,6 +135,36 @@ def escape_latex(text: Any) -> str:
         out.append(_LATEX_SPECIAL_CHARS.get(ch, ch))
         i += 1
     return "".join(out)
+
+
+def _unescape_math_inner(inner: str) -> str:
+    return (
+        inner.replace("\\_", "_")
+        .replace("\\{", "{")
+        .replace("\\}", "}")
+        .replace("\\textbackslash{}", "\\")
+    )
+
+
+def escape_latex(text: Any) -> str:
+    """转义 LaTeX 特殊字符，保留 $...$ 行内公式与已有 LaTeX 命令。"""
+    if text is None:
+        return ""
+    s = str(text).replace("\\$", "$")
+    if not s.strip():
+        return ""
+
+    s = _promote_inline_math(s)
+
+    if "$" in s:
+        parts = re.split(r"(\$[^$\n]+\$)", s)
+        return "".join(
+            f"${_unescape_math_inner(part[1:-1])}$"
+            if part.startswith("$") and part.endswith("$")
+            else _escape_plain_latex(part)
+            for part in parts
+        )
+    return _escape_plain_latex(s)
 
 
 def _normalize_lines(value: Any) -> List[str]:
@@ -254,7 +320,10 @@ def _parse_experiments_text(text: str) -> Dict[str, Any]:
 def _format_itemize(lines: List[str]) -> str:
     if not lines:
         return ""
-    body = "\n".join(f"    \\item {escape_latex(line)}" for line in lines)
+    body = "\n".join(
+        f"    \\item {_markdown_to_latex_body(line) if '**' in line else escape_latex(line)}"
+        for line in lines
+    )
     return f"\\begin{{itemize}}\n{body}\n\\end{{itemize}}\n"
 
 
@@ -276,13 +345,51 @@ def _format_chapter_field(value: Any) -> str:
     return _format_paragraph(text)
 
 
+def _markdown_to_latex_body(text: str) -> str:
+    """Markdown 行内 **粗体** → \\textbf{}，并转义其余 LaTeX 特殊字符。"""
+
+    parts: List[str] = []
+    i = 0
+    while i < len(text):
+        start = text.find("**", i)
+        if start == -1:
+            parts.append(escape_latex(text[i:]))
+            break
+        if start > i:
+            parts.append(escape_latex(text[i:start]))
+        end = text.find("**", start + 2)
+        if end == -1:
+            parts.append(escape_latex(text[start:]))
+            break
+        inner = text[start + 2 : end]
+        parts.append(f"\\textbf{{{escape_latex(inner)}}}")
+        i = end + 2
+    return "".join(parts)
+
+
+def _is_numbered_list_lines(lines: List[str]) -> bool:
+    return bool(lines) and all(re.match(r"^\d+\.\s", ln.strip()) for ln in lines if ln.strip())
+
+
+def _format_enumerate(lines: List[str]) -> str:
+    items: List[str] = []
+    for raw in lines:
+        line = re.sub(r"^\d+\.\s*", "", raw.strip())
+        if not line:
+            continue
+        body = _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
+        items.append(f"    \\item {body}")
+    if not items:
+        return ""
+    return "\\begin{enumerate}\n" + "\n".join(items) + "\n\\end{enumerate}\n"
+
+
 def _format_paragraph(value: Any) -> str:
     lines = _normalize_lines(value)
     if not lines:
         return ""
     if len(lines) == 1 and "###" not in lines[0]:
-        line = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", lines[0])
-        return f"{escape_latex(line)}\n\n"
+        return f"{_markdown_to_latex_body(lines[0])}\n\n"
     return _format_chapter_body(value)
 
 
@@ -307,12 +414,14 @@ def _format_chapter_body(value: Any) -> str:
     if not text:
         return ""
 
-    text = re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", text)
-
     if "###" not in text:
         lines = _normalize_lines(text)
+        if _is_numbered_list_lines(lines):
+            return _format_enumerate(lines)
         if len(lines) == 1:
-            return f"{escape_latex(lines[0])}\n\n"
+            line = lines[0]
+            body = _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
+            return f"{body}\n\n"
         return _format_itemize(lines)
 
     parts: List[str] = []
@@ -320,7 +429,8 @@ def _format_chapter_body(value: Any) -> str:
     if blocks and blocks[0].strip():
         intro = blocks[0].strip()
         if intro:
-            parts.append(f"{escape_latex(intro)}\n\n")
+            intro_body = _markdown_to_latex_body(intro) if "**" in intro else escape_latex(intro)
+            parts.append(f"{intro_body}\n\n")
     for block in blocks[1:]:
         if not block.strip():
             continue
@@ -331,7 +441,10 @@ def _format_chapter_body(value: Any) -> str:
         if body:
             body_lines = [ln.strip() for ln in body.split("\n") if ln.strip()]
             if len(body_lines) == 1 and not body_lines[0].startswith("- "):
-                parts.append(f"{escape_latex(body_lines[0])}\n\n")
+                line = body_lines[0]
+                parts.append(
+                    f"{_markdown_to_latex_body(line) if '**' in line else escape_latex(line)}\n\n"
+                )
             else:
                 items = []
                 for ln in body_lines:
@@ -462,18 +575,169 @@ def _coerce_chapter_json(value: Any) -> Any:
     return value
 
 
+def _bibtex_field_value(text: Any) -> str:
+    """BibTeX 字段值：去除错误 LaTeX 转义，保护花括号。"""
+    s = str(text or "").strip()
+    if not s:
+        return ""
+    for old, new in (
+        (r"\textbackslash{}", "\\"),
+        (r"\_", "_"),
+        (r"\&", "&"),
+        (r"\%", "%"),
+        (r"\#", "#"),
+        (r"\$", "$"),
+    ):
+        s = s.replace(old, new)
+    return s.replace("{", "\\{").replace("}", "\\}")
+
+
+def _is_author_initial(part: str) -> bool:
+    p = part.strip().rstrip(".")
+    return len(p) <= 2 and p.isalpha()
+
+
+def _split_comma_separated_authors(raw: str) -> List[str]:
+    """拆分逗号分隔作者，保留「姓, 名缩写」为一位作者。"""
+    bits = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(bits) <= 1:
+        return bits
+    merged: List[str] = []
+    i = 0
+    while i < len(bits):
+        if i + 1 < len(bits) and _is_author_initial(bits[i + 1]):
+            merged.append(f"{bits[i]}, {bits[i + 1]}")
+            i += 2
+        else:
+            merged.append(bits[i])
+            i += 1
+    return merged
+
+
 def _normalize_bib_authors(authors: Any) -> str:
+    """BibTeX author 字段：Author1 and Author2。"""
     if isinstance(authors, list):
         parts = [str(a).strip() for a in authors if str(a).strip()]
     else:
-        raw = str(authors or "Unknown").strip()
-        if " and " in raw:
-            return escape_latex(raw).replace("\\", "")
-        parts = [p.strip() for p in re.split(r",|;", raw) if p.strip()]
+        raw = str(authors or "").strip()
+        if not raw or raw.lower() in ("unknown", "未知作者"):
+            return ""
+        if re.search(r"\s+and\s+", raw, flags=re.I):
+            parts = [p.strip() for p in re.split(r"\s+and\s+", raw, flags=re.I) if p.strip()]
+        elif ";" in raw:
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+        else:
+            parts = _split_comma_separated_authors(raw)
     if not parts:
-        return "Unknown"
-    return escape_latex(" and ".join(parts)).replace("\\", "")
+        return ""
+    return " and ".join(_bibtex_field_value(p) for p in parts)
 
+
+def parse_reference_line_to_item(line: str) -> Dict[str, str]:
+    """将「作者. 标题 (年份). DOI/URL」格式的参考文献行解析为结构化字段。"""
+    text = (line or "").strip()
+    if not text:
+        return {}
+
+    doi = ""
+    m_doi = re.search(r"\.?\s*DOI:\s*(\S+)\s*$", text, flags=re.I)
+    if m_doi:
+        doi = m_doi.group(1).rstrip(".")
+        text = text[: m_doi.start()].strip()
+
+    url = ""
+    m_url = re.search(r"\.?\s*(https?://\S+)\s*$", text)
+    if m_url:
+        url = m_url.group(1).rstrip(".")
+        text = text[: m_url.start()].strip()
+
+    year = ""
+    m_year = re.search(r"\((\d{4})\)\s*$", text)
+    if m_year:
+        year = m_year.group(1)
+        text = text[: m_year.start()].strip().rstrip(".")
+
+    authors = ""
+    title = text
+    if ". " in text:
+        head, tail = text.split(". ", 1)
+        if tail and len(tail) >= 8:
+            authors = head.strip()
+            title = tail.strip()
+
+    out = {"title": title, "authors": authors, "year": year, "doi": doi, "url": url}
+    return {k: v for k, v in out.items() if v}
+
+
+def _reference_item_key(item: Dict[str, Any]) -> str:
+    doi = str(item.get("doi") or "").strip().lower()
+    if doi:
+        return f"doi:{doi}"
+    title = str(item.get("title") or item.get("paper_title") or "").strip().lower()
+    if title:
+        return f"title:{title}"
+    return ""
+
+
+def _structured_reference_items(
+    citation_map: Optional[List[Dict[str, Any]]] = None,
+    verified_references: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """合并 citation_map / verified_references 并去重。"""
+    merged: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in list(verified_references or []) + list(citation_map or []):
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        item["title"] = (item.get("title") or item.get("paper_title") or "").strip()
+        if not item["title"] or not _is_valid_reference_text(item["title"]):
+            continue
+        key = _reference_item_key(item)
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        merged.append(item)
+    return merged
+
+
+def _reference_item_to_bib_fields(item: Dict[str, Any]) -> Tuple[str, Dict[str, str]]:
+    """结构化文献 → BibTeX entry 类型与字段。"""
+    title = _bibtex_field_value(item.get("title") or item.get("paper_title") or "")
+    authors = _normalize_bib_authors(item.get("authors"))
+    url = str(item.get("source_url") or item.get("url") or "").strip()
+    year = str(item.get("year") or item.get("publication_year") or "").strip()
+    doi = _bibtex_field_value(item.get("doi") or "")
+    journal = _bibtex_field_value(item.get("journal") or "")
+
+    fields: Dict[str, str] = {"title": title}
+    if authors:
+        fields["author"] = authors
+    if year:
+        fields["year"] = year
+    if doi:
+        fields["doi"] = doi
+    if url:
+        fields["url"] = _bibtex_field_value(url)
+    if journal:
+        fields["journal"] = journal
+
+    is_arxiv = "arxiv" in url.lower() or str(item.get("source") or "").lower() == "arxiv"
+    if is_arxiv:
+        eprint = str(item.get("external_id") or url.rstrip("/").split("/")[-1] or "").strip()
+        if eprint:
+            fields["eprint"] = _bibtex_field_value(eprint)
+            fields["archivePrefix"] = "arXiv"
+        if not journal:
+            fields["journal"] = "arXiv preprint"
+
+    entry_type = "article" if journal or is_arxiv or doi else "misc"
+    if entry_type == "misc" and not fields.get("journal"):
+        how = journal or ("arXiv preprint" if is_arxiv else "")
+        if how:
+            fields["howpublished"] = how
+    return entry_type, fields
 
 def _build_author_block(project_info: Dict[str, Any]) -> str:
     project_name = escape_latex(project_info.get("title") or project_info.get("name") or "AI Scientist 科研项目")
@@ -501,14 +765,11 @@ def _build_references_bib(
     entries: List[str] = []
     keys: List[str] = []
     seen_keys: set[str] = set()
-    seen_titles: set[str] = set()
+    seen_item_keys: set[str] = set()
 
     def add_entry(entry_type: str, key: str, fields: Dict[str, str]) -> None:
-        title_key = (fields.get("title") or fields.get("note") or "").strip().lower()
-        if title_key and title_key in seen_titles:
+        if not fields.get("title") and not fields.get("note"):
             return
-        if title_key:
-            seen_titles.add(title_key)
         base_key = key
         suffix = 1
         while key in seen_keys:
@@ -520,55 +781,38 @@ def _build_references_bib(
         entries.append(f"@{entry_type}{{{key},\n  {field_lines}\n}}")
 
     idx = 1
-    for cit in (citation_map or []):
-        title = cit.get("paper_title") or cit.get("title") or ""
-        if not title or not _is_valid_reference_text(title):
-            continue
-        key = _make_bib_key(idx, cit.get("external_id") or cit.get("doi") or title[:20])
-        authors = _normalize_bib_authors(cit.get("authors", "Unknown"))
-        url = cit.get("source_url") or cit.get("url") or ""
-        fields = {
-            "title": escape_latex(title).replace("\\", ""),
-            "author": authors,
-            "year": str(cit.get("year", "")),
-            "doi": escape_latex(cit.get("doi", "")).replace("\\", ""),
-            "url": escape_latex(url).replace("\\", ""),
-            "journal": escape_latex(cit.get("journal", "")).replace("\\", ""),
-        }
-        if "arxiv" in str(url).lower() or cit.get("source") == "arxiv":
-            fields["eprint"] = escape_latex(
-                cit.get("external_id") or str(url).rstrip("/").split("/")[-1]
-            ).replace("\\", "")
-            fields["archivePrefix"] = "arXiv"
-        add_entry("article", key, {k: v for k, v in fields.items() if v})
+    structured = _structured_reference_items(citation_map, verified_references)
+    for item in structured:
+        item_key = _reference_item_key(item)
+        if item_key:
+            seen_item_keys.add(item_key)
+        key = _make_bib_key(idx, item.get("external_id") or item.get("doi") or item.get("title", "")[:20])
+        entry_type, fields = _reference_item_to_bib_fields(item)
+        add_entry(entry_type, key, fields)
         idx += 1
 
-    for vr in (verified_references or []):
-        title = vr.get("title") or vr.get("paper_title") or ""
-        if not title or not _is_valid_reference_text(title):
-            continue
-        key = _make_bib_key(idx, vr.get("external_id") or vr.get("doi") or title[:20])
-        authors = _normalize_bib_authors(vr.get("authors", "Unknown"))
-        fields = {
-            "title": escape_latex(title).replace("\\", ""),
-            "author": authors,
-            "year": str(vr.get("year", "")),
-            "doi": escape_latex(vr.get("doi", "")).replace("\\", ""),
-            "url": escape_latex(vr.get("source_url") or vr.get("url") or "").replace("\\", ""),
-        }
-        add_entry("article", key, {k: v for k, v in fields.items() if v})
-        idx += 1
-
-    refs = chapters.get("references", [])
-    if isinstance(refs, list):
-        for ref in refs:
-            if not ref or not isinstance(ref, str) or not _is_valid_reference_text(ref):
-                continue
-            if any(title_key in ref.lower() for title_key in seen_titles):
-                continue
-            key = _make_bib_key(idx, ref[:24])
-            add_entry("misc", key, {"note": escape_latex(ref).replace("\\", "")})
-            idx += 1
+    # 仅当无结构化文献时，尝试从 chapters.references 文本行解析
+    if not structured:
+        refs = chapters.get("references", [])
+        if isinstance(refs, list):
+            for ref in refs:
+                if not ref or not isinstance(ref, str) or not _is_valid_reference_text(ref):
+                    continue
+                parsed = parse_reference_line_to_item(ref)
+                if parsed.get("title"):
+                    item_key = _reference_item_key(parsed)
+                    if item_key and item_key in seen_item_keys:
+                        continue
+                    if item_key:
+                        seen_item_keys.add(item_key)
+                    key = _make_bib_key(idx, parsed.get("doi") or parsed.get("title", "")[:20])
+                    entry_type, fields = _reference_item_to_bib_fields(parsed)
+                    add_entry(entry_type, key, fields)
+                    idx += 1
+                else:
+                    key = _make_bib_key(idx, ref[:24])
+                    add_entry("misc", key, {"note": _bibtex_field_value(ref)})
+                    idx += 1
 
     bib_content = "\n\n".join(entries)
     return bib_content, keys
@@ -894,22 +1138,9 @@ def export_report_via_latex(
     project_info: Optional[Dict[str, Any]] = None,
     citation_map: Optional[List[Dict[str, Any]]] = None,
     verified_references: Optional[List[Dict[str, Any]]] = None,
-    fallback_markdown_pdf: bool = True,
 ) -> Dict[str, Any]:
     """
-    生成 LaTeX 源码并编译 PDF。
-
-    Returns:
-        {
-            "success": bool,
-            "latex_content": str,
-            "tex_file": str,
-            "bib_file": str | None,
-            "pdf_path": str | None,
-            "pdf_success": bool,
-            "warning": str | None,
-            "export_method": "latex" | "markdown_fallback",
-        }
+    生成 LaTeX 源码并编译 PDF（仅 latex_template，无 Markdown 回退）。
     """
     work_dir = Path(output_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -955,26 +1186,6 @@ def export_report_via_latex(
     warning = compile_result.get("warning") or "LaTeX PDF 生成失败"
     logger.warning(warning)
 
-    if fallback_markdown_pdf:
-        from app.services.pdf_export_service import export_markdown_to_pdf
-
-        pdf_path = work_dir / "report.pdf"
-        md_result = export_markdown_to_pdf(
-            markdown_content=result.get("markdown_content", ""),
-            output_path=str(pdf_path),
-        )
-        if md_result.get("success"):
-            return {
-                "success": True,
-                "latex_content": latex_content,
-                "tex_file": str(tex_path),
-                "bib_file": bib_file,
-                "pdf_path": md_result.get("pdf_path"),
-                "pdf_success": True,
-                "warning": f"LaTeX 编译失败，已回退 Markdown PDF：{warning}",
-                "export_method": "markdown_fallback",
-            }
-
     return {
         "success": False,
         "latex_content": latex_content,
@@ -990,86 +1201,3 @@ def export_report_via_latex(
 def get_reports_storage_dir() -> Path:
     """报告文件根目录 backend/storage/reports。"""
     return Path(__file__).resolve().parents[2] / "storage" / "reports"
-
-
-def regenerate_report_pdf(
-    report_file_id: str,
-    *,
-    markdown_content: Optional[str] = None,
-    fallback_markdown_pdf: bool = True,
-) -> Dict[str, Any]:
-    """
-    为已存在的报告目录重新生成 PDF。
-    优先 LaTeX 编译，失败则回退 Markdown → HTML → PDF。
-    """
-    work_dir = get_reports_storage_dir() / report_file_id
-    if not work_dir.is_dir():
-        return {
-            "success": False,
-            "pdf_success": False,
-            "pdf_path": None,
-            "warning": f"报告目录不存在: {work_dir}",
-            "export_method": None,
-        }
-
-    tex_path = work_dir / "report.tex"
-    pdf_path = work_dir / "report.pdf"
-
-    if tex_path.exists():
-        compile_result = compile_latex_to_pdf(work_dir)
-        if compile_result.get("success"):
-            return {
-                "success": True,
-                "pdf_success": True,
-                "pdf_path": str(pdf_path),
-                "warning": None,
-                "export_method": "latex",
-            }
-        warning = compile_result.get("warning") or "LaTeX 编译失败"
-        logger.warning("重新编译 LaTeX 失败: %s", warning)
-    else:
-        warning = "report.tex 不存在"
-
-    if not fallback_markdown_pdf:
-        return {
-            "success": False,
-            "pdf_success": False,
-            "pdf_path": None,
-            "warning": warning,
-            "export_method": "latex",
-        }
-
-    md_text = markdown_content
-    if not md_text:
-        md_path = work_dir / "report.md"
-        if md_path.exists():
-            md_text = md_path.read_text(encoding="utf-8")
-
-    if not md_text or not md_text.strip():
-        return {
-            "success": False,
-            "pdf_success": False,
-            "pdf_path": None,
-            "warning": f"{warning}；且无 Markdown 内容可回退",
-            "export_method": "latex",
-        }
-
-    from app.services.pdf_export_service import export_markdown_to_pdf
-
-    md_result = export_markdown_to_pdf(md_text, str(pdf_path))
-    if md_result.get("success"):
-        return {
-            "success": True,
-            "pdf_success": True,
-            "pdf_path": md_result.get("pdf_path"),
-            "warning": f"LaTeX 编译失败，已回退 Markdown PDF：{warning}",
-            "export_method": "markdown_fallback",
-        }
-
-    return {
-        "success": False,
-        "pdf_success": False,
-        "pdf_path": None,
-        "warning": md_result.get("warning") or warning,
-        "export_method": "latex",
-    }

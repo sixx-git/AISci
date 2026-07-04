@@ -238,12 +238,21 @@ class StageChatService:
 
         apply_report_dict(report, revised)
         report.extra_metadata = meta
-        if revised.get("markdown_content"):
-            report.markdown_content = str(revised["markdown_content"])
         if revised.get("title") or revised.get("paper_title"):
             report.title = str(revised.get("title") or revised.get("paper_title") or report.title)
+        # 报告正文仅存 structured chapters；PDF 由 LaTeX 模板编译
         report.updated_at = datetime.now(CHINA_TZ)
         self.db.commit()
+
+        pdf_regen: Optional[Dict[str, Any]] = None
+        if report.pdf_path:
+            try:
+                from app.services.report_service import ReportService
+
+                pdf_regen = ReportService(self.db).regenerate_pdf(report_id)
+                self.db.refresh(report)
+            except Exception as exc:
+                logger.warning("修订后 PDF 重新生成失败 report=%s: %s", report_id, exc)
 
         return {
             "report_id": report_id,
@@ -254,6 +263,8 @@ class StageChatService:
             "revision_history": meta["revision_history"],
             "chat_history": meta["chat_history"],
             "applied": True,
+            "pdf_success": (pdf_regen or {}).get("pdf_success"),
+            "export_method": (pdf_regen or {}).get("export_method"),
         }
 
     def _get_run(self, run_id: str) -> PipelineRun:

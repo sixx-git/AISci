@@ -22,6 +22,7 @@ from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtra
 from app.skills.literature.arxiv_search_skill import ArxivSearchSkill
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.literature.search_papers_skill import SearchPapersSkill
+from app.skills.literature.paper_full_text_rag_skill import PaperFullTextRAGSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
 logger = logging.getLogger(__name__)
@@ -964,6 +965,27 @@ class LiteratureMiningAgent:
             except Exception as e:
                 logger.warning(f"SearchPapersSkill 运行失败: {e}")
                 outputs["search_papers"] = {"success": False, "error": str(e)}
+
+            try:
+                rag_skill = PaperFullTextRAGSkill()
+                rag_result = await rag_skill.run(
+                    input_data={
+                        "project_id": project_id,
+                        "research_question": research_question,
+                        "query": research_question,
+                        "top_k": max(top_k, 8),
+                    },
+                    context={"stage": "literature_mining", "project_id": project_id},
+                )
+                outputs["paper_full_text_rag"] = {
+                    "success": rag_result.success,
+                    "data": rag_result.data,
+                    "warnings": rag_result.warnings,
+                    "errors": rag_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"PaperFullTextRAGSkill 运行失败: {e}")
+                outputs["paper_full_text_rag"] = {"success": False, "error": str(e)}
 
             try:
                 linking_skill = MultimodalDataLinkingSkill()

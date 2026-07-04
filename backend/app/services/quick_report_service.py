@@ -10,6 +10,7 @@ from app.schemas.pipeline import PipelineRunRequest
 from app.schemas.project import ProjectCreate, QuickReportRequest
 from app.services.pipeline_service import get_pipeline_service
 from app.services.project_service import ProjectService
+from app.core.domain_data_catalog import merge_domain_hints_into_config, parse_category_from_description
 
 logger = logging.getLogger(__name__)
 
@@ -37,21 +38,25 @@ class QuickReportService:
 
     def start(self, body: QuickReportRequest) -> Dict[str, Any]:
         research_question = build_research_question(body.question_name, body.file_description)
+        category = parse_category_from_description(body.file_description)
         project_svc = ProjectService(self.db)
         project = project_svc.create_project(
             ProjectCreate(
                 name=body.question_name.strip(),
                 description=body.file_description.strip(),
                 research_question=research_question,
+                research_domain=category or None,
                 expected_output="科研报告（一键生成）",
                 data_source=body.file_description.strip()[:500],
             )
         )
         config = dict(project.config or {})
         config["quick_report"] = True
-        config["data_spec_hints"] = {
-            "data_need_note": body.file_description.strip(),
-        }
+        config["data_spec_hints"] = merge_domain_hints_into_config(
+            {"data_need_note": body.file_description.strip()},
+            research_domain=category,
+            file_description=body.file_description.strip(),
+        )
         project.config = config
         self.db.commit()
         self.db.refresh(project)
@@ -130,9 +135,14 @@ class QuickReportService:
             )
         )
         final_report_id = meta.get("final_report_id")
-        can_resume = awaiting and (uploaded_count >= 1 or bool(
-            DatasetService(self.db).get_project_datasets(run.project_id)
-        ))
+        can_resume = (
+            awaiting and (uploaded_count >= 1 or bool(
+                DatasetService(self.db).get_project_datasets(run.project_id)
+            ))
+        ) or (
+            status_lower == "completed"
+            and uploaded_count >= 1
+        )
 
         return {
             "run_id": run.run_id,

@@ -50,7 +50,11 @@ def normalize_legacy_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         c.setdefault("availability", "catalog_only")
         c.setdefault("import_supported", False)
         c.setdefault("api_type", "catalog")
-    elif "openalex" in platform or "pubmed" in platform or "geo" in platform:
+    elif "openalex" in platform or "pubmed" in platform:
+        c.setdefault("availability", "reference_only")
+        c.setdefault("import_supported", False)
+        c.setdefault("api_type", "metadata")
+    elif "geo" in platform or "ncbi" in platform:
         c.setdefault("availability", "metadata_only")
         c.setdefault("import_supported", False)
         c.setdefault("api_type", "metadata")

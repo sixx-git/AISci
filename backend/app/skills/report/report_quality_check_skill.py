@@ -11,20 +11,9 @@ from app.skills.base import BaseSkill, SkillResult
 
 logger = logging.getLogger(__name__)
 
-CHECK_FIELDS = [
-    ("paper_title", "Paper Title"),
-    ("paper_abstract", "Paper Abstract"),
-    ("problem_statement", "Problem Statement"),
-    ("rationale", "Rationale"),
-    ("technical_details", "Technical Details"),
-    ("datasets", "Datasets"),
-    ("source", "Source"),
-    ("target", "Target"),
-    ("methods", "Methods"),
-    ("experiments", "Experiments"),
-    ("results", "Results"),
-    ("references", "References"),
-]
+from app.core.report_fields import REPORT_SECTION_FIELDS
+
+CHECK_FIELDS = REPORT_SECTION_FIELDS
 
 Qwen_KEYWORDS = [
     re.compile(r"千问", re.IGNORECASE),
@@ -133,6 +122,12 @@ class ReportQualityCheckSkill(BaseSkill):
         chapters = report_data.get("chapters", {})
         has_actual_or_simulated = self._check_results_structure(chapters)
 
+        missing_fields: List[str] = []
+        warnings: List[str] = []
+        critical_issues: List[str] = []
+        recommendations: List[str] = []
+        completed_fields = 0
+
         plots_with_source = 0
         plots_generated_from_real = 0
         plots_missing_source = []
@@ -156,12 +151,8 @@ class ReportQualityCheckSkill(BaseSkill):
                     "所有 plots 的 is_generated_from_real_data 均为 false，"
                     "建议基于真实数据生成图表"
                 )
-
-        missing_fields: List[str] = []
-        warnings: List[str] = []
-        critical_issues: List[str] = []
-        recommendations: List[str] = []
-        completed_fields = 0
+        if plots_generated_from_real > 0:
+            has_real_data_plots = True
 
         for key, label in CHECK_FIELDS:
             value = self._extract_field_value(report_data, chapters, key)
@@ -321,14 +312,22 @@ class ReportQualityCheckSkill(BaseSkill):
 
     @staticmethod
     def _check_results_structure(chapters: dict) -> bool:
-        results_obj = chapters.get("results")
+        from app.services.report_compliance_service import parse_chapter_value, _structured_item_count
+
+        results_obj = parse_chapter_value(chapters.get("results"))
         if isinstance(results_obj, dict):
-            has_actual = bool(results_obj.get("actual_results"))
-            has_simulated = bool(results_obj.get("simulated_results"))
+            has_actual = _structured_item_count(results_obj.get("actual_results")) > 0
+            has_simulated = _structured_item_count(results_obj.get("simulated_results")) > 0
             return has_actual or has_simulated
         if isinstance(results_obj, str):
             rl = results_obj.lower()
-            return any(kw in rl for kw in ["actual_result", "actual results", "simulated_result", "simulated results", "实际结果", "模拟结果"])
+            return any(
+                kw in rl
+                for kw in (
+                    "actual_result", "actual results", "simulated_result", "simulated results",
+                    "实际结果", "模拟结果", "合并 csv", "data_finder",
+                )
+            )
         return False
 
     # ────────────── Check Helpers ──────────────

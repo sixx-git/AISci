@@ -160,7 +160,7 @@ class StageHumanLoopService:
         parent_meta = parent_run.extra_metadata if isinstance(parent_run.extra_metadata, dict) else {}
         aux = parent_meta.get("auxiliary_results") or {}
         parent_output = parent_run.output_data if isinstance(parent_run.output_data, dict) else {}
-        for k in ("data_finder", "knowledge_graph", "evidence_reasoning"):
+        for k in ("data_finder", "evidence_reasoning"):
             if k in aux:
                 results[k] = aux[k]
             elif k in parent_output:

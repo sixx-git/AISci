@@ -12,9 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.models.research import Dataset
 from app.skills.modeling import (
-    BaselineModelTrainingSkill,
+    BaselineTrainingSkill,
+    DataCleaningPlanSkill,
     DataPreprocessingSkill,
     DatasetProfilingSkill,
+    ErrorAnalysisSkill,
+    ExperimentTrackingSkill,
+    FeatureEngineeringSkill,
     ModelEvaluationSkill,
     SelfCorrectionSkill,
     TaskTypeDetectionSkill,
@@ -99,6 +103,10 @@ class ModelingService:
             return {"success": False, "error": "; ".join(profile_result.errors)}
 
         profile = profile_result.data
+
+        clean_skill = DataCleaningPlanSkill()
+        clean_result = await clean_skill.run({"profile": profile}, {"stage": "modeling"})
+
         resolved_target = target_column or self._resolve_target_column(profile, ds)
         if not resolved_target:
             return {
@@ -123,6 +131,12 @@ class ModelingService:
         detected_task = task_result.data.get("task_type", "unknown")
         effective_task = detected_task if detected_task != "unknown" else "classification"
 
+        feat_skill = FeatureEngineeringSkill()
+        feat_result = await feat_skill.run(
+            {"profile": profile, "task_type": effective_task, "target_column": resolved_target},
+            {"stage": "modeling"},
+        )
+
         preprocess_skill = DataPreprocessingSkill()
         preprocess_result = await preprocess_skill.run(
             {
@@ -141,7 +155,7 @@ class ModelingService:
                 "target_column": resolved_target,
             }
 
-        train_skill = BaselineModelTrainingSkill()
+        train_skill = BaselineTrainingSkill()
         train_result = await train_skill.run(
             {
                 "task_type": effective_task,
@@ -176,6 +190,12 @@ class ModelingService:
                 "target_column": resolved_target,
             }
 
+        error_skill = ErrorAnalysisSkill()
+        error_result = await error_skill.run(
+            {"evaluation": eval_result.data},
+            {"stage": "modeling"},
+        )
+
         correction_skill = SelfCorrectionSkill()
         correction_result = await correction_skill.run(
             {
@@ -204,6 +224,9 @@ class ModelingService:
             "self_correction_suggestions": correction_result.data.get(
                 "self_correction_suggestions", []
             ),
+            "cleaning_plan": clean_result.data.get("cleaning_plan", []),
+            "feature_plan": feat_result.data.get("feature_plan", {}),
+            "error_analysis": error_result.data,
             "is_pilot_validation": correction_result.data.get("is_pilot_validation", False),
             "warnings": (
                 profile_result.warnings
@@ -215,6 +238,12 @@ class ModelingService:
             ),
             "created_at": datetime.now(CHINA_TZ).isoformat(),
         }
+
+        track_skill = ExperimentTrackingSkill()
+        await track_skill.run(
+            {"project_id": ds.project_id, "dataset_id": dataset_id, "run_payload": payload},
+            {"stage": "modeling"},
+        )
 
         self.save_result(ds.project_id, dataset_id, payload)
         self._update_dataset_metadata(ds, payload)

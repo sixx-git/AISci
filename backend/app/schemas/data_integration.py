@@ -220,4 +220,18 @@ def apply_data_spec_hints(
     if isinstance(user_note, str) and user_note.strip():
         spec["user_data_notes"] = user_note.strip()[:500]
 
+    from app.core.domain_data_catalog import enrich_data_spec_from_domain
+
+    domain_kw = hints.get("domain_keywords")
+    if isinstance(domain_kw, list) and domain_kw:
+        merged = list(dict.fromkeys([*(spec.get("domain_keywords") or []), *[str(x) for x in domain_kw if x]]))
+        spec["domain_keywords"] = merged[:20]
+
+    spec = enrich_data_spec_from_domain(
+        spec,
+        research_domain=str(hints.get("research_category") or hints.get("research_domain") or ""),
+        file_description=str(user_note or ""),
+        research_question=str(spec.get("research_question") or ""),
+    )
+
     return spec

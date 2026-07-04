@@ -24,6 +24,15 @@ class CatalogConnector:
         if data_spec.get("entities_of_interest"):
             keywords.extend(data_spec.get("entities_of_interest") or [])
         modality_filter = list(data_spec.get("modality_filter") or data_spec.get("modalities") or [])
+        from app.core.domain_data_catalog import infer_field_from_text
+
+        research_field = str(data_spec.get("research_field_inferred") or "").strip()
+        if not research_field:
+            research_field = infer_field_from_text(
+                research_domain=str(data_spec.get("research_category") or ""),
+                file_description=str(data_spec.get("user_data_notes") or ""),
+                research_question=query,
+            )
         discovery = DatasetDiscoverySkill()
         res = await discovery.run(
             {
@@ -31,6 +40,7 @@ class CatalogConnector:
                 "keywords": keywords,
                 "modality_filter": modality_filter,
                 "max_results": limit,
+                "research_field": research_field,
             },
             {},
         )

@@ -101,23 +101,6 @@ class FeedbackHubService:
         self.save_hub(project_id, hub)
 
         side_effects: Dict[str, Any] = {}
-        if source == "kg" and self.db and payload:
-            try:
-                from app.services.knowledge_graph_service import get_knowledge_graph_service
-
-                kg_res = get_knowledge_graph_service(self.db).apply_feedback_sync(
-                    project_id,
-                    {
-                        "action": payload.get("action", "update"),
-                        "target_type": payload.get("target_type", "edge"),
-                        "target_id": payload.get("target_id"),
-                        "payload": payload,
-                    },
-                )
-                side_effects["kg"] = kg_res.get("feedback_applied")
-            except Exception as exc:
-                logger.warning("Feedback Hub KG 更新失败: %s", exc)
-                side_effects["kg_error"] = str(exc)
 
         rerun_stages = RERUN_TARGETS.get(target, []) if trigger_rerun else []
         return {

@@ -128,7 +128,7 @@ export function RequiredDatasetUploadPanel({
   if (!candidates.length) {
     return (
       <Card className="p-6 text-sm text-bp-muted">
-        暂无需要手动下载的外部数据集。若 Pipeline 仍在等待，请稍后刷新。
+        当前研究领域未匹配到需手动下载的外部数据集。理论/综述类报告可直接继续生成，无需上传数据。
       </Card>
     );
   }
@@ -142,7 +142,7 @@ export function RequiredDatasetUploadPanel({
       className="border-bp-yellow/20"
     >
       <p className="text-sm text-bp-muted mb-4">
-        系统根据研究问题推荐以下数据源。请下载后上传表格/化学结构文件（如 ChEMBL 的 chembl_37.sdf.gz），或将多文件目录打包为 ZIP；上传至少
+        系统根据<strong className="text-bp-text">研究领域</strong>推荐以下开放数据源。请下载后上传 CSV/TSV/JSON/FITS 等文件，化学/结构类研究可上传 SDF/MOL/SMILES，天文光谱立方可上传 .fits，或将多文件目录打包为 ZIP；上传至少
         <strong className="text-bp-text"> 1 个</strong> 数据集后可继续假设生成与报告流程。
       </p>
 
@@ -156,11 +156,11 @@ export function RequiredDatasetUploadPanel({
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bp-panel/80 text-left text-xs text-bp-muted">
-              <th className="px-3 py-2.5 font-medium">数据集名称</th>
-              <th className="px-3 py-2.5 font-medium">来源</th>
-              <th className="px-3 py-2.5 font-medium">下载地址</th>
-              <th className="px-3 py-2.5 font-medium">状态</th>
-              <th className="px-3 py-2.5 font-medium w-[140px]">上传</th>
+              <th className="px-3 py-2.5 font-medium min-w-[12rem]">数据集名称</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap w-[1%]">来源</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap w-[1%]">下载地址</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap w-[1%]">状态</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap w-[140px]">上传</th>
             </tr>
           </thead>
           <tbody>
@@ -173,22 +173,22 @@ export function RequiredDatasetUploadPanel({
 
               return (
                 <tr key={cid || String(c.dataset_name)} className="border-t border-bp-border/60">
-                  <td className="px-3 py-3 align-top">
+                  <td className="px-3 py-3 align-top min-w-0">
                     <div className="font-medium text-bp-text">{String(c.dataset_name || '未命名')}</div>
                     {c.description && (
                       <p className="text-xs text-bp-muted mt-1 line-clamp-2">{String(c.description)}</p>
                     )}
                   </td>
-                  <td className="px-3 py-3 align-top text-bp-muted whitespace-nowrap">
+                  <td className="px-3 py-3 align-top text-bp-muted whitespace-nowrap w-[1%]">
                     {String(c.source_platform || '—')}
                   </td>
-                  <td className="px-3 py-3 align-top">
+                  <td className="px-3 py-3 align-top whitespace-nowrap w-[1%]">
                     {url ? (
                       <a
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-bp-cyan hover:underline text-xs break-all"
+                        className="inline-flex items-center gap-1 text-bp-cyan hover:underline text-xs whitespace-nowrap"
                       >
                         <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                         打开下载页
@@ -197,23 +197,30 @@ export function RequiredDatasetUploadPanel({
                       <span className="text-bp-muted text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 align-top">
-                    <span className={`inline-flex items-center gap-1 text-xs ${status.cls}`}>
-                      {statusKey === 'processing' && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {statusKey === 'merged' && <CheckCircle2 className="w-3 h-3" />}
-                      {statusKey === 'pending_download' && <Clock className="w-3 h-3" />}
-                      {statusKey === 'failed' && <AlertCircle className="w-3 h-3" />}
+                  <td className="px-3 py-3 align-top whitespace-nowrap w-[1%]">
+                    <span className={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status.cls}`}>
+                      {statusKey === 'processing' && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+                      {statusKey === 'merged' && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+                      {statusKey === 'pending_download' && <Clock className="w-3 h-3 shrink-0" />}
+                      {statusKey === 'failed' && <AlertCircle className="w-3 h-3 shrink-0" />}
                       {status.text}
                     </span>
                     {c.user_upload_filename && (
-                      <p className="text-xs text-bp-muted mt-1">{String(c.user_upload_filename)}</p>
+                      <p className="text-xs text-bp-muted mt-1 max-w-[10rem] truncate" title={String(c.user_upload_filename)}>
+                        {String(c.user_upload_filename)}
+                      </p>
+                    )}
+                    {c.user_upload_error && statusKey === 'failed' && (
+                      <p className="text-xs text-danger-400/90 mt-1 max-w-[12rem]" title={String(c.user_upload_error)}>
+                        {String(c.user_upload_error)}
+                      </p>
                     )}
                   </td>
-                  <td className="px-3 py-3 align-top">
+                  <td className="px-3 py-3 align-top whitespace-nowrap w-[140px]">
                     <input
                       ref={(el) => { fileRefs.current[cid] = el; }}
                       type="file"
-                      accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
+                      accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.fits,.fit,.fts,.fits.gz,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];

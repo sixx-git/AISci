@@ -122,7 +122,7 @@ export function ExternalCandidateTodoPanel({
                 <input
                   ref={(el) => { fileRefs.current[cid] = el; }}
                   type="file"
-                  accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
+                  accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.jsonl,.zip,.fits,.fit,.fts,.fits.gz,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];

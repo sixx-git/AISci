@@ -4,7 +4,7 @@ import {
   HelpCircle,
   BookOpen, Lightbulb, FlaskConical,
   FileText, TrendingUp, Play,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, Database,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -21,13 +21,17 @@ import { DataUploadGateFloating } from '@/components/DataUploadGateFloating';
 import { useDataUploadGate } from '@/hooks/useDataUploadGate';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
 import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
-import { KnowledgeGraphPage } from '@/components/KnowledgeGraphPage';
 import { PromptManagementPage } from '@/components/PromptManagementPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
+import { buildPipelineProgressNodes, resolveCurrentPipelineStageLabel } from '@/lib/pipelineProgressNodes';
+import {
+  resolveProjectDisplayStatus,
+} from '@/lib/projectStatus';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
 import { VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
 import { researchQuestionKey } from '@/lib/storageKeys';
+import { resolveResearchField } from '@/lib/researchField';
 import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
 import { ProjectWorkspaceHeader } from '@/components/workspace/ProjectWorkspaceHeader';
 import { ProjectTabNav } from '@/components/workspace/ProjectTabNav';
@@ -51,23 +55,11 @@ function getStoredResearchQuestion(projectId: string): string {
   }
 }
 
-function getStoredResearchDomain(projectId: string): string {
-  try {
-    const raw = localStorage.getItem(researchQuestionKey(projectId));
-    if (!raw) return '';
-    const parsed = JSON.parse(raw);
-    return parsed.researchDomain || parsed.research_domain || '';
-  } catch {
-    return '';
-  }
-}
-
 // ============ Pipeline 阶段中英文映射表 ============
 const STAGE_CN_MAP: Record<string, string> = {
   problem_understanding: '问题理解',
   literature_mining: '文献挖掘',
   data_acquisition: '数据采集',
-  knowledge_graph: '知识图谱',
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
@@ -93,7 +85,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
             <p>暂无统计数据</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {stats.map((stat, idx) => (
               <div key={idx} className="bp-metric-box text-center">
                 <div className="max-w-full truncate text-2xl font-bold text-bp-cyan" title={stat.value}>{stat.value}</div>
@@ -135,44 +127,36 @@ function QuestionsTab({
   projectId,
   projectMode,
   onSaved,
+  pollWhileRunning,
+  revalidateKey,
 }: {
   projectId: string;
   projectMode?: string;
   onSaved?: () => void;
+  pollWhileRunning?: boolean;
+  revalidateKey?: number;
 }) {
-  return <ResearchQuestionPage projectId={projectId} projectMode={projectMode} onSaved={onSaved} />;
+  return (
+    <ResearchQuestionPage
+      projectId={projectId}
+      projectMode={projectMode}
+      onSaved={onSaved}
+      pollWhileRunning={pollWhileRunning}
+      revalidateKey={revalidateKey}
+    />
+  );
 }
 
 function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
 }
 
-function KnowledgeGraphTab({
-  projectId,
-  projectMode,
-  researchQuestion,
-  focusNodeId,
-}: {
-  projectId: string;
-  projectMode?: string;
-  researchQuestion?: string;
-  focusNodeId?: string | null;
-}) {
-  return (
-    <KnowledgeGraphPage
-      projectId={projectId}
-      projectMode={projectMode}
-      researchQuestion={researchQuestion}
-      focusNodeId={focusNodeId}
-    />
-  );
-}
-
-function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted }: {
+function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted, onPipelineStarted }: {
   projectId: string;
   researchQuestion: string;
   questionSource?: 'backend' | 'localStorage' | 'none';
   onPipelineCompleted?: (result: PipelineRunResult) => void;
+  onPipelineStarted?: (runId: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -188,7 +172,13 @@ function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCo
           研究问题已从项目配置读取
         </div>
       )}
-      <WorkflowPage projectId={projectId} researchQuestion={researchQuestion} compact onPipelineCompleted={onPipelineCompleted} />
+      <WorkflowPage
+        projectId={projectId}
+        researchQuestion={researchQuestion}
+        compact
+        onPipelineCompleted={onPipelineCompleted}
+        onPipelineStarted={onPipelineStarted}
+      />
     </div>
   );
 }
@@ -268,10 +258,23 @@ export function ProjectWorkspace() {
   const [revalidateKey, setRevalidateKey] = useState(0);
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [pipelineRuns, setPipelineRuns] = useState<PipelineRunSummary[]>([]);
+  const [latestRunStages, setLatestRunStages] = useState<
+    Array<{ stage?: string; status?: string; output_data?: unknown }>
+  >([]);
+  const [project, setProject] = useState<ProjectOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const handlePipelineCompleted = useCallback((_result: PipelineRunResult) => {
     setLatestRunId(_result.run_id);
     setIsPipelineRunning(false);
+    setRevalidateKey((k) => k + 1);
+  }, []);
+
+  const handlePipelineStarted = useCallback((runId: string) => {
+    setLatestRunId(runId);
+    setIsPipelineRunning(true);
     setRevalidateKey((k) => k + 1);
   }, []);
 
@@ -302,11 +305,74 @@ export function ProjectWorkspace() {
     return () => { cancelled = true; };
   }, [id, revalidateKey]);
 
+  const latestRun = pipelineRuns[0];
+
   useEffect(() => {
-    if (pipelineRuns[0]?.run_id) {
-      setLatestRunId(pipelineRuns[0].run_id);
+    if (latestRun?.run_id) {
+      setLatestRunId(latestRun.run_id);
     }
-  }, [pipelineRuns]);
+  }, [latestRun?.run_id]);
+
+  useEffect(() => {
+    const terminal = latestRun?.status === 'failed' || latestRun?.status === 'completed';
+    if (terminal) {
+      setIsPipelineRunning(false);
+    }
+  }, [latestRun?.status]);
+
+  const isRunActive = isPipelineRunning || latestRun?.status === 'running';
+
+  // 拉取 / 轮询最新运行的阶段状态（与顶部「运行中」徽章同步）
+  useEffect(() => {
+    const runId = latestRun?.run_id;
+    if (!runId) {
+      setLatestRunStages([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const sortRuns = (runs: PipelineRunSummary[]) =>
+      [...runs].sort(
+        (a, b) =>
+          new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime(),
+      );
+
+    async function refreshRunDetail() {
+      try {
+        const detailRes = await pipelineService.getRunDetail(runId!);
+        if (cancelled) return;
+        if (detailRes.code === 200 && Array.isArray(detailRes.data?.stages)) {
+          setLatestRunStages(detailRes.data.stages);
+        }
+
+        const [runsRes, projRes] = await Promise.all([
+          pipelineService.getRuns(id),
+          projectService.getProject(id),
+        ]);
+        if (cancelled) return;
+        if (runsRes.code === 200 && Array.isArray(runsRes.data)) {
+          setPipelineRuns(sortRuns(runsRes.data));
+        }
+        if (projRes.code === 200 && projRes.data) {
+          setProject(projRes.data);
+        }
+      } catch {
+        /* 轮询失败时保留上次阶段快照 */
+      }
+    }
+
+    refreshRunDetail();
+    if (isRunActive) {
+      timer = setInterval(refreshRunDetail, 2000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [id, latestRun?.run_id, isRunActive, revalidateKey]);
 
   const dataUploadGate = useDataUploadGate(id, latestRunId ?? pipelineRuns[0]?.run_id ?? null);
   const [dataGateDismissed, setDataGateDismissed] = useState(false);
@@ -315,11 +381,6 @@ export function ProjectWorkspace() {
     activeTab === 'datasets' && searchParams.get('subtab') === 'required-datasets';
 
   // --- 项目数据加载 ---
-  const [project, setProject] = useState<ProjectOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadTick, setReloadTick] = useState(0);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -354,26 +415,20 @@ export function ProjectWorkspace() {
       ? 'Federated Learning Scientist'
       : 'General AISci';
 
-  const resolvedResearchField = useMemo(() => {
-    if (project?.research_field) return project.research_field;
-    return getStoredResearchDomain(id || '') || '未知领域';
-  }, [project?.research_field, id]);
+  const resolvedResearchField = useMemo(
+    () => resolveResearchField(project, id, latestRunStages),
+    [project, id, latestRunStages],
+  );
 
-  // --- 当前阶段 ---
-  const resolvedCurrentStage = useMemo(() => {
-    if (isPipelineRunning) return '运行中';
-    const latestRun = pipelineRuns[0];
-    if (!latestRun) return '未开始';
-    if (latestRun.status === 'completed') return '已完成';
-    if (latestRun.status === 'running') return '运行中';
-    if (latestRun.status === 'failed') {
-      const failedCn = latestRun.failed_stage
-        ? STAGE_CN_MAP[latestRun.failed_stage] || latestRun.failed_stage
-        : '';
-      return failedCn ? `失败于 ${failedCn}` : '失败';
-    }
-    return '未开始';
-  }, [isPipelineRunning, pipelineRuns]);
+  const resolvedCurrentStage = useMemo(
+    () => resolveCurrentPipelineStageLabel(
+      latestRun,
+      latestRunStages,
+      STAGE_CN_MAP,
+      { isPipelineStarting: isPipelineRunning && !latestRun },
+    ),
+    [latestRun, latestRunStages, isPipelineRunning],
+  );
 
   // --- 研究问题汇总（后端优先 → localStorage fallback） ---
   const resolvedResearchQuestion = useMemo(() => {
@@ -398,70 +453,43 @@ export function ProjectWorkspace() {
 
   // --- 概览统计 ---
   const overviewStats = useMemo(() => {
-    const latestRun = pipelineRuns[0];
     return [
       { label: 'Pipeline 运行次数', value: String(pipelineRuns.length) },
-      {
-        label: '最新运行状态',
-        value: latestRun
-          ? latestRun.status === 'completed' ? '已完成'
-          : latestRun.status === 'failed' ? '失败'
-          : latestRun.status === 'running' ? '运行中'
-          : latestRun.status
-          : '无记录',
-      },
       { label: '研究领域', value: resolvedResearchField },
       { label: '当前阶段', value: resolvedCurrentStage },
-      {
-        label: '项目状态',
-        value: project?.status === 'completed' ? '已完成'
-          : project?.status === 'running' || project?.status === 'in_progress' ? '运行中'
-          : '草稿',
-      },
-      { label: '创建日期', value: formatDate(project?.created_at) },
     ];
-  }, [pipelineRuns, resolvedResearchField, resolvedCurrentStage, project?.status, project?.created_at]);
+  }, [pipelineRuns.length, resolvedResearchField, resolvedCurrentStage]);
 
-  // --- Pipeline 节点 ---
-  const overviewPipelineNodes = useMemo(() => {
-    const latestRun = pipelineRuns[0];
-    const stages = [
+  // --- Pipeline 节点（与阶段执行记录对齐） ---
+  const pipelineStageDefs = useMemo(
+    () => [
       { id: 'problem_understanding', label: '问题理解', icon: HelpCircle },
       { id: 'literature_mining', label: '文献挖掘', icon: BookOpen },
+      { id: 'data_acquisition', label: '数据采集', icon: Database },
       { id: 'knowledge_gap', label: '知识缺口', icon: AlertTriangle },
       { id: 'hypothesis_generation', label: '假设生成', icon: Lightbulb },
       { id: 'hypothesis_review', label: '假设评估', icon: CheckCircle2 },
       { id: 'experiment_design', label: '实验设计', icon: FlaskConical },
       { id: 'small_validation', label: '小样验证', icon: TrendingUp },
       { id: 'report_generation', label: '报告生成', icon: FileText },
-    ];
+    ],
+    [],
+  );
 
-    const runStatus = latestRun?.status;
-    const failedStageId = latestRun?.failed_stage;
+  const overviewPipelineNodes = useMemo(
+    () => buildPipelineProgressNodes(
+      pipelineStageDefs,
+      latestRunStages,
+      latestRun?.status,
+      latestRun?.failed_stage,
+    ),
+    [pipelineStageDefs, latestRunStages, latestRun?.status, latestRun?.failed_stage],
+  );
 
-    return stages.map((stage, idx) => {
-      let status: 'pending' | 'running' | 'completed' | 'error';
-      if (!runStatus || runStatus === 'pending') {
-        status = 'pending';
-      } else if (runStatus === 'completed') {
-        status = 'completed';
-      } else if (runStatus === 'failed') {
-        if (failedStageId && stage.id === failedStageId) {
-          status = 'error';
-        } else if (failedStageId) {
-          const failedIdx = stages.findIndex(s => s.id === failedStageId);
-          status = failedIdx >= 0 && idx < failedIdx ? 'completed' : 'pending';
-        } else {
-          status = 'pending';
-        }
-      } else if (runStatus === 'running') {
-        status = 'pending';
-      } else {
-        status = 'pending';
-      }
-      return { ...stage, status };
-    });
-  }, [pipelineRuns]);
+  const headerDisplayStatus = resolveProjectDisplayStatus(
+    project?.status,
+    latestRun?.status,
+  );
 
   // --- 保存研究问题后刷新项目数据 ---
   const handleResearchSaved = () => {
@@ -520,18 +548,17 @@ export function ProjectWorkspace() {
       case 'overview':
         return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
       case 'questions':
-        return <QuestionsTab projectId={id} projectMode={resolvedProjectMode} onSaved={handleResearchSaved} />;
-      case 'literature':
-        return <LiteratureTab projectId={id} />;
-      case 'knowledge_graph':
         return (
-          <KnowledgeGraphTab
+          <QuestionsTab
             projectId={id}
             projectMode={resolvedProjectMode}
-            researchQuestion={resolvedResearchQuestion}
-            focusNodeId={searchParams.get('node_id')}
+            onSaved={handleResearchSaved}
+            pollWhileRunning={isRunActive}
+            revalidateKey={revalidateKey}
           />
         );
+      case 'literature':
+        return <LiteratureTab projectId={id} />;
       case 'datasets':
         return <DatasetPage projectId={id} projectMode={resolvedProjectMode} researchQuestion={resolvedResearchQuestion} />;
       case 'workflow':
@@ -541,6 +568,7 @@ export function ProjectWorkspace() {
             researchQuestion={resolvedResearchQuestion}
             questionSource={questionSource}
             onPipelineCompleted={handlePipelineCompleted}
+            onPipelineStarted={handlePipelineStarted}
           />
         );
       case 'prompts':
@@ -579,7 +607,7 @@ export function ProjectWorkspace() {
 
       <ProjectWorkspaceHeader
         projectName={project.name}
-        status={(project.status as any) || 'draft'}
+        status={headerDisplayStatus}
         researchField={resolvedResearchField}
         projectModeLabel={projectModeLabel}
         currentStage={resolvedCurrentStage}

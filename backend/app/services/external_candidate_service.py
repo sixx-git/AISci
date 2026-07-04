@@ -64,10 +64,14 @@ def sync_candidate_upload_status(candidate: Dict[str, Any]) -> None:
 
 
 def list_manual_candidates(candidates: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """需用户手动下载的候选（含已上传处理中/已完成）。"""
+    """需用户手动下载的候选（含已上传处理中/已完成）；排除论文元数据与低相关条目。"""
+    from app.core.research_field import is_actionable_dataset_candidate
+
     ensured = ensure_candidate_ids(candidates)
     manual: List[Dict[str, Any]] = []
     for c in ensured:
+        if not is_actionable_dataset_candidate(c):
+            continue
         availability = str(c.get("availability") or "")
         if availability in MANUAL_AVAILABILITY or c.get("import_supported") is False:
             manual.append(c)
@@ -122,7 +126,7 @@ def _resolve_upload_targets(upload_dir: str, source_path: str, original_filename
         _extract_zip_archive(source_path, extract_dir)
         files = _collect_parseable_files(extract_dir)
         if not files:
-            raise ValueError("ZIP 内未找到可解析的 CSV/JSON/SDF/MOL/SMILES 等文件")
+            raise ValueError("ZIP 内未找到可解析的 CSV/JSON/FITS/SDF/MOL/SMILES 等文件")
         return files, extract_dir
     return [source_path], None
 
@@ -148,7 +152,7 @@ class ExternalCandidateService:
 
         if not is_allowed_upload_filename(original_filename):
             raise ValueError(
-                "不支持的上传格式，请使用 CSV/TSV/XLSX/JSON/ZIP/SDF/MOL/SMILES（含 .sdf.gz）"
+                "不支持的上传格式，请使用 CSV/TSV/XLSX/JSON/ZIP/FITS/SDF/MOL/SMILES（含 .fits.gz）"
             )
 
         cand["user_upload_status"] = STATUS_PROCESSING
@@ -185,7 +189,15 @@ class ExternalCandidateService:
                     context={"stage": "external_candidate_upload"},
                 )
                 if tables:
-                    tbl = dict(tables[0])
+                    tbl = dict(max(
+                        tables,
+                        key=lambda t: (
+                            1 if t.get("extraction_method") in (
+                                "fits_data", "tabular_file", "chem_structure", "fits_catalog",
+                            ) else 0,
+                            int(t.get("row_count") or 0),
+                        ),
+                    ))
                     tbl["source_file"] = os.path.relpath(file_path, upload_dir)
                     break
                 last_err = "未能从该文件解析出表格数据"

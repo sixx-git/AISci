@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils';
 
 /**
- * 统一状态标签 —— 5 种标准状态：
- *   pending     → 灰色（未开始）
- *   running     → 蓝色（运行中）
- *   completed   → 绿色（已完成）
- *   failed      → 红色（失败）
- *   human_review → 紫色（需人工确认）
+ * 统一状态标签：
+ *   pending              → 灰色（未开始）
+ *   running              → 蓝色（运行中）
+ *   completed            → 绿色（已完成）
+ *   failed               → 红色（失败）
+ *   awaiting_data_upload → 黄色（待上传数据，含原 human_review_required）
  */
 export type StatusType =
   | 'pending'
@@ -14,6 +14,7 @@ export type StatusType =
   | 'in_progress'
   | 'completed'
   | 'failed'
+  | 'awaiting_data_upload'
   | 'human_review'
   | 'archived'
   // 向后兼容旧类型
@@ -33,7 +34,8 @@ const statusConfig: Record<StatusType, { className: string; label: string }> = {
   in_progress:  { className: 'badge-running',   label: '运行中' },
   completed:    { className: 'badge-completed', label: '已完成' },
   failed:       { className: 'badge-failed',    label: '失败' },
-  human_review: { className: 'badge-review',    label: '需人工确认' },
+  awaiting_data_upload: { className: 'badge-awaiting-data', label: '待上传数据' },
+  human_review: { className: 'badge-awaiting-data', label: '待上传数据' },
   archived:     { className: 'badge-pending',   label: '已归档' },
   // 别名
   error:   { className: 'badge-failed',         label: '失败' },

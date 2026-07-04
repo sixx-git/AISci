@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _document_publication_year(doc: Document) -> Optional[int]:
+    """从 publication_date 或 metadata_json 提取发表年份。"""
+    meta = doc.metadata_json or {}
+    year = meta.get("year")
+    if year is not None:
+        try:
+            return int(year)
+        except (ValueError, TypeError):
+            pass
+    if doc.publication_date:
+        return doc.publication_date.year
+    return None
+
+
 @dataclass
 class SearchResult:
     """搜索结果（含完整文献元数据，供引用）"""
@@ -225,7 +239,7 @@ class VectorStore:
                     "source_title": doc.title or doc.filename,
                     # ── 文献引用元数据 ──
                     "authors": doc.authors,
-                    "year": doc.year,
+                    "year": _document_publication_year(doc),
                     "source_type": doc.source_type.value if doc.source_type else None,
                     "doi": doc.doi,
                     "external_id": doc.external_id,

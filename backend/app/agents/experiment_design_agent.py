@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.experiment.experiment_sanity_check_skill import ExperimentSanityCheckSkill
+from app.skills.experiment.experiment_plan_critic_skill import ExperimentPlanCriticSkill
 from app.skills.data.multimodal_ingest_skill import MultimodalDataIngestSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 from app.skills.data.dataset_discovery_skill import DatasetDiscoverySkill
@@ -104,6 +105,10 @@ class ExperimentDesignAgent:
                 "experiment_design",
                 {"hypothesis_info": hypothesis_info},
             )
+            if data_files:
+                prompt += "\n\n【项目已上传数据集 — 必须基于以下真实文件设计实验，禁止编造或推荐替代公开数据集】\n"
+                for fp in data_files[:12]:
+                    prompt += f"- {fp}\n"
             if validation_feedback:
                 prompt += "\n\n【上一轮小样验证/沙箱反馈 — 必须据此修订实验设计】\n"
                 for i, note in enumerate(validation_feedback[:8], 1):
@@ -170,13 +175,17 @@ class ExperimentDesignAgent:
             )
 
             ds_output = result.get("skill_outputs", {}).get("dataset_discovery", {})
-            if ds_output.get("success") and ds_output.get("data"):
+            if ds_output.get("success") and ds_output.get("data") and not ds_output.get("skipped"):
                 result["recommended_public_datasets"] = ds_output["data"].get("datasets", [])
             md_output = result.get("skill_outputs", {}).get("multimodal_data_ingest", {})
             if md_output.get("success") and md_output.get("data"):
                 result["project_datasets"] = md_output["data"].get("datasets", [])
+            elif data_files:
+                result["project_datasets"] = [{"file_path": fp} for fp in data_files]
             if not result.get("project_datasets") and not result.get("recommended_public_datasets"):
                 result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
+            elif result.get("project_datasets"):
+                result["data_gap"] = []
 
             logger.info("实验设计完成")
 
@@ -212,6 +221,26 @@ class ExperimentDesignAgent:
             except Exception as e:
                 logger.warning(f"ExperimentSanityCheckSkill 失败: {e}")
                 outputs["experiment_sanity_check"] = {"success": False, "error": str(e)}
+
+            try:
+                critic_skill = ExperimentPlanCriticSkill()
+                critic_result = await critic_skill.run(
+                    input_data={
+                        "experiment_design": result,
+                        "hypothesis": hypothesis,
+                        "literature_facts": literature_facts,
+                    },
+                    context={"stage": "experiment_design"},
+                )
+                outputs["experiment_plan_critic"] = {
+                    "success": critic_result.success,
+                    "data": critic_result.data,
+                    "warnings": critic_result.warnings,
+                    "errors": critic_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ExperimentPlanCriticSkill 失败: {e}")
+                outputs["experiment_plan_critic"] = {"success": False, "error": str(e)}
 
             multimodal_datasets = []
             if data_files:
@@ -259,20 +288,28 @@ class ExperimentDesignAgent:
 
             try:
                 discovery_skill = DatasetDiscoverySkill()
-                discovery_result = await discovery_skill.run(
-                    input_data={
-                        "research_question": hypothesis,
-                        "keywords": [],
-                        "max_results": 10,
-                    },
-                    context={"stage": "experiment_design"},
-                )
-                outputs["dataset_discovery"] = {
-                    "success": discovery_result.success,
-                    "data": discovery_result.data,
-                    "warnings": discovery_result.warnings,
-                    "errors": discovery_result.errors,
-                }
+                if data_files:
+                    outputs["dataset_discovery"] = {
+                        "success": True,
+                        "skipped": True,
+                        "reason": "项目已上传数据集，跳过公开数据集推荐",
+                        "data": {"datasets": []},
+                    }
+                else:
+                    discovery_result = await discovery_skill.run(
+                        input_data={
+                            "research_question": hypothesis,
+                            "keywords": [],
+                            "max_results": 10,
+                        },
+                        context={"stage": "experiment_design"},
+                    )
+                    outputs["dataset_discovery"] = {
+                        "success": discovery_result.success,
+                        "data": discovery_result.data,
+                        "warnings": discovery_result.warnings,
+                        "errors": discovery_result.errors,
+                    }
             except Exception as e:
                 logger.warning(f"DatasetDiscoverySkill 失败: {e}")
                 outputs["dataset_discovery"] = {"success": False, "error": str(e)}

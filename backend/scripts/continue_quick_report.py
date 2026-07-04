@@ -15,6 +15,7 @@ from app.services.pipeline_service import get_pipeline_service
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_id", help="Pipeline run_id")
+    parser.add_argument("--force", action="store_true", help="跳过数据上传强制继续")
     args = parser.parse_args()
 
     init_db()
@@ -25,7 +26,7 @@ def main() -> int:
     try:
         svc = get_pipeline_service(db)
         print("=== resume_after_data_upload ===")
-        info = svc.resume_after_data_upload(args.run_id)
+        info = svc.resume_after_data_upload(args.run_id, force=args.force)
         print(json.dumps(info, ensure_ascii=False, indent=2))
         print("=== execute_pipeline_run (sync) ===")
         svc.execute_pipeline_run(args.run_id)

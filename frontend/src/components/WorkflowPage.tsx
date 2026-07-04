@@ -41,6 +41,7 @@ interface WorkflowPageProps {
   researchQuestion?: string;
   compact?: boolean;
   onPipelineCompleted?: (result: PipelineRunResult) => void;
+  onPipelineStarted?: (runId: string) => void;
 }
 
 type RunState = 'idle' | 'submitting' | 'running' | 'polling';
@@ -480,6 +481,7 @@ export function WorkflowPage({
   researchQuestion,
   compact: _compact = false,
   onPipelineCompleted,
+  onPipelineStarted,
 }: WorkflowPageProps) {
   const [nodes, setNodes] = useState<AgentNodeData[]>(() => createInitialNodes());
   const [selectedId, setSelectedId] = useState<string>('');
@@ -960,6 +962,7 @@ export function WorkflowPage({
       currentRunIdRef.current = result.run_id;
       rememberLatestRunId(result.run_id);
       setRunState('running');
+      onPipelineStarted?.(result.run_id);
 
       startPolling(result.run_id);
     } catch (err: unknown) {

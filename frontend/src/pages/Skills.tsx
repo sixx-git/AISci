@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Puzzle, Search, FilterX, RefreshCw, Loader2, Bot, ToggleLeft, ToggleRight, Lock,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
@@ -13,6 +14,7 @@ import { cn } from '@/lib/utils';
 
 const filterSelectClass = 'input-field select-field w-full h-10 py-2 text-sm';
 const filterButtonClass = 'h-10 shrink-0';
+const PAGE_SIZE = 12;
 
 export function Skills() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
@@ -20,6 +22,7 @@ export function Skills() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const [categoryFilter, setCategoryFilter] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
@@ -55,6 +58,23 @@ export function Skills() {
   useEffect(() => {
     load(true);
   }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, agentFilter, appliedKeyword]);
+
+  const totalPages = Math.max(1, Math.ceil(skills.length / PAGE_SIZE));
+
+  const paginatedSkills = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return skills.slice(start, start + PAGE_SIZE);
+  }, [skills, page]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const categoryOptions = useMemo(
     () => summary?.categories ?? [],
@@ -224,7 +244,16 @@ export function Skills() {
 
       {skills.length > 0 && (
         <div className="space-y-3">
-          {skills.map((skill) => (
+          <div className="flex items-center justify-between px-1 text-xs text-bp-muted">
+            <span>
+              共 {skills.length} 项技能
+              {totalPages > 1 && ` · 第 ${page} / ${totalPages} 页`}
+            </span>
+            {totalPages > 1 && (
+              <span>每页 {PAGE_SIZE} 项</span>
+            )}
+          </div>
+          {paginatedSkills.map((skill) => (
             <Card key={skill.id} className={cn('p-4', !skill.enabled && 'opacity-70')}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -297,6 +326,34 @@ export function Skills() {
               </div>
             </Card>
           ))}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-2 px-1">
+              <span className="text-sm text-bp-muted">
+                第 {page} / {totalPages} 页
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1 || loading}
+                  icon={<ChevronLeft className="w-4 h-4" />}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  上一页
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= totalPages || loading}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  下一页
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

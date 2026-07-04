@@ -48,6 +48,7 @@ from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
 from app.services.prompt_context import set_project_id as set_prompt_project_id
 from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService
+from app.services.report_service import merge_report_extra_metadata
 from app.services.prompt_override_service import get_prompt_override_service
 
 from app.schemas.pipeline import (
@@ -374,7 +375,12 @@ class PipelineService:
             self.db_stage_executions[s.stage_order] = s
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        if meta.get("rerun_from_stage"):
+        du_gate_early = meta.get("data_upload_gate") or {}
+        data_upload_continue = bool(
+            meta.get("pipeline_checkpoint")
+            and (du_gate_early.get("resumed") or du_gate_early.get("continued_at"))
+        )
+        if meta.get("rerun_from_stage") and not data_upload_continue:
             self._start_idx = STAGE_KEY_ORDER.index(meta["rerun_from_stage"])
             parent_id = meta.get("parent_run_id")
             parent = (
@@ -840,13 +846,6 @@ class PipelineService:
             )
         except Exception as df_err:
             logger.warning(f"Discovery R{round_num} Data Finder 重跑失败: {df_err}")
-
-        try:
-            self._exec_knowledge_graph(
-                project_id, research_question, results, project_mode, stage="post_gap",
-            )
-        except Exception as kg_err:
-            logger.warning(f"Discovery R{round_num} 知识图谱更新失败: {kg_err}")
 
         ideation = {}
         try:
@@ -1461,7 +1460,7 @@ class PipelineService:
                 start_idx = max(start_idx, 8)
                 self._skip_to_post_validation = True
             elif resume_phase == "after_data_acquisition":
-                start_idx = max(start_idx, 3)
+                start_idx = 3
             elif resume_phase == "after_report_generation":
                 start_idx = max(start_idx, 8)
                 self._finalize_report_after_gate = True
@@ -1491,7 +1490,7 @@ class PipelineService:
             # ── 阶段 1: ProblemUnderstandingAgent ──
             if start_idx <= 0:
                 self._run_stage(stages, 0, results, research_question, project_id,
-                    lambda: self._exec_problem_understanding(research_question))
+                    lambda: self._exec_problem_understanding(research_question, project_id))
             
             # ── 阶段 2: LiteratureMiningAgent ──
             if start_idx <= 1:
@@ -1504,13 +1503,6 @@ class PipelineService:
                 self._run_stage(stages, 2, results, research_question, project_id,
                     lambda: self._exec_data_acquisition(project_id, research_question, results, project_mode))
 
-                try:
-                    self._exec_knowledge_graph(
-                        project_id, research_question, results, project_mode, stage="initial"
-                    )
-                except Exception as kg_err:
-                    logger.warning(f"知识图谱初始构建失败: {kg_err}")
-
                 self._maybe_pause_for_data_upload(project_id, results)
             
             # ── 阶段 4: KnowledgeGapAgent ──
@@ -1520,13 +1512,6 @@ class PipelineService:
                         results.get("literature_mining"),
                         project_id,
                     ))
-
-                try:
-                    self._exec_knowledge_graph(
-                        project_id, research_question, results, project_mode, stage="post_gap"
-                    )
-                except Exception as kg_err:
-                    logger.warning(f"知识图谱增量更新失败: {kg_err}")
             
             # ── 阶段 5: HypothesisGenerationAgent ──
             if start_idx <= 4:
@@ -1579,13 +1564,6 @@ class PipelineService:
                     self._exec_hypothesis_tree(results, research_question)
                 except Exception as ht_err:
                     logger.warning(f"假设树剪枝失败: {ht_err}")
-
-                try:
-                    self._exec_knowledge_graph(
-                        project_id, research_question, results, project_mode, stage="post_evidence"
-                    )
-                except Exception as kg_err:
-                    logger.warning(f"知识图谱证据链更新失败: {kg_err}")
 
                 try:
                     self._save_hypotheses(project_id, research_question, results)
@@ -1905,6 +1883,8 @@ class PipelineService:
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
         gate = dict(meta.get("data_upload_gate") or {})
         status_val = self.db_pipeline_run.status
+        project_id = self.db_pipeline_run.project_id or ""
+        uploaded = self._uploaded_manual_count(project_id)
         if not gate.get("paused"):
             if (
                 self._is_quick_report_run()
@@ -1917,10 +1897,25 @@ class PipelineService:
                 meta["data_upload_gate"] = gate
                 self._persist_extra_metadata(meta)
                 self.db.commit()
+            elif (
+                status_val == DB_PipelineStatus.COMPLETED
+                and uploaded >= 1
+            ):
+                # 报告已生成但用户事后上传了外部数据：从数据采集后继续重跑下游
+                if not meta.get("pipeline_checkpoint"):
+                    meta["pipeline_checkpoint"] = self._rebuild_checkpoint_from_stages()
+                gate.setdefault("paused", True)
+                gate.setdefault("resume_phase", "after_data_acquisition")
+                if meta.get("rerun_from_stage"):
+                    meta["prior_rerun_from_stage"] = meta.get("rerun_from_stage")
+                    meta.pop("rerun_from_stage", None)
+                    meta.pop("rerun_mode", None)
+                meta["data_upload_gate"] = gate
+                self._persist_extra_metadata(meta)
+                self.db.commit()
             else:
                 raise ValueError("Pipeline 未处于数据上传等待状态")
 
-        project_id = self.db_pipeline_run.project_id or ""
         pending = self._pending_manual_upload_count(project_id)
         uploaded = self._uploaded_manual_count(project_id)
         from app.services.dataset_service import DatasetService
@@ -1974,7 +1969,8 @@ class PipelineService:
         from app.services.dataset_service import DatasetService
 
         has_project_data = bool(DatasetService(self.db).get_project_datasets(project_id))
-        if pending <= 0 and has_project_data:
+        # 无相关外部数据集待下载时，不阻断理论/综述类报告流程
+        if pending <= 0:
             return
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
@@ -2144,14 +2140,28 @@ class PipelineService:
         output = None
         try:
             output = executor()
+            from app.services.data_finder_slim import slim_stage_output
+
+            slimmed_output = slim_stage_output(
+                output if isinstance(output, dict) else self._safe_model_dump(output),
+                stage_key=stage_key,
+            )
             stage_log.status = PipelineStageStatus.COMPLETED
-            stage_log.output_data = output if isinstance(output, dict) else self._safe_model_dump(output)
-            results[stage_key] = stage_log.output_data
-            self._stage_results[stage_key] = stage_log.output_data
+            stage_log.output_data = slimmed_output
+            results[stage_key] = slimmed_output
+            self._stage_results[stage_key] = slimmed_output
 
             self._capture_model_params(db_stage)
-            self._update_stage_execution(db_stage, "completed", output=stage_log.output_data)
+            self._update_stage_execution(db_stage, "completed", output=slimmed_output)
             logger.info(f"[Pipeline] 阶段完成 {idx+1}/8 [{stage_label}] key={stage_key} run_id={self.run_id}")
+
+            try:
+                from app.services.project_research_backfill_service import backfill_project_research_fields
+                backfill_project_research_fields(self.db, project_id, results, stage_key)
+            except Exception as backfill_err:
+                logger.warning(
+                    f"[Pipeline] 研究问题字段回填失败 stage={stage_key} run_id={self.run_id}: {backfill_err}"
+                )
 
             if getattr(self, "_rerun_single_stage_only", False) and idx == getattr(self, "_start_idx", 0):
                 self._restore_downstream_from_parent_run(idx, results, stages)
@@ -2208,7 +2218,6 @@ class PipelineService:
         if idx >= 1:
             base["literature_mining"] = results.get("literature_mining", {})
             base["data_finder"] = results.get("data_finder", {})
-            base["knowledge_graph"] = results.get("knowledge_graph", {})
         if idx >= 2:
             base["knowledge_gap"] = results.get("knowledge_gap", {})
         if idx >= 3:
@@ -2252,9 +2261,18 @@ class PipelineService:
     
     # ────────────── Agent 执行方法 ──────────────
     
-    def _exec_problem_understanding(self, research_question: str):
+    def _exec_problem_understanding(self, research_question: str, project_id: str = ""):
         agent = get_problem_understanding_agent()
-        result = agent.analyze(research_question=research_question)
+        domain_description = None
+        if project_id:
+            from app.models.project import Project
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            if project and project.research_domain:
+                domain_description = project.research_domain.strip()
+        result = agent.analyze(
+            research_question=research_question,
+            domain_description=domain_description,
+        )
         return self._safe_model_dump(result)
     
     def _normalize_literature_bundle(
@@ -2280,14 +2298,27 @@ class PipelineService:
         if extract:
             data_context = {**data_context, "data_finder_results": extract}
 
-        candidates = list(extract.get("external_candidates") or [])
+        # 优先加载磁盘上的完整 Data Finder 结果（含 merged / coverage / provenance）
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        if project_id:
+            try:
+                from app.services.data_finder_service import get_data_finder_service
+
+                full = get_data_finder_service(self.db).load_results(project_id)
+                if isinstance(full, dict) and full:
+                    data_context = {**data_context, "data_finder_results": full}
+            except Exception as exc:
+                logger.warning("[Report] 加载完整 data_finder 结果失败: %s", exc)
+
+        df = data_context.get("data_finder_results") if isinstance(data_context.get("data_finder_results"), dict) else {}
+        candidates = list(df.get("external_candidates") or extract.get("external_candidates") or [])
         if candidates:
             data_context["recommended_datasets"] = candidates
 
         uploaded = []
         for cand in candidates:
             status = (cand.get("user_upload_status") or "").lower()
-            if status in ("uploaded", "accepted", "ready"):
+            if status in ("uploaded", "accepted", "ready", "merged"):
                 uploaded.append(cand)
         if uploaded:
             data_context["uploaded_external_datasets"] = uploaded
@@ -2498,44 +2529,6 @@ class PipelineService:
             selected_hypothesis=selected_hypothesis,
         )
 
-    def _exec_knowledge_graph(
-        self,
-        project_id: str,
-        research_question: str,
-        results: Dict[str, Any],
-        project_mode: str,
-        stage: str = "initial",
-    ) -> Dict[str, Any]:
-        from app.services.knowledge_graph_service import get_knowledge_graph_service
-
-        lm = results.get("literature_mining", {}) or {}
-        kg_gap = results.get("knowledge_gap", {}) or {}
-        hg = results.get("hypothesis_generation", {}) or {}
-        hypotheses = hg.get("hypotheses", []) if hg else []
-
-        service = get_knowledge_graph_service(self.db)
-        graph = service.build_graph_sync(
-            project_id=project_id,
-            literature_mining=lm,
-            knowledge_gap=kg_gap if stage != "initial" else None,
-            hypotheses=hypotheses if stage == "post_evidence" else None,
-            project_mode=project_mode,
-            research_question=research_question,
-        )
-        output = {
-            "stage": stage,
-            "node_count": len(graph.get("nodes", [])),
-            "edge_count": len(graph.get("edges", [])),
-            "quality_report": graph.get("quality_report", {}),
-            "schema": graph.get("schema", {}),
-            "evidence_graph": graph.get("evidence_graph", {}),
-        }
-        results["knowledge_graph"] = {**output, "graph": graph}
-        logger.info(
-            f"[KnowledgeGraph] {stage} 完成: nodes={output['node_count']} edges={output['edge_count']}"
-        )
-        return output
-    
     def _exec_knowledge_gap(
         self,
         literature_mining: Optional[Dict],
@@ -2546,45 +2539,7 @@ class PipelineService:
         facts = lm.get("facts", [])
         uncertain_points = lm.get("uncertain_points", [])
         result = agent.analyze(facts=facts, uncertain_points=uncertain_points)
-        result_dict = self._safe_model_dump(result)
-
-        if project_id:
-            try:
-                from app.services.knowledge_graph_service import get_knowledge_graph_service
-
-                kg_ctx = get_knowledge_graph_service(self.db).get_kg_context_for_agents(project_id)
-                if kg_ctx:
-                    qr = kg_ctx.get("quality_report", {})
-                    graph_gaps = []
-                    for iso in qr.get("isolated_nodes", [])[:5]:
-                        graph_gaps.append({
-                            "gap_id": f"kg_iso_{iso.get('id', '')[:8]}",
-                            "description": f"图谱孤立节点需补充关系: {iso.get('label', '')}",
-                            "basis": [iso.get("id", "")],
-                            "potential_value": "完善证据链连接",
-                            "source": "knowledge_graph",
-                        })
-                    missing_query = get_knowledge_graph_service(self.db).query_graph_sync(
-                        project_id, "当前假设缺少哪些证据？"
-                    )
-                    for path in missing_query.get("graph_paths", [])[:5]:
-                        graph_gaps.append({
-                            "gap_id": f"kg_miss_{hash(str(path)) % 10000}",
-                            "description": f"缺少证据: {' → '.join(str(p) for p in path)}",
-                            "basis": [],
-                            "potential_value": "假设验证需补充文献支持",
-                            "source": "knowledge_graph",
-                        })
-                    if graph_gaps:
-                        result_dict.setdefault("knowledge_gaps", []).extend(graph_gaps)
-                        result_dict["kg_enrichment"] = {
-                            "isolated_count": qr.get("isolated_count", 0),
-                            "graph_gaps_added": len(graph_gaps),
-                        }
-            except Exception as kg_err:
-                logger.warning(f"KG 知识缺口增强失败: {kg_err}")
-
-        return result_dict
+        return self._safe_model_dump(result)
     
     def _exec_hypothesis_generation(
         self,
@@ -2719,6 +2674,7 @@ class PipelineService:
     
     def _exec_hypothesis_review(self, hypothesis_generation: Optional[Dict]) -> dict:
         from app.agents.hypothesis_review_agent import HypothesisCandidate
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         agent = get_hypothesis_review_agent()
         hg = hypothesis_generation or {}
         hypotheses = hg.get("hypotheses", [])
@@ -2756,16 +2712,6 @@ class PipelineService:
         ]
         original_candidates = candidates
         lit_mining = self._stage_results.get("literature_mining", {})
-        kg_evidence = {}
-        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
-        if project_id:
-            try:
-                from app.services.knowledge_graph_service import get_knowledge_graph_service
-                kg_graph = get_knowledge_graph_service(self.db).load_graph(project_id)
-                if kg_graph:
-                    kg_evidence = kg_graph.get("evidence_graph", {})
-            except Exception:
-                pass
 
         result = agent.review(
             hypotheses=candidates,
@@ -2790,16 +2736,6 @@ class PipelineService:
                     ],
                 },
             )
-        if kg_evidence:
-            result_dict["evidence_graph"] = kg_evidence
-            support_edges = [
-                e for e in kg_evidence.get("edges", [])
-                if e.get("relation") == "supports"
-            ]
-            result_dict["kg_support_summary"] = {
-                "support_edge_count": len(support_edges),
-                "evidence_nodes": len(kg_evidence.get("nodes", [])),
-            }
         if ensemble:
             result_dict["primary_index"] = ensemble.get("target_hypothesis_index", 0)
             result_dict["ensemble_decision"] = ensemble.get("decision")
@@ -2906,6 +2842,13 @@ class PipelineService:
         primary_idx = min(max(0, primary_idx), len(reviews) - 1)
         best_review = reviews[primary_idx]
         data_context = self._build_data_context(project_id) if project_id else {}
+        data_files: List[str] = []
+        for ds in data_context.get("datasets") or []:
+            if isinstance(ds, dict) and ds.get("file_path"):
+                data_files.append(str(ds["file_path"]))
+        merged_csv = data_context.get("data_finder_merged_csv")
+        if merged_csv and merged_csv not in data_files:
+            data_files.insert(0, str(merged_csv))
         lit_mining = self._stage_results.get("literature_mining", {})
 
         if project_mode == ProjectMode.FEDERATED_LEARNING.value:
@@ -2943,6 +2886,7 @@ class PipelineService:
             required_data=best_review.get("required_data"),
             possible_method=best_review.get("possible_method"),
             risk=str(best_review.get("risk", "")),
+            data_files=data_files,
             literature_facts=lit_mining.get("facts", []),
             project_mode=project_mode,
             validation_feedback=list(self._validation_feedback_constraints or [])
@@ -2950,6 +2894,28 @@ class PipelineService:
             pilot_results=self._last_pilot_results or None,
         )
         result_dict = result if isinstance(result, dict) else self._safe_model_dump(result)
+        project_datasets = data_context.get("datasets") or []
+        if project_datasets:
+            result_dict["project_datasets"] = project_datasets
+            if not (result_dict.get("datasets") or "").strip():
+                result_dict["datasets"] = "\n".join(
+                    f"- {d.get('filename', 'dataset')} "
+                    f"({d.get('data_type', 'unknown')}, {d.get('n_rows', '?')} 行 × {d.get('n_columns', '?')} 列)"
+                    for d in project_datasets
+                    if isinstance(d, dict)
+                )
+            result_dict["data_gap"] = []
+            src_lines = []
+            for d in project_datasets:
+                if not isinstance(d, dict):
+                    continue
+                cols = d.get("columns") or []
+                col_preview = ", ".join(str(c) for c in cols[:12])
+                src_lines.append(
+                    f"{d.get('filename', 'dataset')}: {col_preview or '无列信息'}"
+                )
+            if src_lines and not (result_dict.get("source_data") or "").strip():
+                result_dict["source_data"] = "\n".join(src_lines)
         hg = self._stage_results.get("hypothesis_generation") or {}
         hypotheses = hg.get("hypotheses") or []
         hypo_meta = hypotheses[primary_idx] if hypotheses and primary_idx < len(hypotheses) else {}
@@ -3208,16 +3174,6 @@ class PipelineService:
                 )
                 result_dict["report_mode"] = ProjectMode.FEDERATED_LEARNING.value
 
-        kg_graph = results.get("knowledge_graph", {}).get("graph")
-        if not kg_graph and project_id:
-            try:
-                from app.services.knowledge_graph_service import get_knowledge_graph_service
-                kg_graph = get_knowledge_graph_service(self.db).load_graph(project_id)
-            except Exception:
-                kg_graph = None
-        if kg_graph:
-            result_dict = agent._enrich_report_with_knowledge_graph(result_dict, kg_graph)
-
         hypothesis = ed.get("hypothesis") or ""
         reviews = hr.get("reviews") or []
         if not hypothesis and reviews:
@@ -3292,21 +3248,6 @@ class PipelineService:
                     "revision_count": len(revision_history),
                 },
             )
-
-        if multimodal_facts:
-            try:
-                from app.services.knowledge_graph_service import get_knowledge_graph_service
-
-                kg_service = get_knowledge_graph_service(self.db)
-                if kg_service.load_graph(project_id):
-                    kg_service.incremental_update_sync(
-                        project_id,
-                        new_facts=multimodal_facts,
-                        research_question=research_question,
-                    )
-                    results.setdefault("knowledge_graph", {})["multimodal_incremental"] = True
-            except Exception as kg_err:
-                logger.warning("[EvidenceReasoning] 多模态 KG 增量更新失败: %s", kg_err)
 
         logger.info(
             f"[EvidenceReasoning] 完成 {len(output.get('hypotheses', []))} 条假设证据链迭代"
@@ -3482,11 +3423,14 @@ class PipelineService:
     
     def _update_stage_execution(self, db_stage: DB_PipelineStageExecution, status: str, output: Optional[Any] = None, error: Optional[str] = None):
         """更新阶段执行记录"""
+        from app.services.data_finder_slim import slim_stage_output
+
         now = datetime.now(CHINA_TZ)
+        stage_key = db_stage.stage.value if hasattr(db_stage.stage, "value") else str(db_stage.stage or "")
         if status == "completed":
             db_stage.status = DB_PipelineStatus.COMPLETED
             if output is not None:
-                db_stage.output_data = output
+                db_stage.output_data = slim_stage_output(output, stage_key=stage_key)
         elif status == "failed":
             db_stage.status = DB_PipelineStatus.FAILED
             if error:
@@ -3503,20 +3447,23 @@ class PipelineService:
         self.db.commit()
     
     def _complete_pipeline_run(self, completed_at: datetime, total_duration_ms: int, results: Dict[str, Any], final_report_id: Optional[str]):
+        from app.services.data_finder_slim import slim_results_for_checkpoint
+
+        safe_results = slim_results_for_checkpoint(results)
         self.db_pipeline_run.status = DB_PipelineStatus.COMPLETED
         self.db_pipeline_run.completed_at = completed_at
         self.db_pipeline_run.total_duration_ms = total_duration_ms
-        self.db_pipeline_run.output_data = results
+        self.db_pipeline_run.output_data = safe_results
         self.db_pipeline_run.current_stage = None
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
         meta["auxiliary_results"] = {
-            k: results[k]
+            k: safe_results[k]
             for k in (
-                "data_finder", "knowledge_graph", "evidence_reasoning",
+                "data_finder", "evidence_reasoning",
                 "ideation_novelty", "discovery_loop", "teaching_auto_refinement",
                 "federated_campaign_refinement",
             )
-            if k in results
+            if k in safe_results
         }
         meta["run_options"] = self._run_options
         meta["version_snapshots"] = self._iteration_snapshots or (
@@ -3643,13 +3590,10 @@ class PipelineService:
                 return json.dumps(val, ensure_ascii=False)
             return str(val)
 
-        extra_meta = report_data.get("compliance_check") or {}
-        if report_data.get("plots"):
-            extra_meta["plots"] = report_data["plots"]
-        if "pdf_success" in report_data:
-            extra_meta["pdf_success"] = report_data.get("pdf_success", False)
-        if report_data.get("export_method"):
-            extra_meta["export_method"] = report_data["export_method"]
+        extra_meta = merge_report_extra_metadata(
+            report_data.get("compliance_check") or {},
+            report_data,
+        )
 
         report = Report(
             id=report_id,
@@ -3657,7 +3601,7 @@ class PipelineService:
             title=title,
             paper_title=title,
             paper_abstract=_to_text(report_data.get("paper_abstract", "")),
-            markdown_content=_to_text(report_data.get("markdown_content", "")),
+            markdown_content="",
             problem_statement=_to_text(chapters.get("problem_statement", "")),
             rationale=_to_text(chapters.get("rationale", "")),
             technical_details=_to_text(chapters.get("technical_details", "")),
@@ -3686,6 +3630,8 @@ class PipelineService:
 
         ds_service = DatasetService(self.db)
 
+        from app.services.data_finder_slim import slim_data_context
+
         try:
             data_context = ds_service.get_project_data_context(project_id)
         except Exception as e:
@@ -3700,7 +3646,7 @@ class PipelineService:
                 "warnings": [f"获取数据上下文失败: {str(e)}"],
             }
 
-        return data_context
+        return slim_data_context(data_context)
 
     @staticmethod
     def _run_alignment_skill(research_question: str, hypotheses: List[Dict]) -> Dict[str, Any]:
@@ -3725,6 +3671,62 @@ class PipelineService:
         except Exception as e:
             logger.warning(f"QuestionAlignmentSkill 异常: {e}")
             return {"alignments": [], "all_off_topic": False, "off_topic_summary": ""}
+
+
+def try_resume_after_dataset_upload(db: Session, project_id: str) -> Optional[Dict[str, Any]]:
+    """用户上传数据集后，若 Pipeline 处于数据上传等待态则自动续跑。"""
+    import threading
+
+    from app.core.database import SessionLocal
+    from app.models.pipeline import PipelineRun
+
+    run = (
+        db.query(PipelineRun)
+        .filter(PipelineRun.project_id == project_id)
+        .order_by(PipelineRun.created_at.desc())
+        .first()
+    )
+    if not run:
+        return None
+
+    meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+    gate = meta.get("data_upload_gate") or {}
+    status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+    is_quick = bool(meta.get("quick_report"))
+    input_opts = (run.input_data or {}).get("options") if isinstance(run.input_data, dict) else {}
+    if isinstance(input_opts, dict) and input_opts.get("enable_quick_report"):
+        is_quick = True
+
+    awaiting = bool(gate.get("paused")) or (
+        status_val.lower() == "human_review_required" and (is_quick or bool(gate))
+    )
+    if not awaiting:
+        return None
+
+    from app.services.dataset_service import DatasetService
+
+    if not DatasetService(db).get_project_datasets(project_id):
+        return None
+
+    svc = get_pipeline_service(db)
+    try:
+        result = svc.resume_after_data_upload(run.run_id)
+    except ValueError:
+        return None
+
+    run_id = run.run_id
+
+    def _bg() -> None:
+        bg_db = SessionLocal()
+        try:
+            get_pipeline_service(bg_db).execute_pipeline_run(run_id)
+        except Exception as exc:
+            logger.exception("[Pipeline] 数据集上传后续跑失败 run_id=%s: %s", run_id, exc)
+        finally:
+            bg_db.close()
+
+    threading.Thread(target=_bg, daemon=True).start()
+    return result
 
 
 def _find_failed_stage(stages: List[PipelineStageLog]) -> Optional[PipelineStageLog]:

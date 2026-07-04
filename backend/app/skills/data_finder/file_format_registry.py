@@ -22,7 +22,15 @@ COMPRESSED_TABULAR_SUFFIXES: Tuple[str, ...] = (
 
 ARCHIVE_EXTENSIONS: Set[str] = {".zip"}
 
-PARSEABLE_EXTENSIONS: Set[str] = TABULAR_EXTENSIONS | CHEMISTRY_EXTENSIONS | ARCHIVE_EXTENSIONS
+FITS_EXTENSIONS: Set[str] = {".fits", ".fit", ".fts"}
+
+COMPRESSED_FITS_SUFFIXES: Tuple[str, ...] = (
+    ".fits.gz", ".fit.gz", ".fts.gz",
+)
+
+PARSEABLE_EXTENSIONS: Set[str] = (
+    TABULAR_EXTENSIONS | CHEMISTRY_EXTENSIONS | ARCHIVE_EXTENSIONS | FITS_EXTENSIONS
+)
 
 
 def detect_file_format(filename: str) -> str:
@@ -31,6 +39,9 @@ def detect_file_format(filename: str) -> str:
     for suffix in COMPRESSED_CHEMISTRY_SUFFIXES:
         if name.endswith(suffix):
             return suffix.replace(".", "_").strip("_")  # sdf_gz
+    for suffix in COMPRESSED_FITS_SUFFIXES:
+        if name.endswith(suffix):
+            return "fits_gz"
     for suffix in COMPRESSED_TABULAR_SUFFIXES:
         if name.endswith(suffix):
             return suffix.replace(".", "_").strip("_")
@@ -41,9 +52,16 @@ def detect_file_format(filename: str) -> str:
         return "tabular"
     if ext == ".zip":
         return "zip"
+    if ext in FITS_EXTENSIONS:
+        return "fits"
     if ext == ".gz":
         return "gz_unknown"
     return "unknown"
+
+
+def is_fits_format(filename: str) -> bool:
+    fmt = detect_file_format(filename)
+    return fmt in {"fits", "fits_gz"}
 
 
 def is_chemistry_format(filename: str) -> bool:
@@ -58,7 +76,7 @@ def is_allowed_upload_filename(filename: str) -> bool:
     name = (filename or "").lower().strip()
     if not name:
         return False
-    for suffix in COMPRESSED_CHEMISTRY_SUFFIXES + COMPRESSED_TABULAR_SUFFIXES:
+    for suffix in COMPRESSED_CHEMISTRY_SUFFIXES + COMPRESSED_TABULAR_SUFFIXES + COMPRESSED_FITS_SUFFIXES:
         if name.endswith(suffix):
             return True
     ext = os.path.splitext(name)[1]
@@ -68,7 +86,7 @@ def is_allowed_upload_filename(filename: str) -> bool:
 def file_extension_for_upload(filename: str) -> str:
     """用于校验的主扩展名（含复合后缀）。"""
     name = (filename or "").lower().strip()
-    for suffix in COMPRESSED_CHEMISTRY_SUFFIXES + COMPRESSED_TABULAR_SUFFIXES:
+    for suffix in COMPRESSED_CHEMISTRY_SUFFIXES + COMPRESSED_TABULAR_SUFFIXES + COMPRESSED_FITS_SUFFIXES:
         if name.endswith(suffix):
             return suffix
     return os.path.splitext(name)[1].lower()
@@ -87,6 +105,7 @@ def collect_parseable_files(root_dir: str) -> list[str]:
         fmt = detect_file_format(os.path.basename(path))
         order = {
             "tabular": 0, "csv": 0, "tsv": 0, "json": 1, "jsonl": 2,
+            "fits": 2, "fits_gz": 2,
             "sdf": 3, "sdf_gz": 3, "mol": 4, "mol_gz": 4,
             "smi": 5, "smiles": 5, "smi_gz": 5,
         }

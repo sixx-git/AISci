@@ -138,6 +138,46 @@ KNOWN_DATASETS = [
         "description": "开放机器学习数据集和实验管理平台",
     },
     {
+        "dataset_name": "NASA Exoplanet Archive",
+        "source": "NASA",
+        "license": "Public Domain",
+        "url": "https://exoplanetarchive.ipac.caltech.edu/",
+        "task_type": "astronomy",
+        "modalities": ["tabular"],
+        "metadata_standard": "IPAC",
+        "description": "系外行星与恒星参数目录，适用于轨道与行星系统研究",
+    },
+    {
+        "dataset_name": "JPL Horizons Ephemeris",
+        "source": "NASA JPL",
+        "license": "Public Domain",
+        "url": "https://ssd.jpl.nasa.gov/horizons/",
+        "task_type": "astronomy",
+        "modalities": ["tabular", "time_series"],
+        "metadata_standard": "Horizons",
+        "description": "太阳系天体历表与轨道参数，可用于行星轨道演化分析",
+    },
+    {
+        "dataset_name": "Sloan Digital Sky Survey (SDSS)",
+        "source": "SDSS",
+        "license": "Public Domain",
+        "url": "https://www.sdss.org/",
+        "task_type": "astronomy",
+        "modalities": ["tabular", "image"],
+        "metadata_standard": "FITS / CSV",
+        "description": "星系、恒星与宇宙学观测数据",
+    },
+    {
+        "dataset_name": "Gaia Archive",
+        "source": "ESA",
+        "license": "CC BY-SA 3.0 IGO",
+        "url": "https://gea.esac.esa.int/archive/",
+        "task_type": "astronomy",
+        "modalities": ["tabular"],
+        "metadata_standard": "Gaia DR",
+        "description": "银河系恒星位置、自行与视差等天体测量数据",
+    },
+    {
         "dataset_name": "ImageNet",
         "source": "image-net.org",
         "license": "Non-commercial research",
@@ -197,6 +237,96 @@ KNOWN_DATASETS = [
         "metadata_standard": "TSV/JSON",
         "description": "自然语言理解多任务基准",
     },
+    {
+        "dataset_name": "Materials Project",
+        "source": "materialsproject.org",
+        "license": "CC BY 4.0",
+        "url": "https://materialsproject.org/",
+        "task_type": "materials_science",
+        "modalities": ["tabular", "3d_structure"],
+        "metadata_standard": "MP API",
+        "description": "无机晶体与材料性质计算数据库，适用于化学与材料研究",
+    },
+    {
+        "dataset_name": "NIST Materials Data",
+        "source": "NIST",
+        "license": "Public Domain",
+        "url": "https://materialsdata.nist.gov/",
+        "task_type": "materials_science",
+        "modalities": ["tabular"],
+        "metadata_standard": "NIST",
+        "description": "材料表征与标准参考数据",
+    },
+    {
+        "dataset_name": "OpenNeuro",
+        "source": "openneuro.org",
+        "license": "various",
+        "url": "https://openneuro.org/",
+        "task_type": "neuroimaging",
+        "modalities": ["image", "tabular", "time_series"],
+        "metadata_standard": "BIDS",
+        "description": "开放神经影像数据集（fMRI/EEG/MEG），BIDS 格式",
+    },
+    {
+        "dataset_name": "Human Connectome Project",
+        "source": "humanconnectome.org",
+        "license": "Restricted / Open",
+        "url": "https://www.humanconnectome.org/",
+        "task_type": "neuroimaging",
+        "modalities": ["image", "tabular"],
+        "metadata_standard": "HCP",
+        "description": "人脑结构与功能连接组数据",
+    },
+    {
+        "dataset_name": "GBIF",
+        "source": "gbif.org",
+        "license": "CC BY / CC0",
+        "url": "https://www.gbif.org/",
+        "task_type": "ecology",
+        "modalities": ["tabular"],
+        "metadata_standard": "Darwin Core",
+        "description": "全球生物多样性 occurrence 与物种分布数据",
+    },
+    {
+        "dataset_name": "WorldClim",
+        "source": "worldclim.org",
+        "license": "CC BY 4.0",
+        "url": "https://www.worldclim.org/",
+        "task_type": "climate",
+        "modalities": ["tabular", "image"],
+        "metadata_standard": "GeoTIFF",
+        "description": "全球气候与生物气候变量栅格数据",
+    },
+    {
+        "dataset_name": "NREL Data Catalog",
+        "source": "NREL",
+        "license": "Public Domain",
+        "url": "https://www.nrel.gov/grid/data-tools.html",
+        "task_type": "energy",
+        "modalities": ["tabular", "time_series"],
+        "metadata_standard": "NREL",
+        "description": "美国可再生能源实验室能源系统与电网数据",
+    },
+    {
+        "dataset_name": "CERN Open Data Portal",
+        "source": "CERN",
+        "license": "CC0",
+        "url": "http://opendata.cern.ch/",
+        "task_type": "particle_physics",
+        "modalities": ["tabular"],
+        "metadata_standard": "CERN OD",
+        "description": "粒子物理实验开放数据",
+    },
+    {
+        "dataset_name": "MAST Archive (STScI)",
+        "source": "Space Telescope Science Institute",
+        "license": "Public Domain",
+        "url": "https://mast.stsci.edu/",
+        "task_type": "astronomy",
+        "modalities": ["tabular", "image"],
+        "metadata_standard": "FITS",
+        "description": "哈勃/JWST 等空间望远镜观测与光谱数据目录",
+    },
 ]
 
 TASK_TYPE_KEYWORDS = {
@@ -237,6 +367,27 @@ TASK_TYPE_KEYWORDS = {
     "structure_prediction": [
         "蛋白质结构", "protein structure", "PDB", "structure prediction", "分子",
     ],
+    "astronomy": [
+        "天文", "天体", "宇宙", "行星", "轨道", "astronomy", "cosmology", "spectroscopy", "JWST", "NIRSpec",
+    ],
+    "materials_science": [
+        "材料", "晶体", "materials", "characterization", "composite", "mechanical",
+    ],
+    "neuroimaging": [
+        "神经", "脑", "fMRI", "EEG", "neuroimaging", "connectome", "cognitive",
+    ],
+    "ecology": [
+        "生态", "物种", "biodiversity", "ecology", "climate", "遥感",
+    ],
+    "energy": [
+        "能源", "电网", "renewable", "hydrogen", "battery", "energy",
+    ],
+    "particle_physics": [
+        "粒子", "物理", "quantum", "CERN", "particle",
+    ],
+    "climate": [
+        "气候", "climate", "weather", "temperature", "precipitation",
+    ],
     "various": [
         "Kaggle", "OpenML", "Hugging Face", "huggingface",
     ],
@@ -257,22 +408,68 @@ _BIOMED_FALLBACK_NAMES = (
     "PubChem BioAssay", "Zenodo", "Hugging Face Datasets", "UCI Machine Learning Repository",
 )
 
+_GENERAL_FALLBACK_NAMES = (
+    "Zenodo", "Hugging Face Datasets", "UCI Machine Learning Repository",
+    "OpenML", "Kaggle Datasets",
+)
+
+_ASTRONOMY_FALLBACK_NAMES = (
+    "NASA Exoplanet Archive", "JPL Horizons Ephemeris",
+    "Sloan Digital Sky Survey (SDSS)", "Gaia Archive", "MAST Archive (STScI)", "Zenodo",
+)
+
+
+def _resolve_field_slug(query_terms: List[str], research_field: str = "") -> str:
+    if research_field and research_field != "general":
+        return research_field
+    from app.core.domain_data_catalog import infer_field_from_text
+
+    return infer_field_from_text(research_question=" ".join(query_terms))
+
+
+def _fallback_datasets_for_field(field: str, max_results: int) -> List[Dict[str, Any]]:
+    from app.core.domain_data_catalog import get_catalog_fallbacks
+
+    names = get_catalog_fallbacks(field)
+    return [ds for ds in KNOWN_DATASETS if ds["dataset_name"] in names][:max_results]
+
+_BIOMED_ONLY_DATASETS = frozenset({
+    "PubMed / PubMed Central", "GEO (Gene Expression Omnibus)", "ChEMBL",
+    "PubChem BioAssay", "Protein Data Bank (PDB)", "TCGA (The Cancer Genome Atlas)",
+    "MIMIC-III / MIMIC-IV",
+})
+
 
 def _is_biomed_query(query_terms: List[str]) -> bool:
     blob = " ".join(query_terms).lower()
     return any(h in blob for h in _BIOMED_QUERY_HINTS)
 
 
+def _is_astronomy_query(query_terms: List[str]) -> bool:
+    blob = " ".join(query_terms).lower()
+    hints = (
+        "天文", "天体", "宇宙", "行星", "轨道", "恒星", "星系", "引力", "膨胀",
+        "astronomy", "astrophysics", "planetary", "orbit", "cosmology", "solar",
+    )
+    return any(h in blob for h in hints)
+
+
 def _should_exclude_dataset(ds: Dict[str, Any], query_terms: List[str]) -> bool:
-    if not _is_biomed_query(query_terms):
-        return False
     name = ds.get("dataset_name", "")
-    if name in _CV_ONLY_DATASETS:
+    if _is_biomed_query(query_terms):
+        if name in _CV_ONLY_DATASETS:
+            return True
+        modalities = set(ds.get("modalities") or [])
+        if modalities == {"image"} and ds.get("task_type") in (
+            "image_classification", "object_detection",
+        ):
+            return True
+        return False
+    # 非生物医学：排除生医专用库
+    if name in _BIOMED_ONLY_DATASETS:
         return True
-    modalities = set(ds.get("modalities") or [])
-    if modalities == {"image"} and ds.get("task_type") in (
-        "image_classification", "object_detection",
-    ):
+    task = str(ds.get("task_type") or "").lower()
+    if task in ("gene_expression_analysis", "genomic_analysis", "clinical_prediction", "drug_discovery"):
         return True
     return False
 
@@ -307,6 +504,7 @@ class DatasetDiscoverySkill(BaseSkill):
         task_type = input_data.get("task_type", "")
         modality_filter: List[str] = input_data.get("modality_filter", [])
         max_results = input_data.get("max_results", 10)
+        research_field = str(input_data.get("research_field") or "").strip()
 
         if not isinstance(keywords, list):
             keywords = []
@@ -317,17 +515,19 @@ class DatasetDiscoverySkill(BaseSkill):
         query_terms.extend(k.lower() for k in keywords if isinstance(k, str) and k.strip())
 
         if not query_terms:
-            result.add_warning("缺少搜索关键词，返回生物医学与通用科研数据平台推荐")
+            result.add_warning("缺少搜索关键词，返回通用开放科研数据平台推荐")
             entry = {
-                "datasets": [ds for ds in KNOWN_DATASETS if ds["dataset_name"] in _BIOMED_FALLBACK_NAMES][:max_results],
-                "total": min(len(_BIOMED_FALLBACK_NAMES), max_results),
+                "datasets": [ds for ds in KNOWN_DATASETS if ds["dataset_name"] in _GENERAL_FALLBACK_NAMES][:max_results],
+                "total": min(len(_GENERAL_FALLBACK_NAMES), max_results),
                 "matched_keywords": [],
-                "search_source": "local_knowledge_biomed_default",
+                "search_source": "local_knowledge_general_default",
             }
             result.data = entry
             return result
 
         is_biomed = _is_biomed_query(query_terms)
+        is_astro = _is_astronomy_query(query_terms)
+        field_slug = _resolve_field_slug(query_terms, research_field)
         matched_keywords: set = set()
         scored_datasets: List[tuple] = []
 
@@ -372,15 +572,18 @@ class DatasetDiscoverySkill(BaseSkill):
         top_datasets = [ds for _, ds in scored_datasets[:max_results]]
 
         if not top_datasets:
-            if is_biomed:
-                top_datasets = [
-                    ds for ds in KNOWN_DATASETS
-                    if ds["dataset_name"] in _BIOMED_FALLBACK_NAMES
-                ][:max_results]
+            if is_biomed or field_slug == "biomedical":
+                top_datasets = _fallback_datasets_for_field("biomedical", max_results)
                 result.add_warning("未找到精确匹配的数据集，已改为推荐生物医学/开放科研数据平台")
+            elif is_astro or field_slug == "astronomy_physics":
+                top_datasets = _fallback_datasets_for_field("astronomy_physics", max_results)
+                result.add_warning("未找到精确匹配的数据集，已改为推荐天文学/开放科研数据平台")
+            elif field_slug != "general":
+                top_datasets = _fallback_datasets_for_field(field_slug, max_results)
+                result.add_warning(f"未找到精确匹配的数据集，已改为推荐「{field_slug}」领域开放数据平台")
             else:
-                top_datasets = KNOWN_DATASETS[:max_results]
-                result.add_warning("未找到精确匹配的数据集，返回通用推荐")
+                top_datasets = _fallback_datasets_for_field("general", max_results)
+                result.add_warning("未找到精确匹配的数据集，返回通用开放科研数据平台推荐")
 
         online_results = await self._try_huggingface_search(query_terms, max_results)
 

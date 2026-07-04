@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, Trash2,
@@ -13,7 +13,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { RecentPipelineSection } from '@/components/workspace/RecentPipelineSection';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { useLatestPipelineRuns } from '@/hooks/useLatestPipelineRuns';
+import { resolveResearchField } from '@/lib/researchField';
 import { statusBadgeLabel } from '@/lib/projectStatus';
 import type { ProjectOverview } from '@/types';
 
@@ -41,6 +43,8 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
 
   const {
     rows: recentPipelineRows,
@@ -51,6 +55,23 @@ export function Home() {
 
   const isApiSuccess = (response: { code?: number; message?: string }) =>
     Number(response?.code) === 200 || Boolean(response?.message?.includes('成功'));
+
+  const hasRunningPipeline = useMemo(() => {
+    for (const run of pipelineStatusByProjectId.values()) {
+      if (run.status === 'running') return true;
+    }
+    return false;
+  }, [pipelineStatusByProjectId]);
+
+  const pipelineSyncKey = useMemo(
+    () => [...pipelineStatusByProjectId.entries()]
+      .map(([id, run]) => `${id}:${run.status}:${run.completed_at || run.created_at || ''}`)
+      .sort()
+      .join('|'),
+    [pipelineStatusByProjectId],
+  );
+
+  const lastSyncedPipelineKeyRef = useRef('');
 
   useEffect(() => {
     let cancelled = false;
@@ -79,15 +100,55 @@ export function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Pipeline 回填 research_domain 后，刷新项目列表以同步首页 chip
+  useEffect(() => {
+    if (pipelineLoading || !pipelineSyncKey) return undefined;
+    if (lastSyncedPipelineKeyRef.current === pipelineSyncKey) return undefined;
+    lastSyncedPipelineKeyRef.current = pipelineSyncKey;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await projectService.getProjects();
+        if (cancelled || response.code !== 200) return;
+        const list = (response.data as { list?: ProjectOverview[] })?.list ?? response.data ?? [];
+        if (Array.isArray(list)) setProjects(list);
+      } catch {
+        /* 静默刷新失败不影响首页主流程 */
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [pipelineLoading, pipelineSyncKey]);
+
+  useEffect(() => {
+    if (!hasRunningPipeline) return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const response = await projectService.getProjects();
+        if (response.code !== 200) return;
+        const list = (response.data as { list?: ProjectOverview[] })?.list ?? response.data ?? [];
+        if (Array.isArray(list)) setProjects(list);
+      } catch {
+        /* ignore */
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [hasRunningPipeline]);
+
   const filtered = useMemo(() => {
     let list = projects;
     if (search.trim()) {
       const kw = search.trim().toLowerCase();
       list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(kw) ||
-          (p.research_field && p.research_field.toLowerCase().includes(kw)) ||
-          (p.description && p.description.toLowerCase().includes(kw)),
+        (p) => {
+          const field = resolveResearchField(p, p.id);
+          return (
+            p.name.toLowerCase().includes(kw)
+            || field.toLowerCase().includes(kw)
+            || (p.description && p.description.toLowerCase().includes(kw))
+          );
+        },
       );
     }
     if (statusFilter) {
@@ -101,25 +162,34 @@ export function Home() {
     setStatusFilter('');
   };
 
-  const handleDeleteProject = async (projectId: string, projectName: string) => {
-    if (!window.confirm(`确认删除项目「${projectName}」？此操作不可撤销。`)) {
-      return;
-    }
-    setDeletingId(projectId);
+  const openDeleteDialog = (projectId: string, projectName: string) => {
+    setDeleteTarget({ id: projectId, name: projectName });
+    setDeleteConfirmInput('');
+    setDeleteError(null);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deletingId) return;
+    setDeleteTarget(null);
+    setDeleteConfirmInput('');
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
     setDeleteError(null);
     try {
-      const response = await projectService.deleteProject(projectId);
+      const response = await projectService.deleteProject(deleteTarget.id);
       if (isApiSuccess(response)) {
-        setProjects((prev) => prev.filter((p) => p.id !== projectId));
+        setProjects((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+        setDeleteTarget(null);
+        setDeleteConfirmInput('');
       } else {
-        const msg = response.message || '删除项目失败';
-        setDeleteError(msg);
-        window.alert(msg);
+        setDeleteError(response.message || '删除项目失败');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '删除项目失败';
-      setDeleteError(msg);
-      window.alert(msg);
+      setDeleteError(err instanceof Error ? err.message : '删除项目失败');
     } finally {
       setDeletingId(null);
     }
@@ -217,7 +287,7 @@ export function Home() {
           )}
         </div>
 
-        {deleteError && (
+        {deleteError && !deleteTarget && (
           <div className="rounded-bp border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">
             {deleteError}
           </div>
@@ -273,7 +343,7 @@ export function Home() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        void handleDeleteProject(project.id, project.name);
+                        openDeleteDialog(project.id, project.name);
                       }}
                       className="p-1.5 rounded-bp text-bp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                     >
@@ -292,7 +362,7 @@ export function Home() {
                   )}
                   <div className="flex items-center gap-2 mb-3">
                     <span className="bp-chip bp-chip-cyan text-xs">
-                      {project.research_field || '未知领域'}
+                      {resolveResearchField(project, project.id)}
                     </span>
                   </div>
                   <div className="flex items-center text-bp-muted text-sm">
@@ -309,6 +379,17 @@ export function Home() {
           </div>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        itemName={deleteTarget?.name ?? ''}
+        confirmValue={deleteConfirmInput}
+        onConfirmValueChange={setDeleteConfirmInput}
+        onConfirm={() => { void handleConfirmDelete(); }}
+        onCancel={closeDeleteDialog}
+        isLoading={deletingId !== null}
+        error={deleteError}
+      />
 
       <footer className="mt-12 pt-6 border-t border-bp-cyan-dim text-center text-bp-muted text-xs">
         [AISci] · Blueprint UI · 多智能体科研工作台

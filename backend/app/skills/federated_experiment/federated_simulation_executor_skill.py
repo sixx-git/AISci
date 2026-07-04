@@ -70,9 +70,27 @@ class FederatedSimulationExecutorSkill(BaseSkill):
                 result.data = csv_result
                 return result
 
-        if has_fl_cols and tabular:
-            result.add_warning("CSV 缺少可聚合列，无法做 uploaded_csv 分析，改用 simulation")
-        elif not tabular and not has_fl_cols:
+            result.data = {
+                "execution_mode": "uploaded_csv_analysis_failed",
+                "alignment_gate": alignment_gate,
+                "best_method": "",
+                "metric_comparison": [],
+                "non_iid_sensitivity": {},
+                "communication_efficiency": {},
+                "client_drift_analysis": {},
+                "next_round_suggestions": [
+                    "已上传 CSV 但无法解析联邦指标列（需 method/global_accuracy 或 VFL 对齐字段）",
+                    "请检查列名后重新上传或在工作流中重跑小样验证",
+                ],
+                "result_source": "uploaded_csv_analysis_failed",
+                "fl_setting": fl_setting,
+            }
+            result.add_warning("已上传数据但无法解析，未生成 simulated pilot")
+            return result
+
+        if has_fl_cols:
+            result.add_warning("检测到联邦字段但缺少可解析 CSV")
+        else:
             result.data = {
                 "execution_mode": "skipped",
                 "alignment_gate": alignment_gate,
@@ -90,9 +108,21 @@ class FederatedSimulationExecutorSkill(BaseSkill):
             }
             return result
 
-        sim = self._build_simulation(plan, fl_context)
-        sim["alignment_gate"] = alignment_gate
-        result.data = sim
+        result.data = {
+            "execution_mode": "skipped",
+            "alignment_gate": alignment_gate,
+            "missing_requirements": [
+                "缺少可用于联邦小样验证的 CSV（需上传真实实验结果表）",
+            ],
+            "best_method": "",
+            "metric_comparison": [],
+            "non_iid_sensitivity": {},
+            "communication_efficiency": {},
+            "client_drift_analysis": {},
+            "next_round_suggestions": ["请上传包含 baseline 对比结果的 CSV 后重跑小样验证"],
+            "result_source": "skipped due to missing data",
+            "fl_setting": fl_setting,
+        }
         return result
 
     def _analyze_csv(

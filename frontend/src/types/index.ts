@@ -841,17 +841,15 @@ export interface ReportData {
   id: string;
   title: string;
   generatedAt: string;
-  markdownContent: string;
   sections: ReportSection[];
   /** 合规性检查结果 */
   complianceCheck?: ComplianceCheck;
   /** 下载链接 */
-  mdDownloadUrl?: string;
   texDownloadUrl?: string;
   pdfDownloadUrl?: string;
-  /** PDF 导出是否成功（后端返回） */
+  /** PDF 导出是否成功（LaTeX 编译） */
   pdfSuccess?: boolean;
-  /** PDF 导出方式：latex / markdown_fallback */
+  /** PDF 导出方式：latex */
   exportMethod?: string;
   /** 图表数据 */
   plots?: ReportPlot[];

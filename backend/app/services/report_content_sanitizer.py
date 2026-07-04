@@ -50,11 +50,13 @@ _SCIENCE_FACING_CHAPTER_KEYS = (
 )
 
 
-def _clean_line(line: str) -> Optional[str]:
+def _clean_line(line: str, *, preserve_platform_terms: bool = False) -> Optional[str]:
     stripped = line.strip()
     if not stripped:
         return ""
     for pat in _DROP_LINE_PATTERNS:
+        if preserve_platform_terms and "qwen" in pat.pattern.lower():
+            continue
         if pat.search(stripped):
             return None
     text = line
@@ -65,14 +67,14 @@ def _clean_line(line: str) -> Optional[str]:
     return text.rstrip()
 
 
-def sanitize_text(text: Any) -> str:
+def sanitize_text(text: Any, *, preserve_platform_terms: bool = False) -> str:
     """净化单段文本或保留结构的列表项。"""
     if text is None:
         return ""
     if isinstance(text, list):
         cleaned_items: List[str] = []
         for item in text:
-            part = sanitize_text(item)
+            part = sanitize_text(item, preserve_platform_terms=preserve_platform_terms)
             if part.strip():
                 cleaned_items.append(part.strip())
         return "\n".join(f"- {item}" if not item.startswith("-") else item for item in cleaned_items)
@@ -81,7 +83,7 @@ def sanitize_text(text: Any) -> str:
         for key, val in text.items():
             if val in (None, "", [], {}):
                 continue
-            val_str = sanitize_text(val)
+            val_str = sanitize_text(val, preserve_platform_terms=preserve_platform_terms)
             if val_str.strip():
                 parts.append(f"{key}: {val_str}")
         return "\n".join(parts)
@@ -89,7 +91,7 @@ def sanitize_text(text: Any) -> str:
     raw = str(text).replace("\\n", "\n")
     out_lines: List[str] = []
     for line in raw.splitlines():
-        cleaned = _clean_line(line)
+        cleaned = _clean_line(line, preserve_platform_terms=preserve_platform_terms)
         if cleaned is None:
             continue
         out_lines.append(cleaned)
@@ -106,6 +108,8 @@ def sanitize_chapters(chapters: Dict[str, Any]) -> Dict[str, Any]:
         val = cleaned[key]
         if isinstance(val, dict):
             cleaned[key] = {k: sanitize_text(v) for k, v in val.items()}
+        elif key == "technical_details":
+            cleaned[key] = sanitize_text(val, preserve_platform_terms=True)
         else:
             cleaned[key] = sanitize_text(val)
     return cleaned
@@ -141,8 +145,10 @@ def sanitize_report_result(result: Dict[str, Any]) -> Dict[str, Any]:
     chapters = out.get("chapters")
     if isinstance(chapters, dict):
         out["chapters"] = sanitize_chapters(chapters)
+        # 有结构化 chapters 时不再保留 Markdown 正文，仅 LaTeX PDF 导出
+        out["markdown_content"] = ""
     if out.get("paper_abstract"):
         out["paper_abstract"] = sanitize_text(out["paper_abstract"])
-    if out.get("markdown_content"):
+    elif out.get("markdown_content"):
         out["markdown_content"] = sanitize_markdown_document(out["markdown_content"])
     return out

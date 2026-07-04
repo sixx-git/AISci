@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.literature_bundle_service import normalize_literature_bundle
 
+ChapterStatus = Tuple[str, Optional[str]]  # (status, note)
+
 _PLACEHOLDER_MARKERS = (
     "缺少真实引用",
     "需先导入",
@@ -188,6 +190,209 @@ def reconcile_reference_check(
     }
 
 
+def parse_chapter_value(raw: Any) -> Any:
+    """解析报告章节字段（兼容 JSON 字符串与结构化 dict/list）。"""
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        if text.startswith("{") or text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return text
+        return text
+    return raw
+
+
+def _nonempty_text(value: Any, min_len: int = 3) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return len(value.strip()) >= min_len
+    if isinstance(value, (int, float, bool)):
+        return True
+    if isinstance(value, dict):
+        return any(_nonempty_text(v, min_len=min_len) for v in value.values())
+    if isinstance(value, list):
+        return any(_nonempty_text(v, min_len=min_len) for v in value)
+    return len(str(value).strip()) >= min_len
+
+
+def _structured_item_count(value: Any) -> int:
+    parsed = parse_chapter_value(value)
+    if isinstance(parsed, list):
+        return sum(1 for item in parsed if _nonempty_text(item))
+    if isinstance(parsed, dict):
+        return sum(1 for item in parsed.values() if _nonempty_text(item))
+    if isinstance(parsed, str):
+        return 1 if len(parsed.strip()) >= 3 else 0
+    return 0
+
+
+def experiment_design_record_to_dict(record: Any) -> Dict[str, Any]:
+    """将 Pipeline 产出或 ORM ExperimentDesign 转为统一 dict。"""
+    if not record:
+        return {}
+    if isinstance(record, dict):
+        return record
+    return {
+        "methods": getattr(record, "methods", "") or "",
+        "datasets": getattr(record, "datasets", "") or "",
+        "source_data": getattr(record, "source_data", "") or "",
+        "target_data": getattr(record, "target_data", "") or "",
+        "baselines": getattr(record, "baselines", "") or "",
+        "metrics": getattr(record, "metrics", "") or "",
+        "experimental_steps": getattr(record, "experimental_steps", "") or "",
+        "expected_results": getattr(record, "expected_results", "") or "",
+        "limitations": getattr(record, "limitations", "") or "",
+    }
+
+
+def assess_pipeline_experiment_design(experiment_design: Optional[Dict[str, Any]]) -> str:
+    """
+    评估 Pipeline/DB 实验设计完整度。
+    返回: complete | partial | none
+    """
+    ed = experiment_design or {}
+    filled = sum(
+        1
+        for ok in (
+            _structured_item_count(ed.get("baselines")) > 0,
+            _structured_item_count(ed.get("metrics")) > 0,
+            _structured_item_count(ed.get("experimental_steps")) > 0,
+            _nonempty_text(ed.get("expected_results")),
+            _nonempty_text(ed.get("methods")),
+        )
+        if ok
+    )
+    if filled >= 3:
+        return "complete"
+    if filled >= 1:
+        return "partial"
+    return "none"
+
+
+def assess_experiments_chapter(chapter: Any) -> str:
+    """评估报告 Experiments 章节完整度: complete | partial | none"""
+    parsed = parse_chapter_value(chapter)
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if len(text) >= 20:
+            return "complete"
+        if len(text) > 0:
+            return "partial"
+        return "none"
+
+    if not isinstance(parsed, dict):
+        return "none"
+
+    baselines = parsed.get("baselines") or []
+    metrics = parsed.get("metrics") or []
+    setup = (parsed.get("experimental_setup") or "").strip()
+    protocol = (parsed.get("validation_protocol") or "").strip()
+    ablation = parsed.get("ablation_study") or []
+
+    has_baselines = _nonempty_text(baselines) or (
+        isinstance(baselines, list) and len(baselines) > 0
+    )
+    has_metrics = _nonempty_text(metrics) or (
+        isinstance(metrics, list) and len(metrics) > 0
+    )
+    has_core = has_baselines and has_metrics
+    has_detail = bool(setup or protocol or ablation)
+    if has_core or (has_detail and (baselines or metrics)):
+        return "complete"
+    if baselines or metrics or setup or protocol or ablation:
+        return "partial"
+    return "none"
+
+
+def assess_results_chapter(chapter: Any) -> str:
+    """评估报告 Results 章节完整度: complete | partial | none"""
+    parsed = parse_chapter_value(chapter)
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if len(text) >= 20:
+            return "complete"
+        if len(text) > 0:
+            return "partial"
+        return "none"
+
+    if not isinstance(parsed, dict):
+        return "none"
+
+    actual = parsed.get("actual_results") or []
+    simulated = parsed.get("simulated_results") or []
+    expected = parsed.get("expected_results") or []
+    limitations = parsed.get("limitations") or []
+
+    if actual or simulated:
+        return "complete"
+    if expected or limitations:
+        return "partial"
+    return "none"
+
+
+def evaluate_chapter_item_status(
+    key: str,
+    value: Any,
+    *,
+    experiment_design: Optional[Dict[str, Any]] = None,
+) -> ChapterStatus:
+    """挑战杯 12 字段中单章节的合规状态。"""
+    if key == "references":
+        raise ValueError("references 应使用 reconcile_reference_check 单独处理")
+
+    if key == "experiments":
+        chapter_level = assess_experiments_chapter(value)
+        pipeline_level = assess_pipeline_experiment_design(experiment_design)
+        if chapter_level == "complete" or pipeline_level == "complete":
+            note = None
+            if pipeline_level == "complete" and chapter_level != "complete":
+                note = "实验设计已在 Pipeline 中生成，报告正文可进一步补充"
+            return "completed", note
+        if chapter_level == "partial" or pipeline_level == "partial":
+            return "human_review", "实验设计部分字段较短，建议补充"
+        return "missing", "该字段缺失"
+
+    if key == "results":
+        level = assess_results_chapter(value)
+        if level == "complete":
+            return "completed", None
+        if level == "partial":
+            return "human_review", "当前主要为预期结果，建议补充实际或模拟结果"
+        return "missing", "该字段缺失"
+
+    if isinstance(value, str) and len(value.strip()) >= 20:
+        return "completed", None
+    if isinstance(value, str) and len(value.strip()) > 0:
+        return "human_review", "内容较短，建议补充"
+    if isinstance(value, list) and len(value) > 0:
+        return "completed", None
+    if isinstance(value, dict) and _nonempty_text(value):
+        return "completed", None
+    return "missing", "该字段缺失"
+
+
+def chapter_has_experiments(
+    chapter: Any,
+    experiment_design: Optional[Dict[str, Any]] = None,
+) -> bool:
+    return (
+        assess_experiments_chapter(chapter) == "complete"
+        or assess_pipeline_experiment_design(experiment_design) == "complete"
+    )
+
+
+def chapter_has_results(chapter: Any) -> bool:
+    return assess_results_chapter(chapter) in ("complete", "partial")
+
+
 def _count_hypotheses_with_evidence(hypotheses: List[Dict[str, Any]]) -> int:
     count = 0
     for h in hypotheses or []:
@@ -201,6 +406,55 @@ def _count_hypotheses_with_evidence(hypotheses: List[Dict[str, Any]]) -> int:
     return count
 
 
+def assess_result_type(chapter: Any) -> Tuple[bool, str]:
+    """返回 (has_result, result_type)。result_type: actual_result | simulated_result | expected_result | none"""
+    parsed = parse_chapter_value(chapter)
+    if isinstance(parsed, dict):
+        if _structured_item_count(parsed.get("actual_results")):
+            return True, "actual_result"
+        if _structured_item_count(parsed.get("simulated_results")):
+            return True, "simulated_result"
+        if _structured_item_count(parsed.get("expected_results")):
+            return True, "expected_result"
+        return False, "none"
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if not text:
+            return False, "none"
+        lower = text.lower()
+        if "actual_result" in lower or "actual results" in lower or "实际结果" in lower:
+            return True, "actual_result"
+        if "simulated_result" in lower or "simulated results" in lower or "模拟结果" in lower:
+            return True, "simulated_result"
+        if "expected_result" in lower or "expected results" in lower or "预期结果" in lower:
+            return True, "expected_result"
+        if len(text) >= 50:
+            if "simulat" in lower or "模拟" in lower:
+                return True, "simulated_result"
+            if "expect" in lower or "预期" in lower:
+                return True, "expected_result"
+        return True, "expected_result"
+    return False, "none"
+
+
+def chapter_has_content(chapter: Any, *, min_len: int = 10) -> bool:
+    return _nonempty_text(chapter, min_len=min_len)
+
+
+def ensure_technical_details_qwen_disclosure(text: Any) -> str:
+    """赛题要求 Technical Details 明确 Qwen/百炼；历史报告或净化后可能缺失。"""
+    from app.skills.report.report_quality_check_skill import Qwen_KEYWORDS
+
+    raw = str(text or "").strip()
+    if any(p.search(raw) for p in Qwen_KEYWORDS):
+        return raw
+    disclosure = (
+        "\n\n本研究的假设梳理、实验设计与报告撰写辅助环节使用通义千问（Qwen）"
+        "系列大语言模型，并通过阿里云百炼平台完成推理服务调用。"
+    )
+    return raw + disclosure
+
+
 def refresh_compliance_metrics(
     compliance: Optional[Dict[str, Any]],
     *,
@@ -209,8 +463,10 @@ def refresh_compliance_metrics(
     verified_references: Optional[List[Dict[str, Any]]] = None,
     literature_facts: Optional[List[Dict[str, Any]]] = None,
     hypotheses: Optional[List[Dict[str, Any]]] = None,
+    chapters: Optional[Dict[str, Any]] = None,
+    experiment_design: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """在已有 compliance_check 基础上，用最新文献/引用数据刷新关键指标。"""
+    """在已有 compliance_check 基础上，用最新文献/引用/实验设计数据刷新关键指标。"""
     merged = dict(compliance or {})
     citation_map = list(citation_map or [])
     verified_references = list(verified_references or [])
@@ -246,26 +502,83 @@ def refresh_compliance_metrics(
     real_refs = [r for r in references if not is_placeholder_reference(r)]
     merged["has_references"] = bool(real_refs) and ref_check["verified_count"] > 0
 
+    ed_dict = experiment_design_record_to_dict(experiment_design)
+    chapter_map = chapters or {}
+    experiments_chapter = chapter_map.get("experiments")
+    results_chapter = chapter_map.get("results")
+    merged["has_experiments"] = chapter_has_experiments(experiments_chapter, ed_dict)
+    merged["has_results"] = chapter_has_results(results_chapter)
+
+    has_result, result_type = assess_result_type(results_chapter)
+    merged["has_actual_or_simulated_result"] = result_type in ("actual_result", "simulated_result")
+    merged["result_type"] = result_type
+
+    has_datasets = chapter_has_content(chapter_map.get("datasets"))
+    has_source = chapter_has_content(chapter_map.get("source"))
+    has_target = chapter_has_content(chapter_map.get("target"))
+    merged["has_datasets"] = has_datasets
+    merged["has_source"] = has_source
+    merged["has_target"] = has_target
+    merged["has_methods"] = chapter_has_content(chapter_map.get("methods"))
+    merged["has_rationale"] = chapter_has_content(chapter_map.get("rationale"), min_len=20)
+    merged["has_technical_details"] = chapter_has_content(chapter_map.get("technical_details"))
+
+    warnings = [
+        w for w in (merged.get("warnings") or [])
+        if not any(k in str(w) for k in ("数据集", "预期结果", "Source", "Target", "数据来源"))
+    ]
+    if not has_datasets:
+        warnings.append("数据集来源不足，请补充真实或合规数据来源")
+    if result_type in ("expected_result", "none") and not has_result:
+        warnings.append("当前仅有预期结果，建议补充公式推导、模拟验证或小样实验")
+    elif result_type == "expected_result" and has_result:
+        pass
+    if not has_source:
+        warnings.append("缺少真实历史数据来源（Source），需补充数据源")
+    if not has_target:
+        warnings.append("缺少目标数据特征描述（Target），需补充")
+    merged["warnings"] = warnings
+
     items = merged.get("items")
     if isinstance(items, list):
         for item in items:
-            if not isinstance(item, dict) or item.get("key") != "references":
+            if not isinstance(item, dict):
                 continue
-            if ref_check["verified_count"] > 0 and ref_check["suspicious_count"] == 0:
-                item["status"] = "completed"
-                item["note"] = f"{ref_check['verified_count']} 条引用已通过文献库验证"
-            elif ref_check["verified_count"] > 0:
-                item["status"] = "human_review"
-                item["note"] = (
-                    f"{ref_check['verified_count']} 条已验证，"
-                    f"{ref_check['suspicious_count']} 条需人工确认"
+            key = item.get("key")
+            if key == "references":
+                if ref_check["verified_count"] > 0 and ref_check["suspicious_count"] == 0:
+                    item["status"] = "completed"
+                    item["note"] = f"{ref_check['verified_count']} 条引用已通过文献库验证"
+                elif ref_check["verified_count"] > 0:
+                    item["status"] = "human_review"
+                    item["note"] = (
+                        f"{ref_check['verified_count']} 条已验证，"
+                        f"{ref_check['suspicious_count']} 条需人工确认"
+                    )
+                elif real_refs:
+                    item["status"] = "human_review"
+                    item["note"] = "引用未能与文献库完全匹配，请人工核对"
+                else:
+                    item["status"] = "missing"
+                    item["note"] = "缺少真实引用，需先导入文献库"
+                continue
+
+            if key in ("experiments", "results"):
+                chapter_val = experiments_chapter if key == "experiments" else results_chapter
+                status, note = evaluate_chapter_item_status(
+                    key,
+                    chapter_val,
+                    experiment_design=ed_dict if key == "experiments" else None,
                 )
-            elif real_refs:
-                item["status"] = "human_review"
-                item["note"] = "引用未能与文献库完全匹配，请人工核对"
-            else:
-                item["status"] = "missing"
-                item["note"] = "缺少真实引用，需先导入文献库"
+                item["status"] = status
+                item["note"] = note
+
+        completed = sum(1 for i in items if i.get("status") == "completed")
+        missing = sum(1 for i in items if i.get("status") == "missing")
+        needs_review = sum(1 for i in items if i.get("status") == "human_review")
+        merged["completed"] = completed
+        merged["missing"] = missing
+        merged["human_review"] = needs_review
 
     critical = [c for c in (merged.get("critical_issues") or []) if "参考文献" not in str(c)]
     if ref_check["verified_count"] == 0 and not real_refs:
@@ -276,6 +589,13 @@ def refresh_compliance_metrics(
     if isinstance(qc, dict):
         data = dict(qc.get("data") or {})
         data["references_verified"] = ref_check["verified_count"]
+        plots = merged.get("plots") or []
+        if isinstance(plots, list) and any(
+            isinstance(p, dict) and p.get("is_generated_from_real_data") for p in plots
+        ):
+            data["has_real_data_plots"] = True
+        if result_type in ("actual_result", "simulated_result"):
+            data["has_actual_or_simulated_results"] = True
         qc["data"] = data
         merged["report_quality_check"] = qc
 
@@ -295,10 +615,23 @@ def enrich_report_extra_metadata(
     *,
     literature_mining: Optional[Dict[str, Any]] = None,
     hypotheses: Optional[List[Dict[str, Any]]] = None,
+    experiment_design: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """读取报告时为 extra_metadata 刷新合规指标（兼容历史报告）。"""
     extra = dict(getattr(report_row, "extra_metadata", None) or {})
     refs = parse_report_references(getattr(report_row, "references", None))
+
+    chapters = {
+        "problem_statement": getattr(report_row, "problem_statement", None),
+        "rationale": getattr(report_row, "rationale", None),
+        "technical_details": getattr(report_row, "technical_details", None),
+        "datasets": getattr(report_row, "datasets", None),
+        "source": getattr(report_row, "source", None),
+        "target": getattr(report_row, "target", None),
+        "methods": getattr(report_row, "methods", None),
+        "experiments": getattr(report_row, "experiments", None),
+        "results": getattr(report_row, "results", None),
+    }
 
     facts, citation_map, verified = literature_bundle_from_pipeline_stage(literature_mining)
     if not facts and not citation_map:
@@ -310,6 +643,10 @@ def enrich_report_extra_metadata(
             }
         )
 
+    ed = experiment_design
+    if not ed and getattr(report_row, "experiment_design_id", None):
+        ed = extra.get("experiment_design_snapshot")
+
     refreshed = refresh_compliance_metrics(
         extra,
         references=refs,
@@ -317,10 +654,20 @@ def enrich_report_extra_metadata(
         verified_references=verified,
         literature_facts=facts,
         hypotheses=hypotheses,
+        chapters=chapters,
+        experiment_design=ed,
     )
 
-    # 保留 plots / export 等非 compliance 字段
-    for key in ("plots", "pdf_success", "export_method", "pdf_warning", "revision_history", "chat_history"):
+    # 保留 plots / export / 质量检查 等非 compliance 字段
+    for key in (
+        "plots",
+        "pdf_success",
+        "export_method",
+        "pdf_warning",
+        "revision_history",
+        "chat_history",
+        "report_quality_check",
+    ):
         if key in extra and key not in refreshed:
             refreshed[key] = extra[key]
     return refreshed

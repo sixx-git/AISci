@@ -113,6 +113,55 @@ class DataFinderService:
 
         return resolve_gap_thresholds(self._load_project_config(project_id), run_options)
 
+    def _project_research_domain(self, project_id: str) -> str:
+        from app.services.project_service import ProjectService
+
+        project = ProjectService(self.db).get_project(project_id)
+        if not project:
+            return ""
+        return (project.research_domain or "").strip()
+
+    def _build_external_search_context(
+        self,
+        *,
+        project_id: str,
+        research_question: str,
+        data_requirements: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        from app.core.research_field import build_research_context
+
+        req = data_requirements if isinstance(data_requirements, dict) else {}
+        data_spec = req.get("data_spec") if isinstance(req.get("data_spec"), dict) else {}
+        keywords = list(req.get("dataset_keywords") or [])
+        keywords.extend(req.get("domain_keywords") or [])
+        return build_research_context(
+            research_question=research_question,
+            research_domain=self._project_research_domain(project_id),
+            keywords=keywords,
+            data_spec=data_spec,
+        )
+
+    def _finalize_external_candidates(
+        self,
+        candidates: List[Dict[str, Any]],
+        *,
+        project_id: str,
+        research_question: str,
+        data_requirements: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        from app.core.research_field import filter_relevant_external_candidates
+        from app.services.data_sources.base import normalize_legacy_candidate
+        from app.services.external_candidate_service import ensure_candidate_ids
+
+        normalized = [normalize_legacy_candidate(c) for c in (candidates or [])]
+        ctx = self._build_external_search_context(
+            project_id=project_id,
+            research_question=research_question,
+            data_requirements=data_requirements,
+        )
+        filtered = filter_relevant_external_candidates(normalized, ctx)
+        return ensure_candidate_ids(filtered)
+
     async def run_search(
         self,
         project_id: str,
@@ -139,6 +188,15 @@ class DataFinderService:
             research_question, project_mode_to_scenario(project_mode),
         )
         data_spec = apply_data_spec_hints(data_spec, user_hints)
+        from app.core.domain_data_catalog import enrich_data_spec_from_domain
+
+        research_domain = self._project_research_domain(project_id)
+        data_spec = enrich_data_spec_from_domain(
+            data_spec,
+            research_domain=research_domain,
+            file_description=str(data_spec.get("user_data_notes") or ""),
+            research_question=research_question,
+        )
         data_requirements["data_spec"] = data_spec
 
         project_config = self._load_project_config(project_id)
@@ -178,10 +236,13 @@ class DataFinderService:
         text_facts = text_facts_res.data.get("text_facts") or []
 
         ext_skill = ExternalDatasetSearchSkill()
+        research_domain = self._project_research_domain(project_id)
         ext_res = await ext_skill.run(
             {
                 "research_question": research_question,
                 "dataset_keywords": data_requirements.get("dataset_keywords", []),
+                "research_domain": research_domain,
+                "data_spec": data_spec,
             },
             ctx,
         )
@@ -202,9 +263,12 @@ class DataFinderService:
                 seen_keys.add(key)
                 ext_candidates.append(nc)
 
-        from app.services.external_candidate_service import ensure_candidate_ids
-
-        ext_candidates = ensure_candidate_ids(ext_candidates)
+        ext_candidates = self._finalize_external_candidates(
+            ext_candidates,
+            project_id=project_id,
+            research_question=research_question,
+            data_requirements=data_requirements,
+        )
 
         figures_all: List[Dict[str, Any]] = []
         fig_skill = FigureDataExtractionSkill()
@@ -343,6 +407,15 @@ class DataFinderService:
             research_question, project_mode_to_scenario(project_mode),
         )
         data_spec = apply_data_spec_hints(data_spec, user_hints)
+        from app.core.domain_data_catalog import enrich_data_spec_from_domain
+
+        research_domain = self._project_research_domain(project_id)
+        data_spec = enrich_data_spec_from_domain(
+            data_spec,
+            research_domain=research_domain,
+            file_description=str(data_spec.get("user_data_notes") or ""),
+            research_question=research_question,
+        )
         data_requirements["data_spec"] = data_spec
 
         ext_skill = ExternalDatasetSearchSkill()
@@ -350,13 +423,14 @@ class DataFinderService:
             {
                 "research_question": research_question,
                 "dataset_keywords": data_requirements.get("dataset_keywords", []),
+                "research_domain": research_domain,
+                "data_spec": data_spec,
             },
             ctx,
         )
 
         from app.services.data_sources.registry import search_all as registry_search
         from app.services.data_sources.base import normalize_legacy_candidate
-        from app.services.external_candidate_service import ensure_candidate_ids
 
         reg_res = await registry_search(research_question, data_spec, limit_per_source=3)
         ext_candidates = [
@@ -369,7 +443,12 @@ class DataFinderService:
             if key and key not in seen_keys:
                 seen_keys.add(key)
                 ext_candidates.append(nc)
-        ext_candidates = ensure_candidate_ids(ext_candidates)
+        ext_candidates = self._finalize_external_candidates(
+            ext_candidates,
+            project_id=project_id,
+            research_question=research_question,
+            data_requirements=data_requirements,
+        )
 
         assets_index = build_assets_index({
             "extracted_tables": [],

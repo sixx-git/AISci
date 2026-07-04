@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.data.preliminary_analysis_skill import PreliminaryAnalysisSkill
+from app.skills.experiment.result_verification_skill import ResultVerificationSkill
 from app.services.experiment_sandbox_service import get_experiment_sandbox_service
 
 logger = logging.getLogger(__name__)
@@ -88,14 +89,27 @@ class SmallValidationAgent:
             
             # 定义 schema 示例
             schema_example = {
-                "has_real_data": 0,
-                "analysis_script": "# 完整的 Python 分析脚本...",
-                "simulated_data": "[{\"col1\": 1, \"col2\": 2}]",
-                "simulation_assumptions": "模拟假设说明...",
-                "charts": "[{\"type\": \"bar\", \"title\": \"示例图表\", \"data\": []}]",
-                "statistics": "{\"mean\": 0.5}",
-                "run_log": "[{\"timestamp\": \"2024-01-01\", \"level\": \"INFO\", \"message\": \"开始\"}]"
+                "has_real_data": has_csv_data,
+                "analysis_script": "# 基于已上传真实数据的 Python 分析脚本...",
+                "simulated_data": "",
+                "simulation_assumptions": "",
+                "charts": "[]",
+                "statistics": "{}",
+                "run_log": "[]",
             }
+            
+            if has_csv_data:
+                prompt += (
+                    "\n\n【重要】项目已提供真实数据文件。"
+                    "禁止生成 simulated_data 或 simulation_assumptions；"
+                    "has_real_data 必须为 1；analysis_script 必须读取真实 CSV/表格路径。"
+                )
+            else:
+                prompt += (
+                    "\n\n【重要】当前无可用真实数据。"
+                    "禁止编造 simulated_data 或预填统计结果；"
+                    "simulated_data 与 simulation_assumptions 留空，仅描述基于实验设计的验证步骤。"
+                )
             
             # 调用 LLM
             result_dict = qwen_structured_chat(
@@ -185,6 +199,28 @@ class SmallValidationAgent:
             except Exception as e:
                 logger.warning(f"PreliminaryAnalysisSkill 失败: {e}")
                 outputs["preliminary_analysis"] = {"success": False, "error": str(e)}
+
+            pa_data = outputs.get("preliminary_analysis", {}).get("data", {})
+            try:
+                verify_skill = ResultVerificationSkill()
+                verify_result = await verify_skill.run(
+                    input_data={
+                        "hypothesis": hypothesis,
+                        "experiment_design": experiment_design or {},
+                        "preliminary_analysis": pa_data,
+                        "expected_results": (experiment_design or {}).get("expected_results", ""),
+                    },
+                    context={"stage": "small_validation"},
+                )
+                outputs["result_verification"] = {
+                    "success": verify_result.success,
+                    "data": verify_result.data,
+                    "warnings": verify_result.warnings,
+                    "errors": verify_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ResultVerificationSkill 失败: {e}")
+                outputs["result_verification"] = {"success": False, "error": str(e)}
             return outputs
 
         try:
@@ -239,15 +275,9 @@ class SmallValidationAgent:
 
         simulated_data = result.get("simulated_data", "")
         simulation_assumptions = result.get("simulation_assumptions", "")
-        if simulated_data or simulation_assumptions:
-            categorized["simulated_results"] = {
-                "data": simulated_data,
-                "assumptions": simulation_assumptions,
-                "note": "LLM 生成的模拟数据，非真实观测数据" if not has_real else "作为真实数据的补充模拟",
-                "data_source": "simulation",
-            }
-            if not has_real:
-                categorized["result_type_summary"] = "simulated_only"
+        categorized["simulated_results"] = {"note": "未生成模拟数据（系统已禁用模拟/预填结果）"}
+        if has_real:
+            categorized["simulated_results"] = {"note": "已使用真实数据，未采用模拟结果"}
 
         target_var = experiment_design.get("target_variable", "") if experiment_design else ""
         expected = experiment_design.get("expected_outcome", "") if experiment_design else ""
@@ -324,9 +354,18 @@ class SmallValidationAgent:
                 if field == "has_real_data":
                     result_dict[field] = has_csv_data
                 elif field == "analysis_script":
-                    result_dict[field] = self._generate_default_script()
+                    result_dict[field] = self._generate_default_script() if has_csv_data else ""
                 else:
                     result_dict[field] = ""
+        
+        # 有真实数据时清除 LLM 可能生成的模拟字段
+        if has_csv_data:
+            result_dict["has_real_data"] = 1
+            result_dict["simulated_data"] = ""
+            result_dict["simulation_assumptions"] = ""
+        else:
+            result_dict["simulated_data"] = ""
+            result_dict["simulation_assumptions"] = ""
         
         # 确保 has_real_data 是整数
         result_dict["has_real_data"] = int(result_dict.get("has_real_data", has_csv_data))

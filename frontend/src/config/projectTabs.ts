@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, HelpCircle, BookOpen, Network, Database,
+  LayoutDashboard, HelpCircle, BookOpen, Database,
   GitBranch, Lightbulb, FlaskConical, FileText, ScrollText, SlidersHorizontal,
 } from 'lucide-react';
 
@@ -14,7 +14,6 @@ export const PROJECT_TABS: ProjectTabItem[] = [
   { id: 'overview', label: '项目概览', icon: LayoutDashboard },
   { id: 'questions', label: '研究问题', icon: HelpCircle },
   { id: 'literature', label: '文献库', icon: BookOpen },
-  { id: 'knowledge_graph', label: '知识图谱', icon: Network },
   { id: 'datasets', label: '数据集', icon: Database },
   { id: 'workflow', label: '智能体工作流', icon: GitBranch },
   { id: 'prompts', label: 'Prompt 管理', icon: SlidersHorizontal },

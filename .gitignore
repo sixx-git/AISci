@@ -77,7 +77,7 @@ backend/build/
 *.sqlite3
 *.db-shm
 *.db-wal
-
+datasets/
 # =========================
 # Storage
 # 保留 storage 目录说明文件，但不提交上传文件、报告、向量索引

@@ -22,56 +22,64 @@ CATEGORY_LABELS: Dict[str, str] = {
     "data": "数据",
     "report": "报告",
     "modeling": "建模",
-    "knowledge_graph": "知识图谱",
     "data_finder": "数据查找",
     "federated_experiment": "联邦实验",
     "multimodal": "多模态",
     "evidence_reasoning": "证据推理",
     "academic": "学术写作",
+    "chinese_writing": "中文写作",
+    "impact_prediction": "影响力预测",
     "general": "通用",
 }
 
 # skill.name -> 使用该 Skill 的智能体 / 服务
 CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "文献挖掘 Agent": [
-        "SearchPapers", "PdfEvidenceExtraction", "ArxivSearch",
+        "SearchPapers", "PaperFullTextRAG", "LiteratureEvidenceRetrieval",
+        "PdfEvidenceExtraction", "ArxivSearch", "ClaimExtraction",
         "CitationGrounding", "MultimodalDataLinking",
         "PaperReading", "DeepResearch", "SourceTracing", "ResearchGenealogy",
         "ClaudeScholar", "PaperSkill",
     ],
-    "假设评审 Agent": ["HypothesisNoveltyReview"],
+    "假设评审 Agent": ["HypothesisNoveltyReview", "HypothesisTournament"],
     "实验设计 Agent": [
-        "ExperimentSanityCheck", "MultimodalDataIngest",
+        "ExperimentSanityCheck", "ExperimentPlanCritic", "TaskDecomposition",
+        "ExperimentProtocol", "MultimodalDataIngest",
         "MultimodalDataLinking", "DatasetDiscovery",
     ],
-    "小样验证 Agent": ["PreliminaryAnalysis"],
+    "小样验证 Agent": [
+        "PreliminaryAnalysis", "ResultVerification",
+        "SimulationExecutor", "ResultAnalyzer", "LabNotebook",
+    ],
     "报告生成 Agent": [
-        "CitationGrounding", "ReportChartGeneration",
-        "ScientificPlot", "ReportQualityCheck",
+        "CitationGrounding", "CitationIntegrityCheck", "ReportChartGeneration",
+        "ScientificPlot", "ReportQualityCheck", "ReportReviewer",
+        "ChineseStyleDiagnosis", "HumanizeRewrite", "ToneControl",
+        "ReportInfluencePrediction",
         "AcademicWritingSkills", "WriteChinese", "PaperWriter", "AcademicPaperSkills",
         "EmpiricalPaper", "NaturePaper", "CCFASkill", "PaperPilot",
         "PaperToPatent", "PaperToStoryboard", "Paper2Beamer",
     ],
     "Pipeline 编排": [
         "QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop",
-        "QuestionValidator", "AcademicResearchSkills", "ResearchSkills",
+        "TaskDecomposition", "Replanning", "QuestionValidator",
+        "AcademicResearchSkills", "ResearchSkills",
     ],
     "数据建模服务": [
-        "DatasetProfiling", "TaskTypeDetection", "DataPreprocessing",
-        "BaselineModelTraining", "ModelEvaluation", "SelfCorrection",
+        "DatasetProfiling", "DataCleaningPlan", "FeatureEngineering",
+        "TaskTypeDetection", "DataPreprocessing",
+        "BaselineModelTraining", "BaselineTraining",
+        "ModelEvaluation", "ErrorAnalysis", "SelfCorrection", "ExperimentTracking",
     ],
     "数据集服务": ["data_juicer_lite"],
     "多源数据查找": [
-        "DataRequirementUnderstanding", "PaperDataLinkExtractor", "TextFactsExtraction",
-        "ExternalDatasetSearch", "FigureDataExtraction", "FigureVlmSeries", "PdfFigureCrop",
-        "SupplementaryFetch", "SupplementaryExtraction", "PdfTableExtraction",
+        "DataRequirementUnderstanding", "ScientificDataSearch", "PaperDataLinkExtractor",
+        "TextFactsExtraction", "ExternalDatasetSearch",
+        "FigureDataExtraction", "FigureVlmSeries", "PdfFigureCrop",
+        "TableExtraction", "PdfTableExtraction",
+        "SupplementaryFetch", "SupplementaryExtraction",
         "DataProvenance", "DatasetSchemaAlignment", "DatasetMerge", "EntityResolution",
         "TabularFileExtraction", "ChemStructureExtraction", "StructuredFileExtraction",
-    ],
-    "知识图谱服务": [
-        "KgSchemaGeneration", "ScientificEntityExtraction", "ScientificRelationExtraction",
-        "EvidenceGraphBuilder", "GraphCommunitySummary", "KgQualityReview", "GraphReasoning",
-        "IncrementalGraphUpdate", "HumanFeedbackUpdate", "GraphRagRetrieval", "KgExplanation",
     ],
     "联邦实验服务": [
         "FederatedDataSchema", "FederatedExperimentPlan", "PrivacyMechanismSuggestion",
@@ -82,11 +90,21 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "QwenVlImageUnderstanding", "AudioTranscription", "MultimodalEvidenceBuilder",
     ],
     "证据推理服务": [
-        "EvidenceRetrieval", "EvidenceChainBuilder", "EvidenceStanceClassification",
-        "ScientificClaimExtraction", "CitationIntegrityCheck", "CounterEvidenceRetrieval",
-        "HypothesisRevision", "SourceTracing",
+        "EvidenceRetrieval", "LiteratureEvidenceRetrieval", "EvidenceGrounding",
+        "EvidenceChainBuilder", "EvidenceStanceClassification",
+        "ScientificClaimExtraction", "ClaimExtraction",
+        "CitationIntegrityCheck", "CounterEvidenceRetrieval", "CounterEvidenceSearch",
+        "HypothesisRevision", "HypothesisRefinement", "MechanismReasoning", "SourceTracing",
     ],
     "人在回路": ["MentorReview"],
+    "中文写作服务": [
+        "ChineseStyleDiagnosis", "HumanizeRewrite", "RevisionReason",
+        "MultiVersionRewrite", "ChineseGECCheck", "ToneControl",
+    ],
+    "影响力预测服务": [
+        "PaperFeatureExtraction", "CitationGraphFeature", "EarlyImpactPrediction",
+        "BiasExplanation", "ImpactCalibration", "ReportInfluencePrediction",
+    ],
     "图表质量": ["PlotVlmCritique", "ScientificPlot"],
 }
 
@@ -126,18 +144,6 @@ REQUIRED_SKILL_IDS: frozenset[str] = frozenset({
     "TabularFileExtraction",
     "ChemStructureExtraction",
     "StructuredFileExtraction",
-    # 知识图谱
-    "KgSchemaGeneration",
-    "ScientificEntityExtraction",
-    "ScientificRelationExtraction",
-    "EvidenceGraphBuilder",
-    "GraphCommunitySummary",
-    "KgQualityReview",
-    "GraphReasoning",
-    "IncrementalGraphUpdate",
-    "HumanFeedbackUpdate",
-    "GraphRagRetrieval",
-    "KgExplanation",
     # 假设评审
     "HypothesisNoveltyReview",
     "MentorReview",
@@ -259,7 +265,8 @@ def discover_skills(refresh: bool = False) -> List[SkillRecord]:
     skills_root = Path(__file__).resolve().parent.parent / "skills"
     found: Dict[str, SkillRecord] = {}
 
-    for py_file in sorted(skills_root.rglob("*_skill.py")):
+    skill_files = sorted(set(skills_root.rglob("*_skill.py")) | set(skills_root.rglob("*_skills.py")))
+    for py_file in skill_files:
         if py_file.name.startswith("_"):
             continue
         rel = py_file.relative_to(skills_root).with_suffix("")

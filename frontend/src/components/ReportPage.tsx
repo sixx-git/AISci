@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, Network, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -50,6 +50,8 @@ export function ReportPage({
   const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
   const [mentorBusy, setMentorBusy] = useState(false);
   const [lastChatReply, setLastChatReply] = useState('');
+  const [regeneratingPdf, setRegeneratingPdf] = useState(false);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!projectId) return;
@@ -160,6 +162,25 @@ export function ReportPage({
     }
   }, [report, showAlert]);
 
+  const handleRegeneratePdf = useCallback(async () => {
+    if (!report?.id) return;
+    setRegeneratingPdf(true);
+    try {
+      const res = await reportService.regeneratePdf(report.id);
+      if (res.code === 200) {
+        await reloadReport();
+        setPdfRefreshKey((k) => k + 1);
+        showAlert(res.data?.pdf_success ? 'PDF 生成成功' : 'PDF 生成失败，请检查 LaTeX 环境');
+      } else {
+        showAlert(res.message || 'PDF 重新生成失败');
+      }
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : 'PDF 重新生成失败');
+    } finally {
+      setRegeneratingPdf(false);
+    }
+  }, [report?.id, reloadReport, showAlert]);
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -227,14 +248,6 @@ export function ReportPage({
           }`}>
             {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
           </span>
-          <button
-            type="button"
-            onClick={() => navigate(`/projects/${projectId}?tab=knowledge_graph`)}
-            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-bp border border-bp-cyan/40 bg-bp-cyan-tint text-bp-cyan hover:bg-bp-cyan/20 transition-colors"
-          >
-            <Network className="w-3 h-3" />
-            查看知识图谱
-          </button>
         </div>
       </div>
 
@@ -347,7 +360,7 @@ export function ReportPage({
                 PDF 导出失败
               </p>
               <p className="text-xs text-bp-yellow/70 leading-relaxed">
-                PDF 导出失败，不影响核心报告生成。Markdown 和 JSON 格式仍可使用。
+                LaTeX PDF 编译失败。请点击预览区「重新生成 PDF」，或检查服务器是否已安装 XeLaTeX。
               </p>
             </div>
           </div>
@@ -397,15 +410,16 @@ export function ReportPage({
         <div className="lg:col-span-8 space-y-4">
           <Card className="min-w-0">
             <ReportPreviewHeader
-              mode={pdfFailed ? 'markdown' : 'pdf'}
               title={report.title}
-              pdfAvailable={!pdfFailed}
               onDownloadPdf={() => handleExport('pdf')}
+              onRegeneratePdf={handleRegeneratePdf}
+              regenerating={regeneratingPdf}
             />
             <ReportPdfPreview
               reportId={report.id}
-              markdownContent={report.markdownContent}
-              pdfSuccess={report.pdfSuccess}
+              refreshKey={pdfRefreshKey}
+              onRegeneratePdf={handleRegeneratePdf}
+              regenerating={regeneratingPdf}
             />
           </Card>
 

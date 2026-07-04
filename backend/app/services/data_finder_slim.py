@@ -71,6 +71,8 @@ def slim_data_finder_payload(payload: Any) -> Dict[str, Any]:
             slim["data_spec"] = {
                 "dataset_keywords": (spec.get("dataset_keywords") or [])[:15],
                 "domain_keywords": (spec.get("domain_keywords") or [])[:15],
+                "entities_of_interest": (spec.get("entities_of_interest") or [])[:8],
+                "target_variables": (spec.get("target_variables") or [])[:10],
                 "modality_filter": spec.get("modality_filter"),
             }
 
@@ -164,11 +166,114 @@ def slim_results_for_checkpoint(results: Dict[str, Any]) -> Dict[str, Any]:
     return safe
 
 
+def slim_data_context(context: Any) -> Dict[str, Any]:
+    """项目 data_context 写入 Pipeline 输入前瘦身（避免 SQLite 膨胀）。"""
+    if not isinstance(context, dict):
+        return {}
+    slim: Dict[str, Any] = {
+        "dataset_count": context.get("dataset_count"),
+        "available_modalities": list(context.get("available_modalities") or [])[:12],
+        "field_candidates": list(context.get("field_candidates") or [])[:40],
+        "target_candidates": list(context.get("target_candidates") or [])[:20],
+        "quality_summary": context.get("quality_summary") if isinstance(context.get("quality_summary"), dict) else {},
+        "warnings": list(context.get("warnings") or [])[:8],
+        "project_mode": context.get("project_mode"),
+        "data_finder_merged_csv": context.get("data_finder_merged_csv"),
+        "fl_context": context.get("fl_context") if isinstance(context.get("fl_context"), dict) else None,
+    }
+    datasets = context.get("datasets")
+    if isinstance(datasets, list):
+        slim["datasets"] = [
+            {
+                "dataset_id": d.get("dataset_id"),
+                "filename": d.get("filename"),
+                "file_path": d.get("file_path"),
+                "data_type": d.get("data_type"),
+                "n_rows": d.get("n_rows"),
+                "n_columns": d.get("n_columns"),
+                "columns": list(d.get("columns") or [])[:40],
+                "missing_rate": d.get("missing_rate"),
+                "preprocessing_status": d.get("preprocessing_status"),
+                "use_for_hypothesis": d.get("use_for_hypothesis"),
+            }
+            for d in datasets[:12]
+            if isinstance(d, dict)
+        ]
+    df = context.get("data_finder_results")
+    if isinstance(df, dict):
+        slim["data_finder_results"] = slim_data_finder_payload(df)
+    mm = context.get("multimodal_evidence")
+    if isinstance(mm, list):
+        slim["multimodal_evidence_count"] = len(mm)
+        slim["multimodal_evidence"] = mm[:8]
+    return {k: v for k, v in slim.items() if v is not None}
+
+
+def slim_stage_output(output: Any, stage_key: str = "") -> Any:
+    """阶段 output_data 持久化到 DB 前瘦身。"""
+    if output is None:
+        return None
+    if not isinstance(output, dict):
+        return _truncate_str(output) if isinstance(output, str) else output
+
+    key = (stage_key or "").lower()
+    if key in ("data_acquisition", "data_finder"):
+        return slim_data_acquisition_output(output)
+    if key == "literature_mining":
+        lm = dict(output)
+        papers = lm.get("source_papers") or lm.get("retrieved_papers")
+        if isinstance(papers, list) and len(papers) > _MAX_LIST_ITEMS:
+            lm["source_papers"] = papers[:_MAX_LIST_ITEMS]
+            lm["source_papers_count"] = len(papers)
+        facts = lm.get("facts")
+        if isinstance(facts, list) and len(facts) > _MAX_LIST_ITEMS:
+            lm["facts"] = facts[:_MAX_LIST_ITEMS]
+            lm["facts_count"] = len(facts)
+        so = lm.get("skill_outputs")
+        if isinstance(so, dict):
+            lm["skill_outputs"] = {
+                k: {"success": (v or {}).get("success"), "data_keys": list(((v or {}).get("data") or {}).keys())[:12]}
+                if isinstance(v, dict) else v
+                for k, v in so.items()
+            }
+        output = lm
+    if key == "experiment_design":
+        ed = dict(output)
+        so = ed.get("skill_outputs")
+        if isinstance(so, dict):
+            slim_so = {}
+            for sk, val in so.items():
+                if not isinstance(val, dict):
+                    slim_so[sk] = val
+                    continue
+                data = val.get("data")
+                if sk == "dataset_discovery" and isinstance(data, dict):
+                    slim_so[sk] = {**val, "data": {"datasets": (data.get("datasets") or [])[:5]}}
+                elif isinstance(data, dict) and len(json.dumps(data, ensure_ascii=False)) > 20_000:
+                    slim_so[sk] = {**val, "data": {"_truncated": True, "keys": list(data.keys())[:20]}}
+                else:
+                    slim_so[sk] = val
+            ed["skill_outputs"] = slim_so
+        output = ed
+
+    try:
+        blob = json.dumps(output, ensure_ascii=False)
+        if len(blob) <= 120_000:
+            return output
+    except (TypeError, ValueError):
+        return {"_truncated": True, "preview": _truncate_str(str(output), 4000)}
+
+    wrapped = slim_results_for_checkpoint({"_stage": output})
+    return wrapped.get("_stage", output)
+
+
 def slim_stage_input(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """阶段 input_data 写入 DB 前瘦身。"""
     if not isinstance(input_data, dict):
         return {}
     out = dict(input_data)
+    if "data_context" in out and isinstance(out["data_context"], dict):
+        out["data_context"] = slim_data_context(out["data_context"])
     if "data_finder" in out:
         out["data_finder"] = slim_data_acquisition_output(out.get("data_finder") or {})
     if "literature_mining" in out and isinstance(out["literature_mining"], dict):

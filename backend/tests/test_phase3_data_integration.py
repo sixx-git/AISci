@@ -104,7 +104,7 @@ class TestReportManifestEnrichment(unittest.TestCase):
                 "confidence": 0.9,
                 "data_citation_id": "cite_abc",
             }],
-            "merged": {"row_count": 10, "merged_csv_path": "/tmp/m.csv"},
+            "merged": {"row_count": 10, "merged_csv_path": "/tmp/m.csv", "columns": ["a", "b"]},
         }
         out = agent._enrich_report_with_data_finder(result, df)
         self.assertIn("DataSpec", out["chapters"]["datasets"])
@@ -112,6 +112,34 @@ class TestReportManifestEnrichment(unittest.TestCase):
         self.assertIn("cite_abc", out["chapters"]["source"])
         self.assertEqual(out["data_finder_summary"]["data_spec_score"], 50)
         self.assertEqual(out["data_finder_summary"]["figures_with_manifest"], 1)
+        results = out["chapters"]["results"]
+        self.assertIsInstance(results, dict)
+        self.assertTrue(results.get("simulated_results"))
+
+    def test_enrich_fits_upload_in_datasets_and_results(self):
+        agent = ReportGenerationAgent()
+        result = {"chapters": {"datasets": "已有数据集说明", "source": "", "results": {}}}
+        df = {
+            "extracted_tables": [{
+                "source_title": "JWST NIRSpec GS-9209",
+                "table_id": "fits_0",
+                "row_count": 3813,
+                "extraction_method": "fits_data",
+            }],
+            "merged": {
+                "row_count": 3813,
+                "merged_csv_path": "/tmp/merged.csv",
+                "columns": ["slice_index", "mean", "std", "min", "max"],
+            },
+            "provenance": [],
+            "coverage_report": {},
+        }
+        out = agent._enrich_report_with_data_finder(result, df)
+        ds = out["chapters"]["datasets"]
+        self.assertIn("FITS", ds)
+        self.assertIn("3813", ds)
+        sim = out["chapters"]["results"].get("simulated_results") or []
+        self.assertTrue(any("3813" in str(x) for x in sim))
 
 
 if __name__ == "__main__":

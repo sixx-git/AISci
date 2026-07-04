@@ -34,7 +34,7 @@ export function RecentPipelineSection({ rows, loading }: RecentPipelineSectionPr
                 <th className="py-2.5 px-4 text-xs text-bp-muted font-medium">Run ID</th>
                 <th className="py-2.5 px-4 text-xs text-bp-muted font-medium">状态</th>
                 <th className="py-2.5 px-4 text-xs text-bp-muted font-medium">时间</th>
-                <th className="py-2.5 px-4 text-xs text-bp-muted font-medium w-24">操作</th>
+                <th className="py-2.5 px-4 text-xs text-bp-muted font-medium w-28">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -62,10 +62,10 @@ export function RecentPipelineSection({ rows, loading }: RecentPipelineSectionPr
                     <td className="py-3 px-4 text-xs text-bp-muted whitespace-nowrap">
                       {formatDate(run.created_at)}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 whitespace-nowrap">
                       <Link
                         to={`/projects/${projectId}?tab=workflow`}
-                        className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-text transition-colors"
+                        className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-text transition-colors whitespace-nowrap"
                       >
                         <Play className="w-3.5 h-3.5" />
                         工作流

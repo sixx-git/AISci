@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.reasoning.hypothesis_novelty_review_skill import HypothesisNoveltyReviewSkill
+from app.skills.reasoning.hypothesis_tournament_skill import HypothesisTournamentSkill
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class HypothesisReviewAgent:
 
             # ── 运行新颖性审查 Skill ──
             result.skill_outputs = self._run_novelty_skills_sync(
-                hypotheses, retrieved_papers, literature_facts
+                hypotheses, retrieved_papers, literature_facts, research_question=research_question,
             )
 
             # ── P2: 集成评审（多评审者聚合）──
@@ -199,6 +200,7 @@ class HypothesisReviewAgent:
         hypotheses: list,
         retrieved_papers: Optional[list] = None,
         literature_facts: Optional[list] = None,
+        research_question: str = "",
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -207,11 +209,14 @@ class HypothesisReviewAgent:
 
         async def _run():
             outputs = {}
+            hypo_dicts = []
             for i, hypo in enumerate(hypotheses):
                 if isinstance(hypo, dict):
                     h_text = hypo.get("hypothesis", "")
+                    hypo_dicts.append(hypo)
                 else:
                     h_text = getattr(hypo, "hypothesis", str(hypo))
+                    hypo_dicts.append({"hypothesis": h_text})
                 if not h_text:
                     continue
 
@@ -234,6 +239,29 @@ class HypothesisReviewAgent:
                 except Exception as e:
                     logger.warning(f"NoveltyReviewSkill 失败 (hypothesis {i}): {e}")
                     outputs[f"hypothesis_{i}"] = {"success": False, "error": str(e)}
+
+            if len(hypo_dicts) >= 2:
+                try:
+                    tournament = HypothesisTournamentSkill()
+                    t_result = await tournament.run(
+                        input_data={
+                            "hypotheses": hypo_dicts,
+                            "research_question": research_question,
+                            "facts": literature_facts or [],
+                            "retrieved_papers": retrieved_papers or [],
+                        },
+                        context={"stage": "hypothesis_review"},
+                    )
+                    outputs["hypothesis_tournament"] = {
+                        "success": t_result.success,
+                        "data": t_result.data,
+                        "warnings": t_result.warnings,
+                        "errors": t_result.errors,
+                    }
+                except Exception as e:
+                    logger.warning(f"HypothesisTournamentSkill 失败: {e}")
+                    outputs["hypothesis_tournament"] = {"success": False, "error": str(e)}
+
             return {"hypothesis_novelty_review": outputs}
 
         try:

@@ -20,7 +20,6 @@ const files = [
   'HitlGatePanel.tsx',
   'HumanInLoopCard.tsx',
   'ReportChecklist.tsx',
-  'MarkdownPreview.tsx',
   'HypothesisCard.tsx',
   'EnsembleReviewPanel.tsx',
   'PlotCritiquePanel.tsx',

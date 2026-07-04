@@ -35,7 +35,24 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
   const plots = (extraMeta.plots as ReportData['plots']) || [];
 
   const rawCompliance = extractComplianceCheck(extraMeta);
-  const complianceCheck = reconcileComplianceForDisplay(rawCompliance, db.references);
+  const qcFromMeta = extraMeta.report_quality_check as ComplianceCheck['report_quality_check'];
+  let complianceCheck = reconcileComplianceForDisplay(rawCompliance, db.references);
+  if (qcFromMeta && typeof qcFromMeta === 'object') {
+    complianceCheck = {
+      ...(complianceCheck ?? {
+        completed: 0,
+        missing: 0,
+        human_review: 0,
+        references_verified: 0,
+        references_suspicious: 0,
+        evidence_fact_count: 0,
+        hypothesis_with_evidence_count: 0,
+        has_actual_or_simulated_result: false,
+        items: [],
+      }),
+      report_quality_check: qcFromMeta,
+    };
+  }
 
   const reportContent: Record<string, string> = {
     title: db.title || '',
@@ -55,21 +72,26 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
   };
 
   const fileId = db.report_id || db.pdf_path;
-  const pdfGenerated = Boolean(db.pdf_generated);
+  const exportMethod = extraMeta.export_method as string | undefined;
+  const pdfSuccessMeta = extraMeta.pdf_success;
+  const pdfFileExists = Boolean(db.pdf_generated);
+  const pdfSuccessFlag =
+    pdfSuccessMeta === true || pdfSuccessMeta === 1 || pdfSuccessMeta === '1';
+  const latexPdfSuccess =
+    exportMethod === 'latex' && (pdfSuccessFlag || pdfFileExists);
+  const pdfDownloadable = latexPdfSuccess;
 
   return {
     id: db.id,
     title: db.title || db.paper_title || '科学假设与研究计划',
     generatedAt: db.created_at ? new Date(db.created_at).toLocaleString('zh-CN') : '',
-    markdownContent: db.markdown_content || '',
     sections: complianceCheck?.items || [],
     complianceCheck,
     plots,
-    pdfSuccess: pdfGenerated,
-    exportMethod: (extraMeta.export_method as string | undefined),
-    mdDownloadUrl: fileId ? `/api/v1/reports/download/${db.id}/md` : undefined,
+    pdfSuccess: latexPdfSuccess,
+    exportMethod,
     texDownloadUrl: fileId ? `/api/v1/reports/download/${db.id}/tex` : undefined,
-    pdfDownloadUrl: fileId && pdfGenerated ? `/api/v1/reports/download/${db.id}/pdf` : undefined,
+    pdfDownloadUrl: fileId && pdfDownloadable ? `/api/v1/reports/download/${db.id}/pdf` : undefined,
     extraMetadata: extraMeta,
     reportContent,
   };
@@ -109,8 +131,24 @@ export const reportService = {
     return null;
   },
 
+  /** POST /api/v1/reports/:reportId/regenerate-pdf */
+  async regeneratePdf(reportId: string): Promise<ApiResponse<{
+    success?: boolean;
+    pdf_success?: boolean;
+    warning?: string;
+    export_method?: string;
+  }>> {
+    const { data } = await api.post<ApiResponse<{
+      success?: boolean;
+      pdf_success?: boolean;
+      warning?: string;
+      export_method?: string;
+    }>>(`/reports/${reportId}/regenerate-pdf`);
+    return data;
+  },
+
   /** GET /api/v1/reports/download/:reportId/:fileType */
-  async download(reportId: string, fileType: 'pdf' | 'md' | 'tex'): Promise<Blob> {
+  async download(reportId: string, fileType: 'pdf' | 'tex'): Promise<Blob> {
     const response = await api.get(`/reports/download/${reportId}/${fileType}`, {
       responseType: 'blob',
     });

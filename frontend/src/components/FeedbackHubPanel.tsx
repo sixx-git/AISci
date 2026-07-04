@@ -95,7 +95,6 @@ export function FeedbackHubPanel({ projectId, latestRunId, onRerunStarted }: Fee
           <option value="user">用户</option>
           <option value="provenance">Provenance</option>
           <option value="data_finder">Data Finder</option>
-          <option value="kg">知识图谱</option>
           <option value="hitl">HITL</option>
         </select>
         <select

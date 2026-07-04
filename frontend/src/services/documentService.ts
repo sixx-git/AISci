@@ -12,9 +12,21 @@ export interface DocumentInfo {
   authors?: string;
   abstract?: string;
   summary?: string;
+  doi?: string;
+  keywords?: string;
+  journal?: string;
+  publication_date?: string | null;
   status: 'uploaded' | 'processing' | 'processed' | 'failed';
   error_message?: string;
   chunk_count?: number;
+  source_type?: string;
+  source_url?: string;
+  pdf_url?: string;
+  external_id?: string;
+  library_scope?: string;
+  import_status?: string;
+  is_personal?: boolean;
+  metadata_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
 }
@@ -66,6 +78,14 @@ export const documentService = {
       '/documents',
       { params: { project_id: projectId, page, page_size: pageSize } },
     );
+    return data;
+  },
+
+  /**
+   * GET /api/v1/documents/:docId
+   */
+  async getDocument(docId: string): Promise<ApiResponse<DocumentInfo>> {
+    const { data } = await api.get<ApiResponse<DocumentInfo>>(`/documents/${docId}`);
     return data;
   },
 

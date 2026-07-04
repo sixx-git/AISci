@@ -106,6 +106,14 @@ const TABLE_COLUMNS = [
   { key: 'actions', label: '操作', className: 'text-right' },
 ] as const;
 
+const AUTHORS_COL_MAX_WIDTH = 'max-w-[14rem]';
+
+function truncateText(text: string, maxLen: number): string {
+  const t = (text || '').trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen)}…`;
+}
+
 // ============ 统计计算 ============
 function computeStats(items: LiteratureItem[]): LiteratureStats {
   return {
@@ -170,6 +178,8 @@ export function LiteratureLibrary({
   const [chunkViewer, setChunkViewer] = useState<{ docId: string; title: string } | null>(null);
   const [chunkLoading, setChunkLoading] = useState(false);
   const [chunkList, setChunkList] = useState<any[]>([]);
+  const [detailDoc, setDetailDoc] = useState<DocumentInfo | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const { statusMsg, showStatus } = useStatusToast();
 
@@ -461,6 +471,24 @@ export function LiteratureLibrary({
     }
   }, [showStatus]);
 
+  // ========== 查看详情 ==========
+  const handleViewDetail = useCallback(async (docId: string) => {
+    setDetailLoading(true);
+    setDetailDoc(null);
+    try {
+      const res = await documentService.getDocument(docId);
+      if (res.code === 200 && res.data) {
+        setDetailDoc(res.data);
+      } else {
+        showStatus({ type: 'error', text: res.message || '获取文献详情失败' });
+      }
+    } catch (err: unknown) {
+      showStatus({ type: 'error', text: `获取文献详情失败: ${getErrorMessage(err)}` });
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [showStatus]);
+
   // ========== 搜索（已有上传文献） ==========
   const filtered = useMemo(() => {
     if (!search.trim()) return literature;
@@ -642,6 +670,7 @@ export function LiteratureLibrary({
               loading={loading}
               deleting={deleting}
               onDelete={handleDelete}
+              onViewDetail={handleViewDetail}
               extractionStats={extractionStats}
               onOpenDataFinder={openDataFinder}
             />
@@ -681,6 +710,7 @@ export function LiteratureLibrary({
             onDownloadPdf={handleDownloadPdf}
             onParseAndIndex={handleParseAndIndex}
             onViewChunks={handleViewChunks}
+            onViewDetail={handleViewDetail}
             chunkViewer={chunkViewer}
             chunkLoading={chunkLoading}
             chunkList={chunkList}
@@ -688,6 +718,12 @@ export function LiteratureLibrary({
           />
         )}
       </div>
+
+      <LiteratureDetailModal
+        doc={detailDoc}
+        loading={detailLoading}
+        onClose={() => setDetailDoc(null)}
+      />
     </div>
   );
 }
@@ -1005,7 +1041,7 @@ function LibraryTabEmpty() {
 function LibraryTabContent({
   docs, loading,
   downloadingDoc, parsingDoc,
-  onDownloadPdf, onParseAndIndex, onViewChunks,
+  onDownloadPdf, onParseAndIndex, onViewChunks, onViewDetail,
   chunkViewer, chunkLoading, chunkList, onCloseChunks,
 }: {
   docs: ImportedDocument[];
@@ -1015,6 +1051,7 @@ function LibraryTabContent({
   onDownloadPdf: (docId: string, title: string) => void;
   onParseAndIndex: (docId: string, title: string) => void;
   onViewChunks: (docId: string, title: string) => void;
+  onViewDetail: (docId: string) => void;
   chunkViewer: { docId: string; title: string } | null;
   chunkLoading: boolean;
   chunkList: any[];
@@ -1128,6 +1165,7 @@ function LibraryTabContent({
 
                 {/* 查看详情 */}
                 <button title="查看详情"
+                        onClick={() => onViewDetail(doc.id)}
                         className="p-1.5 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
@@ -1204,23 +1242,31 @@ function LibraryTabContent({
 
 // ---------- 已有文献表格 ----------
 function LiteratureTable({
-  items, loading, deleting, onDelete, extractionStats = {}, onOpenDataFinder,
+  items, loading, deleting, onDelete, onViewDetail, extractionStats = {}, onOpenDataFinder,
 }: {
   items: LiteratureItem[];
   loading: boolean;
   deleting: string | null;
   onDelete: (id: string) => void;
+  onViewDetail: (id: string) => void;
   extractionStats?: Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>;
   onOpenDataFinder?: () => void;
 }) {
   return (
     <Card className="overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-bp-border bg-bp-panel/50">
               {TABLE_COLUMNS.map((col) => (
-                <th key={col.key} className={cn('px-4 py-3 font-medium text-bp-muted text-xs whitespace-nowrap', col.className)}>
+                <th
+                  key={col.key}
+                  className={cn(
+                    'px-4 py-3 font-medium text-bp-muted text-xs whitespace-nowrap',
+                    col.className,
+                    col.key === 'authors' && AUTHORS_COL_MAX_WIDTH,
+                  )}
+                >
                   {col.label}
                 </th>
               ))}
@@ -1241,7 +1287,11 @@ function LiteratureTable({
                       <span className="text-bp-text text-sm font-medium line-clamp-1">{item.title}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-bp-muted whitespace-nowrap">{item.authors}</td>
+                  <td className={cn('px-4 py-3 text-bp-muted', AUTHORS_COL_MAX_WIDTH)}>
+                    <span className="block truncate" title={item.authors}>
+                      {truncateText(item.authors, 48)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-center text-bp-text whitespace-nowrap">{item.year}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium border', tConf.className)}>{tConf.label}</span>
@@ -1282,6 +1332,7 @@ function LiteratureTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button title="查看详情"
+                              onClick={() => onViewDetail(item.id)}
                               className="p-1.5 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                         <Eye className="w-3.5 h-3.5" />
                       </button>
@@ -1307,6 +1358,170 @@ function LiteratureTable({
         <div className="py-12 text-center text-bp-muted text-sm">没有匹配的文献</div>
       )}
     </Card>
+  );
+}
+
+function formatPublicationYear(doc: DocumentInfo): string {
+  if (doc.publication_date) {
+    const d = new Date(doc.publication_date);
+    if (!Number.isNaN(d.getTime())) return String(d.getFullYear());
+  }
+  const metaYear = doc.metadata_json?.year;
+  if (metaYear != null) return String(metaYear);
+  if (doc.created_at) return String(new Date(doc.created_at).getFullYear());
+  return '—';
+}
+
+function LiteratureDetailModal({
+  doc,
+  loading,
+  onClose,
+}: {
+  doc: DocumentInfo | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  if (!doc && !loading) return null;
+
+  const sourceConf = sourceTypeConfig[doc?.source_type ?? ''] ?? null;
+  const importConf = doc?.import_status ? importStatusConfig[doc.import_status] : null;
+  const parseConf = doc?.status ? parseStatusConfig[mapStatus(doc.status)] : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bp-base/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bp-base border border-bp-cyan-dim rounded-bp w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-bp-glow-strong"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-bp-cyan-dim bg-bp-panel/50">
+          <div className="flex items-center gap-2 min-w-0">
+            <Eye className="w-4 h-4 text-bp-cyan shrink-0" />
+            <h3 className="text-sm font-semibold text-bp-text truncate">
+              {loading ? '加载文献详情…' : doc?.title || doc?.filename || '文献详情'}
+            </h3>
+          </div>
+          <button
+            title="关闭"
+            onClick={onClose}
+            className="p-1 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto max-h-[70vh] p-5">
+          {loading ? (
+            <div className="py-12 text-center text-bp-muted">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+              <p className="text-sm">正在加载…</p>
+            </div>
+          ) : doc ? (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-lg font-semibold text-bp-text leading-snug">{doc.title || doc.filename}</h4>
+                {doc.authors && <p className="text-sm text-bp-muted mt-1">{doc.authors}</p>}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {sourceConf && (
+                  <span className={cn('text-xs px-2 py-0.5 rounded border', sourceConf.className)}>{sourceConf.label}</span>
+                )}
+                {importConf && (
+                  <span className={cn('text-xs px-2 py-0.5 rounded border', importConf.className)}>{importConf.label}</span>
+                )}
+                {parseConf && (
+                  <span className={cn('text-xs px-2 py-0.5 rounded border', parseConf.className)}>{parseConf.label}</span>
+                )}
+              </div>
+
+              {(doc.abstract || doc.summary) && (
+                <div>
+                  <div className="text-xs font-medium text-bp-muted mb-1">摘要</div>
+                  <p className="text-sm text-bp-text leading-relaxed whitespace-pre-wrap">{doc.abstract || doc.summary}</p>
+                </div>
+              )}
+
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-bp-muted text-xs">年份</dt>
+                  <dd className="text-bp-text">{formatPublicationYear(doc)}</dd>
+                </div>
+                <div>
+                  <dt className="text-bp-muted text-xs">切片数</dt>
+                  <dd className="text-bp-text">{doc.chunk_count ?? 0}</dd>
+                </div>
+                <div>
+                  <dt className="text-bp-muted text-xs">文件名</dt>
+                  <dd className="text-bp-text break-all">{doc.filename}</dd>
+                </div>
+                <div>
+                  <dt className="text-bp-muted text-xs">文件大小</dt>
+                  <dd className="text-bp-text">{formatFileSize(doc.file_size)}</dd>
+                </div>
+                {doc.journal && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-bp-muted text-xs">期刊 / 会议</dt>
+                    <dd className="text-bp-text">{doc.journal}</dd>
+                  </div>
+                )}
+                {doc.doi && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-bp-muted text-xs">DOI</dt>
+                    <dd className="text-bp-text font-mono text-xs break-all">{doc.doi}</dd>
+                  </div>
+                )}
+                {doc.external_id && (
+                  <div>
+                    <dt className="text-bp-muted text-xs">外部 ID</dt>
+                    <dd className="text-bp-text font-mono text-xs">{doc.external_id}</dd>
+                  </div>
+                )}
+                {doc.created_at && (
+                  <div>
+                    <dt className="text-bp-muted text-xs">入库时间</dt>
+                    <dd className="text-bp-text">{doc.created_at.slice(0, 19).replace('T', ' ')}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {(doc.source_url || doc.pdf_url) && (
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {doc.source_url && (
+                    <a
+                      href={doc.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-bp-cyan hover:text-bp-cyan/80"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> 来源页面
+                    </a>
+                  )}
+                  {doc.pdf_url && (
+                    <a
+                      href={doc.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-bp-muted hover:text-bp-text"
+                    >
+                      <Download className="w-3.5 h-3.5" /> PDF 链接
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {doc.error_message && (
+                <div className="p-3 rounded-bp bg-danger-500/10 border border-danger-500/25 text-sm text-danger-400">
+                  {doc.error_message}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 

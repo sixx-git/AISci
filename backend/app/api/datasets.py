@@ -68,7 +68,23 @@ async def upload_dataset(
             rq = (project.research_question if project else "") or ""
             get_multimodal_service(db).sync_from_dataset(dataset, rq)
 
-        return {"code": 200, "data": service.to_response(dataset), "message": "上传成功，已完成初步分析"}
+        pipeline_resume = None
+        try:
+            from app.services.pipeline_service import try_resume_after_dataset_upload
+            pipeline_resume = try_resume_after_dataset_upload(db, project_id)
+        except Exception as resume_err:
+            logger.warning("数据集上传后续跑检查失败: %s", resume_err)
+
+        msg = "上传成功，已完成初步分析"
+        if pipeline_resume:
+            msg += "，Pipeline 已自动继续"
+
+        return {
+            "code": 200,
+            "data": service.to_response(dataset),
+            "pipeline_resume": pipeline_resume,
+            "message": msg,
+        }
     except Exception as e:
         logger.error(f"创建数据集记录失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -106,6 +122,22 @@ async def get_data_context(
         "data": data_context,
         "message": "success",
     }
+
+
+@router.get("/catalog")
+async def get_data_catalog(
+    project_id: str = Query(..., description="项目 ID"),
+    refresh: bool = Query(False, description="是否重新生成目录"),
+    db: Session = Depends(get_db),
+):
+    from app.services.data_catalog_service import get_data_catalog_service
+
+    service = get_data_catalog_service(db)
+    if refresh:
+        catalog = service.build_catalog(project_id)
+    else:
+        catalog = service.load_catalog(project_id) or service.build_catalog(project_id)
+    return {"code": 200, "data": catalog, "message": "success"}
 
 
 @router.get("/{dataset_id}")
@@ -229,19 +261,3 @@ async def delete_dataset(
     if not success:
         raise HTTPException(status_code=404, detail="数据集不存在")
     return {"code": 200, "data": None, "message": "数据集已删除"}
-
-
-@router.get("/catalog")
-async def get_data_catalog(
-    project_id: str = Query(..., description="项目 ID"),
-    refresh: bool = Query(False, description="是否重新生成目录"),
-    db: Session = Depends(get_db),
-):
-    from app.services.data_catalog_service import get_data_catalog_service
-
-    service = get_data_catalog_service(db)
-    if refresh:
-        catalog = service.build_catalog(project_id)
-    else:
-        catalog = service.load_catalog(project_id) or service.build_catalog(project_id)
-    return {"code": 200, "data": catalog, "message": "success"}

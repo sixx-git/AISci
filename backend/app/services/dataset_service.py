@@ -18,6 +18,10 @@ from app.skills.data_finder.file_format_registry import (
 
 logger = logging.getLogger(__name__)
 
+_MAX_PREVIEW_ROWS = 5
+_MAX_STATISTICS_COLS = 30
+_MAX_JSON_CHARS = 48_000
+
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".jsonl", ".txt", ".md",
                         ".png", ".jpg", ".jpeg", ".tiff", ".webp", ".gif",
                         ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac",
@@ -34,6 +38,33 @@ TARGET_COLUMN_KEYWORDS = [
     "diagnosis", "prognosis", "response", "status", "flag",
     "label_col", "target_col", "outcome_col",
 ]
+
+
+def _json_dumps_bounded(obj: Any, max_chars: int = _MAX_JSON_CHARS) -> str:
+    try:
+        text = json.dumps(obj, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        text = json.dumps({"_error": "json_encode_failed"}, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return text
+    return json.dumps(
+        {"_truncated": True, "preview": text[: min(2000, max_chars - 80)] + "…"},
+        ensure_ascii=False,
+    )
+
+
+def _cap_statistics(stats: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(stats, dict):
+        return {}
+    capped: Dict[str, Any] = {}
+    for idx, (col, val) in enumerate(stats.items()):
+        if idx >= _MAX_STATISTICS_COLS:
+            capped["_truncated_columns"] = len(stats) - _MAX_STATISTICS_COLS
+            break
+        if isinstance(val, dict) and "top_values" in val and isinstance(val["top_values"], dict):
+            val = {**val, "top_values": dict(list(val["top_values"].items())[:5])}
+        capped[col] = val
+    return capped
 
 
 class DatasetService:
@@ -122,8 +153,10 @@ class DatasetService:
                         "top_values": {str(k): int(v) for k, v in top_vals.items()},
                         "missing": int(df[col].isnull().sum()),
                     }
-            result["statistics"] = stats
-            result["preview"] = json.loads(df.head(n_preview).to_json(orient="records", force_ascii=False))
+            result["statistics"] = _cap_statistics(stats)
+            result["preview"] = json.loads(
+                df.head(n_preview).to_json(orient="records", force_ascii=False)
+            )[:_MAX_PREVIEW_ROWS]
         except Exception as e:
             logger.warning(f"分析表格数据失败: {e}")
         return result
@@ -286,18 +319,18 @@ class DatasetService:
                             analysis = self.analyze_tabular_preview(csv_path)
                             ds.n_rows = analysis.get("n_rows") or tables[0].get("row_count", 0)
                             ds.n_columns = analysis.get("n_columns") or len(tables[0].get("columns", []))
-                            ds.columns_json = json.dumps(analysis.get("columns", tables[0].get("columns", [])), ensure_ascii=False)
-                            ds.dtypes_json = json.dumps(analysis.get("dtypes", {}), ensure_ascii=False)
+                            ds.columns_json = _json_dumps_bounded(analysis.get("columns", tables[0].get("columns", [])))
+                            ds.dtypes_json = _json_dumps_bounded(analysis.get("dtypes", {}))
                             ds.missing_count = analysis.get("missing_count", 0)
                             ds.missing_rate = analysis.get("missing_rate", 0.0)
-                            ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
-                            ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
-                            ds.extra_metadata = json.dumps({
+                            ds.statistics_json = _json_dumps_bounded(analysis.get("statistics", {}))
+                            ds.preview_json = _json_dumps_bounded(analysis.get("preview", []))
+                            ds.extra_metadata = _json_dumps_bounded({
                                 "derived_csv_path": csv_path,
                                 "extraction_method": "chem_structure",
                                 "source_format": tables[0].get("format"),
                                 "truncated": tables[0].get("truncated", False),
-                            }, ensure_ascii=False)
+                            })
                             ds.preprocessing_status = "completed"
                         else:
                             ds.n_rows = int(tables[0].get("row_count") or 0)
@@ -310,12 +343,12 @@ class DatasetService:
                     analysis = self.analyze_tabular_preview(file_path)
                     ds.n_rows = analysis.get("n_rows") or 0
                     ds.n_columns = analysis.get("n_columns") or 0
-                    ds.columns_json = json.dumps(analysis.get("columns", []), ensure_ascii=False)
-                    ds.dtypes_json = json.dumps(analysis.get("dtypes", {}), ensure_ascii=False)
+                    ds.columns_json = _json_dumps_bounded(analysis.get("columns", []))
+                    ds.dtypes_json = _json_dumps_bounded(analysis.get("dtypes", {}))
                     ds.missing_count = analysis.get("missing_count", 0)
                     ds.missing_rate = analysis.get("missing_rate", 0.0)
-                    ds.statistics_json = json.dumps(analysis.get("statistics", {}), ensure_ascii=False)
-                    ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
+                    ds.statistics_json = _json_dumps_bounded(analysis.get("statistics", {}))
+                    ds.preview_json = _json_dumps_bounded(analysis.get("preview", []))
                     ds.preprocessing_status = "completed"
                 elif data_type == "image":
                     analysis = self._analyze_image_file(file_path)
@@ -757,25 +790,23 @@ class DatasetService:
 
         try:
             from app.services.data_finder_service import get_data_finder_service
+            from app.services.data_finder_slim import slim_data_finder_payload
 
             df_results = get_data_finder_service(self.db).load_results(project_id)
             if df_results:
-                context["data_finder_results"] = df_results
+                context["data_finder_results"] = slim_data_finder_payload(df_results)
                 merged = df_results.get("merged") or {}
-                csv_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
+                csv_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path") or merged.get("csv_path")
                 if csv_path:
                     context["data_finder_merged_csv"] = csv_path
                 if df_results.get("coverage_report"):
-                    context["data_finder_coverage"] = df_results["coverage_report"]
-        except Exception:
-            pass
-
-        try:
-            from app.services.knowledge_graph_service import get_knowledge_graph_service
-
-            kg_ctx = get_knowledge_graph_service(self.db).get_kg_context_for_agents(project_id)
-            if kg_ctx:
-                context["knowledge_graph"] = kg_ctx
+                    cov = df_results["coverage_report"]
+                    if isinstance(cov, dict):
+                        context["data_finder_coverage"] = {
+                            "overall_score": cov.get("overall_score"),
+                            "coverage_score": cov.get("coverage_score"),
+                            "data_spec_score": cov.get("data_spec_score"),
+                        }
         except Exception:
             pass
 

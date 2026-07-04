@@ -52,7 +52,7 @@ const statusConfig: Record<AgentStatus, {
     textClass: 'text-danger-400',
   },
   human_review: {
-    label: '需人工确认',
+    label: '待上传数据',
     ringClass: 'border-bp-yellow bg-bp-yellow/10',
     dotClass: 'bg-bp-yellow',
     cardBg: 'bg-bp-yellow/5',
@@ -61,7 +61,7 @@ const statusConfig: Record<AgentStatus, {
     textClass: 'text-bp-yellow',
   },
   human_review_required: {
-    label: '需人工确认',
+    label: '待上传数据',
     ringClass: 'border-bp-yellow bg-bp-yellow/10',
     dotClass: 'bg-bp-yellow',
     cardBg: 'bg-bp-yellow/5',

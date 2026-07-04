@@ -6,7 +6,8 @@ from typing import Any, Dict, List
 
 from app.skills.base import BaseSkill, SkillResult
 from app.skills.data_finder.chem_structure_extraction_skill import ChemStructureExtractionSkill
-from app.skills.data_finder.file_format_registry import detect_file_format, is_chemistry_format
+from app.skills.data_finder.file_format_registry import detect_file_format, is_chemistry_format, is_fits_format
+from app.skills.data_finder.fits_extraction_skill import FitsExtractionSkill
 from app.skills.data_finder.tabular_file_extraction_skill import TabularFileExtractionSkill
 
 
@@ -20,6 +21,9 @@ class StructuredFileExtractionSkill(BaseSkill):
 
         if is_chemistry_format(filename):
             return await ChemStructureExtractionSkill().run(input_data, context)
+
+        if is_fits_format(filename):
+            return await FitsExtractionSkill().run(input_data, context)
 
         fmt = detect_file_format(filename)
         if fmt == "tabular" or fmt in {"csv", "tsv", "json", "jsonl"} or os.path.splitext(filename)[1] in {
@@ -54,6 +58,8 @@ async def extract_tables_from_file(
 
     if is_chemistry_format(payload["filename"]):
         skill = ChemStructureExtractionSkill()
+    elif is_fits_format(payload["filename"]):
+        skill = FitsExtractionSkill()
     else:
         skill = StructuredFileExtractionSkill()
 
