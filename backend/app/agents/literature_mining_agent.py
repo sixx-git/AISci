@@ -100,7 +100,7 @@ class LiteratureMiningAgent:
 
     工作流程：
       1. Crawler+Selector 多源检索（扩展 query、引用网络）→ 自动入库建索引
-      2. FAISS 检索 → 获取 Top-K 相关 Chunk
+      2. Zvec 向量检索 → 获取 Top-K 相关 Chunk
       3. 格式化 Chunk（含完整文献元数据）→ 送入 LLM
       4. LLM 输出结构化事实 + 证据 + citation_map
       5. 后校验：fact 必须绑定真实 chunk，补充元数据
@@ -156,7 +156,7 @@ class LiteratureMiningAgent:
                     corpus_meta=corpus_meta,
                 )
 
-            # ── 1. FAISS 检索 ──
+            # ── 1. Zvec 向量检索 ──
             logger.info(
                 f"开始检索文献片段: project_id={project_id}, "
                 f"query='{research_question[:60]}...', top_k={top_k}"

@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import List
 from pathlib import Path
+import os
 
 
 def _resolve_env_file() -> str:
@@ -53,9 +54,13 @@ class Settings(BaseSettings):
     # Mock LLM 模式：无需真实 QWEN_API_KEY 即可跑通 Pipeline
     USE_MOCK_LLM: bool = False
     
-    # 向量存储配置
-    VECTOR_STORE_PATH: str = "./storage/faiss_index"
+    # 向量存储配置（主路径：Zvec 嵌入式向量库，按 project_id 分 Collection）
+    # Chat 专用 Zvec Collection（与会话级临时文档 RAG 相关）
+    VECTOR_STORE_PATH: str = "./storage/chat_vectors"
     VECTOR_INDEXES_PATH: str = "./storage/vector_indexes"
+    VECTOR_BACKEND: str = "zvec"
+    # Hugging Face 镜像（国内默认 hf-mirror，留空则走官方 huggingface.co）
+    HF_ENDPOINT: str = "https://hf-mirror.com"
     EMBEDDING_MODEL: str = "paraphrase-multilingual-MiniLM-L12-v2"
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 50
@@ -95,4 +100,8 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings():
-    return Settings()
+    settings = Settings()
+    endpoint = (settings.HF_ENDPOINT or "").strip().rstrip("/")
+    if endpoint:
+        os.environ["HF_ENDPOINT"] = endpoint
+    return settings

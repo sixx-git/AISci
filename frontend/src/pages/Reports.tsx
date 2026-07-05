@@ -1,7 +1,7 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  FileText, Clock, ArrowRight, FlaskConical, Search, FilterX, ChevronLeft, ChevronRight,
+  FileText, Clock, ArrowRight, FlaskConical, Search, FilterX, ChevronLeft, ChevronRight, Trash2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Card } from '@/components/Card';
@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { reportService, type ReportBrowseItem } from '@/services/reportService';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -75,6 +76,12 @@ export function Reports() {
   const [customDateTo, setCustomDateTo] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
   const [appliedKeyword, setAppliedKeyword] = useState('');
+
+  const [deleteTarget, setDeleteTarget] = useState<ReportBrowseItem | null>(null);
+  const [deleteConfirmValue, setDeleteConfirmValue] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const dateRange = useMemo(
     () => resolveDateRange(timePreset, customDateFrom, customDateTo),
@@ -144,6 +151,42 @@ export function Reports() {
 
   const applyKeyword = () => {
     setAppliedKeyword(keywordInput.trim());
+  };
+
+  const openDeleteDialog = useCallback((entry: ReportBrowseItem) => {
+    setDeleteTarget(entry);
+    setDeleteConfirmValue('');
+    setDeleteError(null);
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+    setDeleteConfirmValue('');
+    setDeleteError(null);
+  }, [isDeleting]);
+
+  const handleDeleteReport = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeletingId(deleteTarget.id);
+    setDeleteError(null);
+    try {
+      const res = await reportService.delete(deleteTarget.id);
+      if (res.code !== 200 || !res.data) {
+        throw new Error(res.message || '删除失败');
+      }
+      closeDeleteDialog();
+      setReloadTick((t) => t + 1);
+      if (reports.length === 1 && page > 1) {
+        setPage((p) => Math.max(1, p - 1));
+      }
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : '删除失败');
+    } finally {
+      setIsDeleting(false);
+      setDeletingId(null);
+    }
   };
 
   const shell = (subtitle: string, children: React.ReactNode) => (
@@ -302,7 +345,7 @@ export function Reports() {
                     <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden md:table-cell">项目</th>
                     <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden lg:table-cell">问题类型</th>
                     <th className="py-3 px-4 text-xs text-bp-muted font-medium">生成时间</th>
-                    <th className="py-3 px-4 text-xs text-bp-muted font-medium w-20">操作</th>
+                    <th className="py-3 px-4 text-xs text-bp-muted font-medium w-28">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,13 +398,24 @@ export function Reports() {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <Link
-                          to={`/projects/${entry.project_id}?tab=reports`}
-                          className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-text transition-colors"
-                        >
-                          查看
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/projects/${entry.project_id}?tab=reports`}
+                            className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-text transition-colors"
+                          >
+                            查看
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                          <button
+                            type="button"
+                            title="删除报告"
+                            disabled={deletingId === entry.id}
+                            onClick={() => openDeleteDialog(entry)}
+                            className="p-1.5 rounded-bp text-bp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -399,6 +453,19 @@ export function Reports() {
           )}
         </>
       )}
+
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        title="删除报告"
+        itemName={deleteTarget?.title ?? ''}
+        description="此操作不可撤销，将永久删除该研究报告及其 PDF/LaTeX 导出文件。"
+        confirmValue={deleteConfirmValue}
+        onConfirmValueChange={setDeleteConfirmValue}
+        onConfirm={handleDeleteReport}
+        onCancel={closeDeleteDialog}
+        isLoading={isDeleting}
+        error={deleteError}
+      />
     </>,
   );
 }

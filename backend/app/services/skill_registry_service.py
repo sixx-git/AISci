@@ -53,7 +53,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     ],
     "报告生成 Agent": [
         "CitationGrounding", "CitationIntegrityCheck", "ReportChartGeneration",
-        "ScientificPlot", "ReportQualityCheck", "ReportReviewer",
+        "ScientificPlot", "ReportQualityCheck", "ProposalLogicReview", "ReportReviewer",
         "ChineseStyleDiagnosis", "HumanizeRewrite", "ToneControl",
         "ReportInfluencePrediction",
         "AcademicWritingSkills", "WriteChinese", "PaperWriter", "AcademicPaperSkills",

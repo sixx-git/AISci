@@ -32,6 +32,20 @@ class DataSpecHints(BaseModel):
     data_need_note: Optional[str] = Field(None, description="补充数据需求说明")
 
 
+class ScienceIterationConfigSchema(BaseModel):
+    """自迭代配置（写入 project.config.science_iteration）。"""
+    enabled: Optional[bool] = True
+    max_rounds: Optional[int] = Field(None, ge=1, le=5)
+    auto_triggers: Optional[List[str]] = None
+    min_ensemble_score: Optional[float] = Field(None, ge=0, le=10)
+    min_evidence_facts: Optional[int] = Field(None, ge=0, le=20)
+    stagnation_delta: Optional[float] = Field(None, ge=0, le=5)
+    require_human_on_stagnation: Optional[bool] = None
+    show_iteration_in_report: Optional[bool] = None
+    auto_literature_on_weak_evidence: Optional[bool] = None
+    auto_literature_max: Optional[int] = Field(None, ge=1, le=10)
+
+
 class DataAcquisitionConfig(BaseModel):
     """Gap 闭环与补搜阈值（写入 project.config.data_acquisition）。"""
     coverage_gap_threshold: Optional[float] = Field(None, ge=0, le=100)
@@ -86,6 +100,7 @@ class ProjectUpdate(BaseModel):
     project_mode: Optional[ProjectMode] = Field(None, description="项目模式")
     data_spec_hints: Optional[DataSpecHints] = Field(None, description="结构化数据需求提示")
     data_acquisition: Optional[DataAcquisitionConfig] = Field(None, description="数据采集/Gap 闭环配置")
+    science_iteration: Optional[ScienceIterationConfigSchema] = Field(None, description="科学自迭代配置")
 
 
 class ProjectQuery(BaseModel):

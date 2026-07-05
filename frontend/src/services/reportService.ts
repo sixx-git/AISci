@@ -85,6 +85,7 @@ function mapDbToReportData(db: ReportDbRaw): ReportData {
     id: db.id,
     title: db.title || db.paper_title || '科学假设与研究计划',
     generatedAt: db.created_at ? new Date(db.created_at).toLocaleString('zh-CN') : '',
+    version: db.version,
     sections: complianceCheck?.items || [],
     complianceCheck,
     plots,
@@ -157,6 +158,12 @@ export const reportService = {
       throw new Error('响应不是 PDF 文件');
     }
     return response.data;
+  },
+
+  /** DELETE /api/v1/reports/:reportId */
+  async delete(reportId: string): Promise<ApiResponse<boolean>> {
+    const { data } = await api.delete<ApiResponse<boolean>>(`/reports/${reportId}`);
+    return data;
   },
 
   /** GET /api/v1/reports/browse — 报告中心分页列表 */

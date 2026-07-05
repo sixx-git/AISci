@@ -9,8 +9,13 @@ export const projectService = {
   },
 
   /** GET /api/v1/projects/:id */
-  async getProject(projectId: string): Promise<ApiResponse<ProjectOverview>> {
-    const { data } = await api.get<ApiResponse<ProjectOverview>>(`/projects/${projectId}`);
+  async getProject(
+    projectId: string,
+    options?: { timeout?: number },
+  ): Promise<ApiResponse<ProjectOverview>> {
+    const { data } = await api.get<ApiResponse<ProjectOverview>>(`/projects/${projectId}`, {
+      timeout: options?.timeout,
+    });
     return data;
   },
 

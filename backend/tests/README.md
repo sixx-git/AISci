@@ -60,7 +60,7 @@ Mock 的主要组件：
 
 - Qwen LLM 调用（`USE_MOCK_LLM=true` 或 patch）
 - SentenceTransformer 编码
-- FAISS 索引操作
+- Zvec 向量索引操作
 - 文件系统操作（批次测试多用 `tempfile.TemporaryDirectory`）
 - 数据库写入操作
 
@@ -82,7 +82,7 @@ pytest tests/ -v -m "not slow"
 ### 向量测试失败
 
 ```bash
-pip install sentence-transformers faiss-cpu numpy
+pip install sentence-transformers zvec numpy
 ```
 
 ## 开发新测试

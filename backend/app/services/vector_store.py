@@ -1,17 +1,14 @@
 """
 向量存储服务
-提供 RAG 向量检索功能，按 project_id 存储独立的 FAISS 索引
+提供 RAG 向量检索功能，按 project_id 存储独立的 Zvec Collection（嵌入式向量库）
 """
-import os
-import json
 import logging
 import shutil
-from typing import List, Dict, Any, Optional, Tuple
-from pathlib import Path
+import threading
 from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 
 import numpy as np
-import faiss
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -20,6 +17,9 @@ from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+VECTOR_FIELD = "embedding"
+COLLECTION_NAME = "literature_chunks"
 
 
 def _document_publication_year(doc: Document) -> Optional[int]:
@@ -36,6 +36,27 @@ def _document_publication_year(doc: Document) -> Optional[int]:
     return None
 
 
+def _l2_normalize(arr: np.ndarray) -> np.ndarray:
+    """L2 归一化（配合 IP 度量等价于余弦相似度）。"""
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    norms = np.maximum(norms, 1e-12)
+    return arr / norms
+
+
+def _is_zvec_collection(path) -> bool:
+    from pathlib import Path
+    p = Path(path)
+    return p.is_dir() and (p / "manifest.0").exists()
+
+
+def _is_legacy_faiss_index(path) -> bool:
+    from pathlib import Path
+    p = Path(path)
+    return (p / "index.faiss").exists() or (p / "mapping.json").exists()
+
+
 @dataclass
 class SearchResult:
     """搜索结果（含完整文献元数据，供引用）"""
@@ -45,7 +66,6 @@ class SearchResult:
     page_number: Optional[int]
     source_title: Optional[str]
     similarity_score: float
-    # ── 文献引用元数据 ──
     authors: Optional[str] = None
     year: Optional[int] = None
     source_type: Optional[str] = None
@@ -70,10 +90,24 @@ class SentenceTransformerEmbedding(BaseEmbedding):
     """Sentence-Transformers Embedding"""
 
     def __init__(self, model_name: Optional[str] = None):
+        import os
         from sentence_transformers import SentenceTransformer
+
+        endpoint = (settings.HF_ENDPOINT or "").strip().rstrip("/")
+        if endpoint:
+            os.environ["HF_ENDPOINT"] = endpoint
+
         self.model_name = model_name or settings.EMBEDDING_MODEL
         logger.info(f"Loading embedding model: {self.model_name}")
-        self._model = SentenceTransformer(self.model_name)
+        try:
+            self._model = SentenceTransformer(self.model_name, local_files_only=True)
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "本地未找到 embedding 模型 %s，尝试在线下载: %s",
+                self.model_name,
+                exc,
+            )
+            self._model = SentenceTransformer(self.model_name)
         self._dimension = self._model.get_sentence_embedding_dimension()
         logger.info(f"Embedding model loaded, dimension: {self._dimension}")
 
@@ -85,123 +119,191 @@ class SentenceTransformerEmbedding(BaseEmbedding):
         return self._dimension
 
 
+def _build_collection_schema(dimension: int):
+    import zvec
+    from zvec import CollectionSchema, VectorSchema, FieldSchema, DataType, FlatIndexParam
+
+    return CollectionSchema(
+        name=COLLECTION_NAME,
+        vectors=VectorSchema(
+            VECTOR_FIELD,
+            DataType.VECTOR_FP32,
+            dimension,
+            index_param=FlatIndexParam(),
+        ),
+        fields=[
+            FieldSchema("document_id", DataType.STRING),
+            FieldSchema("content", DataType.STRING),
+            FieldSchema("page_number", DataType.INT32, nullable=True),
+            FieldSchema("source_title", DataType.STRING, nullable=True),
+            FieldSchema("authors", DataType.STRING, nullable=True),
+            FieldSchema("year", DataType.INT32, nullable=True),
+            FieldSchema("source_type", DataType.STRING, nullable=True),
+            FieldSchema("doi", DataType.STRING, nullable=True),
+            FieldSchema("external_id", DataType.STRING, nullable=True),
+            FieldSchema("source_url", DataType.STRING, nullable=True),
+            FieldSchema("fallback", DataType.BOOL, nullable=True),
+        ],
+    )
+
+
+def _chunk_to_doc(chunk: Chunk, doc: Document, vector: List[float]):
+    from zvec import Doc
+
+    return Doc(
+        id=chunk.id,
+        vectors={VECTOR_FIELD: vector},
+        fields={
+            "document_id": doc.id,
+            "content": chunk.content,
+            "page_number": chunk.page_number or chunk.start_page,
+            "source_title": doc.title or doc.filename,
+            "authors": doc.authors,
+            "year": _document_publication_year(doc),
+            "source_type": doc.source_type.value if doc.source_type else None,
+            "doi": doc.doi,
+            "external_id": doc.external_id,
+            "source_url": doc.source_url,
+            "fallback": bool((doc.metadata_json or {}).get("fallback", False)) if doc.metadata_json else False,
+        },
+    )
+
+
+def _doc_to_search_result(doc) -> SearchResult:
+    fields = doc.fields or {}
+    return SearchResult(
+        chunk_id=doc.id,
+        document_id=fields.get("document_id") or "",
+        content=fields.get("content") or "",
+        page_number=fields.get("page_number"),
+        source_title=fields.get("source_title"),
+        similarity_score=round(float(getattr(doc, "score", 0.0) or 0.0), 4),
+        authors=fields.get("authors"),
+        year=fields.get("year"),
+        source_type=fields.get("source_type"),
+        doi=fields.get("doi"),
+        external_id=fields.get("external_id"),
+        source_url=fields.get("source_url"),
+        fallback=bool(fields.get("fallback", False)),
+    )
+
+
 class VectorStore:
     """
-    FAISS 向量存储管理器
+    Zvec 向量存储管理器
     按 project_id 分区存储：
-      storage/vector_indexes/{project_id}/index.faiss
-      storage/vector_indexes/{project_id}/mapping.json
+      storage/vector_indexes/{project_id}/   ← Zvec Collection 目录
     """
 
     def __init__(
         self,
         embedding: Optional[BaseEmbedding] = None,
-        base_path: Optional[str] = None
+        base_path: Optional[str] = None,
     ):
+        from pathlib import Path
+
         self.base_path = Path(base_path or settings.VECTOR_INDEXES_PATH)
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-        self.embedding = embedding or SentenceTransformerEmbedding()
-
-        # 内存缓存
-        self._indexes: Dict[str, faiss.Index] = {}
-        self._mappings: Dict[str, List[Dict[str, Any]]] = {}
-        self._chunk_id_index: Dict[str, Dict[str, int]] = {}  # {project_id: {chunk_id: faiss_index}}
+        self._embedding = embedding
+        self._collections: Dict[str, Any] = {}
+        self._collection_lock = threading.Lock()
 
         self._load_all()
-        logger.info(f"VectorStore initialized at {self.base_path}")
+        logger.info(f"VectorStore (Zvec) initialized at {self.base_path}")
 
-    # ─────────── 路径 ───────────
+    @property
+    def embedding(self) -> BaseEmbedding:
+        if self._embedding is None:
+            self._embedding = SentenceTransformerEmbedding()
+        return self._embedding
 
-    def _project_dir(self, project_id: str) -> Path:
-        """项目索引目录"""
+    def _project_dir(self, project_id: str):
+        from pathlib import Path
         p = self.base_path / project_id
         p.mkdir(parents=True, exist_ok=True)
         return p
 
-    def _index_path(self, project_id: str) -> Path:
-        return self._project_dir(project_id) / "index.faiss"
-
-    def _mapping_path(self, project_id: str) -> Path:
-        return self._project_dir(project_id) / "mapping.json"
-
-    # ─────────── 加载/保存 ───────────
+    def _collection_path(self, project_id: str) -> str:
+        return str(self._project_dir(project_id))
 
     def _load_all(self):
-        """加载所有已存在的项目索引"""
         for d in self.base_path.iterdir():
             if not d.is_dir():
                 continue
-            project_id = d.name
-            try:
-                self._load_project(project_id)
-                logger.info(f"Loaded index: {project_id}")
-            except Exception as e:
-                logger.error(f"Failed to load index {project_id}: {e}")
+            if _is_zvec_collection(d):
+                logger.info(f"Found Zvec collection: {d.name}")
 
-    def _load_project(self, project_id: str):
-        idx_path = self._index_path(project_id)
-        map_path = self._mapping_path(project_id)
+    def _open_collection(self, project_id: str, *, create: bool = False):
+        import zvec
 
-        if not idx_path.exists() or not map_path.exists():
-            return
+        if project_id in self._collections:
+            return self._collections[project_id]
 
-        self._indexes[project_id] = faiss.read_index(str(idx_path))
+        path = self._collection_path(project_id)
+        with self._collection_lock:
+            if project_id in self._collections:
+                return self._collections[project_id]
 
-        with open(map_path, "r", encoding="utf-8") as f:
-            self._mappings[project_id] = json.load(f)
+            if _is_zvec_collection(path):
+                col = zvec.open(path)
+            elif create:
+                schema = _build_collection_schema(self.embedding.dimension)
+                col = zvec.create_and_open(path=path, schema=schema)
+            else:
+                return None
 
-        # 重建 chunk_id → faiss index 查找
-        self._chunk_id_index[project_id] = {
-            item["chunk_id"]: i for i, item in enumerate(self._mappings[project_id])
-        }
+            self._collections[project_id] = col
+            return col
 
-    def _save_project(self, project_id: str):
-        if project_id not in self._indexes:
-            logger.warning(f"No index for project {project_id}")
-            return
+    def _reset_project_index(self, project_id: str) -> None:
+        col = self._collections.pop(project_id, None)
+        path = self._project_dir(project_id)
+        try:
+            if col is not None:
+                col.destroy()
+        except Exception as exc:
+            logger.warning("Zvec destroy failed project=%s: %s", project_id, exc)
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+        else:
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+        path.mkdir(parents=True, exist_ok=True)
 
-        idx_path = self._index_path(project_id)
-        map_path = self._mapping_path(project_id)
-
-        faiss.write_index(self._indexes[project_id], str(idx_path))
-
-        with open(map_path, "w", encoding="utf-8") as f:
-            json.dump(self._mappings[project_id], f, ensure_ascii=False, indent=2)
-
-        logger.info(f"Saved index: {project_id} ({len(self._mappings[project_id])} chunks)")
-
-    # ─────────── 构建索引 ───────────
-
-    def _get_or_create_index(self, project_id: str) -> faiss.Index:
-        if project_id not in self._indexes:
-            self._indexes[project_id] = faiss.IndexFlatIP(self.embedding.dimension)
-            self._mappings[project_id] = []
-            self._chunk_id_index[project_id] = {}
-            logger.info(f"Created new index: {project_id}")
-        return self._indexes[project_id]
+    def _collection_doc_count(self, project_id: str) -> int:
+        col = self._collections.get(project_id)
+        if col is not None:
+            return int(col.stats.doc_count)
+        path = self._collection_path(project_id)
+        if not _is_zvec_collection(path):
+            return 0
+        try:
+            import zvec
+            col = zvec.open(path)
+            return int(col.stats.doc_count)
+        except Exception:
+            return 0
 
     def build_index(
         self,
         project_id: str,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        *,
+        rebuild: bool = False,
     ) -> int:
-        """
-        构建项目向量索引 —— 将项目下所有已处理的 Chunk 向量化并入库
+        if rebuild:
+            self._reset_project_index(project_id)
 
-        Returns:
-            添加的 Chunk 数量，0 表示没有新数据
-        """
         session = db or SessionLocal()
         own_session = db is None
 
         try:
-            # 查询该项目的所有 Chunk（已处理状态）
             rows = (
                 session.query(Chunk, Document)
                 .join(Document, Chunk.document_id == Document.id)
                 .filter(Chunk.project_id == project_id)
-                .filter(Document.status == DocumentStatus.PROCESSED)  # 只取已解析的文档
+                .filter(Document.status == DocumentStatus.PROCESSED)
                 .all()
             )
 
@@ -209,58 +311,42 @@ class VectorStore:
                 logger.warning(f"Project {project_id} has no chunks to index")
                 return 0
 
-            # 过滤掉已存在于索引中的 chunk
-            existing_ids = set(self._chunk_id_index.get(project_id, {}).keys())
-            new_rows = [(c, d) for c, d in rows if c.id not in existing_ids]
+            if rebuild:
+                new_rows = rows
+            else:
+                new_rows = [(c, d) for c, d in rows if c.status != ChunkStatus.READY]
 
             if not new_rows:
                 logger.info(f"Project {project_id}: all {len(rows)} chunks already indexed")
                 return 0
 
-            logger.info(f"Project {project_id}: indexing {len(new_rows)} new chunks")
+            logger.info(
+                f"Project {project_id}: indexing {len(new_rows)} chunks"
+                + (" (full rebuild)" if rebuild else " (incremental)")
+            )
 
-            # 向量化
             texts = [c.content for c, _ in new_rows]
-            embeddings = self.embedding.embed(texts)
-            faiss.normalize_L2(embeddings)
+            embeddings = _l2_normalize(self.embedding.embed(texts).astype(np.float32))
 
-            # 添加到 FAISS
-            index = self._get_or_create_index(project_id)
-            start_idx = len(self._mappings[project_id])
-            index.add(embeddings.astype(np.float32))
+            col = self._open_collection(project_id, create=True)
+            if col is None:
+                raise RuntimeError(f"无法打开/创建 Zvec collection: {project_id}")
 
-            # 更新 mapping
+            docs = []
             for i, (chunk, doc) in enumerate(new_rows):
-                item = {
-                    "chunk_id": chunk.id,
-                    "document_id": doc.id,
-                    "content": chunk.content,
-                    "page_number": chunk.page_number or chunk.start_page,
-                    "source_title": doc.title or doc.filename,
-                    # ── 文献引用元数据 ──
-                    "authors": doc.authors,
-                    "year": _document_publication_year(doc),
-                    "source_type": doc.source_type.value if doc.source_type else None,
-                    "doi": doc.doi,
-                    "external_id": doc.external_id,
-                    "source_url": doc.source_url,
-                    "fallback": (doc.metadata_json or {}).get("fallback", False) if doc.metadata_json else False,
-                    "faiss_index": start_idx + i,
-                }
-                self._mappings[project_id].append(item)
-                self._chunk_id_index[project_id][chunk.id] = start_idx + i
+                docs.append(
+                    _chunk_to_doc(chunk, doc, embeddings[i].tolist())
+                )
 
-            # 保存
-            self._save_project(project_id)
+            col.upsert(docs)
 
-            # 更新 Chunk 状态
             for chunk, _ in new_rows:
                 chunk.status = ChunkStatus.READY
                 chunk.embedding_model = settings.EMBEDDING_MODEL
                 chunk.dimension = self.embedding.dimension
 
             session.commit()
-            logger.info(f"Project {project_id}: built index with {len(new_rows)} chunks")
+            logger.info(f"Project {project_id}: indexed {len(new_rows)} chunks in Zvec")
             return len(new_rows)
 
         except Exception as e:
@@ -271,126 +357,122 @@ class VectorStore:
             if own_session:
                 session.close()
 
-    # ─────────── 搜索 ───────────
-
     def search(
         self,
         project_id: str,
         query: str,
         top_k: int = 5,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
     ) -> List[SearchResult]:
-        """
-        向量搜索
+        if _is_legacy_faiss_index(self._project_dir(project_id)) and not _is_zvec_collection(
+            self._project_dir(project_id)
+        ):
+            raise ValueError(
+                f"项目 {project_id} 使用旧版 FAISS 索引，请在文献库点击「同步向量索引」重建"
+            )
 
-        Returns:
-            SearchResult 列表，按相似度降序
-        """
-        if project_id not in self._indexes:
+        col = self._open_collection(project_id, create=False)
+        if col is None or col.stats.doc_count == 0:
             raise ValueError(f"项目 {project_id} 尚未构建向量索引，请先构建索引")
 
-        mapping = self._mappings.get(project_id)
-        if not mapping:
-            raise ValueError(f"项目 {project_id} 没有已索引的切片")
+        from zvec import Query
 
-        index = self._indexes[project_id]
+        q_emb = _l2_normalize(self.embedding.embed([query]).astype(np.float32))
+        k = min(top_k, int(col.stats.doc_count))
+        hits = col.query(
+            queries=Query(VECTOR_FIELD, vector=q_emb[0].tolist()),
+            topk=k,
+            output_fields=[
+                "document_id", "content", "page_number", "source_title",
+                "authors", "year", "source_type", "doi", "external_id",
+                "source_url", "fallback",
+            ],
+        )
 
-        # 查询向量化
-        q_emb = self.embedding.embed([query])
-        faiss.normalize_L2(q_emb)
-
-        k = min(top_k, len(mapping))
-        scores, indices = index.search(q_emb.astype(np.float32), k)
-
-        results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < 0 or int(idx) >= len(mapping):
-                continue
-            item = mapping[int(idx)]
-            results.append(SearchResult(
-                chunk_id=item["chunk_id"],
-                document_id=item["document_id"],
-                content=item["content"],
-                page_number=item.get("page_number"),
-                source_title=item.get("source_title"),
-                similarity_score=round(float(score), 4),
-                # ── 文献引用元数据 ──
-                authors=item.get("authors"),
-                year=item.get("year"),
-                source_type=item.get("source_type"),
-                doi=item.get("doi"),
-                external_id=item.get("external_id"),
-                source_url=item.get("source_url"),
-                fallback=item.get("fallback", False),
-            ))
-
+        results = [_doc_to_search_result(h) for h in hits]
         logger.info(f"Search {project_id}: {len(results)} results for '{query[:50]}...'")
         return results
 
-    # ─────────── 管理 ───────────
-
     def delete_project_index(self, project_id: str) -> bool:
         try:
-            self._indexes.pop(project_id, None)
-            self._mappings.pop(project_id, None)
-            self._chunk_id_index.pop(project_id, None)
-
-            for f in [self._index_path(project_id), self._mapping_path(project_id)]:
-                if f.exists():
-                    f.unlink()
-
-            d = self._project_dir(project_id)
-            if d.exists() and not any(d.iterdir()):
-                d.rmdir()
-
-            logger.info(f"Deleted index: {project_id}")
+            self._reset_project_index(project_id)
+            logger.info(f"Deleted Zvec index: {project_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to delete index {project_id}: {e}", exc_info=True)
             return False
 
-    def get_project_stats(self, project_id: str) -> Dict[str, Any]:
-        if project_id not in self._indexes:
-            return {
-                "project_id": project_id,
-                "exists": False,
-                "chunk_count": 0,
-            }
-        return {
-            "project_id": project_id,
-            "exists": True,
-            "chunk_count": len(self._mappings.get(project_id, [])),
-            "dimension": self.embedding.dimension,
-            "embedding_model": settings.EMBEDDING_MODEL,
-            "index_file": str(self._index_path(project_id)),
-            "mapping_file": str(self._mapping_path(project_id)),
-        }
+    def get_project_stats(self, project_id: str, db: Optional[Session] = None) -> Dict[str, Any]:
+        return read_project_index_stats(project_id, db=db)
 
     def has_index(self, project_id: str) -> bool:
-        return project_id in self._indexes and len(self._mappings.get(project_id, [])) > 0
+        return self._collection_doc_count(project_id) > 0
 
-
-# ─────────── 单例 ───────────
 
 _vector_store: Optional[VectorStore] = None
+_vector_store_lock = threading.Lock()
+
+
+def read_project_index_stats(project_id: str, db: Optional[Session] = None) -> Dict[str, Any]:
+    """轻量读取项目索引统计（不加载 embedding 模型）。"""
+    from pathlib import Path
+
+    base = Path(settings.VECTOR_INDEXES_PATH) / project_id
+    legacy = _is_legacy_faiss_index(base)
+    zvec_exists = _is_zvec_collection(base)
+
+    indexed_count = 0
+    if zvec_exists:
+        try:
+            import zvec
+            col = zvec.open(str(base))
+            indexed_count = int(col.stats.doc_count)
+        except Exception as exc:
+            logger.warning("读取 Zvec stats 失败 project=%s: %s", project_id, exc)
+
+    stats: Dict[str, Any] = {
+        "project_id": project_id,
+        "exists": indexed_count > 0,
+        "chunk_count": indexed_count,
+        "dimension": None,
+        "embedding_model": settings.EMBEDDING_MODEL,
+        "vector_backend": settings.VECTOR_BACKEND,
+        "index_file": str(base) if zvec_exists else None,
+        "mapping_file": None,
+        "legacy_faiss": legacy and not zvec_exists,
+    }
+
+    if db is None:
+        return stats
+
+    db_chunk_count = (
+        db.query(Chunk)
+        .join(Document, Chunk.document_id == Document.id)
+        .filter(Chunk.project_id == project_id)
+        .filter(Document.status == DocumentStatus.PROCESSED)
+        .count()
+    )
+    stats["db_chunk_count"] = db_chunk_count
+    stats["in_sync"] = indexed_count == db_chunk_count
+    return stats
 
 
 def get_vector_store() -> VectorStore:
     global _vector_store
     if _vector_store is None:
-        _vector_store = VectorStore()
+        with _vector_store_lock:
+            if _vector_store is None:
+                _vector_store = VectorStore()
     return _vector_store
 
 
 def delete_project_index_files(project_id: str) -> bool:
-    """仅删除磁盘上的向量索引文件，避免为删除项目加载 embedding 模型。"""
     global _vector_store
     try:
         if _vector_store is not None:
-            _vector_store._indexes.pop(project_id, None)
-            _vector_store._mappings.pop(project_id, None)
-            _vector_store._chunk_id_index.pop(project_id, None)
+            return _vector_store.delete_project_index(project_id)
 
+        from pathlib import Path
         base = Path(settings.VECTOR_INDEXES_PATH) / project_id
         if base.exists():
             shutil.rmtree(base, ignore_errors=True)
@@ -402,16 +484,65 @@ def delete_project_index_files(project_id: str) -> bool:
         return False
 
 
-def build_vector_index(project_id: str, db: Optional[Session] = None) -> int:
-    """便捷函数：构建向量索引"""
-    return get_vector_store().build_index(project_id, db)
+def build_vector_index(project_id: str, db: Optional[Session] = None, *, rebuild: bool = False) -> int:
+    return get_vector_store().build_index(project_id, db, rebuild=rebuild)
+
+
+def sync_project_index(project_id: str, db: Optional[Session] = None) -> int:
+    return get_vector_store().build_index(project_id, db, rebuild=True)
+
+
+def schedule_project_index_sync(
+    project_id: str,
+    *,
+    document_id: Optional[str] = None,
+) -> None:
+    from app.models.project import Document, ImportStatus
+
+    def _worker() -> None:
+        from app.core.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            count = sync_project_index(project_id, db=session)
+            if document_id:
+                doc = (
+                    session.query(Document)
+                    .filter(Document.id == document_id, Document.project_id == project_id)
+                    .first()
+                )
+                if doc and doc.import_status != ImportStatus.FAILED:
+                    doc.import_status = ImportStatus.INDEXED
+                    session.commit()
+            logger.info("后台索引同步完成 project=%s chunks=%s", project_id, count)
+        except Exception as exc:
+            logger.warning("后台索引同步失败 project=%s: %s", project_id, exc)
+            if document_id:
+                try:
+                    doc = (
+                        session.query(Document)
+                        .filter(Document.id == document_id, Document.project_id == project_id)
+                        .first()
+                    )
+                    if doc:
+                        doc.error_message = (doc.error_message or "") + f"; 后台索引失败: {exc}"
+                        session.commit()
+                except Exception:
+                    session.rollback()
+        finally:
+            session.close()
+
+    threading.Thread(
+        target=_worker,
+        name=f"index-sync-{project_id[:8]}",
+        daemon=True,
+    ).start()
 
 
 def search_vector_store(
     project_id: str,
     query: str,
     top_k: int = 5,
-    db: Optional[Session] = None
+    db: Optional[Session] = None,
 ) -> List[SearchResult]:
-    """便捷函数：向量搜索"""
     return get_vector_store().search(project_id, query, top_k, db)

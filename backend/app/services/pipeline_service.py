@@ -13,7 +13,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 CHINA_TZ = timezone(timedelta(hours=8))
 
-from app.agents.problem_understanding_agent import get_problem_understanding_agent
+from app.agents.problem_understanding_agent import (
+    get_problem_understanding_agent,
+    build_scientific_logic_constraints,
+    resolve_research_question_from_pu,
+)
 from app.agents.literature_mining_agent import get_literature_mining_agent
 from app.agents.knowledge_gap_agent import get_knowledge_gap_agent
 from app.agents.hypothesis_generation_agent import get_hypothesis_generation_agent
@@ -493,8 +497,9 @@ class PipelineService:
 
         pu = problem_understanding or {}
         kg = knowledge_gap or {}
-        rq = pu.get("research_question") or (
-            self.db_pipeline_run.research_question if self.db_pipeline_run else ""
+        rq = resolve_research_question_from_pu(
+            pu,
+            fallback=self.db_pipeline_run.research_question if self.db_pipeline_run else "",
         )
         keywords = pu.get("keywords") or []
         if isinstance(keywords, str):
@@ -636,6 +641,45 @@ class PipelineService:
             "human_review_required": sv.get("human_review_required"),
         }
 
+    def _get_science_iteration_orchestrator(self):
+        from app.services.science_iteration_service import get_science_iteration_orchestrator
+        return get_science_iteration_orchestrator(self.db, self)
+
+    def _run_science_iteration_hooks(
+        self,
+        hook: str,
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+        stages: Optional[List[PipelineStageLog]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            orch = self._get_science_iteration_orchestrator()
+            if hook == "after_hypothesis_generation":
+                orch.record_milestone(results, "initial", label="R1_initial")
+                return orch.maybe_supplement_literature_on_weak_evidence(
+                    results, project_id, research_question,
+                )
+            if hook == "after_hypothesis_review" and stages is not None:
+                orch.record_milestone(results, "hypothesis_review", label="post_review")
+                return orch.maybe_run_standard_refinement(
+                    stages, results, research_question, project_id, project_mode,
+                )
+            if hook == "after_small_validation":
+                sv = results.get("small_validation") or {}
+                sb = sv.get("sandbox_execution") or {}
+                if sb.get("success") is False:
+                    orch.record_milestone(
+                        results, "validation_fail",
+                        actions=["sandbox_success=False"],
+                    )
+            if hook == "finalize":
+                return orch.finalize_session(results)
+        except Exception as exc:
+            logger.warning("[ScienceIteration] hook %s 失败: %s", hook, exc)
+        return None
+
     def _capture_iteration_snapshot(self, round_num: int, results: Dict[str, Any], label: str = "") -> Dict[str, Any]:
         """P1-4: 捕获假设/计划版本快照供跨轮对比。"""
         hr = results.get("hypothesis_review") or {}
@@ -670,10 +714,15 @@ class PipelineService:
             or {}
         )
 
+        hypo_text = (
+            (reviews[primary_idx].get("hypothesis") if reviews else "")
+            or str(primary_hypo.get("hypothesis") or "")
+        )
         snapshot = {
             "round": round_num,
             "label": label or f"R{round_num}",
-            "hypothesis": (reviews[primary_idx].get("hypothesis") if reviews else "") or "",
+            "hypothesis": hypo_text,
+            "hypothesis_full": hypo_text,
             "rationale_preview": ((reviews[primary_idx].get("rationale") or "")[:300] if reviews else ""),
             "experimental_steps_preview": (ed.get("experimental_steps") or "")[:500],
             "methods_preview": (ed.get("methods") or "")[:300],
@@ -687,6 +736,8 @@ class PipelineService:
             "replan_action_count": len(fp.get("replan_actions") or []),
             "supporting_fact_count": prov.get("supporting_fact_count", 0),
             "supporting_fact_ids_sample": prov.get("supporting_fact_ids_sample") or [],
+            "data_evidence_count": len(primary_hypo.get("data_evidence_ids") or []),
+            "dataset_field_count": len(primary_hypo.get("dataset_field_refs") or []),
             "evidence_level": prov.get("evidence_level"),
             "verifiable_spec_summary": (vspec.get("claim") or "")[:200],
             "verifiable_primary_metric": vspec.get("primary_metric"),
@@ -1569,12 +1620,19 @@ class PipelineService:
                     self._save_hypotheses(project_id, research_question, results)
                 except Exception as save_err:
                     logger.warning(f"保存假设/证据链失败: {save_err}")
+                self._run_science_iteration_hooks(
+                    "after_hypothesis_generation", results, research_question, project_id, project_mode,
+                )
                 self._maybe_pause_for_hitl_gate("hypothesis_generation", results)
             
             # ── 阶段 6: HypothesisReviewAgent ──
             if start_idx <= 5:
                 self._run_stage(stages, 5, results, research_question, project_id,
                     lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
+                self._run_science_iteration_hooks(
+                    "after_hypothesis_review", results, research_question, project_id, project_mode,
+                    stages=stages,
+                )
                 self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
             # ── 阶段 7: ExperimentDesignAgent ──
@@ -1604,6 +1662,9 @@ class PipelineService:
                 sv_first = results.get("small_validation")
                 if isinstance(sv_first, dict):
                     self._apply_post_validation_updates(results, sv_first)
+                self._run_science_iteration_hooks(
+                    "after_small_validation", results, research_question, project_id, project_mode,
+                )
                 if project_mode == ProjectMode.FEDERATED_LEARNING.value:
                     self._capture_iteration_snapshot(1, results, label="FL_Campaign_R1")
                 if self._run_options.get("pipeline_mode") == PipelineMode.TEACHING.value:
@@ -2552,11 +2613,15 @@ class PipelineService:
         pu = problem_understanding or {}
         lm = self._enrich_literature_mining(literature_mining)
         kg = knowledge_gap or {}
-        research_question = pu.get("research_question", "")
+        research_question = resolve_research_question_from_pu(
+            pu,
+            fallback=self.db_pipeline_run.research_question if self.db_pipeline_run else "",
+        )
         num_ideas = int(self._run_options.get("num_ideas", 3))
         extra_constraints = list(self._discovery_refinement or []) + list(
             self._validation_feedback_constraints or []
         ) + list(self._human_feedback_constraints or [])
+        extra_constraints.extend(build_scientific_logic_constraints(pu))
 
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id)
@@ -2569,7 +2634,7 @@ class PipelineService:
             research_question=research_question,
             facts=merged_facts,
             knowledge_gaps=kg.get("knowledge_gaps", []),
-            constraints=[],
+            constraints=list(pu.get("constraints") or []),
             project_id=project_id,
             data_context=data_context,
             project_mode=self._get_project_mode(project_id),
@@ -3489,6 +3554,10 @@ class PipelineService:
             discovery_loop=results.get("discovery_loop"),
             hypothesis_review=results.get("hypothesis_review"),
         )
+        try:
+            self._run_science_iteration_hooks("finalize", results, "", "", "general")
+        except Exception:
+            pass
         self._record_closed_loop_event(
             "quality_acceptance",
             {

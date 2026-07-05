@@ -5,7 +5,7 @@ import {
   Database, Eye, Sparkles, Trash2,
   FileSearch, Loader2, CheckCircle, Clock, AlertCircle, Plus,
   Layers, BrainCircuit,
-  XCircle, ArrowUp, Search, Download, ExternalLink,
+  XCircle, Search, Download, ExternalLink,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
@@ -15,6 +15,7 @@ import { LoadingState } from '@/components/workspace/LoadingState';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
+import type { VectorIndexStats } from '@/services/vectorService';
 import dataFinderService from '@/services/dataFinderService';
 import type { DocumentInfo } from '@/services/documentService';
 import type { ArxivPaper, ImportedDocument, ImportArxivResult, ParseIndexResult } from '@/services/literatureService';
@@ -180,6 +181,8 @@ export function LiteratureLibrary({
   const [chunkList, setChunkList] = useState<any[]>([]);
   const [detailDoc, setDetailDoc] = useState<DocumentInfo | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [indexStats, setIndexStats] = useState<VectorIndexStats | null>(null);
+  const [indexStatsLoading, setIndexStatsLoading] = useState(false);
 
   const { statusMsg, showStatus } = useStatusToast();
 
@@ -216,6 +219,21 @@ export function LiteratureLibrary({
     }
   }, [projectId]);
 
+  const loadIndexStats = useCallback(async () => {
+    if (!projectId || projectId === 'default') return;
+    setIndexStatsLoading(true);
+    try {
+      const res = await vectorService.getIndexStats(projectId);
+      if (res.code === 200 && res.data) {
+        setIndexStats(res.data);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setIndexStatsLoading(false);
+    }
+  }, [projectId]);
+
   const openDataFinder = useCallback(() => {
     if (projectId && projectId !== 'default') {
       navigate(`/projects/${projectId}?tab=datasets&subtab=data-finder`);
@@ -243,7 +261,10 @@ export function LiteratureLibrary({
     loadDocuments();
     loadImportedDocs();
     loadExtractionStats();
-  }, [loadDocuments, loadImportedDocs, loadExtractionStats]);
+    // 索引统计走轻量 API，延迟加载避免与主列表争抢连接
+    const timer = window.setTimeout(() => loadIndexStats(), 300);
+    return () => window.clearTimeout(timer);
+  }, [loadDocuments, loadImportedDocs, loadExtractionStats, loadIndexStats]);
 
   // ========== 上传 PDF ==========
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,6 +288,7 @@ export function LiteratureLibrary({
         showStatus({ type: 'success', text: `"${uploadedDoc?.filename ?? file.name}" 上传成功，已生成 ${chunks} 个切片` });
         await loadDocuments();
         await loadImportedDocs();
+        await loadIndexStats();
       } else {
         showStatus({ type: 'error', text: res.message || '上传失败' });
       }
@@ -276,7 +298,7 @@ export function LiteratureLibrary({
     } finally {
       setUploading(false);
     }
-  }, [projectId, loadDocuments, loadImportedDocs, showStatus]);
+  }, [projectId, loadDocuments, loadImportedDocs, loadIndexStats, showStatus]);
 
   // ========== 删除 ==========
   const handleDelete = useCallback(async (id: string) => {
@@ -287,6 +309,7 @@ export function LiteratureLibrary({
         showStatus({ type: 'success', text: '文献已删除' });
         await loadDocuments();
         await loadImportedDocs();
+        await loadIndexStats();
       } else {
         showStatus({ type: 'error', text: res.message || '删除失败' });
       }
@@ -295,18 +318,19 @@ export function LiteratureLibrary({
     } finally {
       setDeleting(null);
     }
-  }, [loadDocuments, loadImportedDocs, showStatus]);
+  }, [loadDocuments, loadImportedDocs, loadIndexStats, showStatus]);
 
   // ========== 构建向量索引 ==========
   const handleBuildIndex = useCallback(async () => {
     setBuildingIndex(true);
-    showStatus({ type: 'loading', text: '正在构建向量索引…' });
+    showStatus({ type: 'loading', text: '正在同步向量索引…' });
     try {
-      const res = await vectorService.buildIndex(projectId);
+      const res = await vectorService.buildIndex(projectId, true);
       if (res.code === 200) {
         const added = (res.data as any)?.added_count ?? 0;
         const total = (res.data as any)?.total_count ?? added;
-        showStatus({ type: 'success', text: `向量索引构建成功，新增 ${added} 条，共 ${total} 条切片` });
+        showStatus({ type: 'success', text: `向量索引已同步，共 ${total} 条切片` });
+        await loadIndexStats();
       } else {
         showStatus({ type: 'error', text: res.message || '构建索引失败' });
       }
@@ -316,7 +340,7 @@ export function LiteratureLibrary({
     } finally {
       setBuildingIndex(false);
     }
-  }, [projectId, showStatus]);
+  }, [projectId, loadIndexStats, showStatus]);
 
   // ========== arXiv 搜索 ==========
   const handleArxivSearch = useCallback(async () => {
@@ -447,13 +471,14 @@ export function LiteratureLibrary({
       const idxInfo = r.index_added != null ? `，索引 +${r.index_added}` : '';
       showStatus({ type: 'success', text: `解析完成: ${r.chunk_count} chunks${idxInfo}` });
       await loadImportedDocs();
+      await loadIndexStats();
     } catch (err: any) {
       const detail = getErrorMessage(err);
       showStatus({ type: 'error', text: `解析失败: ${detail}` });
     } finally {
       setParsingDoc(null);
     }
-  }, [projectId, loadImportedDocs, showStatus]);
+  }, [projectId, loadImportedDocs, loadIndexStats, showStatus]);
 
   // ========== 查看 Chunk ==========
   const handleViewChunks = useCallback(async (docId: string, docTitle: string) => {
@@ -597,7 +622,7 @@ export function LiteratureLibrary({
                 <FileSearch className="w-4 h-4 text-bp-cyan" />
                 <h3 className="text-sm font-semibold text-bp-text">数据导入与处理</h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input ref={fileInputRef} type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" />
                 <button
                   disabled={uploading}
@@ -616,14 +641,6 @@ export function LiteratureLibrary({
                   </div>
                 </button>
 
-                <button disabled className="flex items-start gap-3 p-4 rounded-lg border border-bp-border bg-bp-panel/40 opacity-60 text-left">
-                  <div className="w-9 h-9 rounded-lg bg-bp-surface flex items-center justify-center shrink-0"><ArrowUp className="w-4 h-4 text-bp-muted" /></div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-bp-muted">导入 CSV 数据</div>
-                    <div className="text-xs text-bp-muted mt-0.5">导入结构化科研数据</div>
-                  </div>
-                </button>
-
                 <button
                   disabled={buildingIndex}
                   onClick={handleBuildIndex}
@@ -636,8 +653,18 @@ export function LiteratureLibrary({
                     {buildingIndex ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <BrainCircuit className="w-4 h-4 text-bp-text" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-bp-text">{buildingIndex ? '构建中…' : '构建向量索引'}</div>
-                    <div className="text-xs text-bp-muted mt-0.5">为文献构建语义检索索引</div>
+                    <div className="text-sm font-medium text-bp-text">{buildingIndex ? '同步中…' : '同步向量索引'}</div>
+                    <div className="text-xs text-bp-muted mt-0.5">
+                      {indexStatsLoading
+                        ? '加载索引状态…'
+                        : indexStats
+                          ? indexStats.in_sync === false
+                            ? `索引 ${indexStats.chunk_count}/${indexStats.db_chunk_count ?? '?'} 条，需同步`
+                            : indexStats.exists
+                              ? `已索引 ${indexStats.chunk_count} 条切片`
+                              : '尚未建立索引，上传 PDF 后自动索引'
+                          : '为文献构建语义检索索引'}
+                    </div>
                   </div>
                 </button>
               </div>

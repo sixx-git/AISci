@@ -10,10 +10,13 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.core.response import ApiResponse, success, error
+from app.core.async_utils import run_blocking
 from app.services.vector_store import (
     get_vector_store,
     build_vector_index,
+    sync_project_index,
     search_vector_store,
+    read_project_index_stats,
     SearchResult,
 )
 
@@ -58,6 +61,8 @@ class IndexStatsResponse(BaseModel):
     project_id: str
     exists: bool
     chunk_count: int
+    db_chunk_count: Optional[int] = None
+    in_sync: Optional[bool] = None
     dimension: Optional[int] = None
     embedding_model: Optional[str] = None
     index_file: Optional[str] = None
@@ -69,13 +74,14 @@ class IndexStatsResponse(BaseModel):
 @router.post("/build", response_model=ApiResponse[BuildResponse])
 async def build_index(
     project_id: str = Query(..., description="项目 ID"),
+    rebuild: bool = Query(False, description="True 时全量重建索引（删文献后同步）"),
     db: Session = Depends(get_db)
 ):
     """
     构建项目向量索引
 
     查询 project_id 下所有已解析文档的 Chunk，
-    使用 embedding 模型生成向量，存入 FAISS 索引。
+    使用 embedding 模型生成向量，存入 Zvec 索引。
     """
     try:
         # 检查是否有 Chunk
@@ -91,10 +97,13 @@ async def build_index(
         if chunk_count == 0:
             return error(f"项目 {project_id} 没有已解析的Chunk，请先上传并解析文档", code=1)
 
-        added_count = build_vector_index(project_id, db)
+        if rebuild:
+            added_count = await run_blocking(sync_project_index, project_id, db)
+        else:
+            added_count = await run_blocking(build_vector_index, project_id, db)
 
-        store = get_vector_store()
-        total = len(store._mappings.get(project_id, []))
+        stats = read_project_index_stats(project_id, db=db)
+        total = stats["chunk_count"]
 
         return success(
             BuildResponse(
@@ -120,7 +129,7 @@ async def vector_search(
     """
     向量搜索
 
-    在指定项目的 FAISS 索引中检索与 query 最相似的 Chunk。
+    在指定项目的 Zvec 索引中检索与 query 最相似的 Chunk。
     """
     try:
         store = get_vector_store()
@@ -128,11 +137,12 @@ async def vector_search(
         if not store.has_index(project_id):
             return error(f"项目 {project_id} 尚未构建向量索引，请先调用 /vector-search/build", code=1)
 
-        results = search_vector_store(
-            project_id=project_id,
-            query=request.query,
-            top_k=request.top_k,
-            db=db,
+        results = await run_blocking(
+            search_vector_store,
+            project_id,
+            request.query,
+            request.top_k,
+            db,
         )
 
         items = [
@@ -161,11 +171,10 @@ async def vector_search(
 # ─────────── 统计 ───────────
 
 @router.get("/index/{project_id}/stats", response_model=ApiResponse[IndexStatsResponse])
-async def get_index_stats(project_id: str):
-    """获取项目向量索引统计信息"""
+async def get_index_stats(project_id: str, db: Session = Depends(get_db)):
+    """获取项目向量索引统计信息（不加载 embedding 模型）"""
     try:
-        store = get_vector_store()
-        stats = store.get_project_stats(project_id)
+        stats = read_project_index_stats(project_id, db=db)
         return success(IndexStatsResponse(**stats))
     except Exception as e:
         return error(str(e), code=1)

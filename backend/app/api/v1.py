@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature, diagnose, datasets, data_finder, prompts, human_loop, multimodal, feedback, llm_config, skills
+from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature, diagnose, datasets, data_finder, prompts, human_loop, multimodal, feedback, llm_config, skills, science_iteration
 
 router = APIRouter()
 
@@ -21,3 +21,4 @@ router.include_router(human_loop.router, prefix="/human-loop", tags=["human-loop
 router.include_router(feedback.router, prefix="/feedback", tags=["feedback-hub"])
 router.include_router(llm_config.router, prefix="/llm", tags=["llm-config"])
 router.include_router(skills.router, prefix="/skills", tags=["skills"])
+router.include_router(science_iteration.router, prefix="/science-iteration", tags=["science-iteration"])

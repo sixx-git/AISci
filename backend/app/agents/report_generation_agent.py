@@ -28,6 +28,7 @@ from app.skills.report.report_chart_generation_skill import ReportChartGeneratio
 from app.skills.report.scientific_plot_skill import ScientificPlotSkill
 from app.skills.report.report_quality_check_skill import ReportQualityCheckSkill
 from app.skills.report.report_reviewer_skill import ReportReviewerSkill
+from app.skills.report.proposal_logic_review_skill import ProposalLogicReviewSkill
 from app.skills.evidence_reasoning.citation_integrity_check_skill import CitationIntegrityCheckSkill
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,16 @@ class ReportGenerationAgent:
                 result["compliance_check"] = compliance
             if result.get("skill_outputs") and isinstance(result["skill_outputs"], dict):
                 result["skill_outputs"]["report_quality_check"] = quality_check_output
+
+            proposal_logic_output = self._run_proposal_logic_review_sync(
+                result,
+                problem_understanding,
+                knowledge_gaps,
+            )
+            if result.get("skill_outputs") and isinstance(result["skill_outputs"], dict):
+                result["skill_outputs"]["proposal_logic_review"] = proposal_logic_output
+            if isinstance(result.get("compliance_check"), dict):
+                result["compliance_check"]["proposal_logic_review"] = proposal_logic_output
 
             reviewer_output = self._run_report_reviewer_sync(
                 result,
@@ -685,6 +696,45 @@ class ReportGenerationAgent:
             return {"success": False, "data": {}, "error": "timeout after 180s", "warnings": [], "errors": ["timeout after 180s"]}
         except Exception as e:
             logger.warning(f"ReportQualityCheckSkill 异常: {e}")
+            return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
+
+    @staticmethod
+    def _run_proposal_logic_review_sync(
+        result_dict: Dict[str, Any],
+        problem_understanding: Optional[Dict[str, Any]] = None,
+        knowledge_gaps: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        import asyncio
+
+        async def _run():
+            try:
+                skill = ProposalLogicReviewSkill()
+                skill_result = await skill.run(
+                    input_data={
+                        "report_data": result_dict,
+                        "problem_understanding": problem_understanding or {},
+                        "knowledge_gaps": knowledge_gaps or {},
+                    },
+                    context={"stage": "report_generation"},
+                )
+                return {
+                    "success": skill_result.success,
+                    "data": skill_result.data,
+                    "warnings": skill_result.warnings,
+                    "errors": skill_result.errors,
+                }
+            except Exception as e:
+                logger.warning(f"ProposalLogicReviewSkill 失败: {e}")
+                return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
+
+        try:
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(asyncio.wait_for(_run(), timeout=120))
+        except asyncio.TimeoutError:
+            logger.warning("ProposalLogicReviewSkill 超时 (120s)")
+            return {"success": False, "data": {}, "error": "timeout after 120s", "warnings": [], "errors": ["timeout after 120s"]}
+        except Exception as e:
+            logger.warning(f"ProposalLogicReviewSkill 异常: {e}")
             return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
 
     @staticmethod

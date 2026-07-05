@@ -89,12 +89,13 @@ async def problem_understanding(
 
 @router.post("/literature-mining", response_model=ApiResponse[LiteratureMiningResponse])
 async def literature_mining(
-    request: LiteratureMiningRequest
+    request: LiteratureMiningRequest,
+    db: Session = Depends(get_db),
 ):
     """
     文献挖掘智能体
     
-    输入项目ID和研究问题，先调用FAISS检索相关文献片段，再调用Qwen提取关键科学事实。
+    输入项目ID和研究问题，先调用 Zvec 向量检索相关文献片段，再调用 Qwen 提取关键科学事实。
     每条事实必须绑定来源chunk_id、论文标题、页码，禁止无来源事实。
     """
     try:
@@ -103,7 +104,8 @@ async def literature_mining(
         result = agent.mine(
             project_id=request.project_id,
             research_question=request.research_question,
-            top_k=request.top_k
+            top_k=request.top_k,
+            db=db,
         )
         
         return success(

@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -27,6 +27,20 @@ interface ReportPageProps {
   latestRunId?: string | null;
 }
 
+const selectChevronStyle = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 12px center',
+  paddingRight: '2.5rem',
+} as const;
+
+function formatReportVersionLabel(entry: ReportData, index: number, total: number) {
+  const ordinal = total - index;
+  const prefix = index === 0 ? '最新' : `第 ${ordinal} 版`;
+  const title = entry.title.length > 40 ? `${entry.title.slice(0, 37)}…` : entry.title;
+  return `${prefix} · ${entry.generatedAt} · ${title}`;
+}
+
 export function ReportPage({
   projectId,
   projectMode,
@@ -38,7 +52,10 @@ export function ReportPage({
   const navigate = useNavigate();
   const { message: alertMsg, showAlert } = useToast(2500);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [reportVersions, setReportVersions] = useState<ReportData[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [reviseMessage, setReviseMessage] = useState('');
@@ -53,6 +70,25 @@ export function ReportPage({
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
+  const loadProjectReports = useCallback(async (preferReportId?: string | null) => {
+    const list = await reportService.getList(projectId);
+    setReportVersions(list);
+
+    if (list.length === 0) {
+      setReport(null);
+      setSelectedReportId(null);
+      return null;
+    }
+
+    const targetId = preferReportId && list.some((item) => item.id === preferReportId)
+      ? preferReportId
+      : list[0].id;
+    const target = list.find((item) => item.id === targetId) ?? list[0];
+    setSelectedReportId(target.id);
+    setReport(target);
+    return target;
+  }, [projectId]);
+
   useEffect(() => {
     if (!projectId) return;
 
@@ -60,17 +96,48 @@ export function ReportPage({
       setIsLoading(true);
       setErrorMsg(null);
       try {
-        const data = await reportService.getLatest(projectId);
-        if (data) {
-          setReport(data);
-        }
+        await loadProjectReports(null);
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : '加载报告失败');
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [projectId, _revalidateKey, _latestRunId, reloadTick]);
+  }, [projectId, _revalidateKey, _latestRunId, loadProjectReports]);
+
+  useEffect(() => {
+    if (!projectId || reloadTick === 0) return;
+
+    (async () => {
+      try {
+        await loadProjectReports(selectedReportId);
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : '加载报告失败');
+      }
+    })();
+  }, [reloadTick, projectId, selectedReportId, loadProjectReports]);
+
+  const handleVersionChange = useCallback(async (reportId: string) => {
+    if (reportId === selectedReportId) return;
+    setIsSwitchingVersion(true);
+    setSelectedReportId(reportId);
+    try {
+      const cached = reportVersions.find((item) => item.id === reportId);
+      if (cached) {
+        setReport(cached);
+        return;
+      }
+      const detail = await reportService.getDetail(reportId);
+      if (detail) {
+        setReport(detail);
+        setReportVersions((prev) => prev.map((item) => (item.id === detail.id ? detail : item)));
+      }
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : '切换报告版本失败');
+    } finally {
+      setIsSwitchingVersion(false);
+    }
+  }, [reportVersions, selectedReportId, showAlert]);
 
   const reportPageHeader = (
     <div className="mb-6">
@@ -83,10 +150,22 @@ export function ReportPage({
   const chatHistory = (report?.extraMetadata?.chat_history as Array<Record<string, unknown>> | undefined) || [];
 
   const reloadReport = useCallback(async () => {
-    const data = await reportService.getLatest(projectId);
-    if (data) setReport(data);
-    return data;
-  }, [projectId]);
+    const currentId = selectedReportId ?? report?.id ?? null;
+    if (currentId) {
+      const detail = await reportService.getDetail(currentId);
+      if (detail) {
+        setReport(detail);
+        setReportVersions((prev) => {
+          const exists = prev.some((item) => item.id === detail.id);
+          if (!exists) return [detail, ...prev];
+          return prev.map((item) => (item.id === detail.id ? detail : item));
+        });
+        setSelectedReportId(detail.id);
+        return detail;
+      }
+    }
+    return loadProjectReports(currentId);
+  }, [selectedReportId, report?.id, loadProjectReports]);
 
   const handleMentorReview = useCallback(async () => {
     if (!report?.id) return;
@@ -249,6 +328,38 @@ export function ReportPage({
             {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
           </span>
         </div>
+
+        {reportVersions.length > 0 && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1 min-w-0">
+              <label htmlFor="report-version-select" className="flex items-center gap-1.5 text-xs text-bp-muted mb-1.5">
+                <History className="w-3.5 h-3.5" />
+                报告版本
+                <span className="text-bp-muted/70">（共 {reportVersions.length} 份）</span>
+              </label>
+              <select
+                id="report-version-select"
+                value={selectedReportId ?? report.id}
+                disabled={isSwitchingVersion || reportVersions.length <= 1}
+                onChange={(e) => void handleVersionChange(e.target.value)}
+                className="input-field py-2.5 w-full max-w-3xl appearance-none cursor-pointer disabled:cursor-default disabled:opacity-80"
+                style={selectChevronStyle}
+              >
+                {reportVersions.map((entry, index) => (
+                  <option key={entry.id} value={entry.id}>
+                    {formatReportVersionLabel(entry, index, reportVersions.length)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {reportVersions.length > 1 && selectedReportId === reportVersions[0]?.id && (
+              <span className="text-xs text-bp-green shrink-0 pb-2.5">当前为最新生成结果</span>
+            )}
+            {reportVersions.length > 1 && selectedReportId !== reportVersions[0]?.id && (
+              <span className="text-xs text-bp-yellow shrink-0 pb-2.5">正在查看历史版本</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── 警告横幅区 ── */}

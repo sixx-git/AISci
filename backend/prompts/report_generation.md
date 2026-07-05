@@ -51,6 +51,16 @@
 
 ---
 
+## 开题报告科学逻辑（全章必须遵循）
+
+生成各章节时，必须体现以下逻辑链，**禁止跳步**：
+
+```
+主要矛盾 → 对象拆解(内/外/边界) → 研究现状 → 知识空白 → 工作基础 → 子问题 → 假设/内容 → 可验证方法
+```
+
+优先使用 `problem_understanding` 中的 `main_contradiction`、`research_object`、`research_significance`；若缺失，从已有输入推断并在文中明确写出。
+
 ## 章节结构 —— 与 latex_template 一致（中文标题）
 
 内容写入 JSON 的 `chapters` 对应字段；**禁止**使用旧版 `## 1. Paper Title` 等英文编号 Markdown。
@@ -58,9 +68,9 @@
 | 字段 | 模板章节 | 要求 |
 |------|----------|------|
 | `paper_title` | 论文标题 | 精确学术标题，体现研究对象、方法与验证目标 |
-| `paper_abstract` | 摘要 | 150-300 字，含背景、问题、方法、预期/初步结果 |
-| `problem_statement` | 待研究问题 | 明确指出领域局限性与研究价值 |
-| `rationale` | 解决思路 | 含已知事实、知识缺口、推理过程、科学假设 |
+| `paper_abstract` | 摘要 | 150-300 字；**一句一层**：背景、主要矛盾、方法、预期/初步结果 |
+| `problem_statement` | 待研究问题 | 必须含**主要矛盾**、领域局限性、**真实科研价值**；可引用 `main_contradiction` 与 `research_object` 的内外边界 |
+| `rationale` | 解决思路 | **已知事实 → 知识缺口 → 推理过程 → 科学假设**（四步连贯，不可省略） |
 | `technical_details` | 必要的技术手段 | 验证假设所需的实验/材料/分析技术（禁止写 LLM/Pipeline） |
 | `datasets` | 数据集 | 合规数据来源或拟采集说明 |
 | `source` | 历史数据 | 假设推演依据；缺则写明需补充 |
@@ -72,12 +82,12 @@
 
 各字段写作要求（摘要）：
 - **paper_title**：基于 facts 与 hypothesis 构造，禁止泛化标题。
-- **paper_abstract**：若为模拟/预期结果，须写明「初步模拟验证」或「可行性验证」。
-- **problem_statement**：写清领域局限、研究动机；可引用 fact_id。
-- **rationale**：须含已知事实、知识缺口、推理过程、科学假设。
+- **paper_abstract**：若为模拟/预期结果，须写明「初步模拟验证」或「可行性验证」；背景须点明矛盾来源。
+- **problem_statement**：写清主要矛盾、对象边界（内/外/边界）、领域局限与真实科研价值；可引用 fact_id。
+- **rationale**：须按顺序写：已知事实 → 知识缺口（空白）→ 推理 → 科学假设；缺口须与 `knowledge_gaps` 一致。
 - **technical_details**：只写科学验证技术，**禁止** LLM/智能体/Pipeline/RAG 等系统描述。
 - **datasets / source / target**：分开写；缺真实数据须明确说明，禁止伪造。
-- **methods**：可执行实验步骤；**禁止**写 Pipeline 内部阶段。
+- **methods**：可执行、**可验证**的实验步骤，须与假设及 `research_object` 对应；**禁止**写 Pipeline 内部阶段。
 - **experiments**：JSON 对象含 baselines、metrics、experimental_setup、ablation_study、validation_protocol。
 - **results**：JSON 或文本区分 actual_results / simulated_results / expected_results / limitations。
 - **references**：仅 citation_map / literature_facts 可验证条目；禁止编造。

@@ -1,9 +1,9 @@
-"""在同步代码中安全运行协程（兼容 FastAPI 已有 event loop 的场景）。"""
+"""在同步/异步代码间安全调度阻塞任务。"""
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from typing import Any, Coroutine, TypeVar
+from typing import Any, Callable, Coroutine, TypeVar
 
 T = TypeVar("T")
 
@@ -24,3 +24,8 @@ def run_coroutine_sync(coro: Coroutine[Any, Any, T], *, timeout: float | None = 
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         return executor.submit(_runner).result()
+
+
+async def run_blocking(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """在独立线程中运行阻塞函数，避免卡住 FastAPI event loop。"""
+    return await asyncio.to_thread(func, *args, **kwargs)

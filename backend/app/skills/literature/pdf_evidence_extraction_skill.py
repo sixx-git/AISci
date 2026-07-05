@@ -23,7 +23,7 @@ class PdfEvidenceExtractionSkill(BaseSkill):
     输入:
       - project_id: str             项目 ID
       - research_question: str      研究问题
-      - top_k: int = 10             FAISS 检索 Top-K
+      - top_k: int = 10             Zvec 检索 Top-K
 
     输出 (SkillResult.data):
       - facts: List[dict]           结构化事实列表

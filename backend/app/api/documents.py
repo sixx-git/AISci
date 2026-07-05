@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.response import ApiResponse, success, error
+from app.core.async_utils import run_blocking
 from app.services.project_service import DocumentService
 from app.schemas.project import (
     DocumentInfo,
@@ -34,11 +35,12 @@ async def upload_document(
         file_content = await file.read()
         
         service = DocumentService(db)
-        doc, chunks = service.upload_and_parse_document(
+        doc, chunks = await run_blocking(
+            service.upload_and_parse_document,
             filename=file.filename,
             file_content=file_content,
             project_id=project_id,
-            auto_parse=auto_parse
+            auto_parse=auto_parse,
         )
         
         doc_info = DocumentInfo.model_validate(doc)
@@ -68,7 +70,7 @@ async def parse_document(
             backend = ParserBackend.PYPDF
         
         service = DocumentService(db)
-        doc, chunks = service.parse_document(doc_id, backend=backend)
+        doc, chunks = await run_blocking(service.parse_document, doc_id, backend=backend)
         
         doc_info = DocumentInfo.model_validate(doc)
         chunks_count = len(chunks) if chunks else 0
@@ -166,7 +168,7 @@ async def delete_document(doc_id: str, db: Session = Depends(get_db)):
     """删除文档"""
     try:
         service = DocumentService(db)
-        result = service.delete_document(doc_id)
+        result = await run_blocking(service.delete_document, doc_id)
         
         if not result:
             return error("文档不存在", code=404)

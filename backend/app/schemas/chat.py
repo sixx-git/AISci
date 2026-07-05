@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     session_id: Optional[str] = None
     use_rag: bool = True
+    project_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

@@ -393,16 +393,27 @@ class DocumentService:
         doc = self.get_document(doc_id)
         if not doc:
             return False
+
+        project_id = doc.project_id
         
         # 删除文件
         if os.path.exists(doc.file_path):
             try:
                 os.remove(doc.file_path)
-            except:
+            except OSError:
                 pass
         
         self.db.delete(doc)
         self.db.commit()
+
+        if project_id:
+            try:
+                from app.services.vector_store import schedule_project_index_sync
+                schedule_project_index_sync(project_id)
+            except Exception as exc:
+                logger.warning(
+                    "删除文献后提交后台索引同步失败 project=%s: %s", project_id, exc
+                )
         
         return True
     

@@ -374,7 +374,10 @@ export function ProjectWorkspace() {
     };
   }, [id, latestRun?.run_id, isRunActive, revalidateKey]);
 
-  const dataUploadGate = useDataUploadGate(id, latestRunId ?? pipelineRuns[0]?.run_id ?? null);
+  const dataUploadGate = useDataUploadGate(
+    loading ? undefined : projectId,
+    latestRunId ?? pipelineRuns[0]?.run_id ?? null,
+  );
   const [dataGateDismissed, setDataGateDismissed] = useState(false);
 
   const onRequiredDatasetsTab =
@@ -385,11 +388,17 @@ export function ProjectWorkspace() {
     let cancelled = false;
 
     async function loadProject() {
+      if (!projectId) {
+        setLoading(false);
+        setError('项目 ID 无效');
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        const res = await projectService.getProject(id);
+        const res = await projectService.getProject(projectId, { timeout: 20000 });
         if (cancelled) return;
         if (res.code === 200 && res.data) {
           setProject(res.data);
@@ -398,7 +407,12 @@ export function ProjectWorkspace() {
         }
       } catch (e: unknown) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : '获取项目详情失败，请检查后端服务是否启动');
+        const msg = e instanceof Error ? e.message : '获取项目详情失败，请检查后端服务是否启动';
+        if (/timeout|aborted/i.test(msg)) {
+          setError('加载超时：后端可能正在处理向量索引或下载模型，请稍后点击重试');
+        } else {
+          setError(msg);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -406,7 +420,7 @@ export function ProjectWorkspace() {
 
     loadProject();
     return () => { cancelled = true; };
-  }, [id, reloadTick]);
+  }, [projectId, reloadTick]);
 
   // --- 研究领域 ---
   const resolvedProjectMode = project?.project_mode || 'general';

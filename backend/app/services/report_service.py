@@ -616,18 +616,25 @@ class ReportService:
         }
 
     def delete_report(self, report_id: str) -> bool:
-        """删除研究报告"""
+        """删除研究报告及其导出文件。"""
         db_report = self.get_report_by_id(report_id)
         if not db_report:
             return False
-        
+
+        file_id = db_report.pdf_path
         try:
             self.db.delete(db_report)
             self.db.commit()
-            
+
+            if file_id:
+                import shutil
+                export_dir = get_reports_storage_dir() / file_id
+                if export_dir.exists():
+                    shutil.rmtree(export_dir, ignore_errors=True)
+
             logger.info(f"删除研究报告成功，ID: {report_id}")
             return True
-            
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"删除研究报告失败: {e}", exc_info=True)

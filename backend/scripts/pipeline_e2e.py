@@ -60,6 +60,15 @@ PRESET_RESPONSES = {
         "scope_boundary": "小样本学习场景",
         "constraints": ["数据量限制"],
         "expected_output": ["性能提升方案"],
+        "main_contradiction": "小样本条件下模型泛化与数据不足之间的矛盾",
+        "phenomenon_contradiction": "训练数据有限但期望高泛化性能",
+        "research_object": {
+            "internal": "模型结构与特征表示",
+            "external": "数据分布与标注环境",
+            "boundary": "小样本学习设定，不含大规模预训练",
+        },
+        "decomposition_notes": "通过先验知识补偿样本不足",
+        "research_significance": "提升小样本场景下的可部署模型性能",
     },
     "literature_mining": {
         "citation_map": [

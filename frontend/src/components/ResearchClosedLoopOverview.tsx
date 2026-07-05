@@ -10,6 +10,7 @@ import { GapLoopHistoryPanel } from '@/components/GapLoopHistoryPanel';
 import { LoopDependencyGraph } from '@/components/LoopDependencyGraph';
 import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
+import { IterationRoundPanel } from '@/components/IterationRoundPanel';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
@@ -17,6 +18,7 @@ import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { pipelineService } from '@/services/pipelineService';
+import scienceIterationService from '@/services/scienceIterationService';
 import hypothesisService, { type BackendHypothesis } from '@/services/hypothesisService';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +30,7 @@ import type {
   PipelineRunSummary,
   TeachingAutoRefinementData,
   QualityAcceptance,
+  ScienceIterationSession,
 } from '@/types';
 
 interface ResearchClosedLoopOverviewProps {
@@ -97,6 +100,9 @@ export function ResearchClosedLoopOverview({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flowView, setFlowView] = useState<'micro' | 'macro'>('micro');
+  const [iterationSession, setIterationSession] = useState<ScienceIterationSession | null>(null);
+  const [iterationLoading, setIterationLoading] = useState(false);
+  const [iterationError, setIterationError] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -155,6 +161,35 @@ export function ResearchClosedLoopOverview({
     return () => { cancelled = true; };
   }, [selectedRunId, revalidateKey]);
 
+  useEffect(() => {
+    if (!selectedRunId) {
+      setIterationSession(null);
+      return;
+    }
+    let cancelled = false;
+    setIterationLoading(true);
+    setIterationError(null);
+    scienceIterationService.getIterationSession(selectedRunId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.code === 200 && res.data) {
+          setIterationSession(res.data);
+        } else {
+          setIterationSession(null);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setIterationError(e instanceof Error ? e.message : '加载自迭代会话失败');
+          setIterationSession(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIterationLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedRunId, revalidateKey]);
+
   const extra = runDetail?.extra_metadata as PipelineRunExtraMetadata | undefined;
 
   const discoveryLoopData = useMemo((): DiscoveryLoopData | null => {
@@ -171,7 +206,11 @@ export function ResearchClosedLoopOverview({
     return extra?.quality_acceptance ?? null;
   }, [extra]);
 
-  const versionSnapshots = useMemo(() => extra?.version_snapshots ?? [], [extra]);
+  const versionSnapshots = useMemo(() => {
+    const fromSession = iterationSession?.version_snapshots;
+    if (fromSession && fromSession.length >= 2) return fromSession;
+    return extra?.version_snapshots ?? [];
+  }, [extra, iterationSession]);
 
   const pipelineMode = (extra?.run_options?.pipeline_mode as string | undefined) || 'teaching';
 
@@ -208,6 +247,7 @@ export function ResearchClosedLoopOverview({
     Boolean(extra?.quality_trend?.length) ||
     Boolean(discoveryLoopData) ||
     Boolean(teachingRefinementData) ||
+    Boolean(iterationSession?.rounds?.length) ||
     versionSnapshots.length >= 2;
 
   const hasTimeline = Boolean(
@@ -471,6 +511,16 @@ export function ResearchClosedLoopOverview({
             <VersionComparePanel snapshots={versionSnapshots} />
             <EvidenceDiffPanel snapshots={versionSnapshots} />
           </div>
+        </CollapsiblePanel>
+      )}
+
+      {(iterationLoading || iterationSession?.rounds?.length || iterationError) && (
+        <CollapsiblePanel title="科学自迭代" subtitle="ScienceIteration · 轮次与资料补充" defaultOpen>
+          <IterationRoundPanel
+            session={iterationSession}
+            loading={iterationLoading}
+            error={iterationError}
+          />
         </CollapsiblePanel>
       )}
 

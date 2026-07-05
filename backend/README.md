@@ -48,7 +48,7 @@ backend/
 ├── prompts/              # Markdown Prompt 模板
 ├── tests/                # pytest 测试（含 test_batch1–7 回归）
 ├── data/                 # arXiv fallback 数据
-└── storage/              # 运行时数据（FAISS、报告、上传文件）
+└── storage/              # 运行时数据（Zvec 向量库、报告、上传文件）
 ```
 
 ## Skill 分类
@@ -128,7 +128,10 @@ QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-max
 USE_MOCK_LLM=false
 DATABASE_URL=sqlite:///./data/aiscientist.db
-VECTOR_STORE_PATH=./storage/faiss_index
+VECTOR_STORE_PATH=./storage/chat_vectors
+VECTOR_INDEXES_PATH=./storage/vector_indexes
+VECTOR_BACKEND=zvec
+HF_ENDPOINT=https://hf-mirror.com
 EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 UPLOAD_DIR=./storage/uploads
 ```

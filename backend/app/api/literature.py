@@ -13,6 +13,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.core.async_utils import run_blocking
 from app.core.response import ApiResponse, success, error
 from app.services.literature_ingestion_service import LiteratureIngestionService
 from app.services.literature_sources.bibtex_importer import BibTexParseError
@@ -336,9 +337,10 @@ async def parse_document(
     """
     try:
         service = LiteratureIngestionService(db)
-        result = service.parse_document(
-            project_id=req.project_id,
-            document_id=req.document_id,
+        result = await run_blocking(
+            service.parse_document,
+            req.project_id,
+            req.document_id,
         )
         source_tag = f" (来源: {result.get('source_type', '?')})" if result.get('source_type') else ""
         return success(
@@ -363,16 +365,17 @@ async def index_document(
     """
     统一向量索引（任意来源）
 
-    对项目级 FAISS 索引进行增量构建。
+    对项目级 Zvec 向量索引进行增量构建。
     LiteratureMiningAgent 不关心文献来源，仅按 project_id 检索。
 
     前置条件: 文档已解析（import_status = parsed）
     """
     try:
         service = LiteratureIngestionService(db)
-        result = service.index_document(
-            project_id=req.project_id,
-            document_id=req.document_id,
+        result = await run_blocking(
+            service.index_document,
+            req.project_id,
+            req.document_id,
         )
         return success(
             data=result,
@@ -401,10 +404,11 @@ async def parse_and_index(
     """
     try:
         service = LiteratureIngestionService(db)
-        result = service.parse_and_index(
-            project_id=req.project_id,
-            document_id=req.document_id,
-            auto_index=req.auto_index,
+        result = await run_blocking(
+            service.parse_and_index,
+            req.project_id,
+            req.document_id,
+            req.auto_index,
         )
         idx_msg = f"，索引新增 {result['index_added']} 条" if result.get('index_added') is not None else ""
         return success(

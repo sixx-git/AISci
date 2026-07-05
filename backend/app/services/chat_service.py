@@ -3,14 +3,13 @@ from sqlalchemy.orm import Session
 from app.schemas.chat import ChatRequest, ChatResponse, ChatMessage as ChatMessageSchema
 from app.models.chat import ChatSession, ChatMessage
 from app.services.llm_service import LLMService
-from app.services.vector_service import VectorService
+from app.services.vector_store import get_vector_store, search_vector_store
 
 
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
         self.llm_service = LLMService()
-        self.vector_service = VectorService()
     
     async def send_message(self, request: ChatRequest) -> ChatResponse:
         session_id = request.session_id or str(uuid.uuid4())
@@ -33,7 +32,15 @@ class ChatService:
         context = ""
         
         if request.use_rag:
-            context, references = await self.vector_service.search(request.messages[-1].content)
+            if request.project_id:
+                context, references = self._search_project_literature(
+                    request.project_id,
+                    request.messages[-1].content,
+                )
+            else:
+                context, references = await self._search_chat_vectors(
+                    request.messages[-1].content,
+                )
         
         prompt = self._build_chat_prompt(request.messages, context)
         response = await self.llm_service.generate(prompt)
@@ -54,6 +61,37 @@ class ChatService:
             message=ChatMessageSchema(role="assistant", content=response),
             references=references if references else None
         )
+
+    def _search_project_literature(self, project_id: str, query: str, top_k: int = 5):
+        """从项目 Zvec 索引检索文献片段（与文献库共用同一 Collection）。"""
+        store = get_vector_store()
+        if not store.has_index(project_id):
+            return "", []
+
+        try:
+            results = search_vector_store(project_id, query, top_k=top_k, db=self.db)
+        except ValueError:
+            return "", []
+
+        if not results:
+            return "", []
+
+        context_parts = []
+        ref_set = set()
+        for r in results:
+            title = r.source_title or r.document_id
+            page = f" p.{r.page_number}" if r.page_number else ""
+            context_parts.append(f"[{title}{page}] {r.content}")
+            ref_set.add(title)
+
+        return "\n\n".join(context_parts), list(ref_set)
+
+    async def _search_chat_vectors(self, query: str, top_k: int = 5):
+        """从 Chat 专用 Zvec Collection 检索（无 project_id 时的 fallback）。"""
+        from app.services.vector_service import VectorService
+
+        service = VectorService()
+        return await service.search(query, top_k=top_k)
     
     def _build_chat_prompt(self, messages, context: str) -> str:
         prompt = ""

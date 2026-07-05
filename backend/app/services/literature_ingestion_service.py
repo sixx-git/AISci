@@ -17,7 +17,7 @@ from app.models import Document, SourceType, ImportStatus, LibraryScope, Documen
 from app.services.literature_sources.arxiv_source import ArxivSource, ArxivPaper
 from app.services.literature_sources.bibtex_importer import BibTexImporter, BibTexParseError, parse_bibtex
 from app.services.document_parser import DocumentParser
-from app.services.vector_store import build_vector_index
+from app.services.vector_store import schedule_project_index_sync, sync_project_index
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -568,6 +568,17 @@ class LiteratureIngestionService:
 
             logger.info(f"PDF 解析完成: {document_id} -> {len(chunks)} chunks, status={doc.import_status.value}")
 
+            indexed_count = 0
+            index_scheduled = False
+            try:
+                schedule_project_index_sync(project_id, document_id=document_id)
+                index_scheduled = True
+                logger.info(f"向量索引已提交后台同步: project={project_id}, doc={document_id}")
+            except Exception as idx_exc:
+                logger.warning(f"提交后台索引失败（文献仍为 parsed）: {idx_exc}")
+                doc.error_message = (doc.error_message or "") + f"; 索引调度失败: {idx_exc}"
+                self.db.commit()
+
         except Exception as e:
             doc.import_status = ImportStatus.FAILED
             doc.status = DocumentStatus.FAILED
@@ -581,6 +592,8 @@ class LiteratureIngestionService:
             "chunk_count": len(chunks),
             "status": doc.import_status.value,
             "source_type": doc.source_type.value if doc.source_type else None,
+            "index_added": indexed_count if doc.import_status == ImportStatus.INDEXED else 0,
+            "index_scheduled": index_scheduled,
         }
 
     # ==================== 统一向量索引 ====================
@@ -591,7 +604,7 @@ class LiteratureIngestionService:
         document_id: str,
     ) -> Dict[str, Any]:
         """
-        统一向量索引方法 —— 构建项目级 FAISS 索引。
+        统一向量索引方法 —— 构建项目级 Zvec 索引。
 
         索引范围：project_id 下所有状态为 processed 的 Chunk。
         单篇文献调用此方法会触发整个项目的增量索引，
@@ -618,7 +631,7 @@ class LiteratureIngestionService:
 
         logger.info(f"开始构建向量索引: project={project_id}, doc={document_id}")
         try:
-            index_added = build_vector_index(project_id, db=self.db)
+            index_added = sync_project_index(project_id, db=self.db)
 
             doc.import_status = ImportStatus.INDEXED
             self.db.commit()

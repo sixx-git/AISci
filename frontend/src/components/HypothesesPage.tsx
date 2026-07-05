@@ -13,6 +13,7 @@ import { ErrorState } from '@/components/workspace/ErrorState';
 import { HypothesisCard } from '@/components/HypothesisCard';
 import { EvidenceChainDrawer } from '@/components/EvidenceChainDrawer';
 import hypothesisService from '@/services/hypothesisService';
+import scienceIterationService from '@/services/scienceIterationService';
 import { pipelineService } from '@/services/pipelineService';
 import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
 import { useToast } from '@/hooks/useToast';
@@ -20,7 +21,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { mapBackendEvidenceToItem, mapBackendHypothesisToDetailed } from '@/lib/mappers/hypothesisMapper';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { selectedHypothesisKey } from '@/lib/storageKeys';
-import type { DetailedHypothesis, EvidenceChain, EvidenceItem, HypothesisTreeData } from '@/types';
+import type { DetailedHypothesis, EvidenceChain, EvidenceItem, HypothesisProvenance, HypothesisTreeData } from '@/types';
 
 interface HypothesesPageProps {
   projectId?: string;
@@ -67,6 +68,8 @@ export function HypothesesPage({
   const [selectedHypothesis, setSelectedHypothesis] = useState<DetailedHypothesis | null>(null);
   const [currentEvidence, setCurrentEvidence] = useState<EvidenceItem[]>([]);
   const [currentEvidenceChain, setCurrentEvidenceChain] = useState<EvidenceChain | null>(null);
+  const [provenance, setProvenance] = useState<HypothesisProvenance | null>(null);
+  const [provenanceLoading, setProvenanceLoading] = useState(false);
   const [iteratingId, setIteratingId] = useState<string | null>(null);
   const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
   const [retryTick, setRetryTick] = useState(0);
@@ -152,13 +155,18 @@ export function HypothesesPage({
     if (!hypo) return;
     setSelectedHypothesis(hypo);
     setCurrentEvidenceChain(hypo.evidenceChain ?? null);
+    setProvenance(null);
+    setProvenanceLoading(Boolean(_projectId));
     setDrawerOpen(true);
 
     Promise.all([
       hypothesisService.getHypothesisEvidence(id),
       hypothesisService.getEvidenceChain(id),
+      _projectId
+        ? scienceIterationService.getHypothesisProvenance(_projectId, id, _latestRunId)
+        : Promise.resolve({ code: 200, data: null, message: 'ok' }),
     ])
-      .then(([evRes, chainRes]) => {
+      .then(([evRes, chainRes, provRes]) => {
         if (evRes.code === 200 && Array.isArray(evRes.data)) {
           setCurrentEvidence(evRes.data.map(mapBackendEvidenceToItem));
         } else {
@@ -172,12 +180,16 @@ export function HypothesesPage({
         } else {
           setCurrentEvidenceChain(hypo.evidenceChain ?? null);
         }
+        if (provRes.code === 200 && provRes.data) {
+          setProvenance(provRes.data);
+        }
       })
       .catch(() => {
         setCurrentEvidence([]);
         setCurrentEvidenceChain(hypo.evidenceChain ?? null);
-      });
-  }, [hypotheses]);
+      })
+      .finally(() => setProvenanceLoading(false));
+  }, [hypotheses, _projectId, _latestRunId]);
 
   const handleIterateEvidence = useCallback(async (id: string) => {
     setIteratingId(id);
@@ -210,6 +222,8 @@ export function HypothesesPage({
     setSelectedHypothesis(null);
     setCurrentEvidence([]);
     setCurrentEvidenceChain(null);
+    setProvenance(null);
+    setProvenanceLoading(false);
   }, []);
 
   const offTopicHypotheses = useMemo(
@@ -539,6 +553,8 @@ export function HypothesesPage({
         evidenceCount={selectedHypothesis?.evidenceCount || 0}
         evidenceList={currentEvidence}
         evidenceChain={currentEvidenceChain}
+        provenance={provenance}
+        provenanceLoading={provenanceLoading}
       />
     </div>
   );

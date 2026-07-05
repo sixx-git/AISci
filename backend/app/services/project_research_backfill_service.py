@@ -70,6 +70,16 @@ def backfill_from_problem_understanding(project: Project, pu: Dict[str, Any]) ->
         if expected:
             updates["expected_output"] = expected
 
+    if _is_blank(project.research_background):
+        background_parts = [
+            _pick_nonempty(pu.get("main_contradiction")),
+            _pick_nonempty(pu.get("phenomenon_contradiction")),
+            _pick_nonempty(pu.get("research_significance")),
+        ]
+        background = _join_list([p for p in background_parts if p])
+        if background:
+            updates["research_background"] = background
+
     rq = (project.research_question or "").strip()
     ps = _pick_nonempty(pu.get("problem_statement"))
     if ps and (_is_blank(rq) or len(rq) < 30):

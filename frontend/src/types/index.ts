@@ -309,6 +309,7 @@ export interface PipelineRunExtraMetadata {
   quality_trend?: QualityTrendEntry[];
   quality_acceptance?: QualityAcceptance;
   version_snapshots?: IterationSnapshot[];
+  science_iteration?: ScienceIterationSession;
   auxiliary_results?: Record<string, unknown>;
   parent_run_id?: string;
   rerun_from?: string;
@@ -379,6 +380,122 @@ export interface IterationSnapshot {
   evidence_level?: string;
   verifiable_spec_summary?: string;
   verifiable_primary_metric?: string;
+  hypothesis_full?: string;
+  data_evidence_count?: number;
+  dataset_field_count?: number;
+}
+
+// ==================== 科学自迭代 ====================
+
+export interface ScienceIterationConfig {
+  enabled?: boolean;
+  max_rounds?: number;
+  auto_triggers?: string[];
+  min_ensemble_score?: number;
+  min_evidence_facts?: number;
+  stagnation_delta?: number;
+  require_human_on_stagnation?: boolean;
+  show_iteration_in_report?: boolean;
+  auto_literature_on_weak_evidence?: boolean;
+  auto_literature_max?: number;
+}
+
+export interface HypothesisOriginBlock {
+  main_contradiction?: string;
+  phenomenon_contradiction?: string;
+  problem_statement?: string;
+  research_significance?: string;
+  reasoning_chain?: string[];
+}
+
+export interface LiteratureGroundingItem {
+  fact_id?: string;
+  content?: string;
+  quote_text?: string;
+  source_title?: string;
+  document_id?: string;
+  relevance_score?: number | null;
+}
+
+export interface DataGroundingItem {
+  table_id?: string;
+  source_title?: string;
+  source_type?: string;
+  csv_path?: string;
+  row_count?: number | null;
+  extraction_method?: string;
+}
+
+export interface HypothesisGroundingBlock {
+  literature?: LiteratureGroundingItem[];
+  data?: DataGroundingItem[];
+  multimodal?: Record<string, unknown>[];
+  counter_evidence?: Record<string, unknown>[];
+  knowledge_gaps?: string[];
+}
+
+export interface HypothesisVerificationBlock {
+  verifiable_spec?: Record<string, unknown>;
+  validation_target?: string;
+  expected_measurable_effect?: string;
+  verification_checks?: Record<string, unknown>[];
+  sandbox_success?: boolean | null;
+}
+
+export interface HypothesisProvenance {
+  hypothesis_id: string;
+  hypothesis_text?: string;
+  origin?: HypothesisOriginBlock;
+  grounding?: HypothesisGroundingBlock;
+  verification?: HypothesisVerificationBlock;
+  evidence_sufficiency?: string;
+  evidence_level?: string;
+  scores?: Record<string, unknown>;
+}
+
+export interface MaterialSupplementAction {
+  action_type?: string;
+  description?: string;
+  priority?: string;
+  target?: string;
+}
+
+export interface MaterialSupplementPlan {
+  triggers?: string[];
+  actions?: MaterialSupplementAction[];
+  suggested_queries?: string[];
+}
+
+export interface IterationRoundScores {
+  hypothesis_tree?: number | null;
+  ensemble_overall?: number | null;
+  evidence_balance?: number | null;
+  logic_score?: number | null;
+  cqs?: number | null;
+}
+
+export interface IterationRoundRecord {
+  round?: number;
+  trigger?: string;
+  label?: string;
+  hypothesis_preview?: string;
+  actions_taken?: string[];
+  scores?: IterationRoundScores;
+  delta_from_prev?: Record<string, unknown>;
+  material_plan?: MaterialSupplementPlan | null;
+  snapshot_label?: string;
+}
+
+export interface ScienceIterationSession {
+  session_id?: string;
+  project_id?: string;
+  run_id?: string;
+  config?: ScienceIterationConfig;
+  rounds?: IterationRoundRecord[];
+  current_best?: Record<string, unknown>;
+  version_snapshots?: IterationSnapshot[];
+  material_supplement_plan?: MaterialSupplementPlan | null;
+  human_checkpoints?: Record<string, unknown>[];
 }
 
 export interface ReplanAction {
@@ -841,6 +958,8 @@ export interface ReportData {
   id: string;
   title: string;
   generatedAt: string;
+  /** 同一份报告的 PDF 再生成次数（非 Pipeline 多次运行的版本号） */
+  version?: number;
   sections: ReportSection[];
   /** 合规性检查结果 */
   complianceCheck?: ComplianceCheck;
