@@ -12,7 +12,8 @@ interface ReportPdfPreviewProps {
   regenerating?: boolean;
 }
 
-const PREVIEW_HEIGHT = 'calc(100vh - 320px)';
+/** 约 A4 一页高度（297mm @ 96dpi ≈ 1123px），便于单页 PDF 预览 */
+const PREVIEW_HEIGHT = 'max(1123px, calc(100vh - 200px))';
 
 /** 报告预览：仅 LaTeX 模板 PDF */
 export function ReportPdfPreview({

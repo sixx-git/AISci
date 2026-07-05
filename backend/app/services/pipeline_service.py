@@ -3000,6 +3000,13 @@ class PipelineService:
                         "source": "data_finder",
                     })
 
+        csv_data_path = None
+        for ds in multimodal_datasets:
+            fp = ds.get("file_path")
+            if fp and os.path.exists(fp) and ds.get("data_type", "tabular") == "tabular":
+                csv_data_path = fp
+                break
+
         if project_mode == ProjectMode.FEDERATED_LEARNING.value:
             from app.services.federated_experiment_service import get_federated_experiment_service
             import asyncio
@@ -3039,6 +3046,7 @@ class PipelineService:
             methods=ed.get("methods", ""),
             datasets=ed.get("datasets", ""),
             metrics=ed.get("metrics", ""),
+            csv_data_path=csv_data_path,
             experiment_design=ed,
             multimodal_datasets=multimodal_datasets,
             modeling_results=modeling_results,

@@ -560,6 +560,19 @@ def _load_template_preamble(template_dir: Path) -> str:
         r"\usepackage[UTF8]{ctex}",
         r"\usepackage[UTF8,fontset=fandol]{ctex}",
     )
+    if r"\PassOptionsToPackage{numbers,sort&compress}{natbib}" not in preamble:
+        preamble = preamble.replace(
+            r"\usepackage{iclr2024_conference,times}",
+            r"\PassOptionsToPackage{numbers,sort&compress}{natbib}"
+            "\n\\usepackage{iclr2024_conference,times}"
+            "\n\\setcitestyle{numbers,square,sort&compress}",
+        )
+    elif r"\setcitestyle{numbers" not in preamble:
+        preamble = preamble.replace(
+            r"\usepackage{iclr2024_conference,times}",
+            r"\usepackage{iclr2024_conference,times}"
+            "\n\\setcitestyle{numbers,square,sort&compress}",
+        )
     return preamble + "\n"
 
 
@@ -818,6 +831,149 @@ def _build_references_bib(
     return bib_content, keys
 
 
+def _format_authors_for_citation(authors: Any) -> str:
+    """GB/T 7714 作者列：3 人以内全列，超过 3 人加「等」/ et al."""
+    if isinstance(authors, list):
+        parts = [str(a).strip() for a in authors if str(a).strip()]
+    else:
+        raw = str(authors or "").strip()
+        if not raw or raw.lower() in ("unknown", "未知作者"):
+            return ""
+        if re.search(r"\s+and\s+", raw, flags=re.I):
+            parts = [p.strip() for p in re.split(r"\s+and\s+", raw, flags=re.I) if p.strip()]
+        elif ";" in raw:
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+        else:
+            parts = _split_comma_separated_authors(raw)
+    if not parts:
+        return ""
+    has_cjk = any(re.search(r"[\u4e00-\u9fff]", p) for p in parts)
+    if len(parts) > 3:
+        parts = parts[:3] + (["等"] if has_cjk else ["et al."])
+    return ", ".join(parts)
+
+
+def _reference_type_marker(item: Dict[str, Any]) -> str:
+    """文献类型标识：M 专著 / J 期刊 / J/OL 电子期刊 / EB/OL 电子资源。"""
+    if item.get("publisher") or item.get("publisher_location"):
+        return "M"
+    url = str(item.get("source_url") or item.get("url") or "").lower()
+    source = str(item.get("source") or "").lower()
+    if "arxiv" in url or source == "arxiv":
+        return "J/OL"
+    if item.get("journal"):
+        return "J"
+    if url:
+        return "EB/OL"
+    return "J"
+
+
+def _format_reference_gbt7714(item: Dict[str, Any]) -> str:
+    """
+    格式化为 GB/T 7714 参考文献条目（用于 \\bibitem 正文）。
+    示例：姜启源, 谢金星, 叶俊. 数学模型[M]. 北京: 高等教育出版社, 2018.
+    """
+    note = str(item.get("note") or "").strip()
+    title = (item.get("title") or item.get("paper_title") or "").strip().rstrip(".")
+    if not title:
+        return note
+
+    authors = _format_authors_for_citation(item.get("authors"))
+    marker = _reference_type_marker(item)
+    year = str(item.get("year") or item.get("publication_year") or "").strip()
+    journal = str(item.get("journal") or "").strip()
+    publisher = str(item.get("publisher") or "").strip()
+    pub_place = str(item.get("publisher_location") or item.get("address") or "").strip()
+    doi = str(item.get("doi") or "").strip()
+    url = str(item.get("source_url") or item.get("url") or "").strip()
+
+    segments: List[str] = []
+    if authors:
+        segments.append(f"{authors}.")
+    segments.append(f"{title}{{[{marker}]}}")
+
+    if marker == "M" and (pub_place or publisher):
+        place_pub = pub_place
+        if publisher:
+            place_pub = f"{pub_place}: {publisher}" if pub_place else publisher
+        if year:
+            place_pub = f"{place_pub}, {year}" if place_pub else year
+        if place_pub:
+            segments.append(f". {place_pub}")
+    else:
+        source = journal
+        if not source and "arxiv" in url.lower():
+            eprint = str(item.get("external_id") or url.rstrip("/").split("/")[-1] or "").strip()
+            source = f"arXiv:{eprint}" if eprint else "arXiv preprint"
+        if source:
+            segments.append(f". {source}" + (f", {year}" if year else ""))
+        elif year:
+            segments.append(f". {year}")
+
+    if doi:
+        segments.append(f". DOI: {doi}")
+    elif url and marker in ("J/OL", "EB/OL"):
+        segments.append(f". {url}")
+
+    return "".join(segments)
+
+
+def _collect_bibliography_items(
+    chapters: Dict[str, Any],
+    citation_map: Optional[List[Dict[str, Any]]] = None,
+    verified_references: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """合并结构化文献与 chapters.references 文本行，去重。"""
+    items: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _add(item: Dict[str, Any]) -> None:
+        if not item.get("title") and not item.get("paper_title"):
+            return
+        title = (item.get("title") or item.get("paper_title") or "").strip()
+        if title and not _is_valid_reference_text(title):
+            return
+        key = _reference_item_key(item)
+        if key:
+            if key in seen:
+                return
+            seen.add(key)
+        items.append(item)
+
+    for item in _structured_reference_items(citation_map, verified_references):
+        _add(dict(item))
+
+    refs = chapters.get("references", [])
+    if isinstance(refs, list):
+        for ref in refs:
+            if not ref or not isinstance(ref, str) or not _is_valid_reference_text(ref):
+                continue
+            parsed = parse_reference_line_to_item(ref)
+            if parsed.get("title"):
+                _add(parsed)
+            else:
+                _add({"note": ref.strip()})
+
+    return items
+
+
+def _build_thebibliography_section(items: List[Dict[str, Any]]) -> str:
+    """生成 \\begin{thebibliography}…\\bibitem{refN}…\\end{thebibliography}。"""
+    if not items:
+        return (
+            "\\begin{thebibliography}{99}\n"
+            "\\bibitem{ref1} 暂无已验证参考文献。\n"
+            "\\end{thebibliography}\n"
+        )
+    label_width = str(min(max(len(items), 9), 99))
+    lines = [f"\\begin{{thebibliography}}{{{label_width}}}"]
+    for idx, item in enumerate(items, start=1):
+        body = escape_latex(_format_reference_gbt7714(item))
+        lines.append(f"\\bibitem{{ref{idx}}} {body}")
+    lines.append("\\end{thebibliography}\n")
+    return "\n".join(lines)
+
+
 def _prepare_figure_files(
     plots: Optional[List[Dict[str, Any]]],
     output_dir: Path,
@@ -851,7 +1007,7 @@ def _prepare_figure_files(
         prepared.append(
             {
                 "relative_path": f"figures/{filename}",
-                "title": plot.get("title") or f"Chart {i + 1}",
+                "title": plot.get("caption") or plot.get("description") or plot.get("title") or f"Chart {i + 1}",
                 "label": f"fig:{safe_id}",
             }
         )
@@ -924,17 +1080,8 @@ def build_latex_document(
     if figure_files:
         body_parts.append(_build_figures_section(figure_files))
 
-    refs = chapters.get("references", [])
-    has_bib = bool(
-        [r for r in (refs if isinstance(refs, list) else []) if _is_valid_reference_text(str(r))]
-        or citation_map
-        or verified_references
-    )
-    if has_bib:
-        body_parts.append("\\nocite{*}\n\\bibliography{references}\n")
-    else:
-        body_parts.append("\\section{参考论文}\n\n")
-        body_parts.append("暂无已验证参考文献。\n")
+    bib_items = _collect_bibliography_items(chapters, citation_map, verified_references)
+    body_parts.append(_build_thebibliography_section(bib_items))
 
     body = "".join(body_parts)
     return (
@@ -1077,7 +1224,13 @@ def compile_latex_to_pdf(
     commands: List[List[str]] = [
         [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_filename],
     ]
-    if (work_dir / "references.bib").exists() and bibtex:
+    tex_source = tex_path.read_text(encoding="utf-8", errors="replace")
+    use_bibtex = (
+        bibtex
+        and (work_dir / "references.bib").exists()
+        and "\\bibliography{" in tex_source
+    )
+    if use_bibtex:
         commands.extend(
             [
                 [bibtex, "report"],
@@ -1149,12 +1302,7 @@ def export_report_via_latex(
     copy_template_assets(work_dir, template_dir)
 
     chapters = result.get("chapters", {}) or {}
-    bib_content, _ = _build_references_bib(chapters, citation_map, verified_references)
     bib_file: Optional[str] = None
-    if bib_content.strip():
-        bib_path = work_dir / "references.bib"
-        bib_path.write_text(bib_content, encoding="utf-8")
-        bib_file = str(bib_path)
 
     figure_files = _prepare_figure_files(result.get("plots"), work_dir)
     latex_content = build_latex_document(
@@ -1169,6 +1317,13 @@ def export_report_via_latex(
 
     tex_path = work_dir / "report.tex"
     tex_path.write_text(latex_content, encoding="utf-8")
+
+    stale_bib = work_dir / "references.bib"
+    if stale_bib.exists() and "\\bibliography{" not in latex_content:
+        try:
+            stale_bib.unlink()
+        except OSError:
+            pass
 
     compile_result = compile_latex_to_pdf(work_dir)
     if compile_result.get("success"):

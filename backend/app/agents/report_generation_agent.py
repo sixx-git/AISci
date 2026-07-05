@@ -627,7 +627,8 @@ class ReportGenerationAgent:
                 return {"citation_grounding": {"success": False, "error": str(e)}}
 
         try:
-            return asyncio.run(_run())
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(_run())
         except Exception as e:
             logger.warning(f"CitationGroundingSkill 异常: {e}")
             return {}
@@ -677,7 +678,8 @@ class ReportGenerationAgent:
                 return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
 
         try:
-            return asyncio.run(asyncio.wait_for(_run(), timeout=180))
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(asyncio.wait_for(_run(), timeout=180))
         except asyncio.TimeoutError:
             logger.warning("ReportQualityCheckSkill 超时 (180s)")
             return {"success": False, "data": {}, "error": "timeout after 180s", "warnings": [], "errors": ["timeout after 180s"]}
@@ -716,7 +718,8 @@ class ReportGenerationAgent:
                 return {"success": False, "data": {}, "error": str(e), "warnings": [], "errors": [str(e)]}
 
         try:
-            return asyncio.run(asyncio.wait_for(_run(), timeout=180))
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(asyncio.wait_for(_run(), timeout=180))
         except asyncio.TimeoutError:
             logger.warning("ReportReviewerSkill 超时 (180s)")
             return {"success": False, "data": {}, "error": "timeout after 180s", "warnings": [], "errors": ["timeout after 180s"]}
@@ -756,7 +759,8 @@ class ReportGenerationAgent:
                 return {"success": False, "error": str(e)}
 
         try:
-            return asyncio.run(_run())
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(_run())
         except Exception as e:
             logger.warning(f"CitationIntegrityCheckSkill 异常: {e}")
             return {}
@@ -1693,7 +1697,8 @@ class ReportGenerationAgent:
             return outputs
 
         try:
-            return asyncio.run(asyncio.wait_for(_run(), timeout=180))
+            from app.core.async_utils import run_coroutine_sync
+            return run_coroutine_sync(asyncio.wait_for(_run(), timeout=180))
         except asyncio.TimeoutError:
             logger.warning("ChartGeneration 超时 (180s)")
             return {"charts": [], "skill_outputs": {}}

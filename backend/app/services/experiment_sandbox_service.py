@@ -47,7 +47,6 @@ class ExperimentSandboxService:
         data_dir.mkdir(exist_ok=True)
 
         script_path = exp_dir / "analysis.py"
-        script_path.write_text(analysis_script or "", encoding="utf-8")
 
         linked_data: Optional[str] = None
         if csv_data_path and os.path.exists(csv_data_path):
@@ -59,6 +58,9 @@ class ExperimentSandboxService:
             except Exception as exc:
                 logger.warning(f"复制数据到沙箱失败: {exc}")
                 linked_data = csv_data_path
+
+        prepared_script = self._prepare_analysis_script(analysis_script or "", linked_data)
+        script_path.write_text(prepared_script, encoding="utf-8")
 
         wrapper_path = exp_dir / "_sandbox_runner.py"
         wrapper_path.write_text(self._build_wrapper(str(script_path), str(plots_dir)), encoding="utf-8")
@@ -209,6 +211,37 @@ class ExperimentSandboxService:
             return None, "subprocess", f"docker timeout: {exc}"
         except Exception as exc:
             return None, "subprocess", str(exc)
+
+    @staticmethod
+    def _prepare_analysis_script(script: str, data_path: Optional[str]) -> str:
+        """将 LLM 脚本中的硬编码 CSV 路径替换为沙箱环境变量。"""
+        import re
+
+        header = (
+            "# --- AISci sandbox preamble (auto-injected) ---\n"
+            "import os\n"
+            "_AISCI_DATA = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
+            "if not _AISCI_DATA:\n"
+            "    raise FileNotFoundError('沙箱未注入 AISCI_DATA_PATH，请上传或合并 CSV 后重试')\n"
+            "# --- end preamble ---\n\n"
+        )
+        body = script or ""
+        if data_path:
+            body = re.sub(
+                r"pd\.read_csv\s*\(\s*['\"][^'\"]+['\"]",
+                "pd.read_csv(_AISCI_DATA",
+                body,
+            )
+            body = re.sub(
+                r"read_csv\s*\(\s*['\"][^'\"]+['\"]",
+                "read_csv(_AISCI_DATA",
+                body,
+            )
+        if "AISCI_DATA_PATH" not in body and "CSV_DATA_PATH" not in body and "_AISCI_DATA" not in body:
+            body = header + body
+        elif "_AISCI_DATA" not in body:
+            body = header + body
+        return body
 
     @staticmethod
     def _build_wrapper(script_path: str, plots_dir: str) -> str:

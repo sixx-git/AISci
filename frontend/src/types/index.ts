@@ -879,9 +879,19 @@ export interface ReportGenerationResult {
 
 export interface ReportPlot {
   plot_id: string;
-  type: 'line' | 'bar' | 'scatter' | 'heatmap' | 'histogram' | 'box';
+  type: 'line' | 'bar' | 'scatter' | 'heatmap' | 'histogram' | 'box' | 'grouped_bar' | 'sandbox_plot';
   title: string;
   description: string;
+  /** 完整论文图注：实验条件、指标、对比结论 */
+  caption?: string;
+  experiment_condition?: string;
+  metric?: string;
+  metric_direction?: 'higher_is_better' | 'lower_is_better' | 'context_dependent';
+  baseline_comparison?: string;
+  x_label?: string;
+  y_label?: string;
+  has_legend?: boolean;
+  chart_kind?: 'experiment_result' | 'descriptive_stat';
   base64: string;
   url: string;
   file_path: string;

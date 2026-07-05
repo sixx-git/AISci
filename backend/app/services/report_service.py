@@ -447,14 +447,11 @@ class ReportService:
         from app.services.report_charts_service import generate_report_plots_from_project
         from app.services.report_compliance_service import reconcile_reference_check, parse_report_references
 
-        existing = list((db_report.extra_metadata or {}).get("plots") or [])
-        plots = existing
-        if not plots:
-            plots = generate_report_plots_from_project(
-                db_report.project_id,
-                self.db,
-                charts_dir,
-            )
+        plots = generate_report_plots_from_project(
+            db_report.project_id,
+            self.db,
+            charts_dir,
+        )
 
         refs = parse_report_references(db_report.references)
         lit_facts, citation_map, pipeline_verified = self._load_literature_bundle_for_report(
@@ -528,7 +525,9 @@ class ReportService:
             refs_list = [refs] if refs else []
 
         export_dir = get_reports_storage_dir() / file_id
-        charts_dir = str(export_dir / "charts")
+        from app.services.report_charts_service import get_public_charts_dir
+
+        charts_dir = str(get_public_charts_dir())
         plots, qc_output = self._refresh_report_plots_and_quality(
             db_report,
             enriched_chapters,
@@ -575,8 +574,10 @@ class ReportService:
                 else:
                     verified.append({"title": r.strip()})
 
+        from app.services.report_content_sanitizer import sanitize_report_result
+
         export_result = export_report_via_latex(
-            result=result,
+            result=sanitize_report_result(result),
             output_dir=str(export_dir),
             project_info={"title": db_report.paper_title},
             citation_map=citation_map or verified,

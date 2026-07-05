@@ -7,6 +7,8 @@ from pathlib import Path
 
 from app.services.latex_export_service import (
     _build_references_bib,
+    _build_thebibliography_section,
+    _format_reference_gbt7714,
     build_latex_document,
     copy_template_assets,
     escape_latex,
@@ -154,6 +156,63 @@ class TestLatexExportService(unittest.TestCase):
         self.assertEqual(len(keys), 1)
         self.assertIn("Cosmological N-body", bib)
         self.assertIn("author = {Wang, L}", bib)
+
+    def test_format_reference_gbt7714_chinese_book(self):
+        line = _format_reference_gbt7714(
+            {
+                "authors": ["姜启源", "谢金星", "叶俊"],
+                "title": "数学模型",
+                "publisher_location": "北京",
+                "publisher": "高等教育出版社",
+                "year": "2018",
+            }
+        )
+        self.assertIn("姜启源", line)
+        self.assertIn("数学模型{[M]}", line)
+        self.assertIn("北京: 高等教育出版社", line)
+        self.assertIn("2018", line)
+
+    def test_build_thebibliography_section(self):
+        block = _build_thebibliography_section(
+            [
+                {
+                    "authors": "Smith, J.",
+                    "title": "Planetary orbit stability",
+                    "journal": "ApJ",
+                    "year": "2020",
+                    "doi": "10.5555/test",
+                }
+            ]
+        )
+        self.assertIn("\\begin{thebibliography}", block)
+        self.assertIn("\\bibitem{ref1}", block)
+        self.assertIn("Planetary orbit stability", block)
+        self.assertNotIn("\\bibliography{references}", block)
+
+    def test_build_latex_document_uses_thebibliography(self):
+        result = {
+            "title": "测试",
+            "paper_title": "测试论文",
+            "paper_abstract": "摘要。",
+            "chapters": {
+                "problem_statement": "问题",
+                "rationale": "思路",
+                "technical_details": "技术",
+                "datasets": "数据",
+                "source": "源",
+                "target": "目标",
+                "methods": "方法",
+                "experiments": "实验",
+                "results": "结果",
+                "references": [
+                    "Smith, J. Planetary stability (2020). DOI: 10.5555/test",
+                ],
+            },
+        }
+        tex = build_latex_document(result)
+        self.assertIn("\\begin{thebibliography}", tex)
+        self.assertIn("\\bibitem{ref1}", tex)
+        self.assertNotIn("\\bibliography{references}", tex)
 
 
 if __name__ == "__main__":

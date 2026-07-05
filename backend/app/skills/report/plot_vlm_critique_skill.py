@@ -135,7 +135,7 @@ class PlotVlmCritiqueSkill(BaseSkill):
         if not has_axes:
             score -= 0.8
             issues.append("缺少轴标签元数据")
-        if not has_legend and plot.get("plot_type") in ("line", "bar", "scatter"):
+        if not has_legend and plot.get("plot_type") in ("line", "bar", "scatter", "grouped_bar"):
             score -= 0.4
             issues.append("建议补充图例")
         score = round(max(1.0, min(10.0, score)), 2)

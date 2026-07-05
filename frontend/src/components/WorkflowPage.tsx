@@ -495,7 +495,7 @@ export function WorkflowPage({
   const [staleWarning, setStaleWarning] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
-  const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
+  const [, setPipelineRunStatus] = useState<string | null>(null);
   const [loopConfig, setLoopConfig] = useState<LoopConfigState>(DEFAULT_LOOP_CONFIG);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);

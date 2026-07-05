@@ -1,5 +1,9 @@
 """报告正文净化测试。"""
-from app.services.report_content_sanitizer import sanitize_chapters, sanitize_report_result
+from app.services.report_content_sanitizer import (
+    sanitize_chapters,
+    sanitize_report_result,
+    strip_operational_bracket_sections,
+)
 
 
 def test_sanitize_removes_llm_agent_from_technical_details():
@@ -32,3 +36,43 @@ def test_sanitize_report_result():
     assert "千问" not in result["paper_abstract"]
     assert "向量检索" not in result["chapters"]["technical_details"]
     assert "LLM" not in result["markdown_content"]
+
+
+def test_strip_operational_bracket_sections():
+    raw = (
+        "主要使用 NASA Exoplanet Archive。\n\n"
+        "【推荐外部数据库/数据集】\n"
+        "- Zenodo dataset [$pending_download$]: html snippet\n\n"
+        "【多源数据查找与整合】\n"
+        "DataSpec 场景=general；已合并 CSV：3813 行。\n"
+        "数据发现完备性得分：83.3/100。\n\n"
+        "科学数据来源包括 TESS 光变曲线。"
+    )
+    cleaned = strip_operational_bracket_sections(raw)
+    assert "【" not in cleaned
+    assert "DataSpec" not in cleaned
+    assert "pending_download" not in cleaned
+    assert "NASA Exoplanet Archive" in cleaned
+    assert "TESS 光变曲线" in cleaned
+
+
+def test_sanitize_results_removes_pipeline_notes():
+    chapters = sanitize_chapters(
+        {
+            "results": {
+                "simulated_results": [
+                    "【整合数据集】data_finder 合并 CSV：3813 行；清洗 3813→3813 行。",
+                ],
+                "expected_results": [
+                    "小样验证未执行；上列为已上传/合并数据的描述性统计。",
+                    "预期通过 MCMC 获得 w 的后验约束。",
+                ],
+                "actual_results": [],
+            }
+        }
+    )
+    results = chapters["results"]
+    assert results["simulated_results"] == []
+    assert len(results["expected_results"]) == 1
+    assert "MCMC" in results["expected_results"][0]
+    assert "小样验证未执行" not in str(results)

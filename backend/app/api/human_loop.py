@@ -101,10 +101,13 @@ async def rerun_from_stage(
         )
 
         def _bg():
-            bg_db = SessionLocal()
+            import app.core.database as _db
+            from app.services.pipeline_service import get_pipeline_service
+
+            _db.init_db()
+            bg_db = _db.SessionLocal()
             try:
-                svc = get_pipeline_service(bg_db)
-                svc.execute_pipeline_run(new_run_id)
+                get_pipeline_service(bg_db).execute_pipeline_run(new_run_id)
             except Exception as exc:
                 logger.exception(f"Rerun 后台失败: {exc}")
             finally:

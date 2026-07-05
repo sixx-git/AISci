@@ -8,13 +8,16 @@ import { ErrorState } from '@/components/workspace/ErrorState';
 import {
   FlaskConical, CheckCircle, XCircle, Database,
   BarChart3, ListChecks, Target, BookOpen,
-  AlertTriangle, Lightbulb, FileText, Play,
+  AlertTriangle, Lightbulb, Play,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import experimentService from '@/services/experimentService';
+import { pipelineService } from '@/services/pipelineService';
+import humanLoopService from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
 import { getErrorMessage } from '@/lib/errors';
+import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import {
   categoryColor,
   categoryLabel,
@@ -30,6 +33,58 @@ interface ExperimentDesignPageProps {
   revalidateKey?: number;
   latestRunId?: string | null;
   selectedHypothesisId?: string | null;
+}
+
+async function resolvePipelineRunId(
+  projectId: string,
+  latestRunId?: string | null,
+): Promise<string | null> {
+  try {
+    const res = await pipelineService.getRuns(projectId);
+    if (res.code === 200 && res.data?.length) {
+      const completed = res.data.find((r) => r.status === 'completed');
+      if (completed?.run_id) return completed.run_id;
+    }
+  } catch {
+    /* ignore */
+  }
+  if (latestRunId) return latestRunId;
+  try {
+    const saved = localStorage.getItem(activeRunKey(projectId));
+    if (saved) return saved;
+  } catch {
+    /* ignore */
+  }
+  const res = await pipelineService.getRuns(projectId);
+  if (res.code === 200 && res.data?.length) {
+    return res.data[0].run_id;
+  }
+  return null;
+}
+
+function rememberActiveRun(projectId: string, runId: string) {
+  try {
+    localStorage.setItem(activeRunKey(projectId), runId);
+    localStorage.setItem(activeRunStatusKey(projectId), 'running');
+  } catch {
+    /* ignore */
+  }
+}
+
+async function pollPipelineUntilDone(runId: string): Promise<'completed' | 'failed' | 'timeout'> {
+  for (let i = 0; i < 120; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const res = await pipelineService.getStatus(runId);
+      if (res.code !== 200 || !res.data) continue;
+      const status = res.data.status;
+      if (status === 'completed') return 'completed';
+      if (status === 'failed') return 'failed';
+    } catch {
+      /* keep polling */
+    }
+  }
+  return 'timeout';
 }
 
 function VerifiabilityChecklist({ exp }: { exp: DetailedExperimentDesign }) {
@@ -110,12 +165,17 @@ function FlExperimentPlanSidebar({ experiment }: { experiment: DetailedExperimen
 function PrimaryHypothesisActions({
   onGenerate,
   onSmallValidation,
-  onOpenReport,
+  onOpenWorkflow,
+  generatingDesign,
+  runningValidation,
 }: {
   onGenerate: () => void;
   onSmallValidation: () => void;
-  onOpenReport: () => void;
+  onOpenWorkflow: () => void;
+  generatingDesign?: boolean;
+  runningValidation?: boolean;
 }) {
+  const busy = generatingDesign || runningValidation;
   return (
     <Card>
       <h4 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
@@ -123,15 +183,31 @@ function PrimaryHypothesisActions({
         Primary Hypothesis Actions
       </h4>
       <div className="flex flex-col gap-2">
-        <Button variant="primary" size="sm" icon={<Sparkles className="w-4 h-4" />} onClick={onGenerate}>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Sparkles className="w-4 h-4" />}
+          onClick={onGenerate}
+          isLoading={generatingDesign}
+          disabled={busy && !generatingDesign}
+        >
           生成实验设计
         </Button>
-        <Button variant="secondary" size="sm" icon={<Play className="w-4 h-4" />} onClick={onSmallValidation}>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Play className="w-4 h-4" />}
+          onClick={onSmallValidation}
+          isLoading={runningValidation}
+          disabled={busy && !runningValidation}
+        >
           运行小样验证
         </Button>
-        <Button variant="secondary" size="sm" icon={<FileText className="w-4 h-4" />} onClick={onOpenReport}>
-          进入研究报告
-        </Button>
+        {(generatingDesign || runningValidation) && (
+          <Button variant="secondary" size="sm" onClick={onOpenWorkflow}>
+            在工作流查看进度
+          </Button>
+        )}
       </div>
     </Card>
   );
@@ -151,6 +227,8 @@ export function ExperimentDesignPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [generatingDesign, setGeneratingDesign] = useState(false);
+  const [runningValidation, setRunningValidation] = useState(false);
 
   const selectedHypothesisId = _selectedHypothesisId
     || (() => {
@@ -184,21 +262,64 @@ export function ExperimentDesignPage({
       .finally(() => setLoading(false));
   }, [_projectId, _revalidateKey, _latestRunId, reloadTick]);
 
+  const handleOpenWorkflow = useCallback(() => {
+    if (_projectId) {
+      navigate(`/projects/${_projectId}?tab=workflow`);
+    }
+  }, [_projectId, navigate]);
+
+  const runPipelineStage = useCallback(async (stage: 'experiment_design' | 'small_validation') => {
+    if (!_projectId) {
+      showAlert('缺少项目 ID');
+      return;
+    }
+    const setBusy = stage === 'experiment_design' ? setGeneratingDesign : setRunningValidation;
+    setBusy(true);
+    try {
+      const parentRunId = await resolvePipelineRunId(_projectId, _latestRunId);
+      if (!parentRunId) {
+        showAlert('未找到 Pipeline 运行记录，请先到工作流页运行一次 Pipeline');
+        return;
+      }
+      const label = stage === 'experiment_design' ? '实验设计' : '小样验证';
+      showAlert(`正在启动「${label}」阶段…`);
+      const res = await humanLoopService.rerunFromStage({
+        project_id: _projectId,
+        run_id: parentRunId,
+        stage,
+        use_human_modified_output: true,
+        rerun_mode: 'single_stage',
+      });
+      if (res.code !== 200 || !res.data?.run_id) {
+        showAlert(res.message || `${label}启动失败`);
+        return;
+      }
+      const newRunId = res.data.run_id;
+      rememberActiveRun(_projectId, newRunId);
+      showAlert(`${label}已在后台运行，可在工作流页查看进度`);
+      const outcome = await pollPipelineUntilDone(newRunId);
+      if (outcome === 'completed') {
+        showAlert(`${label}已完成，页面数据已刷新`);
+        setReloadTick((t) => t + 1);
+      } else if (outcome === 'failed') {
+        showAlert(`${label}执行失败，请在工作流页查看错误详情`);
+      } else {
+        showAlert(`${label}仍在运行，请稍后在工作流页查看结果`);
+      }
+    } catch (err) {
+      showAlert(getErrorMessage(err, stage === 'experiment_design' ? '生成实验设计失败' : '运行小样验证失败'));
+    } finally {
+      setBusy(false);
+    }
+  }, [_projectId, _latestRunId, showAlert]);
+
   const handleGenerate = useCallback(() => {
-    showAlert('请先在工作流页面运行 Pipeline，完成 experiment_design 阶段后返回查看');
-  }, [showAlert]);
+    void runPipelineStage('experiment_design');
+  }, [runPipelineStage]);
 
   const handleSmallValidation = useCallback(() => {
-    showAlert('请先运行 Pipeline 的 small_validation 阶段');
-  }, [showAlert]);
-
-  const handleOpenReport = useCallback(() => {
-    if (_projectId) {
-      navigate(`/projects/${_projectId}?tab=reports`);
-    } else {
-      showAlert('请先进入项目工作台');
-    }
-  }, [_projectId, navigate, showAlert]);
+    void runPipelineStage('small_validation');
+  }, [runPipelineStage]);
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -451,7 +572,9 @@ export function ExperimentDesignPage({
                 <PrimaryHypothesisActions
                   onGenerate={handleGenerate}
                   onSmallValidation={handleSmallValidation}
-                  onOpenReport={handleOpenReport}
+                  onOpenWorkflow={handleOpenWorkflow}
+                  generatingDesign={generatingDesign}
+                  runningValidation={runningValidation}
                 />
                 {projectMode === 'federated_learning' && (
                   <FlExperimentPlanSidebar experiment={experiment} />

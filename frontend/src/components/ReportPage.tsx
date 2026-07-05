@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, Database, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -423,16 +423,15 @@ export function ReportPage({
             />
           </Card>
 
-          {/* ── 数据图表区域 ── */}
+          {/* ── 实验结果图表 ── */}
           {report.plots && report.plots.length > 0 && (
             <Card className="mt-4">
               <div className="flex items-center gap-2 mb-4">
                 <BarChart3 className="w-4 h-4 text-bp-green" />
                 <div>
-                  <h3 className="text-sm font-semibold text-bp-text">数据可视化</h3>
+                  <h3 className="text-sm font-semibold text-bp-text">实验结果图表</h3>
                   <p className="text-xs text-bp-muted">
-                    共 {report.plots.length} 张图表 · 
-                    {report.plots.filter(p => p.is_generated_from_real_data).length} 张基于真实数据
+                    共 {report.plots.length} 张 · 含实验条件、评估指标与基线对比说明
                   </p>
                 </div>
               </div>
@@ -443,30 +442,57 @@ export function ReportPage({
                     className="rounded-bp border border-bp-border bg-bp-base/60 overflow-hidden"
                   >
                     <div className="px-3 py-2 border-b border-bp-border/60 bg-bp-base/50">
-                      <p className="text-xs font-medium text-bp-text truncate">{plot.title}</p>
-                      {plot.description && (
-                        <p className="text-xs text-bp-muted mt-0.5 line-clamp-1">{plot.description}</p>
+                      <p className="text-xs font-medium text-bp-text">{plot.title}</p>
+                      {(plot.caption || plot.description) && (
+                        <p className="text-xs text-bp-muted mt-1 leading-relaxed line-clamp-4">
+                          {plot.caption || plot.description}
+                        </p>
                       )}
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <div className="mt-2 space-y-1">
+                        {plot.experiment_condition && (
+                          <p className="text-[11px] text-bp-muted">
+                            <span className="text-bp-text/80">实验条件：</span>
+                            {plot.experiment_condition}
+                          </p>
+                        )}
+                        {plot.metric && (
+                          <p className="text-[11px] text-bp-muted">
+                            <span className="text-bp-text/80">评估指标：</span>
+                            {plot.metric}
+                            {plot.metric_direction === 'higher_is_better' && '（越高越好）'}
+                            {plot.metric_direction === 'lower_is_better' && '（越低越好）'}
+                          </p>
+                        )}
+                        {plot.baseline_comparison && (
+                          <p className="text-[11px] text-bp-muted">
+                            <span className="text-bp-text/80">对比结论：</span>
+                            {plot.baseline_comparison}
+                          </p>
+                        )}
+                        {(plot.x_label || plot.y_label) && (
+                          <p className="text-[11px] text-bp-muted">
+                            <span className="text-bp-text/80">坐标轴：</span>
+                            {[plot.x_label, plot.y_label].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-bp-surface/50 text-bp-muted">
                           {plot.type}
                         </span>
                         {plot.is_generated_from_real_data ? (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-green/15 text-bp-green">
                             <CheckCircle2 className="w-2.5 h-2.5" />
-                            真实数据
+                            实验产出
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-yellow/15 text-bp-yellow">
                             <AlertTriangle className="w-2.5 h-2.5" />
-                            非真实数据
+                            待验证
                           </span>
                         )}
-                        {plot.source_dataset_id && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-cyan-tint text-bp-cyan">
-                            <Database className="w-2.5 h-2.5" />
-                            {plot.source_dataset_id.slice(0, 8)}
-                          </span>
+                        {plot.has_legend && (
+                          <span className="text-[11px] text-bp-muted">含图例</span>
                         )}
                       </div>
                     </div>
@@ -487,11 +513,6 @@ export function ReportPage({
                         <span className="text-xs text-bp-muted">图表不可用</span>
                       )}
                     </div>
-                    {plot.markdown_embed && (
-                      <div className="px-3 py-1.5 border-t border-bp-border/60 bg-bp-base/30">
-                        <code className="text-xs text-bp-muted break-all">{plot.markdown_embed}</code>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -504,16 +525,12 @@ export function ReportPage({
               <div className="flex items-start gap-3 p-2">
                 <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-medium text-bp-yellow mb-1">缺少真实数据，未生成图表</p>
-                  {hasNoDatasets ? (
-                    <p className="text-xs text-bp-yellow/70">
-                      请通过"数据集"页面上传 CSV/Excel 等结构化数据文件，以启用统计图表生成。
-                    </p>
-                  ) : (
-                    <p className="text-xs text-bp-yellow/70">
-                      当前数据集可能不包含可分析的结构化数据，无法生成统计图表。
-                    </p>
-                  )}
+                  <p className="text-xs font-medium text-bp-yellow mb-1">暂无实验结果图表</p>
+                  <p className="text-xs text-bp-yellow/70 leading-relaxed">
+                    报告图表需来自小样验证或沙箱实验（含方法对比指标、误差棒与显著性），
+                    不再从原始 FITS/CSV 自动生成均值/标准差描述图。
+                    请先完成 Pipeline「小样验证」阶段，并确保分析脚本输出 metrics.json 与实验图。
+                  </p>
                 </div>
               </div>
             </Card>

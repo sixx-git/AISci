@@ -1,10 +1,46 @@
 """
-报告正文净化：移除与具体科学问题无关的平台/大模型/智能体描述。
+报告正文净化：移除与具体科学问题无关的平台/大模型/智能体描述，
+以及 Pipeline 回填的【】运维记录块。
 """
 from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional
+
+_BRACKET_SECTION = re.compile(r"^【[^】]+】")
+
+# Pipeline / data_finder 回填块内的续行，或独立的运维行
+_OPERATIONAL_LINE_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"^【[^】]+】",
+        r"^[-*•]\s.*\[\$pending_download\$",
+        r"^[-*•]\s.*\(Zenodo\).*\[merged\]",
+        r"^<p>",
+        r"^DataSpec\s",
+        r"数据发现完备性得分",
+        r"DataSpec\s*字段覆盖率",
+        r"^已合并\s*CSV",
+        r"^从\s*\d+\s*个\s*PDF",
+        r"^待补充：",
+        r"page=None",
+        r"quality=\d",
+        r"method=\$?user_upload",
+        r"cite=\$?tbl_",
+        r"\[\$user_upload",
+        r"data_finder",
+        r"用户上传/.*解析表",
+        r"未从 PDF 抽取",
+        r"未抽取到结构化",
+        r"小样验证未执行",
+        r"图表 extraction manifest",
+        r"^\['小样验证",
+        r"^\[\'小样验证",
+        r"含用户上传解析表",
+        r"Table page None",
+        r"\$tbl_[a-f0-9]+",
+    ]
+]
 
 # 整行删除：明显属于系统实现而非科学内容
 _DROP_LINE_PATTERNS = [
@@ -50,6 +86,86 @@ _SCIENCE_FACING_CHAPTER_KEYS = (
 )
 
 
+def _is_operational_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    return any(p.search(stripped) for p in _OPERATIONAL_LINE_PATTERNS)
+
+
+def _is_operational_block_continuation(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if _BRACKET_SECTION.match(stripped):
+        return True
+    if stripped.startswith(("-", "*", "•")):
+        return True
+    return _is_operational_line(line)
+
+
+def strip_operational_bracket_sections(text: str) -> str:
+    """移除【运维标题】及其下属 Pipeline / data_finder 运行记录。"""
+    if not text:
+        return text
+
+    out_lines: List[str] = []
+    skipping = False
+
+    for line in text.replace("\\n", "\n").splitlines():
+        stripped = line.strip()
+        if _BRACKET_SECTION.match(stripped):
+            skipping = True
+            continue
+        if skipping:
+            if _is_operational_block_continuation(line):
+                continue
+            skipping = False
+        if _is_operational_line(line):
+            continue
+        out_lines.append(line)
+
+    collapsed: List[str] = []
+    prev_blank = False
+    for line in out_lines:
+        blank = not line.strip()
+        if blank and prev_blank:
+            continue
+        collapsed.append(line)
+        prev_blank = blank
+    return "\n".join(collapsed).strip()
+
+
+def _sanitize_results_chapter(results: Any) -> Any:
+    if not isinstance(results, dict):
+        return strip_operational_bracket_sections(sanitize_text(results))
+
+    cleaned: Dict[str, Any] = {}
+    for key, val in results.items():
+        if isinstance(val, list):
+            items: List[Any] = []
+            seen: set[str] = set()
+            for item in val:
+                text = strip_operational_bracket_sections(
+                    sanitize_text(item, preserve_platform_terms=False)
+                ).strip()
+                if not text or _is_operational_line(text):
+                    continue
+                if text in seen:
+                    continue
+                seen.add(text)
+                items.append(text)
+            cleaned[key] = items
+        elif isinstance(val, str):
+            text = strip_operational_bracket_sections(
+                sanitize_text(val, preserve_platform_terms=False)
+            ).strip()
+            cleaned[key] = text if text and not _is_operational_line(text) else []
+        else:
+            cleaned[key] = val
+    return cleaned
+
+
 def _clean_line(line: str, *, preserve_platform_terms: bool = False) -> Optional[str]:
     stripped = line.strip()
     if not stripped:
@@ -89,6 +205,7 @@ def sanitize_text(text: Any, *, preserve_platform_terms: bool = False) -> str:
         return "\n".join(parts)
 
     raw = str(text).replace("\\n", "\n")
+    raw = strip_operational_bracket_sections(raw)
     out_lines: List[str] = []
     for line in raw.splitlines():
         cleaned = _clean_line(line, preserve_platform_terms=preserve_platform_terms)
@@ -106,7 +223,9 @@ def sanitize_chapters(chapters: Dict[str, Any]) -> Dict[str, Any]:
         if key not in cleaned:
             continue
         val = cleaned[key]
-        if isinstance(val, dict):
+        if key == "results":
+            cleaned[key] = _sanitize_results_chapter(val)
+        elif isinstance(val, dict):
             cleaned[key] = {k: sanitize_text(v) for k, v in val.items()}
         elif key == "technical_details":
             cleaned[key] = sanitize_text(val, preserve_platform_terms=True)

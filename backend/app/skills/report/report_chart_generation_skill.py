@@ -65,13 +65,17 @@ class ReportChartGenerationSkill(BaseSkill):
             }
             return result
 
-        if not data_rows:
+        has_embedded_series = any(
+            isinstance(s.get("series"), list) and len(s.get("series") or []) >= 2
+            for s in plot_specs
+        )
+        if not data_rows and not has_embedded_series:
             result.add_warning("无真实数据，未生成图表")
             result.data = {
                 "charts": [],
                 "total_charts": 0,
                 "output_dir": output_dir,
-                "warning": "无真实数据，未生成图表。请上传 CSV/Excel 等结构化数据集以启用图表生成。",
+                "warning": "无实验指标或沙箱图表，未生成描述性统计图。请先完成小样验证或沙箱实验。",
             }
             result.metadata = {
                 "format": output_format,
@@ -149,12 +153,16 @@ class ReportChartGenerationSkill(BaseSkill):
             x_label = spec.get("x_label", "")
             y_label = spec.get("y_label", "")
             if x_label:
-                ax.set_xlabel(x_label)
+                ax.set_xlabel(x_label, fontsize=11)
             if y_label:
-                ax.set_ylabel(y_label)
-            ax.grid(True, alpha=0.3)
+                ax.set_ylabel(y_label, fontsize=11)
+            ax.grid(True, alpha=0.3, axis="y")
 
-            plt.tight_layout()
+            caption = spec.get("caption") or description
+            if caption and len(caption) <= 120:
+                fig.text(0.5, 0.01, caption, ha="center", va="bottom", fontsize=8, wrap=True)
+
+            plt.tight_layout(rect=[0, 0.04 if caption else 0, 1, 1])
 
             file_path = ""
             base64_str = ""
@@ -175,15 +183,25 @@ class ReportChartGenerationSkill(BaseSkill):
 
             plt.close(fig)
 
+            caption = spec.get("caption") or description
             return {
                 "plot_id": chart_id,
                 "type": chart_type,
                 "title": title,
                 "description": description,
+                "caption": caption,
+                "experiment_condition": spec.get("experiment_condition", ""),
+                "metric": spec.get("metric", ""),
+                "metric_direction": spec.get("metric_direction", ""),
+                "baseline_comparison": spec.get("baseline_comparison", ""),
+                "x_label": x_label,
+                "y_label": y_label,
+                "has_legend": spec.get("has_legend", False),
+                "chart_kind": spec.get("chart_kind", "experiment_result"),
                 "base64": base64_str,
                 "url": url,
                 "file_path": file_path,
-                "markdown_embed": f"![{title}]({url})" if url else "",
+                "markdown_embed": f"![{caption or title}]({url})" if url else "",
                 "source_dataset_id": source_dataset_id,
                 "is_generated_from_real_data": is_from_real,
             }
@@ -239,6 +257,63 @@ class ReportChartGenerationSkill(BaseSkill):
                 ax.plot(range(len(y_data)), y_data, marker="o", markersize=3, linewidth=1.5)
                 return True
             return False
+
+        elif chart_type == "grouped_bar":
+            series = spec.get("series") or []
+            if len(series) < 2:
+                return False
+            n_groups = max(len(s.get("values") or []) for s in series)
+            if n_groups < 1:
+                return False
+            x_labels = [
+                str((series[0].get("values") or [{}])[gi].get("x", f"G{gi + 1}"))
+                for gi in range(n_groups)
+            ]
+            n_series = len(series)
+            width = 0.75 / max(n_series, 1)
+            x = np.arange(n_groups)
+            colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3"]
+            for si, s in enumerate(series):
+                vals_raw = s.get("values") or []
+                vals = [float(v.get("y", 0)) for v in vals_raw[:n_groups]]
+                while len(vals) < n_groups:
+                    vals.append(0.0)
+                errs = [
+                    float(v.get("err")) if v.get("err") is not None else None
+                    for v in vals_raw[:n_groups]
+                ]
+                while len(errs) < n_groups:
+                    errs.append(None)
+                offset = (si - (n_series - 1) / 2) * width
+                ax.bar(
+                    x + offset,
+                    vals,
+                    width,
+                    label=str(s.get("name") or f"方法{si + 1}"),
+                    color=colors[si % len(colors)],
+                    alpha=0.88,
+                    yerr=errs if any(e is not None for e in errs) else None,
+                    capsize=4,
+                    error_kw={"elinewidth": 1.2},
+                )
+            ax.set_xticks(x)
+            ax.set_xticklabels(x_labels, rotation=30, ha="right", fontsize=9)
+            ax.legend(loc="best", fontsize=9, framealpha=0.9)
+            for sig in spec.get("significance") or []:
+                if not isinstance(sig, dict):
+                    continue
+                p_val = sig.get("p_value")
+                if p_val is not None and float(p_val) < 0.05:
+                    y_max = ax.get_ylim()[1]
+                    ax.text(
+                        0.5,
+                        y_max * 0.95,
+                        "* p<0.05",
+                        ha="center",
+                        fontsize=10,
+                        color="crimson",
+                    )
+            return True
 
         elif chart_type == "bar":
             if y_key:

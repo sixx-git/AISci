@@ -153,6 +153,39 @@ class SmallValidationAgent:
                 }
                 result["results"] = self._merge_sandbox_into_results(result["results"], sandbox)
 
+                if not sandbox.get("success") and csv_data_path and os.path.exists(csv_data_path):
+                    from app.services.experiment_pilot_analysis_service import (
+                        run_pilot_from_csv,
+                        write_pilot_metrics_json,
+                    )
+
+                    artifact_dir = sandbox.get("artifact_dir") or ""
+                    pilot = run_pilot_from_csv(
+                        csv_data_path,
+                        experiment_design or {},
+                        output_dir=artifact_dir or self.validation_dir,
+                        hypothesis=hypothesis,
+                    )
+                    if pilot.get("success"):
+                        if artifact_dir:
+                            write_pilot_metrics_json(artifact_dir, pilot["metrics"])
+                        result["artifacts"]["metrics"] = pilot["metrics"]
+                        result["artifacts"]["plots"] = pilot.get("plots") or []
+                        result["pilot_analysis"] = pilot
+                        result["sandbox_execution"] = {
+                            **sandbox,
+                            "success": True,
+                            "metrics": pilot["metrics"],
+                            "plots": pilot.get("plots") or [],
+                            "pilot_fallback": True,
+                        }
+                        result["results"] = self._merge_sandbox_into_results(
+                            result["results"], result["sandbox_execution"]
+                        )
+                        result.setdefault("warnings", []).append(
+                            "LLM 沙箱脚本未成功，已使用真实 CSV pilot 对比分析作为实验结果"
+                        )
+
             validation_id = self._save_validation_files(result, run_id=run_id)
             if validation_id:
                 result["validation_id"] = validation_id

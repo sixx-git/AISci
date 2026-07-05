@@ -39,7 +39,7 @@ export function DataUploadGateFloating({
                 前往数据集页面
               </Button>
               {onDismiss && (
-                <Button size="sm" variant="ghost" onClick={onDismiss}>
+                <Button size="sm" variant="secondary" onClick={onDismiss}>
                   稍后处理
                 </Button>
               )}

@@ -2,10 +2,12 @@
 FastAPI 应用入口
 """
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.database import create_tables
@@ -34,6 +36,11 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(v1_router, prefix="/api/v1")
+
+# 静态资源：/storage/* -> backend/storage/*
+_storage_root = Path(__file__).resolve().parent.parent / "storage"
+_storage_root.mkdir(parents=True, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=str(_storage_root)), name="storage")
 
 
 # ============= 基础接口 =============
