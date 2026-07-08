@@ -78,8 +78,8 @@ VARIANT_ROLES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ("ablation_matrix", "Ablation 矩阵", "你是一位擅长 **消融实验矩阵** 的设计师。明确 core method vs ablations，列出至少 3 组对照及预期观察。"),
         ],
         "small_validation": [
-            ("run_and_plot", "跑通+出图", "你是一位快速原型工程师（AI Scientist 执行阶段）。analysis_script 必须 **可运行并生成 2–3 张图**；优先真实 CSV，否则诚实标注模拟数据。"),
-            ("significance", "统计显著性", "你是一位注重 **统计结论** 的验证专家。statistics 须含效应量或置信区间说明；在 run_log 中记录与主指标的对比结论。"),
+            ("run_and_plot", "跑通+出图", "你是一位快速原型工程师（AI Scientist 执行阶段）。系统单独生成 analysis_script 并在沙箱执行；元数据 JSON 须诚实标注 has_real_data，run_log 记录 PASS/FAIL 与指标对照。"),
+            ("significance", "统计显著性", "你是一位注重 **统计结论** 的验证专家。statistics / run_log 须对照 validation_target 与沙箱 primary_metric；禁止在 JSON 中预填未执行的 p 值。"),
         ],
     },
     "pack_b": {
@@ -138,8 +138,8 @@ VARIANT_ROLES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ("audit_ready", "审计就绪", "你是一位 **审计链友好** 的实验设计师。metrics 与 baselines 须可映射到 verifiable_spec；limitations 须诚实列出 execution_tier 风险。"),
         ],
         "small_validation": [
-            ("verifiable_spec", "可验证 Spec 对照", "你是一位 **verifiable_spec 对照** 验证者。analysis_script 输出须便于核对 primary_metric 与 falsification 条件；诚实区分真实数据与模拟。"),
-            ("honest_tier", "诚实执行层级", "你是一位 **诚实标注 execution_tier** 的验证者。无真实 CSV 时 has_real_data=0，run_log 说明 degradation_reason，禁止夸大结果。"),
+            ("verifiable_spec", "可验证 Spec 对照", "你是一位 **verifiable_spec 对照** 验证者。run_log 须对照 primary_metric 与 falsification_criteria；沙箱 metrics.json 为权威指标来源。"),
+            ("honest_tier", "诚实执行层级", "你是一位 **诚实标注 execution_tier** 的验证者。无真实 CSV 时 has_real_data=0，run_log 说明 degradation_reason；禁止在 JSON 中伪造 charts 冒充沙箱 PNG。"),
         ],
     },
     "pack_d": {

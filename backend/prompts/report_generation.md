@@ -34,8 +34,17 @@
 ### 实验设计
 {{experiment_design}}
 
-### 小样验证
+### 小样验证（`small_validation` 阶段输出，JSON 注入）
 {{small_validation}}
+
+**字段结构（撰写 `results` 章节时须遵守）：**
+- `has_real_data`：是否使用真实 CSV
+- `artifacts.plots[]`：沙箱/pilot 实验图（`plot_id`、`title`、`source`: `sandbox_execution` | `pilot_analysis`）
+- `sandbox_execution`：`success`、`output_complete`、`sandbox_incomplete`、`metrics`（含 `primary_metric`）、`plots`
+- `results.actual_results` / `simulated_results` / `expected_results`：须区分真实、模拟与预期
+- `pilot_analysis`（可选）：沙箱不完整时的 CSV 对比补偿
+
+**红线：** 仅引用 `artifacts.plots` 或 `sandbox_execution.plots` / `pilot_analysis.plots` 作为实验图；**禁止**用 preliminary EDA 描述统计图冒充实验结果。若 `sandbox_incomplete=true` 且无 pilot 图，在 `results` 中写明「实验图待补全」而非编造数值。
 
 ### 已验证的引用列表
 {{verified_references}}
@@ -89,7 +98,7 @@
 - **datasets / source / target**：分开写；缺真实数据须明确说明，禁止伪造。
 - **methods**：可执行、**可验证**的实验步骤，须与假设及 `research_object` 对应；**禁止**写 Pipeline 内部阶段。
 - **experiments**：JSON 对象含 baselines、metrics、experimental_setup、ablation_study、validation_protocol。
-- **results**：JSON 或文本区分 actual_results / simulated_results / expected_results / limitations。
+- **results**：JSON 或文本区分 actual_results / simulated_results / expected_results / limitations；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`，区分 pilot_fallback 与完整沙箱产出
 - **references**：仅 citation_map / literature_facts 可验证条目；禁止编造。
 
 **VFL 场景**：experiments 的 baselines/metrics 须符合 vertical_fl 要求（见原赛题规范）。

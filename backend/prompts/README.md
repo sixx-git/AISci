@@ -10,7 +10,9 @@
 | [hypothesis_generation.md](./hypothesis_generation.md) | `hypothesis_generation` | HypothesisGenerationAgent | 候选假设 + supporting_fact_ids + 数据字段引用 |
 | [hypothesis_review.md](./hypothesis_review.md) | `hypothesis_review` | HypothesisReviewAgent | 五维评分、修改建议 |
 | [experiment_design.md](./experiment_design.md) | `experiment_design` | ExperimentDesignAgent | 实验方案、指标、基线、步骤 |
-| [small_validation.md](./small_validation.md) | `small_validation` | SmallValidationAgent | 小样验证脚本、统计、图表 |
+| [small_validation.md](./small_validation.md) | `small_validation` | SmallValidationAgent | JSON 元数据 + 沙箱 `artifacts`（metrics/plots） |
+| [pro_con_con_challenge.md](./pro_con_con_challenge.md) | `hypothesis_review` | ProConAdversarialService | 反方质疑 `challenges[]` |
+| [pro_con_evolution.md](./pro_con_evolution.md) | `hypothesis_review` | ProConAdversarialService | 正方演化 `evolution` |
 | [report_generation.md](./report_generation.md) | `report_generation` | ReportGenerationAgent | 12 字段 Markdown / LaTeX 报告 |
 
 ## 与闭环能力的衔接

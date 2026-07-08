@@ -1,7 +1,7 @@
 > **Pipeline 阶段**: `hypothesis_review`  
-> **调用方**: HypothesisReviewAgent / EnsembleReview  
-> **输出**: reviews[]（五维评分）、suggestions  
-> **说明**: 评审结合 supporting_fact_ids 与 evidence_level；可与 verifiable_spec 检查、假设树剪枝联动。
+> **调用方**: HypothesisReviewAgent（本 Prompt）→ 系统追加 EnsembleReview / 红蓝对抗  
+> **输出**: `reviews[]`（五维评分）、`summary`  
+> **说明**: 评审结合 `supporting_fact_ids`、`evidence_level`、`validation_target`、`verifiable_spec`；`skill_outputs.ensemble_review` 与 `skill_outputs.pro_con_adversarial` 由系统在 LLM 输出后自动合并，**无需在本 JSON 中输出**。
 
 
 > **范式预设**: 由 `generate_prompt_presets.py` 生成；应用后写入项目级覆盖。
@@ -13,17 +13,29 @@
 ## 任务要求
 对输入的候选假设列表进行评审，每条假设从以下 5 个维度评分（0-10 分）：
 
-1. scientific_value（科学价值）：该假设对推动领域发展的重要性
-2. novelty（创新性）：该假设与现有研究的区别和创新点
-3. testability（可测试性）：该假设通过实验/分析验证的可行性
-4. data_availability（数据可用性）：验证该假设所需数据的可获得性
-5. cost_risk（成本风险）：验证该假设的成本、时间和风险程度
+1. **scientific_value**（科学价值）：该假设对推动领域发展的重要性
+2. **novelty**（创新性）：该假设与现有研究的区别和创新点
+3. **testability**（可测试性）：结合 `validation_target`、`verifiable_spec.falsification_criteria` 评估可检验程度
+4. **data_availability**（数据可用性）：结合 `required_data`、`dataset_field_refs`、`supporting_fact_ids` 评估数据可获得性
+5. **cost_risk**（成本风险）：验证该假设的成本、时间和风险程度
+
+## 输入字段说明（每条候选假设可能包含）
+- `hypothesis`：假设陈述
+- `rationale` / `novelty` / `testability` / `required_data` / `possible_method` / `risk`
+- `supporting_fact_ids`：文献 fact_id 列表（须在事实白名单内）
+- `evidence_level`：`high` | `medium` | `low`
+- `validation_target`：可观测主指标（如 Accuracy、F1、AUC、RMSE）
+- `expected_measurable_effect`：可量化预期效果
+- `verifiable_spec.falsification_criteria`：可证伪条件（若有）
 
 ## 重要原则
-- 评分理由必须具体，结合假设内容进行分析
-- 指出低分原因（如果某项评分<6分）
-- 给出修改建议
-- 按综合得分（加权或平均分）从高到低排序
+- 评分理由必须具体，结合假设内容与上述字段分析
+- `evidence_level=low` 或 `supporting_fact_ids` 为空时，`data_availability` 与 `testability` 从严评分
+- `validation_target` 空泛（如「性能提升」）时，`testability` 不得超过 5 分
+- 指出低分原因（如果某项评分 < 6 分），写入 `low_score_reason`
+- 给出可操作的修改建议
+- `reviews` 按 `overall_score` 从高到低排序
+- `hypothesis_index` 必须与输入列表的 0-based 索引一致
 
 ## 评分标准
 - 9-10 分：优秀，非常突出
@@ -36,7 +48,8 @@
 {{hypotheses_list}}
 
 ## 输出格式要求
-请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
+请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记。**仅输出 `reviews` 与 `summary`**，不要输出 `skill_outputs`、`primary_index`、`ensemble_review`（由系统后处理）：
+
 {
   "reviews": [
     {
@@ -55,13 +68,13 @@
         },
         "testability": {
           "score": 7,
-          "reason": "可以通过对照实验验证，但需要较大样本量",
+          "reason": "validation_target 明确为 F1-score，具备对照实验路径",
           "low_score_reason": null
         },
         "data_availability": {
           "score": 5,
           "reason": "需要特定数据集，获取难度中等",
-          "low_score_reason": "数据获取成本较高，可能需要合作"
+          "low_score_reason": "supporting_fact_ids 较少，data_availability 受限"
         },
         "cost_risk": {
           "score": 6,
@@ -70,9 +83,9 @@
         }
       },
       "overall_score": 7.0,
-      "suggestions": "建议1：先进行小规模预实验验证可行性；建议2：寻找公开数据集或合作获取数据；建议3：考虑简化实验设计降低风险",
-      "strengths": ["创新性强", "科学价值高"],
-      "weaknesses": ["数据获取困难", "成本风险较高"]
+      "suggestions": "建议1：补充 supporting_fact_ids；建议2：细化 expected_measurable_effect；建议3：在 verifiable_spec 中写明 falsification 条件",
+      "strengths": ["创新性强", "validation_target 具体"],
+      "weaknesses": ["证据链薄弱", "成本风险较高"]
     }
   ],
   "summary": "对所有假设的总体评价和推荐建议"

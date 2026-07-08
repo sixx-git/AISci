@@ -273,13 +273,14 @@ class ProConAdversarialService:
             for c in all_challenges[:8]
             if isinstance(c, dict)
         )
-        prompt = (
-            f"研究问题：{research_question}\n\n"
-            f"正方假设：{hypothesis.get('hypothesis', '')}\n\n"
-            f"反方质疑：\n{challenge_lines}\n\n"
-            "请输出 JSON：{\"evolved_rationale\": \"...\", \"revision_points\": [\"...\"], "
-            "\"hypothesis_patch\": \"若需微调假设表述则给出，否则为空字符串\", "
-            "\"remaining_risks\": [\"...\"]}"
+        prompt_loader = get_prompt_loader()
+        prompt = prompt_loader.render_template(
+            "pro_con_evolution",
+            {
+                "research_question": research_question or "（未指定）",
+                "hypothesis": hypothesis.get("hypothesis", ""),
+                "challenges_block": challenge_lines or "（无有效质疑）",
+            },
         )
         schema = {
             "evolved_rationale": "整合反方质疑后的理论依据",
