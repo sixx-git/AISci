@@ -16,6 +16,9 @@ import hypothesisService from '@/services/hypothesisService';
 import scienceIterationService from '@/services/scienceIterationService';
 import { pipelineService } from '@/services/pipelineService';
 import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
+import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
+import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
+import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
 import { useToast } from '@/hooks/useToast';
 import { getErrorMessage } from '@/lib/errors';
 import { mapBackendEvidenceToItem, mapBackendHypothesisToDetailed } from '@/lib/mappers/hypothesisMapper';
@@ -73,6 +76,13 @@ export function HypothesesPage({
   const [iteratingId, setIteratingId] = useState<string | null>(null);
   const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+
+  const {
+    proCon: proConAdversarial,
+    ensemble: ensembleReview,
+    adversarialMode,
+    loading: reviewExtrasLoading,
+  } = useHypothesisReviewExtras(_projectId, _latestRunId, _revalidateKey);
 
   useEffect(() => {
     if (!_projectId) {
@@ -332,6 +342,28 @@ export function HypothesesPage({
       {alertMsg && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan animate-pulse">
           {alertMsg}
+        </div>
+      )}
+
+      {!reviewExtrasLoading && (proConAdversarial || ensembleReview) && (
+        <div className="space-y-4 mb-6">
+          {proConAdversarial && (
+            <Card
+              title="红蓝对抗审查"
+              subtitle={
+                adversarialMode === 'multi_group'
+                  ? '假设评估阶段 · 多研究组组间攻防'
+                  : '假设评估阶段 · 正方多智能体 vs 反方质疑'
+              }
+            >
+              <ProConAdversarialPanel data={proConAdversarial} />
+            </Card>
+          )}
+          {ensembleReview && (
+            <Card title="集成评审" subtitle="含反方质疑智能体权重（con_challenger）">
+              <EnsembleReviewPanel review={ensembleReview} />
+            </Card>
+          )}
         </div>
       )}
 

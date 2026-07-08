@@ -24,6 +24,9 @@ import {
   mapBackendExperimentDesignToDetailed,
 } from '@/lib/mappers/experimentDesignMapper';
 import { selectedHypothesisKey } from '@/lib/storageKeys';
+import { navigateToProjectTab } from '@/lib/projectNavigation';
+import { AdversarialReviewSummary } from '@/components/AdversarialReviewSummary';
+import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
 import type { DetailedExperimentDesign } from '@/types';
 
 interface ExperimentDesignPageProps {
@@ -230,6 +233,12 @@ export function ExperimentDesignPage({
   const [generatingDesign, setGeneratingDesign] = useState(false);
   const [runningValidation, setRunningValidation] = useState(false);
 
+  const { proCon: proConAdversarial, loading: reviewExtrasLoading } = useHypothesisReviewExtras(
+    _projectId,
+    _latestRunId,
+    _revalidateKey,
+  );
+
   const selectedHypothesisId = _selectedHypothesisId
     || (() => {
       try { return _projectId ? localStorage.getItem(selectedHypothesisKey(_projectId)) : null; }
@@ -336,6 +345,15 @@ export function ExperimentDesignPage({
       {alertMsg && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan animate-pulse">
           {alertMsg}
+        </div>
+      )}
+
+      {!reviewExtrasLoading && proConAdversarial && _projectId && (
+        <div className="mb-4">
+          <AdversarialReviewSummary
+            data={proConAdversarial}
+            onViewDetail={() => navigateToProjectTab(navigate, _projectId, 'hypotheses')}
+          />
         </div>
       )}
 
