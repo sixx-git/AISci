@@ -3,7 +3,7 @@ import { Settings2, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { cn } from '@/lib/utils';
-import type { PipelineRunMode, QualityTrendEntry } from '@/types';
+import type { PipelineRunMode, QualityTrendEntry, AdversarialMode } from '@/types';
 
 export interface LoopConfigState {
   pipelineMode: PipelineRunMode;
@@ -19,6 +19,9 @@ export interface LoopConfigState {
   enableFederatedCampaign: boolean;
   federatedCampaignMax: number;
   sandboxUseDocker: boolean;
+  enableProConAdversarial: boolean;
+  adversarialMode: AdversarialMode;
+  conChallengeMaxRounds: number;
 }
 
 export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
@@ -35,6 +38,9 @@ export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   enableFederatedCampaign: true,
   federatedCampaignMax: 2,
   sandboxUseDocker: false,
+  enableProConAdversarial: true,
+  adversarialMode: 'single_group',
+  conChallengeMaxRounds: 2,
 };
 
 export function loopConfigToRunOptions(config: LoopConfigState): Record<string, unknown> {
@@ -54,6 +60,9 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
     sandbox_use_docker: config.sandboxUseDocker,
     enable_hf_auto_import: true,
     enable_hitl_gate: false,
+    enable_pro_con_adversarial: config.enableProConAdversarial,
+    adversarial_mode: config.adversarialMode,
+    con_challenge_max_rounds: config.conChallengeMaxRounds,
   };
 }
 
@@ -228,6 +237,53 @@ export function LoopConfigPanel({
                 className="input-field py-1.5 px-2 text-sm w-16"
               />
             </Field>
+          </>
+        )}
+
+        <label className="flex items-center gap-2 text-xs text-bp-muted cursor-pointer pb-1">
+          <input
+            type="checkbox"
+            checked={value.enableProConAdversarial}
+            onChange={(e) =>
+              patch({
+                enableProConAdversarial: e.target.checked,
+                adversarialMode: e.target.checked ? value.adversarialMode : 'off',
+              })
+            }
+            disabled={disabled}
+            className="rounded border-bp-border"
+          />
+          红蓝对抗（正方/反方）
+        </label>
+
+        {value.enableProConAdversarial && (
+          <>
+            <Field label="对抗模式">
+              <select
+                value={value.adversarialMode}
+                onChange={(e) => patch({ adversarialMode: e.target.value as AdversarialMode })}
+                disabled={disabled}
+                className="input-field py-1.5 px-2 text-sm min-w-[140px]"
+              >
+                <option value="single_group">单研究组</option>
+                <option value="multi_group">多研究组（组间攻防）</option>
+              </select>
+            </Field>
+            {value.adversarialMode === 'single_group' && (
+              <Field label="反方轮次">
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={value.conChallengeMaxRounds}
+                  onChange={(e) =>
+                    patch({ conChallengeMaxRounds: Math.max(1, Math.min(4, Number(e.target.value) || 2)) })
+                  }
+                  disabled={disabled}
+                  className="input-field py-1.5 px-2 text-sm w-16"
+                />
+              </Field>
+            )}
           </>
         )}
 

@@ -1039,7 +1039,7 @@ class PipelineService:
             return self._exec_report_generation(results, self._build_pipeline_run_info(), project_mode)
 
         self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
-        final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+        final_report_id = self._persist_pipeline_report(project_id, results)
         post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_after")
 
         return {
@@ -1373,7 +1373,7 @@ class PipelineService:
                 )
 
             self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
-            final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+            final_report_id = self._persist_pipeline_report(project_id, results)
             post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
             history[-1]["snapshot_after"] = post_snapshot
 
@@ -1699,7 +1699,7 @@ class PipelineService:
             # ── 阶段 9: ReportGenerationAgent ──
             if getattr(self, "_finalize_report_after_gate", False):
                 self._finalize_report_after_gate = False
-                final_report_id = self._create_report(project_id, results.get("report_generation", {}))
+                final_report_id = self._persist_pipeline_report(project_id, results)
             elif start_idx <= 8 and not teaching_report_ran:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
@@ -1707,8 +1707,8 @@ class PipelineService:
                         results, pipeline_run_info, project_mode
                     )
                 self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
+                final_report_id = self._persist_pipeline_report(project_id, results)
                 self._maybe_pause_for_hitl_gate("report_generation", results)
-                final_report_id = self._create_report(project_id, results.get("report_generation", {}))
 
             # ── P5: Discovery 开放循环（Sakana-like）──
             if start_idx <= 4 and self._run_options.get("pipeline_mode") == PipelineMode.DISCOVERY.value:
@@ -1788,6 +1788,10 @@ class PipelineService:
                 f"[Pipeline] 单阶段重跑完成 run_id={self.run_id} stage={done.stage_key}"
             )
             final_report_id = self.db_pipeline_run.final_report_id
+            if done.stage_key == "report_generation":
+                created = self._persist_pipeline_report(project_id, results)
+                if created:
+                    final_report_id = created
             self._complete_pipeline_run(pipeline_end, total_duration_ms, results, final_report_id)
             return PipelineRunResult(
                 pipeline_id=self.run_id,
@@ -2204,14 +2208,14 @@ class PipelineService:
             output = executor()
             from app.services.data_finder_slim import slim_stage_output
 
-            slimmed_output = slim_stage_output(
-                output if isinstance(output, dict) else self._safe_model_dump(output),
-                stage_key=stage_key,
+            full_output = (
+                output if isinstance(output, dict) else self._safe_model_dump(output)
             )
+            slimmed_output = slim_stage_output(full_output, stage_key=stage_key)
             stage_log.status = PipelineStageStatus.COMPLETED
             stage_log.output_data = slimmed_output
-            results[stage_key] = slimmed_output
-            self._stage_results[stage_key] = slimmed_output
+            results[stage_key] = full_output
+            self._stage_results[stage_key] = full_output
 
             self._capture_model_params(db_stage)
             self._update_stage_execution(db_stage, "completed", output=slimmed_output)
@@ -2821,6 +2825,28 @@ class PipelineService:
                 rev["evidence_sufficiency"] = suff.get("evidence_sufficiency")
                 rev["missing_evidence_types"] = suff.get("missing_evidence_types")
 
+        adv_mode = self._run_options.get("adversarial_mode", "single_group")
+        if self._run_options.get("enable_pro_con_adversarial", True) and adv_mode != "off":
+            try:
+                from app.services.pro_con_adversarial_service import get_pro_con_adversarial_service
+
+                result_dict = get_pro_con_adversarial_service().enhance_review(
+                    result_dict,
+                    hypotheses=hypotheses,
+                    literature_facts=lit_mining.get("facts", []),
+                    research_question=self.db_pipeline_run.research_question if self.db_pipeline_run else "",
+                    mode=adv_mode,
+                    max_con_rounds=int(self._run_options.get("con_challenge_max_rounds", 2)),
+                    enable_evolution=bool(self._run_options.get("enable_hypothesis_evolution", True)),
+                )
+                ensemble = (result_dict.get("skill_outputs") or {}).get("ensemble_review") or {}
+                if ensemble:
+                    result_dict["primary_index"] = ensemble.get("target_hypothesis_index", result_dict.get("primary_index"))
+                    result_dict["ensemble_decision"] = ensemble.get("decision")
+                    result_dict["ensemble_overall"] = ensemble.get("overall")
+            except Exception as adv_err:
+                logger.warning(f"红蓝对抗包装失败（已跳过，不影响后续阶段）: {adv_err}")
+
         return result_dict
     
     def _apply_hypothesis_review_scores(
@@ -3039,6 +3065,12 @@ class PipelineService:
                 for ds in ds_service.get_project_datasets(project_id):
                     if ds.data_type != "tabular":
                         continue
+                    meta = {}
+                    if ds.extra_metadata:
+                        try:
+                            meta = json.loads(ds.extra_metadata)
+                        except (TypeError, ValueError):
+                            meta = {}
                     multimodal_datasets.append(
                         {
                             "dataset_id": ds.id,
@@ -3051,6 +3083,10 @@ class PipelineService:
                             "dtypes": json.loads(ds.dtypes_json) if ds.dtypes_json else {},
                             "statistics": json.loads(ds.statistics_json) if ds.statistics_json else {},
                             "preview": json.loads(ds.preview_json) if ds.preview_json else [],
+                            "file_size": ds.file_size,
+                            "analysis_tier": meta.get("analysis_tier"),
+                            "sample_parquet_path": meta.get("sample_parquet_path"),
+                            "extra_metadata": ds.extra_metadata,
                         }
                     )
                 df_results = get_data_finder_service(self.db).load_results(project_id)
@@ -3651,13 +3687,58 @@ class PipelineService:
             })
         return papers
 
+    def _persist_pipeline_report(self, project_id: str, results: Dict[str, Any]) -> Optional[str]:
+        """将 Pipeline 报告阶段结果落库（支持内存全量、截断摘要与磁盘 JSON）。"""
+        from app.services.data_finder_slim import (
+            find_recent_report_data_on_disk,
+            load_report_data_from_storage,
+            resolve_report_generation_payload,
+        )
+
+        stage_data = results.get("report_generation")
+        memory_data = self._stage_results.get("report_generation")
+        storage_data: Dict[str, Any] = {}
+        for candidate in (
+            (stage_data or {}).get("report_id") if isinstance(stage_data, dict) else None,
+            (memory_data or {}).get("report_id") if isinstance(memory_data, dict) else None,
+        ):
+            if candidate:
+                storage_data = load_report_data_from_storage(str(candidate))
+                if storage_data:
+                    break
+        if not storage_data:
+            started = self._pipeline_start.timestamp() if self._pipeline_start else None
+            storage_data = find_recent_report_data_on_disk(
+                not_before_ts=started - 120 if started else None,
+                not_after_ts=datetime.now(CHINA_TZ).timestamp() + 120,
+            )
+
+        payload = resolve_report_generation_payload(
+            stage_data,
+            memory_fallback=memory_data,
+            storage_fallback=storage_data,
+        )
+        if not payload:
+            logger.warning(
+                f"[Pipeline] 报告落库跳过：未解析到有效报告数据 run_id={self.run_id} project_id={project_id}"
+            )
+            return None
+        return self._create_report(project_id, payload)
+
     def _create_report(self, project_id: str, report_data: Dict[str, Any]) -> Optional[str]:
         """创建报告记录"""
+        from app.services.data_finder_slim import resolve_report_generation_payload
+
+        report_data = resolve_report_generation_payload(
+            report_data,
+            memory_fallback=self._stage_results.get("report_generation"),
+        )
         if not report_data:
             return None
         report_id = str(uuid.uuid4())
         title = report_data.get("paper_title", report_data.get("title", "研究报告"))
-        chapters = report_data.get("chapters", {})
+        chapters = report_data.get("chapters", {}) if isinstance(report_data.get("chapters"), dict) else {}
+        file_report_id = report_data.get("report_id")
 
         def _to_text(val):
             if val is None:
@@ -3691,7 +3772,7 @@ class PipelineService:
             results=_to_text(chapters.get("results", "")),
             references=json.dumps(chapters.get("references", []), ensure_ascii=False) if isinstance(chapters.get("references"), list) else _to_text(chapters.get("references", "")),
             created_at=datetime.now(CHINA_TZ),
-            pdf_path=report_data.get("report_id"),
+            pdf_path=file_report_id or report_data.get("pdf_path"),
             status="ready",
             extra_metadata=extra_meta,
         )

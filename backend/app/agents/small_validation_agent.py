@@ -163,6 +163,7 @@ class SmallValidationAgent:
             # ── P0: 沙箱执行 analysis_script，绑定 run artifacts ──
             if run_id and result.get("analysis_script"):
                 extra_env = {"AISCI_PROJECT_ID": project_id or ""}
+                extra_env.update(self._sandbox_env_for_data(csv_data_path, multimodal_datasets))
                 if sandbox_use_docker:
                     extra_env["AISCI_SANDBOX_USE_DOCKER"] = "1"
                 sandbox = get_experiment_sandbox_service().execute_analysis_script(
@@ -181,38 +182,15 @@ class SmallValidationAgent:
                 }
                 result["results"] = self._merge_sandbox_into_results(result["results"], sandbox)
 
-                if not sandbox.get("success") and csv_data_path and os.path.exists(csv_data_path):
-                    from app.services.experiment_pilot_analysis_service import (
-                        run_pilot_from_csv,
-                        write_pilot_metrics_json,
-                    )
-
-                    artifact_dir = sandbox.get("artifact_dir") or ""
-                    pilot = run_pilot_from_csv(
-                        csv_data_path,
-                        experiment_design or {},
-                        output_dir=artifact_dir or self.validation_dir,
+                if self._sandbox_needs_pilot_fallback(sandbox, csv_data_path):
+                    self._apply_pilot_fallback(
+                        result,
+                        sandbox=sandbox,
+                        csv_data_path=csv_data_path,
+                        experiment_design=experiment_design,
                         hypothesis=hypothesis,
+                        incomplete=bool(sandbox.get("sandbox_incomplete")),
                     )
-                    if pilot.get("success"):
-                        if artifact_dir:
-                            write_pilot_metrics_json(artifact_dir, pilot["metrics"])
-                        result["artifacts"]["metrics"] = pilot["metrics"]
-                        result["artifacts"]["plots"] = pilot.get("plots") or []
-                        result["pilot_analysis"] = pilot
-                        result["sandbox_execution"] = {
-                            **sandbox,
-                            "success": True,
-                            "metrics": pilot["metrics"],
-                            "plots": pilot.get("plots") or [],
-                            "pilot_fallback": True,
-                        }
-                        result["results"] = self._merge_sandbox_into_results(
-                            result["results"], result["sandbox_execution"]
-                        )
-                        result.setdefault("warnings", []).append(
-                            "LLM 沙箱脚本未成功，已使用真实 CSV pilot 对比分析作为实验结果"
-                        )
 
             validation_id = self._save_validation_files(result, run_id=run_id)
             if validation_id:
@@ -398,6 +376,44 @@ class SmallValidationAgent:
         categorized["actual_results"] = actual
         return categorized
 
+    @staticmethod
+    def _sandbox_env_for_data(
+        csv_data_path: Optional[str],
+        multimodal_datasets: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, str]:
+        from app.core.dataset_scale import (
+            parse_dataset_extra_metadata,
+            resolve_analysis_tier,
+            tier_sample_rows,
+            tier_sandbox_timeout_sec,
+        )
+
+        tier = "T0"
+        sample_parquet = ""
+        if csv_data_path and os.path.exists(csv_data_path):
+            tier = resolve_analysis_tier(os.path.getsize(csv_data_path))
+        for ds in multimodal_datasets or []:
+            fp = ds.get("file_path")
+            if csv_data_path and fp == csv_data_path:
+                meta = parse_dataset_extra_metadata(ds.get("extra_metadata"))
+                if isinstance(ds.get("analysis_tier"), str):
+                    tier = ds["analysis_tier"]
+                elif meta.get("analysis_tier"):
+                    tier = str(meta["analysis_tier"])
+                sample_parquet = str(
+                    ds.get("sample_parquet_path") or meta.get("sample_parquet_path") or ""
+                )
+                break
+
+        env = {
+            "AISCI_DATA_TIER": tier,
+            "AISCI_SAMPLE_ROWS": str(tier_sample_rows(tier) or 0),
+            "AISCI_SANDBOX_TIMEOUT_SEC": str(tier_sandbox_timeout_sec(tier)),
+        }
+        if sample_parquet and os.path.isfile(sample_parquet):
+            env["AISCI_SAMPLE_PARQUET"] = sample_parquet
+        return env
+
     def _generate_analysis_script(
         self,
         *,
@@ -420,12 +436,23 @@ class SmallValidationAgent:
             f"数据集: {datasets or '未提供'}\n"
             f"指标: {metrics or '未提供'}\n"
             f"{data_hint}\n\n"
-            "请输出完整可运行的 Python 3 分析脚本，使用 pandas/numpy/matplotlib。"
-            "必须用 ```python 代码块包裹，不要输出 JSON 或其他说明文字。"
+            "请输出完整可运行的 Python 3 分析脚本，使用 pandas/numpy/matplotlib。\n"
+            "必须用 ```python 代码块包裹，不要输出 JSON 或其他说明文字。\n\n"
+            "【沙箱输出契约 — 必须全部满足】\n"
+            "1. 使用环境变量 AISCI_RUN_DIR 作为运行目录，将 metrics 写入 "
+            "Path(AISCI_RUN_DIR)/'metrics.json'（JSON 对象，含 primary_metric 或具体指标键，"
+            "禁止仅写 note 占位）。\n"
+            "2. 使用环境变量 AISCI_PLOTS_DIR 作为图表目录，至少保存 1 张 PNG 到该目录 "
+            "（如 PLOTS_DIR/'experiment_result.png'）。\n"
+            "3. 优先调用 _aisci_load_data() 加载数据；否则使用 os.environ['AISCI_DATA_PATH']。\n"
+            "4. 图表须体现假设验证或方法对比（如指标柱状图、误差对比），"
+            "禁止只输出原始字段直方图/散点图作为唯一结果。\n"
+            "5. 设置 matplotlib Agg 后端，脚本 exit code 必须为 0。"
         )
         if has_csv_data and csv_data_path:
             script_prompt += (
-                f"\n脚本必须使用 pandas.read_csv 读取: {csv_data_path}"
+                "\n脚本应优先使用 _aisci_load_data() 加载数据（沙箱会自动注入该函数）；"
+                "若直接 read_csv，请使用环境变量 AISCI_DATA_PATH。"
             )
         try:
             raw = qwen_chat(
@@ -509,53 +536,136 @@ class SmallValidationAgent:
         
         return result_dict
     
+    @staticmethod
+    def _sandbox_needs_pilot_fallback(
+        sandbox: Dict[str, Any],
+        csv_data_path: Optional[str],
+    ) -> bool:
+        if not csv_data_path or not os.path.exists(csv_data_path):
+            return False
+        if not sandbox.get("success"):
+            return True
+        if sandbox.get("sandbox_incomplete"):
+            return True
+        if not sandbox.get("output_complete", True):
+            return True
+        return False
+
+    def _apply_pilot_fallback(
+        self,
+        result: Dict[str, Any],
+        *,
+        sandbox: Dict[str, Any],
+        csv_data_path: str,
+        experiment_design: Optional[Dict[str, Any]],
+        hypothesis: str,
+        incomplete: bool = False,
+    ) -> None:
+        from app.services.experiment_pilot_analysis_service import (
+            run_pilot_from_csv,
+            write_pilot_metrics_json,
+        )
+
+        artifact_dir = sandbox.get("artifact_dir") or ""
+        pilot = run_pilot_from_csv(
+            csv_data_path,
+            experiment_design or {},
+            output_dir=artifact_dir or self.validation_dir,
+            hypothesis=hypothesis,
+        )
+        if not pilot.get("success"):
+            result.setdefault("warnings", []).append(
+                "沙箱未产出有效实验图/指标，pilot 对比分析也未能生成结果"
+            )
+            return
+
+        if artifact_dir:
+            write_pilot_metrics_json(artifact_dir, pilot["metrics"])
+        result["artifacts"]["metrics"] = pilot["metrics"]
+        result["artifacts"]["plots"] = pilot.get("plots") or []
+        result["pilot_analysis"] = pilot
+        result["sandbox_execution"] = {
+            **sandbox,
+            "success": True,
+            "metrics": pilot["metrics"],
+            "plots": pilot.get("plots") or [],
+            "pilot_fallback": True,
+            "output_complete": True,
+            "sandbox_incomplete": False,
+        }
+        result["results"] = self._merge_sandbox_into_results(
+            result["results"], result["sandbox_execution"]
+        )
+        msg = (
+            "沙箱脚本未写出 metrics/图表，已使用真实 CSV pilot 对比分析作为实验结果"
+            if incomplete
+            else "LLM 沙箱脚本未成功，已使用真实 CSV pilot 对比分析作为实验结果"
+        )
+        result.setdefault("warnings", []).append(msg)
+
     def _generate_default_script(self) -> str:
-        """生成默认的分析脚本"""
-        return '''import pandas as pd
-import numpy as np
+        """生成符合沙箱契约的默认分析脚本（真实数据）。"""
+        return '''import json
+import os
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
+import numpy as np
+import pandas as pd
 
-# 设置中文显示
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
+run_dir = Path(os.environ.get("AISCI_RUN_DIR", "."))
+plots_dir = Path(os.environ.get("AISCI_PLOTS_DIR", str(run_dir / "plots")))
+plots_dir.mkdir(parents=True, exist_ok=True)
 
-print("="*50)
-print("小样验证脚本")
-print(f"开始时间: {datetime.now()}")
-print("="*50)
 
-# 生成模拟数据
-np.random.seed(42)
-n_samples = 100
-data = pd.DataFrame({
-    'feature1': np.random.normal(0, 1, n_samples),
-    'feature2': np.random.normal(1, 2, n_samples),
-    'target': np.random.choice([0, 1], n_samples)
-})
+def _load_df():
+    if "globals" in dir() and callable(globals().get("_aisci_load_data")):
+        return _aisci_load_data()
+    data_path = os.environ.get("AISCI_DATA_PATH") or os.environ.get("CSV_DATA_PATH")
+    if not data_path:
+        raise RuntimeError("缺少 AISCI_DATA_PATH，无法加载数据")
+    return pd.read_csv(data_path)
 
-print("\\n数据前5行:")
-print(data.head())
-print("\\n数据统计信息:")
-print(data.describe())
 
-# 简单统计
-stats = {
-    'feature1_mean': data['feature1'].mean(),
-    'feature1_std': data['feature1'].std(),
-    'feature2_mean': data['feature2'].mean(),
-    'feature2_std': data['feature2'].std(),
-    'target_dist': data['target'].value_counts().to_dict()
+df = _load_df()
+numeric = df.select_dtypes(include=[np.number])
+metrics = {
+    "rows": int(len(df)),
+    "columns": int(len(df.columns)),
+    "data_source": "sandbox_default_script",
 }
 
-print("\\n统计结果:")
-for key, value in stats.items():
-    print(f"{key}: {value}")
+if numeric.empty:
+    metrics["primary_metric"] = 0.0
+    metrics["warning"] = "no numeric columns"
+else:
+    col = numeric.columns[0]
+    series = numeric[col].dropna()
+    metrics["primary_metric"] = float(series.mean())
+    metrics["primary_metric_std"] = float(series.std()) if len(series) > 1 else 0.0
+    metrics["metric_label"] = str(col)
 
-print("\\n" + "="*50)
-print("验证完成")
-print("="*50)
+    mid = max(1, len(series) // 2)
+    group_a = series.iloc[:mid]
+    group_b = series.iloc[mid:]
+    metrics["baseline_mean"] = float(group_a.mean())
+    metrics["proposed_mean"] = float(group_b.mean())
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    names = ["Baseline（前半）", "Proposed（后半）"]
+    vals = [metrics["baseline_mean"], metrics["proposed_mean"]]
+    ax.bar(names, vals, color=["#4C72B0", "#DD8452"], alpha=0.9)
+    ax.set_ylabel(str(col))
+    ax.set_title(f"Pilot：{col} 分区对比")
+    ax.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+    fig.savefig(plots_dir / "experiment_result.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
+    json.dump(metrics, f, ensure_ascii=False, indent=2)
 '''
     
     def _generate_default_log(self) -> str:

@@ -18,7 +18,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
     <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-bp-cyan" />
-        集成评审（Ensemble Review）
+        集成评审（含红蓝反方权重）
       </h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -39,7 +39,7 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
             {members.map((m) => (
               <div key={String(m.reviewer_id)} className="flex items-center justify-between text-xs">
                 <span className="text-bp-muted">
-                  {String(m.reviewer_id)}
+                  {m.reviewer_id === 'con_challenger' ? '反方质疑' : String(m.reviewer_id)}
                   {m.weight != null ? ` (${(Number(m.weight) * 100).toFixed(0)}%)` : ''}
                 </span>
                 <span className="font-mono text-bp-text">{Number(m.overall_score ?? 0).toFixed(1)}</span>

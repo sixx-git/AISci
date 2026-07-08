@@ -139,7 +139,7 @@ const datasetService = {
     formData.append('file', file);
     const res = await api.post('/datasets/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
+      timeout: 3600000,
     });
     return res.data;
   },
@@ -181,7 +181,7 @@ const datasetService = {
 
   async runModeling(datasetId: string, payload: ModelingRunPayload = {}): Promise<ApiResponse<ModelingResult>> {
     const res = await api.post<ApiResponse<ModelingResult>>(`/datasets/${datasetId}/modeling/run`, payload, {
-      timeout: 300000,
+      timeout: 3600000,
     });
     return res.data;
   },
@@ -198,7 +198,7 @@ const datasetService = {
     const res = await api.post<ApiResponse<DatasetAssistantChatResult>>(
       `/datasets/${datasetId}/assistant/chat`,
       payload,
-      { timeout: 300000 },
+      { timeout: 3600000 },
     );
     return res.data;
   },

@@ -4,7 +4,11 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from app.services.data_finder_slim import slim_data_context, slim_stage_output
+from app.services.data_finder_slim import (
+    resolve_report_generation_payload,
+    slim_data_context,
+    slim_stage_output,
+)
 from app.services.dataset_service import _json_dumps_bounded, _cap_statistics
 
 
@@ -50,6 +54,34 @@ def test_slim_stage_output_experiment_design_skill_outputs():
     slim = slim_stage_output(out, stage_key="experiment_design")
     ds = slim["skill_outputs"]["dataset_discovery"]["data"]["datasets"]
     assert len(ds) <= 5
+
+
+def test_slim_stage_output_report_generation_keeps_chapters():
+    out = {
+        "title": "科学假设与研究计划",
+        "paper_title": "联邦学习研究",
+        "paper_abstract": "摘要" * 3000,
+        "report_id": "file-123",
+        "chapters": {
+            "problem_statement": "问题" * 5000,
+            "methods": "方法",
+            "references": [{"id": i} for i in range(120)],
+        },
+        "plots": [{"title": f"p{i}", "file_path": f"/tmp/{i}.png"} for i in range(30)],
+    }
+    slim = slim_stage_output(out, stage_key="report_generation")
+    assert slim["paper_title"] == "联邦学习研究"
+    assert slim["chapters"]["methods"] == "方法"
+    assert len(slim["chapters"]["references"]) == 80
+    assert slim.get("plots_count") == 30
+    assert "_truncated" not in slim
+
+
+def test_resolve_report_generation_payload_prefers_memory_fallback():
+    truncated = {"_truncated": True, "preview": '{"paper_title":"截断标题"}'}
+    full = {"paper_title": "完整标题", "chapters": {"methods": "M"}}
+    resolved = resolve_report_generation_payload(truncated, memory_fallback=full)
+    assert resolved["paper_title"] == "完整标题"
 
 
 def test_exec_experiment_design_passes_data_files():

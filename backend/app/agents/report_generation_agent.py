@@ -24,8 +24,6 @@ from app.services.report_compliance_service import (
 
 CHINA_TZ = timezone(timedelta(hours=8))
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
-from app.skills.report.report_chart_generation_skill import ReportChartGenerationSkill
-from app.skills.report.scientific_plot_skill import ScientificPlotSkill
 from app.skills.report.report_quality_check_skill import ReportQualityCheckSkill
 from app.skills.report.report_reviewer_skill import ReportReviewerSkill
 from app.skills.report.proposal_logic_review_skill import ProposalLogicReviewSkill
@@ -193,6 +191,7 @@ class ReportGenerationAgent:
                 multimodal_datasets,
                 result.get("report_id", ""),
                 pipeline_run_info,
+                small_validation=small_validation,
             )
             result["plots"] = charts_data.get("charts", [])
             result["chart_skill_outputs"] = charts_data.get("skill_outputs", {})
@@ -1631,130 +1630,53 @@ class ReportGenerationAgent:
         multimodal_datasets: Optional[List[Dict[str, Any]]],
         report_id: str,
         pipeline_run_info: Optional[Dict[str, Any]] = None,
+        small_validation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        import asyncio
-        from pathlib import Path
-        from app.services.experiment_sandbox_service import RUNS_ROOT
+        from app.services.report_plot_service import (
+            collect_sandbox_plots_from_validation,
+            dedupe_report_plots,
+            prepare_plots_for_persistence,
+        )
 
-        output_dir = ""
-        run_id = (pipeline_run_info or {}).get("run_id")
-        if run_id:
-            charts_dir = RUNS_ROOT / str(run_id) / "report_charts"
-            charts_dir.mkdir(parents=True, exist_ok=True)
-            output_dir = str(charts_dir)
-        elif report_id:
-            output_dir = str(Path(__file__).resolve().parent.parent / "storage" / "reports" / report_id / "charts")
-            Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-        async def _run():
-            outputs: Dict[str, Any] = {"charts": [], "skill_outputs": {}}
-            plot_specs = []
-            data_rows = []
-
-            if preliminary_analysis_skill_outputs:
-                pa_data = preliminary_analysis_skill_outputs.get("preliminary_analysis", {})
-                if isinstance(pa_data, dict) and pa_data.get("data"):
-                    pa_inner = pa_data["data"]
-                    plot_specs = pa_inner.get("plots", [])
-                    data_rows = pa_inner.get("sample_data_rows", [])
-                    if not data_rows:
-                        data_rows = pa_inner.get("feature_vectors", [])
-
-            if not data_rows and multimodal_datasets:
-                for ds in multimodal_datasets:
-                    sample_rows = ds.get("sample_data", []) or ds.get("preview", [])
-                    if sample_rows:
-                        data_rows.extend(sample_rows[:200])
-                        break
-
-            if not data_rows:
-                outputs["skill_outputs"] = {
+        sandbox_plots = collect_sandbox_plots_from_validation(small_validation)
+        if sandbox_plots:
+            synced = prepare_plots_for_persistence(
+                sandbox_plots,
+                report_file_id=report_id or None,
+                keep_base64=True,
+            )
+            charts = dedupe_report_plots(synced)
+            logger.info("[报告生成] 使用沙箱/ pilot 实验图 %d 张", len(charts))
+            return {
+                "charts": charts,
+                "skill_outputs": {
                     "report_chart_generation": {
                         "success": True,
-                        "data": {"charts": [], "total_charts": 0},
-                        "warnings": ["无真实数据，未生成图表"],
+                        "data": {"charts": charts, "total_charts": len(charts)},
+                        "warnings": [],
+                        "source": "sandbox_execution",
                     }
+                },
+            }
+
+        # 无沙箱实验产出时，不再用 PreliminaryAnalysis 描述统计图冒充实验结果
+        del preliminary_analysis_skill_outputs, multimodal_datasets
+        warning = (
+            "小样验证未产出沙箱实验图或指标；"
+            "请先完成沙箱脚本（metrics.json + plots/*.png）或 pilot 对比分析。"
+        )
+        logger.warning("[报告生成] %s", warning)
+        return {
+            "charts": [],
+            "skill_outputs": {
+                "report_chart_generation": {
+                    "success": True,
+                    "data": {"charts": [], "total_charts": 0},
+                    "warnings": [warning],
+                    "source": "none",
                 }
-                return outputs
-
-            if not plot_specs:
-                return outputs
-
-            try:
-                sci_plot_skill = ScientificPlotSkill()
-                sci_result = await sci_plot_skill.run(
-                    input_data={
-                        "plot_specs": plot_specs,
-                        "data": data_rows,
-                        "output_dir": output_dir,
-                        "format": "both",
-                        "dpi": 150,
-                        "figure_size": (10, 6),
-                    },
-                    context={"stage": "report_generation"},
-                )
-                sci_charts = sci_result.data.get("charts", [])
-                if sci_charts:
-                    outputs.setdefault("charts", [])
-                    existing_ids = {c.get("plot_id", "") for c in outputs["charts"]}
-                    for ch in sci_charts:
-                        pid = ch.get("plot_id", "")
-                        if pid not in existing_ids:
-                            outputs["charts"].append(ch)
-                            existing_ids.add(pid)
-                outputs["skill_outputs"]["scientific_plot"] = {
-                    "success": sci_result.success,
-                    "data": sci_result.data,
-                    "warnings": sci_result.warnings,
-                    "errors": sci_result.errors,
-                }
-            except Exception as e:
-                logger.warning(f"ScientificPlotSkill 失败: {e}")
-                outputs["skill_outputs"]["scientific_plot"] = {"success": False, "error": str(e)}
-
-            try:
-                chart_skill = ReportChartGenerationSkill()
-                chart_result = await chart_skill.run(
-                    input_data={
-                        "plot_specs": plot_specs,
-                        "data": data_rows,
-                        "output_dir": output_dir,
-                        "format": "both",
-                        "dpi": 150,
-                        "figure_size": (10, 6),
-                    },
-                    context={"stage": "report_generation"},
-                )
-                rc_charts = chart_result.data.get("charts", [])
-                if rc_charts:
-                    outputs.setdefault("charts", [])
-                    existing_ids = {c.get("plot_id", "") for c in outputs["charts"]}
-                    for ch in rc_charts:
-                        pid = ch.get("plot_id", "")
-                        if pid not in existing_ids:
-                            outputs["charts"].append(ch)
-                            existing_ids.add(pid)
-                outputs["skill_outputs"]["report_chart_generation"] = {
-                    "success": chart_result.success,
-                    "data": chart_result.data,
-                    "warnings": chart_result.warnings,
-                    "errors": chart_result.errors,
-                }
-            except Exception as e:
-                logger.warning(f"ReportChartGenerationSkill 失败: {e}")
-                outputs["skill_outputs"]["report_chart_generation"] = {"success": False, "error": str(e)}
-
-            return outputs
-
-        try:
-            from app.core.async_utils import run_coroutine_sync
-            return run_coroutine_sync(asyncio.wait_for(_run(), timeout=180))
-        except asyncio.TimeoutError:
-            logger.warning("ChartGeneration 超时 (180s)")
-            return {"charts": [], "skill_outputs": {}}
-        except Exception as e:
-            logger.warning(f"ChartGeneration 异常: {e}")
-            return {"charts": [], "skill_outputs": {}}
+            },
+        }
 
     def _build_run_summary_content(self, run_info: Dict[str, Any]) -> str:
         def fmt_time(ts):
@@ -1891,8 +1813,10 @@ class ReportGenerationAgent:
 
         chapters = result.get("chapters", {})
         if isinstance(chapters, dict):
+            from app.services.report_compliance_service import assess_results_chapter
+
             existing_results = chapters.get("results", "")
-            if not existing_results or len(str(existing_results).strip()) < 50:
+            if assess_results_chapter(existing_results) == "none":
                 result_type = sv_results.get("result_type_summary", "none")
                 enriched = "### 实验结果\n\n"
                 modeling_result = None

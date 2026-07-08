@@ -611,6 +611,59 @@ export interface EnsembleReviewData {
     disagreement_flags?: string[];
   };
   target_hypothesis_index?: number;
+  pro_con_adversarial?: boolean;
+}
+
+export type AdversarialMode = 'single_group' | 'multi_group' | 'off';
+
+export interface ProConChallenge {
+  target_aspect?: string;
+  attack_type?: string;
+  severity?: string;
+  statement?: string;
+  counter_evidence_fact_ids?: string[];
+  suggested_fix?: string;
+}
+
+export interface ProConAdversarialData {
+  mode?: AdversarialMode;
+  pro_side?: {
+    role?: string;
+    agents?: string[];
+    research_groups?: Array<{
+      group_index: number;
+      hypothesis?: string;
+      rationale?: string;
+      evidence_level?: string;
+      literature_anchors?: Array<{ fact_id?: string; summary?: string }>;
+      validation_target?: string;
+    }>;
+  };
+  con_side?: {
+    type?: string;
+    target_hypothesis_index?: number;
+    rounds?: Array<{
+      round?: number;
+      round_summary?: string;
+      overall_threat_level?: string;
+      challenges?: ProConChallenge[];
+    }>;
+  };
+  cross_group_attacks?: Array<{
+    defender_index?: number;
+    attacker_index?: number;
+    attacker_label?: string;
+    challenges?: ProConChallenge[];
+  }>;
+  group_survival_scores?: number[];
+  evolution?: {
+    status?: string;
+    evolved_rationale?: string;
+    revision_points?: string[];
+    hypothesis_patch?: string;
+    remaining_risks?: string[];
+  };
+  primary_index_override?: { from?: number; to?: number; reason?: string };
 }
 
 export interface IdeationNoveltyData {
@@ -656,6 +709,10 @@ export interface PipelineRunOptions {
   enable_federated_campaign_loop?: boolean;
   federated_campaign_max?: number;
   sandbox_use_docker?: boolean;
+  enable_pro_con_adversarial?: boolean;
+  adversarial_mode?: AdversarialMode;
+  con_challenge_max_rounds?: number;
+  enable_hypothesis_evolution?: boolean;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {
@@ -1011,11 +1068,13 @@ export interface ReportPlot {
   y_label?: string;
   has_legend?: boolean;
   chart_kind?: 'experiment_result' | 'descriptive_stat';
-  base64: string;
-  url: string;
-  file_path: string;
-  markdown_embed: string;
+  base64?: string;
+  url?: string;
+  file_path?: string;
+  markdown_embed?: string;
+  source?: string;
   source_dataset_id?: string;
+  has_image?: boolean;
   is_generated_from_real_data: boolean;
 }
 

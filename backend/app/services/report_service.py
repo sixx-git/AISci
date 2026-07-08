@@ -5,6 +5,7 @@ Report 服务
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import or_
@@ -20,6 +21,68 @@ from app.services.latex_export_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def backfill_project_report_if_missing(db: Session, project_id: str) -> Optional[Report]:
+    """若项目无报告但 Pipeline 已完成报告阶段，尝试从阶段输出/磁盘补偿落库。"""
+    if db.query(Report).filter(Report.project_id == project_id).first():
+        return None
+
+    from app.models.pipeline import (
+        PipelineRun as DB_PipelineRun,
+        PipelineStage as DB_PipelineStage,
+        PipelineStageExecution as DB_PipelineStageExecution,
+        PipelineStatus as DB_PipelineStatus,
+    )
+    from app.services.pipeline_service import PipelineService
+
+    run = (
+        db.query(DB_PipelineRun)
+        .filter(
+            DB_PipelineRun.project_id == project_id,
+            DB_PipelineRun.status == DB_PipelineStatus.COMPLETED,
+        )
+        .order_by(DB_PipelineRun.completed_at.desc())
+        .first()
+    )
+    if not run:
+        return None
+
+    stage_exec = (
+        db.query(DB_PipelineStageExecution)
+        .filter(
+            DB_PipelineStageExecution.pipeline_run_id == run.id,
+            DB_PipelineStageExecution.stage == DB_PipelineStage.REPORT_GENERATION,
+            DB_PipelineStageExecution.status == DB_PipelineStatus.COMPLETED,
+        )
+        .first()
+    )
+    if not stage_exec or not stage_exec.output_data:
+        return None
+
+    svc = PipelineService(db)
+    svc.run_id = run.run_id
+    svc.db_pipeline_run = run
+    if run.started_at:
+        svc._pipeline_start = run.started_at
+    report_id = svc._persist_pipeline_report(
+        project_id,
+        {"report_generation": stage_exec.output_data},
+    )
+    if not report_id:
+        return None
+
+    if not run.final_report_id:
+        run.final_report_id = report_id
+        db.commit()
+
+    logger.info(
+        "已从 Pipeline 阶段输出补偿落库报告 project_id=%s report_id=%s run_id=%s",
+        project_id,
+        report_id,
+        run.run_id,
+    )
+    return db.query(Report).filter(Report.id == report_id).first()
 
 
 def _parse_chapter_field(val: Any) -> Any:
@@ -51,8 +114,16 @@ def merge_report_extra_metadata(
 ) -> Dict[str, Any]:
     """合并合规指标与 LaTeX PDF 导出元数据（Pipeline / API 共用）。"""
     extra = dict(base or {})
-    if report_data.get("plots"):
-        extra["plots"] = report_data["plots"]
+    plots = report_data.get("plots")
+    if isinstance(plots, list) and plots:
+        from app.services.report_plot_service import prepare_plots_for_persistence
+
+        file_id = report_data.get("report_id") or report_data.get("pdf_path")
+        extra["plots"] = prepare_plots_for_persistence(
+            plots,
+            report_file_id=str(file_id) if file_id else None,
+            keep_base64=False,
+        )
     if "pdf_success" in report_data:
         extra["pdf_success"] = bool(report_data.get("pdf_success"))
     if report_data.get("export_method"):
@@ -226,9 +297,16 @@ class ReportService:
         if status:
             query = query.filter(Report.status == status)
         
-        return query.order_by(
+        reports = query.order_by(
             Report.created_at.desc()
         ).limit(limit).offset(offset).all()
+
+        if not reports and offset == 0:
+            backfilled = backfill_project_report_if_missing(self.db, project_id)
+            if backfilled:
+                return [backfilled]
+
+        return reports
     
     def get_latest_report_by_project(
         self,
@@ -242,6 +320,8 @@ class ReportService:
         ).order_by(
             Report.created_at.desc()
         ).first()
+        if not report:
+            report = backfill_project_report_if_missing(self.db, project_id)
         if report and ensure_pdf and report.pdf_path and not report_pdf_exists(report.pdf_path):
             try:
                 self.regenerate_pdf(report.id)
@@ -452,6 +532,13 @@ class ReportService:
             self.db,
             charts_dir,
         )
+        from app.services.report_plot_service import prepare_plots_for_persistence
+
+        plots = prepare_plots_for_persistence(
+            plots,
+            report_file_id=db_report.pdf_path,
+            keep_base64=False,
+        )
 
         refs = parse_report_references(db_report.references)
         lit_facts, citation_map, pipeline_verified = self._load_literature_bundle_for_report(
@@ -639,6 +726,20 @@ class ReportService:
             self.db.rollback()
             logger.error(f"删除研究报告失败: {e}", exc_info=True)
             raise
+
+    def get_plot_image_path(self, report_id: str, plot_id: str) -> Optional[Path]:
+        """解析报告图表 PNG 路径。"""
+        from app.services.report_plot_service import resolve_plot_image_path
+
+        report = self.get_report_by_id(report_id)
+        if not report:
+            return None
+        extra = report.extra_metadata if isinstance(report.extra_metadata, dict) else {}
+        return resolve_plot_image_path(
+            extra,
+            plot_id,
+            report_file_id=report.pdf_path,
+        )
 
 
 def get_report_service() -> ReportService:

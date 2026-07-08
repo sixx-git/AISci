@@ -10,6 +10,7 @@ from app.services.dataset_service import DatasetService, SUPPORTED_EXTENSIONS
 from app.skills.data_finder.file_format_registry import is_allowed_upload_filename
 from app.services.modeling_service import ModelingService
 from app.services.dataset_assistant_service import DatasetAssistantService
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,12 +47,20 @@ async def upload_dataset(
             ),
         )
 
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="文件内容为空")
-
     service = DatasetService(db)
-    file_path = service.save_uploaded_file(project_id, file.filename or "unknown", content)
+    settings = get_settings()
+    try:
+        file_path, file_size = await service.save_uploaded_file_stream(
+            project_id,
+            file.filename or "unknown",
+            file,
+            max_bytes=settings.MAX_UPLOAD_SIZE,
+        )
+    except ValueError as size_err:
+        raise HTTPException(status_code=413, detail=str(size_err)) from size_err
+
+    if file_size <= 0:
+        raise HTTPException(status_code=400, detail="文件内容为空")
 
     try:
         dataset = service.create_dataset(

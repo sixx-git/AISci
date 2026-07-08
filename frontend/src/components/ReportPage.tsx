@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from 'react';
+﻿import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History } from 'lucide-react';
 import { Card } from './Card';
@@ -39,6 +39,64 @@ function formatReportVersionLabel(entry: ReportData, index: number, total: numbe
   const prefix = index === 0 ? '最新' : `第 ${ordinal} 版`;
   const title = entry.title.length > 40 ? `${entry.title.slice(0, 37)}…` : entry.title;
   return `${prefix} · ${entry.generatedAt} · ${title}`;
+}
+
+function plotSourceLabel(plot: ReportPlot): { text: string; tone: 'green' | 'yellow' | 'muted' } {
+  if (plot.chart_kind === 'descriptive_stat') {
+    return { text: '数据探索', tone: 'muted' };
+  }
+  const source = (plot.source || '').toLowerCase();
+  if (
+    source === 'sandbox_execution'
+    || source === 'pilot_analysis'
+    || plot.chart_kind === 'experiment_result'
+    || plot.type === 'sandbox_plot'
+  ) {
+    return { text: '实验产出', tone: 'green' };
+  }
+  if (plot.is_generated_from_real_data) {
+    return { text: '待验证', tone: 'yellow' };
+  }
+  return { text: '待验证', tone: 'yellow' };
+}
+
+function ReportPlotImage({
+  reportId,
+  plot,
+}: {
+  reportId: string;
+  plot: ReportPlot;
+}) {
+  const candidates = useMemo(() => {
+    const urls: string[] = [];
+    if (plot.url) urls.push(plot.url);
+    if (reportId && plot.plot_id) {
+      urls.push(`/api/v1/reports/plots/${reportId}/${plot.plot_id}/image`);
+    }
+    if (plot.base64) {
+      urls.push(`data:image/png;base64,${plot.base64}`);
+    }
+    return [...new Set(urls)];
+  }, [reportId, plot]);
+
+  const [idx, setIdx] = useState(0);
+  const src = candidates[idx] ?? null;
+
+  if (!src) {
+    return <span className="text-xs text-bp-muted">图表不可用</span>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={plot.title}
+      loading="lazy"
+      className="max-w-full max-h-[300px] object-contain rounded"
+      onError={() => {
+        setIdx((prev) => (prev + 1 < candidates.length ? prev + 1 : prev));
+      }}
+    />
+  );
 }
 
 export function ReportPage({
@@ -591,38 +649,33 @@ export function ReportPage({
                         <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-bp-surface/50 text-bp-muted">
                           {plot.type}
                         </span>
-                        {plot.is_generated_from_real_data ? (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-green/15 text-bp-green">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            实验产出
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded bg-bp-yellow/15 text-bp-yellow">
-                            <AlertTriangle className="w-2.5 h-2.5" />
-                            待验证
-                          </span>
-                        )}
+                        {(() => {
+                          const badge = plotSourceLabel(plot);
+                          return (
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded',
+                                badge.tone === 'green' && 'bg-bp-green/15 text-bp-green',
+                                badge.tone === 'yellow' && 'bg-bp-yellow/15 text-bp-yellow',
+                                badge.tone === 'muted' && 'bg-bp-surface/50 text-bp-muted',
+                              )}
+                            >
+                              {badge.tone === 'green' ? (
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                              ) : (
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                              )}
+                              {badge.text}
+                            </span>
+                          );
+                        })()}
                         {plot.has_legend && (
                           <span className="text-[11px] text-bp-muted">含图例</span>
                         )}
                       </div>
                     </div>
                     <div className="p-3 flex items-center justify-center bg-bp-base/40 min-h-[200px]">
-                      {plot.base64 ? (
-                        <img
-                          src={`data:image/png;base64,${plot.base64}`}
-                          alt={plot.title}
-                          className="max-w-full max-h-[300px] object-contain rounded"
-                        />
-                      ) : plot.url ? (
-                        <img
-                          src={plot.url}
-                          alt={plot.title}
-                          className="max-w-full max-h-[300px] object-contain rounded"
-                        />
-                      ) : (
-                        <span className="text-xs text-bp-muted">图表不可用</span>
-                      )}
+                      <ReportPlotImage reportId={report.id} plot={plot} />
                     </div>
                   </div>
                 ))}

@@ -12,6 +12,14 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.core.config import get_settings
+from app.core.dataset_scale import (
+    resolve_analysis_tier,
+    tier_sample_rows,
+    tier_sandbox_docker_memory,
+    tier_sandbox_timeout_sec,
+)
+
 logger = logging.getLogger(__name__)
 
 CHINA_TZ = timezone(timedelta(hours=8))
@@ -49,15 +57,12 @@ class ExperimentSandboxService:
         script_path = exp_dir / "analysis.py"
 
         linked_data: Optional[str] = None
+        data_link_mode = "none"
+        external_data_mount: Optional[str] = None
         if csv_data_path and os.path.exists(csv_data_path):
-            linked_data = str(data_dir / "input.csv")
-            try:
-                if not Path(linked_data).exists():
-                    import shutil
-                    shutil.copy2(csv_data_path, linked_data)
-            except Exception as exc:
-                logger.warning(f"复制数据到沙箱失败: {exc}")
-                linked_data = csv_data_path
+            linked_data, data_link_mode, external_data_mount = self._resolve_data_link(
+                csv_data_path, data_dir, extra_env
+            )
 
         prepared_script = self._prepare_analysis_script(analysis_script or "", linked_data)
         script_path.write_text(prepared_script, encoding="utf-8")
@@ -74,7 +79,14 @@ class ExperimentSandboxService:
             env["AISCI_DATA_PATH"] = linked_data
             env["CSV_DATA_PATH"] = linked_data
         if extra_env:
-            env.update(extra_env)
+            env.update({k: str(v) for k, v in extra_env.items() if v is not None})
+
+        tier = env.get("AISCI_DATA_TIER") or resolve_analysis_tier(
+            os.path.getsize(csv_data_path) if csv_data_path and os.path.exists(csv_data_path) else 0
+        )
+        env.setdefault("AISCI_DATA_TIER", tier)
+        env.setdefault("AISCI_SAMPLE_ROWS", str(tier_sample_rows(tier) or 0))
+        timeout_sec = int(env.get("AISCI_SANDBOX_TIMEOUT_SEC") or tier_sandbox_timeout_sec(tier))
 
         use_docker = self._should_use_docker(extra_env)
         started = datetime.now(CHINA_TZ)
@@ -84,7 +96,7 @@ class ExperimentSandboxService:
 
         if use_docker:
             proc, isolation_mode, docker_error = self._run_in_docker(
-                exp_dir, wrapper_path, env, linked_data
+                exp_dir, wrapper_path, env, linked_data, external_data_mount, tier
             )
         if proc is None:
             proc = subprocess.run(
@@ -92,7 +104,7 @@ class ExperimentSandboxService:
                 cwd=str(exp_dir),
                 capture_output=True,
                 text=True,
-                timeout=SANDBOX_TIMEOUT_SEC,
+                timeout=timeout_sec,
                 env=env,
             )
             if use_docker and docker_error:
@@ -109,6 +121,16 @@ class ExperimentSandboxService:
         plots = self._collect_plots(plots_dir, exp_dir)
 
         success = proc.returncode == 0
+        output_complete = self._is_output_complete(metrics, plots)
+        sandbox_incomplete = success and not output_complete
+        if sandbox_incomplete:
+            logger.warning(
+                "沙箱进程成功但未产出有效 metrics/plots run_id=%s metrics_keys=%s plots=%d",
+                run_id,
+                list(metrics.keys()) if isinstance(metrics, dict) else type(metrics),
+                len(plots),
+            )
+
         manifest = {
             "experiment_id": exp_dir.name,
             "run_id": run_id,
@@ -118,11 +140,16 @@ class ExperimentSandboxService:
             "return_code": proc.returncode,
             "success": success,
             "data_path": linked_data,
+            "data_link_mode": data_link_mode,
+            "analysis_tier": tier,
+            "sandbox_timeout_sec": timeout_sec,
             "script_path": str(script_path),
             "stdout_path": str(stdout_path),
             "stderr_path": str(stderr_path),
             "metrics": metrics,
             "plots": plots,
+            "output_complete": output_complete,
+            "sandbox_incomplete": sandbox_incomplete,
             "isolation_mode": isolation_mode,
             "docker_error": docker_error,
         }
@@ -140,10 +167,17 @@ class ExperimentSandboxService:
             "stderr": (proc.stderr or "")[:4000],
             "metrics": metrics,
             "plots": plots,
-            "data_source": "sandbox_execution" if success else "sandbox_failed",
+            "output_complete": output_complete,
+            "sandbox_incomplete": sandbox_incomplete,
+            "data_source": "sandbox_execution" if success and output_complete else (
+                "sandbox_incomplete" if success else "sandbox_failed"
+            ),
             "provenance": "experiment_sandbox",
             "isolation_mode": isolation_mode,
             "docker_error": docker_error,
+            "analysis_tier": tier,
+            "data_link_mode": data_link_mode,
+            "execution_mode": "sample" if tier in ("T1", "T2", "T3") else "full",
         }
 
     @staticmethod
@@ -168,34 +202,77 @@ class ExperimentSandboxService:
         except Exception:
             return False
 
+    @staticmethod
+    def _resolve_data_link(
+        csv_data_path: str,
+        data_dir: Path,
+        extra_env: Optional[Dict[str, str]],
+    ) -> tuple[str, str, Optional[str]]:
+        """大文件引用原路径，小文件复制到沙箱目录。"""
+        import shutil
+
+        settings = get_settings()
+        abs_src = os.path.abspath(csv_data_path)
+        size = os.path.getsize(abs_src)
+        tier = (extra_env or {}).get("AISCI_DATA_TIER") or resolve_analysis_tier(size)
+        no_copy = size > int(settings.LARGE_FILE_NO_COPY_BYTES) or tier in ("T1", "T2", "T3")
+
+        sample_parquet = (extra_env or {}).get("AISCI_SAMPLE_PARQUET") or ""
+        if sample_parquet and os.path.isfile(sample_parquet):
+            dest = str(data_dir / "sample.parquet")
+            if not Path(dest).exists():
+                shutil.copy2(sample_parquet, dest)
+            return dest, "sample_parquet", None
+
+        if no_copy:
+            return abs_src, "reference", str(Path(abs_src).parent)
+
+        dest = str(data_dir / "input.csv")
+        if not Path(dest).exists():
+            shutil.copy2(abs_src, dest)
+        return dest, "copy", None
+
     def _run_in_docker(
         self,
         exp_dir: Path,
         wrapper_path: Path,
         env: Dict[str, str],
         linked_data: Optional[str],
+        external_data_mount: Optional[str],
+        tier: str,
     ):
-        """P2-8: 可选 Docker 隔离执行，失败时由调用方降级 subprocess。"""
+        """可选 Docker 隔离执行，失败时由调用方降级 subprocess。"""
         if not self._docker_available():
             return None, "subprocess", "docker unavailable"
 
+        memory = env.get("AISCI_SANDBOX_DOCKER_MEMORY") or tier_sandbox_docker_memory(tier)
+        timeout_sec = int(env.get("AISCI_SANDBOX_TIMEOUT_SEC") or tier_sandbox_timeout_sec(tier))
         work_mount = f"{exp_dir.resolve()}:/work"
         cmd = [
             "docker", "run", "--rm",
             "--network", "none",
-            "--memory", "512m",
+            "--memory", memory,
             "--cpus", "1",
             "-v", work_mount,
             "-w", "/work",
             "-e", "PYTHONIOENCODING=utf-8",
             "-e", "MPLBACKEND=Agg",
-            "-e", f"AISCI_RUN_DIR=/work",
-            "-e", f"AISCI_PLOTS_DIR=/work/plots",
+            "-e", "AISCI_RUN_DIR=/work",
+            "-e", "AISCI_PLOTS_DIR=/work/plots",
         ]
-        if linked_data:
+        if external_data_mount and linked_data:
+            host_dir = Path(external_data_mount).resolve()
+            cmd.extend(["-v", f"{host_dir}:/ext_data:ro"])
+            container_path = f"/ext_data/{Path(linked_data).name}"
+            cmd.extend(["-e", f"AISCI_DATA_PATH={container_path}", "-e", f"CSV_DATA_PATH={container_path}"])
+        elif linked_data:
             cmd.extend(["-e", "AISCI_DATA_PATH=/work/data/input.csv", "-e", "CSV_DATA_PATH=/work/data/input.csv"])
-        for key in ("AISCI_DATA_PATH", "CSV_DATA_PATH", "AISCI_PLOTS_DIR", "AISCI_RUN_DIR"):
-            if env.get(key) and key not in ("AISCI_DATA_PATH", "CSV_DATA_PATH"):
+        passthrough = (
+            "AISCI_DATA_TIER", "AISCI_SAMPLE_ROWS", "AISCI_SAMPLE_PARQUET",
+            "AISCI_SANDBOX_TIMEOUT_SEC", "AISCI_PROJECT_ID",
+        )
+        for key in passthrough:
+            if env.get(key):
                 cmd.extend(["-e", f"{key}={env[key]}"])
         cmd.extend([SANDBOX_DOCKER_IMAGE, "python", "_sandbox_runner.py"])
 
@@ -204,7 +281,7 @@ class ExperimentSandboxService:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=SANDBOX_TIMEOUT_SEC + 30,
+                timeout=timeout_sec + 30,
             )
             return proc, "docker", None
         except subprocess.TimeoutExpired as exc:
@@ -223,6 +300,16 @@ class ExperimentSandboxService:
             "_AISCI_DATA = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
             "if not _AISCI_DATA:\n"
             "    raise FileNotFoundError('沙箱未注入 AISCI_DATA_PATH，请上传或合并 CSV 后重试')\n"
+            "def _aisci_load_data():\n"
+            "    import pandas as pd\n"
+            "    tier = os.environ.get('AISCI_DATA_TIER', 'T0')\n"
+            "    sample_pq = os.environ.get('AISCI_SAMPLE_PARQUET') or ''\n"
+            "    nrows = int(os.environ.get('AISCI_SAMPLE_ROWS') or '0')\n"
+            "    if tier in ('T1', 'T2', 'T3') and sample_pq and os.path.exists(sample_pq):\n"
+            "        return pd.read_parquet(sample_pq)\n"
+            "    if tier in ('T1', 'T2', 'T3') and nrows > 0:\n"
+            "        return pd.read_csv(_AISCI_DATA, nrows=nrows)\n"
+            "    return pd.read_csv(_AISCI_DATA)\n"
             "# --- end preamble ---\n\n"
         )
         body = script or ""
@@ -330,6 +417,12 @@ finally:
                     "is_generated_from_real_data": True,
                 })
         return plots
+
+    @staticmethod
+    def _is_output_complete(metrics: Dict[str, Any], plots: List[Dict[str, Any]]) -> bool:
+        from app.services.report_plot_service import is_sandbox_output_complete
+
+        return is_sandbox_output_complete(metrics, plots)
 
 
 def get_experiment_sandbox_service() -> ExperimentSandboxService:

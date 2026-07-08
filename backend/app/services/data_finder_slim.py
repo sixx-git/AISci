@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _MAX_LIST_ITEMS = 20
 _MAX_STR_LEN = 2000
@@ -209,6 +209,211 @@ def slim_data_context(context: Any) -> Dict[str, Any]:
     return {k: v for k, v in slim.items() if v is not None}
 
 
+def slim_literature_mining_output(output: Dict[str, Any]) -> Dict[str, Any]:
+    """文献挖掘阶段持久化：保留 facts/uncertain_points 供下游与 UI，瘦身大字段。"""
+    if not isinstance(output, dict):
+        return {}
+    if output.get("_truncated"):
+        return output
+
+    lm = dict(output)
+    papers = lm.get("source_papers") or lm.get("retrieved_papers")
+    if isinstance(papers, list) and len(papers) > _MAX_LIST_ITEMS:
+        lm["source_papers"] = papers[:_MAX_LIST_ITEMS]
+        lm["source_papers_count"] = len(papers)
+
+    facts = lm.get("facts")
+    if isinstance(facts, list):
+        slim_facts: List[Dict[str, Any]] = []
+        for f in facts[:50]:
+            if not isinstance(f, dict):
+                continue
+            slim_facts.append({
+                **{k: v for k, v in f.items() if k not in ("fact_text", "quote_text", "content")},
+                "content": _truncate_str(f.get("content") or f.get("fact_text"), 800),
+                "fact_text": _truncate_str(f.get("fact_text") or f.get("content"), 1200),
+                "quote_text": _truncate_str(f.get("quote_text"), 300),
+            })
+        lm["facts"] = slim_facts
+        if len(facts) > 50:
+            lm["facts_count"] = len(facts)
+
+    uncertain = lm.get("uncertain_points")
+    if isinstance(uncertain, list) and len(uncertain) > 30:
+        lm["uncertain_points"] = uncertain[:30]
+        lm["uncertain_points_count"] = len(uncertain)
+
+    evidence = lm.get("evidence")
+    if isinstance(evidence, list):
+        lm["evidence_count"] = len(evidence)
+        lm["evidence"] = evidence[:10]
+
+    citation_map = lm.get("citation_map")
+    if isinstance(citation_map, list):
+        lm["citation_map_count"] = len(citation_map)
+        lm["citation_map"] = citation_map[:15]
+
+    so = lm.get("skill_outputs")
+    if isinstance(so, dict):
+        lm["skill_outputs"] = {
+            k: {"success": (v or {}).get("success"), "data_keys": list(((v or {}).get("data") or {}).keys())[:12]}
+            if isinstance(v, dict) else v
+            for k, v in so.items()
+        }
+    return lm
+
+
+def _report_payload_usable(data: Dict[str, Any]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    if data.get("paper_title") or data.get("title"):
+        return True
+    chapters = data.get("chapters")
+    return isinstance(chapters, dict) and any(chapters.values())
+
+
+def _try_parse_json_text(text: str) -> Dict[str, Any]:
+    if not isinstance(text, str) or not text.strip():
+        return {}
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def slim_report_generation_output(output: Dict[str, Any]) -> Dict[str, Any]:
+    """报告阶段持久化：保留章节结构与元数据，截断超长文本。"""
+    if not isinstance(output, dict):
+        return {}
+    if output.get("_truncated"):
+        return output
+
+    slim: Dict[str, Any] = {
+        k: output[k]
+        for k in (
+            "title",
+            "paper_title",
+            "paper_abstract",
+            "report_id",
+            "pdf_success",
+            "export_method",
+            "warning",
+            "human_review_required",
+            "report_mode",
+            "compliance_check",
+        )
+        if k in output
+    }
+    if isinstance(output.get("paper_abstract"), str):
+        slim["paper_abstract"] = _truncate_str(output["paper_abstract"], 8000)
+
+    chapters = output.get("chapters")
+    if isinstance(chapters, dict):
+        slim_chapters: Dict[str, Any] = {}
+        for key, val in chapters.items():
+            if key == "references" and isinstance(val, list):
+                slim_chapters[key] = val[:80]
+                if len(val) > 80:
+                    slim_chapters["references_count"] = len(val)
+            else:
+                slim_chapters[key] = _truncate_str(val, 12000)
+        slim["chapters"] = slim_chapters
+
+    plots = output.get("plots")
+    if isinstance(plots, list):
+        from app.services.report_plot_service import slim_plot_for_db
+
+        slim["plots"] = [slim_plot_for_db(p) for p in plots[:30] if isinstance(p, dict)]
+        slim["plots_count"] = len(plots)
+
+    return slim
+
+
+def resolve_report_generation_payload(
+    report_data: Any,
+    *,
+    memory_fallback: Any = None,
+    storage_fallback: Any = None,
+) -> Dict[str, Any]:
+    """从阶段输出、内存缓存或磁盘 JSON 恢复可落库的报告结构。"""
+    ordered: List[Dict[str, Any]] = []
+
+    if isinstance(memory_fallback, dict) and _report_payload_usable(memory_fallback):
+        ordered.append(memory_fallback)
+
+    if isinstance(report_data, dict) and report_data:
+        if not report_data.get("_truncated"):
+            ordered.append(report_data)
+        else:
+            preview = _try_parse_json_text(report_data.get("preview") or "")
+            if preview:
+                ordered.append(preview)
+            elif report_data.get("report_id"):
+                disk = load_report_data_from_storage(str(report_data["report_id"]))
+                if disk:
+                    ordered.append(disk)
+
+    if isinstance(storage_fallback, dict) and _report_payload_usable(storage_fallback):
+        ordered.append(storage_fallback)
+
+    for resolved in ordered:
+        if _report_payload_usable(resolved):
+            return resolved
+    return {}
+
+
+def load_report_data_from_storage(report_file_id: str) -> Dict[str, Any]:
+    """读取报告生成阶段写入的 report_data.json。"""
+    if not report_file_id:
+        return {}
+    try:
+        from app.services.latex_export_service import get_reports_storage_dir
+
+        json_path = get_reports_storage_dir() / report_file_id / "report_data.json"
+        if not json_path.is_file():
+            return {}
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def find_recent_report_data_on_disk(
+    *,
+    not_before_ts: Optional[float] = None,
+    not_after_ts: Optional[float] = None,
+) -> Dict[str, Any]:
+    """按修改时间扫描磁盘报告，用于 Pipeline 落库补偿。"""
+    try:
+        from app.services.latex_export_service import get_reports_storage_dir
+
+        root = get_reports_storage_dir()
+        if not root.is_dir():
+            return {}
+        best: tuple[float, Dict[str, Any]] = (0.0, {})
+        for child in root.iterdir():
+            if not child.is_dir():
+                continue
+            json_path = child / "report_data.json"
+            if not json_path.is_file():
+                continue
+            mtime = json_path.stat().st_mtime
+            if not_before_ts is not None and mtime < not_before_ts:
+                continue
+            if not_after_ts is not None and mtime > not_after_ts:
+                continue
+            if mtime <= best[0]:
+                continue
+            data = load_report_data_from_storage(child.name)
+            if _report_payload_usable(data):
+                best = (mtime, data)
+        return best[1]
+    except Exception:
+        return {}
+
+
 def slim_stage_output(output: Any, stage_key: str = "") -> Any:
     """阶段 output_data 持久化到 DB 前瘦身。"""
     if output is None:
@@ -220,24 +425,10 @@ def slim_stage_output(output: Any, stage_key: str = "") -> Any:
     if key in ("data_acquisition", "data_finder"):
         return slim_data_acquisition_output(output)
     if key == "literature_mining":
-        lm = dict(output)
-        papers = lm.get("source_papers") or lm.get("retrieved_papers")
-        if isinstance(papers, list) and len(papers) > _MAX_LIST_ITEMS:
-            lm["source_papers"] = papers[:_MAX_LIST_ITEMS]
-            lm["source_papers_count"] = len(papers)
-        facts = lm.get("facts")
-        if isinstance(facts, list) and len(facts) > _MAX_LIST_ITEMS:
-            lm["facts"] = facts[:_MAX_LIST_ITEMS]
-            lm["facts_count"] = len(facts)
-        so = lm.get("skill_outputs")
-        if isinstance(so, dict):
-            lm["skill_outputs"] = {
-                k: {"success": (v or {}).get("success"), "data_keys": list(((v or {}).get("data") or {}).keys())[:12]}
-                if isinstance(v, dict) else v
-                for k, v in so.items()
-            }
-        output = lm
-    if key == "experiment_design":
+        output = slim_literature_mining_output(output)
+    elif key == "report_generation":
+        output = slim_report_generation_output(output)
+    elif key == "experiment_design":
         ed = dict(output)
         so = ed.get("skill_outputs")
         if isinstance(so, dict):
@@ -262,6 +453,11 @@ def slim_stage_output(output: Any, stage_key: str = "") -> Any:
             return output
     except (TypeError, ValueError):
         return {"_truncated": True, "preview": _truncate_str(str(output), 4000)}
+
+    if key == "literature_mining" and isinstance(output, dict):
+        return slim_literature_mining_output(output)
+    if key == "report_generation" and isinstance(output, dict):
+        return slim_report_generation_output(output)
 
     wrapped = slim_results_for_checkpoint({"_stage": output})
     return wrapped.get("_stage", output)

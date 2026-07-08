@@ -220,6 +220,26 @@ class ReportQualityCheckSkill(BaseSkill):
                     has_content = True
                 else:
                     missing_fields.append(label)
+            elif key == "results":
+                from app.services.report_compliance_service import assess_results_chapter
+
+                merged = value
+                if assess_results_chapter(merged) == "none":
+                    merged = report_data.get("results") or chapters.get("results")
+                level = assess_results_chapter(merged)
+                if level == "complete":
+                    completed_fields += 1
+                    has_content = True
+                elif level == "partial":
+                    completed_fields += 1
+                    has_content = True
+                elif isinstance(merged, str) and len(merged.strip()) >= 20:
+                    completed_fields += 1
+                    has_content = True
+                elif isinstance(merged, str) and len(merged.strip()) > 0:
+                    warnings.append(f"{label} 内容较短，建议补充（当前 {len(merged.strip())} 字符）")
+                else:
+                    missing_fields.append(label)
             elif isinstance(value, str) and len(value.strip()) >= 20:
                 completed_fields += 1
                 has_content = True
@@ -229,8 +249,6 @@ class ReportQualityCheckSkill(BaseSkill):
                 missing_fields.append(label)
 
             if has_content:
-                if key == "technical_details":
-                    self._check_technical_details(value, warnings, critical_issues)
                 if key == "results":
                     self._check_results_field(value, chapters, warnings, critical_issues)
 
@@ -306,6 +324,10 @@ class ReportQualityCheckSkill(BaseSkill):
             structured = report_data.get(key)
             if isinstance(structured, dict) and len(structured) > 0:
                 return structured
+        if key == "results":
+            top = report_data.get("results")
+            if top is not None and top != "":
+                return top
         return chapters.get(key, "")
 
     # ────────────── Results Structure Check ──────────────
@@ -336,10 +358,8 @@ class ReportQualityCheckSkill(BaseSkill):
     def _check_technical_details(
         value: Any, warnings: List[str], critical_issues: List[str],
     ) -> None:
-        text = str(value) if value else ""
-        has_qwen = any(pat.search(text) for pat in Qwen_KEYWORDS)
-        if not has_qwen:
-            critical_issues.append("Technical Details 未明确提及 Qwen/千问 和阿里云百炼")
+        """Technical Details 聚焦科学方法即可，不再强制提及 Qwen/百炼。"""
+        _ = (value, warnings, critical_issues)
 
     @staticmethod
     def _check_datasets(

@@ -598,6 +598,7 @@ class PreliminaryAnalysisSkill(BaseSkill):
                 "y_label": "频次",
                 "source_dataset_id": ds_id,
                 "is_generated_from_real_data": True,
+                "chart_kind": "descriptive_stat",
             })
 
         if len(numeric_cols) >= 2:
@@ -618,6 +619,7 @@ class PreliminaryAnalysisSkill(BaseSkill):
                         "y_label": c2,
                         "source_dataset_id": ds_id,
                         "is_generated_from_real_data": True,
+                        "chart_kind": "descriptive_stat",
                     })
 
         if len(numeric_cols) >= 3:
@@ -634,6 +636,7 @@ class PreliminaryAnalysisSkill(BaseSkill):
                 "y_label": "特征",
                 "source_dataset_id": ds_id,
                 "is_generated_from_real_data": True,
+                "chart_kind": "descriptive_stat",
             })
 
         if categorical_cols:
@@ -651,6 +654,7 @@ class PreliminaryAnalysisSkill(BaseSkill):
                     "y_label": "频次",
                     "source_dataset_id": ds_id,
                     "is_generated_from_real_data": True,
+                    "chart_kind": "descriptive_stat",
                 })
 
         return plots

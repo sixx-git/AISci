@@ -30,9 +30,48 @@ interface ReportDbRaw {
   updated_at?: string;
 }
 
+function dedupeReportPlots(plots: ReportPlot[]): ReportPlot[] {
+  const seen = new Set<string>();
+  const ranked = [...plots].sort((a, b) => {
+    const score = (p: ReportPlot) => {
+      const source = (p.source || '').toLowerCase();
+      if (source === 'sandbox_execution' || source === 'pilot_analysis') return 0;
+      if (p.chart_kind === 'experiment_result') return 1;
+      if (p.chart_kind === 'descriptive_stat') return 3;
+      return 2;
+    };
+    return score(a) - score(b);
+  });
+  const out: ReportPlot[] = [];
+  for (const plot of ranked) {
+    const key = plot.plot_id || `${plot.title}|${plot.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(plot);
+  }
+  return out;
+}
+
+export function resolvePlotImageSrc(reportId: string, plot: ReportPlot): string | null {
+  if (plot.url) {
+    return plot.url.startsWith('http') ? plot.url : plot.url;
+  }
+  if (reportId && plot.plot_id && (plot.has_image || !plot.base64)) {
+    return `/api/v1/reports/plots/${reportId}/${plot.plot_id}/image`;
+  }
+  if (plot.base64) {
+    return `data:image/png;base64,${plot.base64}`;
+  }
+  if (reportId && plot.plot_id) {
+    return `/api/v1/reports/plots/${reportId}/${plot.plot_id}/image`;
+  }
+  return null;
+}
+
 function mapDbToReportData(db: ReportDbRaw): ReportData {
   const extraMeta = (db.extra_metadata || {}) as Record<string, unknown>;
-  const plots = (extraMeta.plots as ReportData['plots']) || [];
+  const rawPlots = (extraMeta.plots as ReportData['plots']) || [];
+  const plots = dedupeReportPlots(rawPlots);
 
   const rawCompliance = extractComplianceCheck(extraMeta);
   const qcFromMeta = extraMeta.report_quality_check as ComplianceCheck['report_quality_check'];

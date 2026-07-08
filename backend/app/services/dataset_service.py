@@ -104,6 +104,41 @@ class DatasetService:
             f.write(content)
         return file_path
 
+    async def save_uploaded_file_stream(
+        self,
+        project_id: str,
+        filename: str,
+        upload_file,
+        *,
+        max_bytes: Optional[int] = None,
+    ) -> tuple[str, int]:
+        """流式写入磁盘，避免大文件整包进内存。"""
+        settings = get_settings()
+        limit = int(max_bytes if max_bytes is not None else settings.MAX_UPLOAD_SIZE)
+        chunk_size = max(64 * 1024, int(settings.UPLOAD_CHUNK_SIZE))
+        ds_dir = self._get_storage_dir(project_id)
+        safe_name = f"{uuid.uuid4().hex[:8]}_{filename}"
+        file_path = os.path.join(ds_dir, safe_name)
+        total = 0
+        with open(file_path, "wb") as out:
+            while True:
+                chunk = await upload_file.read(chunk_size)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > limit:
+                    out.close()
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    raise ValueError(
+                        f"文件大小超过限制 ({limit / (1024 * 1024):.0f} MB)。"
+                        "可在 .env 中调整 MAX_UPLOAD_SIZE。"
+                    )
+                out.write(chunk)
+        return file_path, total
+
     def analyze_tabular_preview(self, file_path: str, n_preview: int = 10) -> Dict[str, Any]:
         result: Dict[str, Any] = {
             "columns": [],
@@ -116,6 +151,30 @@ class DatasetService:
             "preview": [],
         }
         try:
+            settings = get_settings()
+            file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
+            if file_size > int(settings.LARGE_FILE_THRESHOLD_BYTES):
+                from app.services.data_probe_service import get_data_probe_service
+
+                probe = get_data_probe_service().probe_tabular(file_path)
+                if probe.get("probe_status") == "completed":
+                    result.update({
+                        "columns": probe.get("columns") or [],
+                        "dtypes": probe.get("dtypes") or {},
+                        "n_rows": probe.get("n_rows") or 0,
+                        "n_columns": probe.get("n_columns") or 0,
+                        "missing_count": probe.get("missing_count") or 0,
+                        "missing_rate": probe.get("missing_rate") or 0.0,
+                        "statistics": probe.get("statistics") or {},
+                        "preview": (probe.get("preview") or [])[:_MAX_PREVIEW_ROWS],
+                        "_large_file_probe": True,
+                        "analysis_tier": probe.get("analysis_tier"),
+                        "probe_engine": probe.get("probe_engine"),
+                        "row_count_est": probe.get("row_count_est"),
+                        "sample_parquet_path": probe.get("sample_parquet_path"),
+                    })
+                    return result
+
             import pandas as pd
             ext = os.path.splitext(file_path)[1].lower()
             if ext in (".xlsx", ".xls"):
@@ -349,6 +408,19 @@ class DatasetService:
                     ds.missing_rate = analysis.get("missing_rate", 0.0)
                     ds.statistics_json = _json_dumps_bounded(analysis.get("statistics", {}))
                     ds.preview_json = _json_dumps_bounded(analysis.get("preview", []))
+                    if analysis.get("_large_file_probe"):
+                        meta = {
+                            "analysis_tier": analysis.get("analysis_tier"),
+                            "probe_engine": analysis.get("probe_engine"),
+                            "file_size_bytes": file_size or os.path.getsize(file_path) if os.path.isfile(file_path) else 0,
+                            "row_count_est": analysis.get("row_count_est") or analysis.get("n_rows"),
+                            "sample_parquet_path": analysis.get("sample_parquet_path"),
+                            "large_file_probe": True,
+                        }
+                        ds.extra_metadata = json.dumps(
+                            {k: v for k, v in meta.items() if v is not None},
+                            ensure_ascii=False,
+                        )
                     ds.preprocessing_status = "completed"
                 elif data_type == "image":
                     analysis = self._analyze_image_file(file_path)
@@ -855,6 +927,10 @@ class DatasetService:
         return True
 
     def to_response(self, ds: Dataset) -> dict:
+        from app.core.dataset_scale import parse_dataset_extra_metadata, dataset_analysis_tier
+
+        meta = parse_dataset_extra_metadata(ds.extra_metadata)
+        tier = dataset_analysis_tier(ds)
         return {
             "id": ds.id,
             "project_id": ds.project_id,
@@ -874,6 +950,10 @@ class DatasetService:
             "preprocessing_status": ds.preprocessing_status,
             "use_for_hypothesis": ds.use_for_hypothesis,
             "extra_metadata": ds.extra_metadata,
+            "analysis_tier": tier,
+            "row_count_est": meta.get("row_count_est"),
+            "sample_parquet_path": meta.get("sample_parquet_path"),
+            "probe_engine": meta.get("probe_engine"),
             "created_at": ds.created_at.isoformat() if ds.created_at else None,
             "updated_at": ds.updated_at.isoformat() if ds.updated_at else None,
         }

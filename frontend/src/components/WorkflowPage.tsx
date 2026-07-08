@@ -12,6 +12,7 @@ import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
+import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
 import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
@@ -24,6 +25,7 @@ import type {
   AgentNodeData,
   AgentStatus,
   EnsembleReviewData,
+  ProConAdversarialData,
   IdeationNoveltyData,
   PlotQualityData,
   PipelineRunExtraMetadata,
@@ -529,6 +531,14 @@ export function WorkflowPage({
       overall: raw.overall ?? (out.ensemble_overall as number | undefined),
       decision: raw.decision ?? (out.ensemble_decision as string | undefined),
     };
+  }, [selectedNode]);
+
+  const proConAdversarial = useMemo((): ProConAdversarialData | null => {
+    if (selectedNode?.id !== 'evaluation' || !selectedNode.output_data) return null;
+    const out = selectedNode.output_data as Record<string, unknown>;
+    const so = out.skill_outputs as Record<string, unknown> | undefined;
+    const raw = so?.pro_con_adversarial as ProConAdversarialData | undefined;
+    return raw?.mode && raw.mode !== 'off' ? raw : null;
   }, [selectedNode]);
 
   const ideationData = useMemo((): IdeationNoveltyData | null => {
@@ -1426,8 +1436,14 @@ export function WorkflowPage({
             </CollapsiblePanel>
           )}
 
+          {proConAdversarial && (
+            <CollapsiblePanel title="红蓝对抗" subtitle="ProConAdversarialPanel" defaultOpen>
+              <ProConAdversarialPanel data={proConAdversarial} />
+            </CollapsiblePanel>
+          )}
+
           {ensembleReview && (
-            <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel" defaultOpen={false}>
+            <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel（含反方质疑权重）" defaultOpen={false}>
               <EnsembleReviewPanel
                 review={ensembleReview}
                 onRerunFromReview={effectiveRunId ? handleRerunFromReview : undefined}

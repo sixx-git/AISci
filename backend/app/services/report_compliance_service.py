@@ -442,17 +442,8 @@ def chapter_has_content(chapter: Any, *, min_len: int = 10) -> bool:
 
 
 def ensure_technical_details_qwen_disclosure(text: Any) -> str:
-    """赛题要求 Technical Details 明确 Qwen/百炼；历史报告或净化后可能缺失。"""
-    from app.skills.report.report_quality_check_skill import Qwen_KEYWORDS
-
-    raw = str(text or "").strip()
-    if any(p.search(raw) for p in Qwen_KEYWORDS):
-        return raw
-    disclosure = (
-        "\n\n本研究的假设梳理、实验设计与报告撰写辅助环节使用通义千问（Qwen）"
-        "系列大语言模型，并通过阿里云百炼平台完成推理服务调用。"
-    )
-    return raw + disclosure
+    """保留兼容入口；不再自动追加 Qwen/百炼披露（报告正文聚焦科学内容）。"""
+    return str(text or "").strip()
 
 
 def _backfill_quality_score(data: Dict[str, Any], merged: Dict[str, Any]) -> None:

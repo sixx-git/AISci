@@ -67,7 +67,14 @@ class Settings(BaseSettings):
     
     # 文件上传配置
     UPLOAD_DIR: str = "./storage/uploads"
-    MAX_UPLOAD_SIZE: int = 52428800
+    MAX_UPLOAD_SIZE: int = 2 * 1024 * 1024 * 1024  # 2GB
+    UPLOAD_CHUNK_SIZE: int = 8 * 1024 * 1024  # 8MB 流式写盘块大小
+    LARGE_FILE_THRESHOLD_BYTES: int = 50 * 1024 * 1024  # 超过则跳过 pandas 全表 analyze
+    LARGE_FILE_NO_COPY_BYTES: int = 50 * 1024 * 1024  # 沙箱超过则引用原路径，不 copy2
+    DATA_PROBE_SAMPLE_ROWS: int = 1000  # DuckDB/采样探查行数
+    SANDBOX_TIMEOUT_T0_SEC: int = 120
+    SANDBOX_TIMEOUT_T1_SEC: int = 300
+    SANDBOX_TIMEOUT_T2_SEC: int = 600
     ALLOWED_EXTENSIONS: str = "txt,pdf,docx,md,csv"
     
     # arXiv 配置

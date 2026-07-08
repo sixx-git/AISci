@@ -291,6 +291,29 @@ async def browse_reports(
         return error(str(e))
 
 
+@router.get("/plots/{report_id}/{plot_id}/image")
+async def get_report_plot_image(
+    report_id: str,
+    plot_id: str,
+    db: Session = Depends(get_db),
+):
+    """按需返回报告实验图 PNG（避免列表接口携带大量 base64）。"""
+    try:
+        report_service = ReportService(db)
+        image_path = report_service.get_plot_image_path(report_id, plot_id)
+        if not image_path or not image_path.is_file():
+            raise HTTPException(status_code=404, detail="图表不存在")
+        return FileResponse(
+            path=str(image_path),
+            media_type="image/png",
+            filename=f"{plot_id}.png",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        return error(str(e))
+
+
 @router.get("/{project_id}", response_model=ApiResponse[List[ReportDBResponse]])
 async def get_project_reports(
     project_id: str,

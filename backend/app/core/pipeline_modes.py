@@ -27,8 +27,10 @@ DEFAULT_MIN_IMPROVEMENT_DELTA = 3.0
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
 DEFAULT_DATA_SPEC_GAP_THRESHOLD = 60.0
 DEFAULT_MAX_GAP_ROUNDS = 2
+DEFAULT_CON_CHALLENGE_MAX_ROUNDS = 2
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
+VALID_ADVERSARIAL_MODES = ("single_group", "multi_group", "off")
 
 HITL_GATE_STAGE_LABELS = {
     "hypothesis_generation": "假设生成",
@@ -103,6 +105,19 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         mode = PipelineMode.DISCOVERY.value
         enable_hitl_gate = False
         teaching_auto = False
+    enable_pro_con = opts.get("enable_pro_con_adversarial", True)
+    adversarial_mode = opts.get("adversarial_mode", "single_group")
+    if adversarial_mode not in VALID_ADVERSARIAL_MODES:
+        adversarial_mode = "single_group"
+    if not enable_pro_con:
+        adversarial_mode = "off"
+    if adversarial_mode == "multi_group" and num_ideas < 2:
+        adversarial_mode = "single_group"
+    con_max_rounds = opts.get("con_challenge_max_rounds", DEFAULT_CON_CHALLENGE_MAX_ROUNDS)
+    try:
+        con_max_rounds = max(1, min(int(con_max_rounds), 4))
+    except (TypeError, ValueError):
+        con_max_rounds = DEFAULT_CON_CHALLENGE_MAX_ROUNDS
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -124,4 +139,8 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "data_spec_gap_threshold": data_spec_threshold,
         "max_gap_rounds": max_gap_rounds,
         "enable_quick_report": enable_quick_report,
+        "enable_pro_con_adversarial": bool(enable_pro_con),
+        "adversarial_mode": adversarial_mode,
+        "con_challenge_max_rounds": con_max_rounds,
+        "enable_hypothesis_evolution": bool(opts.get("enable_hypothesis_evolution", True)),
     }
