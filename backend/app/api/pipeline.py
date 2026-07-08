@@ -48,6 +48,8 @@ def _human_fields_from_stage(stage: PipelineStageExecution) -> dict:
         "human_feedback": meta.get("human_feedback"),
         "edited_at": meta.get("edited_at"),
         "revision_history": history,
+        "chat_history": meta.get("chat_history") or [],
+        "human_edited": bool(meta.get("human_edited")),
     }
 
 CHINA_TZ = timezone(timedelta(hours=8))
@@ -533,6 +535,7 @@ async def rerun_from_stage(
             from_stage=body.stage,
             use_human_modified_output=body.use_human_modified_output,
             rerun_mode=rerun_mode,
+            human_feedback=getattr(body, "human_feedback", "") or "",
         )
         thread = threading.Thread(
             target=_execute_pipeline_background,

@@ -427,6 +427,91 @@ class ReportService:
             self.db.rollback()
             logger.error(f"更新研究报告失败: {e}", exc_info=True)
             raise
+
+    def sync_from_stage_human_output(
+        self,
+        project_id: str,
+        run_id: str,
+        stage_output: Dict[str, Any],
+    ) -> Optional[str]:
+        """将报告阶段 human_modified_output 同步到 Report 表，供报告 Tab 展示。"""
+        from app.models.pipeline import PipelineRun
+        from app.services.data_finder_slim import resolve_report_generation_payload
+
+        payload = resolve_report_generation_payload(stage_output) or stage_output
+        if not isinstance(payload, dict) or not payload:
+            return None
+
+        run = self.db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+        db_report: Optional[Report] = None
+        if run and run.final_report_id:
+            db_report = self.get_report_by_id(run.final_report_id)
+        if not db_report:
+            db_report = (
+                self.db.query(Report)
+                .filter(Report.project_id == project_id)
+                .order_by(Report.updated_at.desc(), Report.created_at.desc())
+                .first()
+            )
+        if not db_report:
+            logger.warning(
+                "报告 HITL 同步跳过：未找到 Report project=%s run=%s", project_id, run_id
+            )
+            return None
+
+        chapters = payload.get("chapters", {}) if isinstance(payload.get("chapters"), dict) else {}
+        title = str(payload.get("paper_title") or payload.get("title") or db_report.title or "研究报告")
+        db_report.title = title
+        db_report.paper_title = title
+        if payload.get("paper_abstract") is not None:
+            db_report.paper_abstract = _chapter_to_db_text(payload.get("paper_abstract"))
+
+        chapter_fields = (
+            "problem_statement",
+            "rationale",
+            "technical_details",
+            "datasets",
+            "source",
+            "target",
+            "methods",
+            "experiments",
+            "results",
+        )
+        for field in chapter_fields:
+            if field in chapters:
+                setattr(db_report, field, _chapter_to_db_text(chapters[field]))
+            elif field in payload:
+                setattr(db_report, field, _chapter_to_db_text(payload[field]))
+
+        if "references" in chapters:
+            refs = chapters["references"]
+            db_report.references = (
+                json.dumps(refs, ensure_ascii=False) if isinstance(refs, (list, dict)) else _chapter_to_db_text(refs)
+            )
+        elif "references" in payload:
+            refs = payload["references"]
+            db_report.references = (
+                json.dumps(refs, ensure_ascii=False) if isinstance(refs, (list, dict)) else _chapter_to_db_text(refs)
+            )
+
+        extra = merge_report_extra_metadata(
+            db_report.extra_metadata if isinstance(db_report.extra_metadata, dict) else {},
+            payload,
+        )
+        extra["last_hitl_sync_at"] = datetime.now().isoformat()
+        extra["hitl_sync_run_id"] = run_id
+        db_report.extra_metadata = extra
+        db_report.version = int(db_report.version or 1) + 1
+        db_report.updated_at = datetime.now()
+        self.db.commit()
+        self.db.refresh(db_report)
+        logger.info(
+            "报告 HITL 同步成功 project=%s run=%s report_id=%s",
+            project_id,
+            run_id,
+            db_report.id,
+        )
+        return db_report.id
     
     def _re_enrich_report_chapters(self, db_report: Report) -> Dict[str, Any]:
         """用 Pipeline 数据上下文回填/补全报告章节（尤其 results 与 FITS 数据）。"""

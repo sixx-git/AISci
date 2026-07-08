@@ -31,6 +31,10 @@ class RerunFromStageRequest(BaseModel):
         default="single_stage",
         description="single_stage=仅重跑本阶段; from_stage_onward=从本阶段起执行后续流程",
     )
+    human_feedback: str = Field(
+        default="",
+        description="重跑时注入该阶段的额外约束/修改意见",
+    )
 
 
 class RerunFromStageResponse(BaseModel):
@@ -114,6 +118,10 @@ class StageChatRequest(BaseModel):
     stage: str
     message: str
     apply_change: bool = True
+    mode: str = Field(
+        default="advisory",
+        description="advisory=咨询对话不改输出; revise=轻量修订 human_modified_output",
+    )
 
 
 class StageChatResponse(BaseModel):
@@ -124,6 +132,9 @@ class StageChatResponse(BaseModel):
     explanation: str
     changes_summary: List[str] = Field(default_factory=list)
     applied: bool = True
+    chat_history: List[Dict[str, Any]] = Field(default_factory=list)
+    revision_mode: Optional[str] = None
+    mode: Optional[str] = None
 
 
 class MentorReviewRequest(BaseModel):

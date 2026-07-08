@@ -48,7 +48,9 @@ def _l2_normalize(arr: np.ndarray) -> np.ndarray:
 def _is_zvec_collection(path) -> bool:
     from pathlib import Path
     p = Path(path)
-    return p.is_dir() and (p / "manifest.0").exists()
+    if not p.is_dir():
+        return False
+    return any(p.glob("manifest.*"))
 
 
 def _is_legacy_faiss_index(path) -> bool:
@@ -86,12 +88,29 @@ class BaseEmbedding:
         raise NotImplementedError
 
 
+def _load_sentence_transformer(model_name: str, *, local_only: bool = True):
+    """加载 SentenceTransformer，兼容 2.x（local_files_only 走 model_kwargs）与新版 API。"""
+    from sentence_transformers import SentenceTransformer
+
+    st_kwargs: Dict[str, Any] = {}
+    if local_only:
+        st_kwargs = {
+            "model_kwargs": {"local_files_only": True},
+            "tokenizer_kwargs": {"local_files_only": True},
+        }
+    try:
+        return SentenceTransformer(model_name, **st_kwargs)
+    except TypeError:
+        if st_kwargs:
+            return SentenceTransformer(model_name)
+        raise
+
+
 class SentenceTransformerEmbedding(BaseEmbedding):
     """Sentence-Transformers Embedding"""
 
     def __init__(self, model_name: Optional[str] = None):
         import os
-        from sentence_transformers import SentenceTransformer
 
         endpoint = (settings.HF_ENDPOINT or "").strip().rstrip("/")
         if endpoint:
@@ -100,14 +119,14 @@ class SentenceTransformerEmbedding(BaseEmbedding):
         self.model_name = model_name or settings.EMBEDDING_MODEL
         logger.info(f"Loading embedding model: {self.model_name}")
         try:
-            self._model = SentenceTransformer(self.model_name, local_files_only=True)
+            self._model = _load_sentence_transformer(self.model_name, local_only=True)
         except (OSError, ValueError) as exc:
             logger.warning(
                 "本地未找到 embedding 模型 %s，尝试在线下载: %s",
                 self.model_name,
                 exc,
             )
-            self._model = SentenceTransformer(self.model_name)
+            self._model = _load_sentence_transformer(self.model_name, local_only=False)
         self._dimension = self._model.get_sentence_embedding_dimension()
         logger.info(f"Embedding model loaded, dimension: {self._dimension}")
 
@@ -117,6 +136,119 @@ class SentenceTransformerEmbedding(BaseEmbedding):
     @property
     def dimension(self) -> int:
         return self._dimension
+
+
+QWEN_EMBEDDING_MODELS = frozenset({
+    "text-embedding-v3",
+    "text-embedding-v4",
+    "text-embedding-v2",
+    "text-embedding-v1",
+})
+
+
+class QwenDashScopeEmbedding(BaseEmbedding):
+    """DashScope 千问文本向量（OpenAI 兼容 /embeddings，复用 QWEN_API_KEY）。"""
+
+    BATCH_SIZE = 10
+    DEFAULT_DIMENSION = 1024
+
+    def __init__(self, model_name: Optional[str] = None, dimension: Optional[int] = None):
+        from openai import OpenAI
+
+        from app.core.llm_runtime import get_effective_api_key, get_effective_base_url
+
+        raw = (model_name or settings.EMBEDDING_MODEL or "").strip()
+        if raw in QWEN_EMBEDDING_MODELS:
+            self.model_name = raw
+        else:
+            self.model_name = "text-embedding-v3"
+            if raw and raw not in QWEN_EMBEDDING_MODELS:
+                logger.info(
+                    "EMBEDDING_BACKEND=qwen，将 %s 映射为 %s",
+                    raw,
+                    self.model_name,
+                )
+
+        dim_cfg = dimension if dimension is not None else settings.EMBEDDING_DIMENSION
+        self._dimension = int(dim_cfg) if dim_cfg and int(dim_cfg) > 0 else self.DEFAULT_DIMENSION
+        self._client = None
+
+        if settings.USE_MOCK_LLM:
+            logger.info("Mock LLM 模式：千问 embedding 使用确定性伪向量")
+            return
+
+        api_key = get_effective_api_key()
+        if not api_key:
+            raise ValueError(
+                "EMBEDDING_BACKEND=qwen 需要配置 QWEN_API_KEY（与对话模型共用）"
+            )
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url=get_effective_base_url(),
+        )
+        logger.info(
+            "千问 embedding 已就绪: model=%s, dimension=%s",
+            self.model_name,
+            self._dimension,
+        )
+
+    def _mock_embed(self, texts: List[str]) -> np.ndarray:
+        out = np.zeros((len(texts), self._dimension), dtype=np.float32)
+        for i, text in enumerate(texts):
+            seed = abs(hash(f"{self.model_name}:{text}")) % (2**32)
+            rng = np.random.default_rng(seed)
+            vec = rng.standard_normal(self._dimension).astype(np.float32)
+            out[i] = vec / max(np.linalg.norm(vec), 1e-12)
+        return out
+
+    def embed(self, texts: List[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, self._dimension), dtype=np.float32)
+
+        if settings.USE_MOCK_LLM or self._client is None:
+            return self._mock_embed(texts)
+
+        from openai import APIError, APIConnectionError, APITimeoutError
+
+        all_rows: List[List[float]] = []
+        for start in range(0, len(texts), self.BATCH_SIZE):
+            batch = [
+                t if isinstance(t, str) and t.strip() else " "
+                for t in texts[start : start + self.BATCH_SIZE]
+            ]
+            kwargs: Dict[str, Any] = {
+                "model": self.model_name,
+                "input": batch,
+                "encoding_format": "float",
+            }
+            if self.model_name in ("text-embedding-v3", "text-embedding-v4"):
+                kwargs["dimensions"] = self._dimension
+
+            try:
+                resp = self._client.embeddings.create(**kwargs)
+            except (APIError, APIConnectionError, APITimeoutError) as exc:
+                raise RuntimeError(f"千问 embedding API 调用失败: {exc}") from exc
+
+            ordered = sorted(resp.data, key=lambda item: item.index)
+            for item in ordered:
+                all_rows.append(list(item.embedding))
+
+        arr = np.asarray(all_rows, dtype=np.float32)
+        if arr.ndim == 2 and arr.shape[1] > 0:
+            self._dimension = int(arr.shape[1])
+        return arr
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+
+def create_embedding(model_name: Optional[str] = None) -> BaseEmbedding:
+    """按 EMBEDDING_BACKEND 创建 embedding 实现。"""
+    backend = (settings.EMBEDDING_BACKEND or "sentence_transformers").strip().lower()
+    if backend in ("qwen", "dashscope", "openai"):
+        return QwenDashScopeEmbedding(model_name=model_name)
+    return SentenceTransformerEmbedding(model_name=model_name)
 
 
 def _build_collection_schema(dimension: int):
@@ -215,17 +347,28 @@ class VectorStore:
     @property
     def embedding(self) -> BaseEmbedding:
         if self._embedding is None:
-            self._embedding = SentenceTransformerEmbedding()
+            self._embedding = create_embedding()
         return self._embedding
 
     def _project_dir(self, project_id: str):
         from pathlib import Path
-        p = self.base_path / project_id
-        p.mkdir(parents=True, exist_ok=True)
-        return p
+
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        return self.base_path / project_id
 
     def _collection_path(self, project_id: str) -> str:
         return str(self._project_dir(project_id))
+
+    def _ensure_zvec_create_path(self, path: str) -> None:
+        """Zvec create_and_open 要求路径不存在；清理空目录或残留非 Zvec 目录。"""
+        from pathlib import Path
+
+        p = Path(path)
+        if not p.exists():
+            return
+        if _is_zvec_collection(p):
+            return
+        shutil.rmtree(p, ignore_errors=True)
 
     def _load_all(self):
         for d in self.base_path.iterdir():
@@ -248,6 +391,7 @@ class VectorStore:
             if _is_zvec_collection(path):
                 col = zvec.open(path)
             elif create:
+                self._ensure_zvec_create_path(path)
                 schema = _build_collection_schema(self.embedding.dimension)
                 col = zvec.create_and_open(path=path, schema=schema)
             else:
@@ -264,12 +408,9 @@ class VectorStore:
                 col.destroy()
         except Exception as exc:
             logger.warning("Zvec destroy failed project=%s: %s", project_id, exc)
-            if path.exists():
-                shutil.rmtree(path, ignore_errors=True)
-        else:
-            if path.exists():
-                shutil.rmtree(path, ignore_errors=True)
-        path.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+        # 勿 mkdir：Zvec create_and_open 要求目标路径不存在
 
     def _collection_doc_count(self, project_id: str) -> int:
         col = self._collections.get(project_id)
@@ -424,9 +565,7 @@ def read_project_index_stats(project_id: str, db: Optional[Session] = None) -> D
     indexed_count = 0
     if zvec_exists:
         try:
-            import zvec
-            col = zvec.open(str(base))
-            indexed_count = int(col.stats.doc_count)
+            indexed_count = get_vector_store()._collection_doc_count(project_id)
         except Exception as exc:
             logger.warning("读取 Zvec stats 失败 project=%s: %s", project_id, exc)
 

@@ -13,11 +13,11 @@ class TestVectorService:
 
     @pytest.fixture
     def mock_embedding(self):
-        with patch("app.services.vector_service.SentenceTransformerEmbedding") as mock_cls:
+        with patch("app.services.vector_service.create_embedding") as mock_factory:
             mock = Mock()
             mock.dimension = 384
             mock.embed = Mock(return_value=np.random.rand(1, 384).astype(np.float32))
-            mock_cls.return_value = mock
+            mock_factory.return_value = mock
             yield mock
 
     @pytest.fixture

@@ -51,7 +51,7 @@ from app.core.execution_metadata import annotate_validation_execution_metadata
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
 from app.services.prompt_context import set_project_id as set_prompt_project_id
-from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService
+from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService, get_effective_output
 from app.services.report_service import merge_report_extra_metadata
 from app.services.prompt_override_service import get_prompt_override_service
 
@@ -246,6 +246,7 @@ class PipelineService:
         from_stage: str,
         use_human_modified_output: bool = True,
         rerun_mode: str = "single_stage",
+        human_feedback: str = "",
     ) -> str:
         """从指定阶段重新运行：默认仅重跑本阶段，保留上下游结果。"""
         if from_stage not in STAGE_KEY_ORDER:
@@ -275,6 +276,9 @@ class PipelineService:
         }
 
         version = (parent.version or 1) + 1
+        feedback_constraints: List[str] = []
+        if human_feedback and human_feedback.strip():
+            feedback_constraints.append(human_feedback.strip())
         self.db_pipeline_run = DB_PipelineRun(
             id=str(uuid.uuid4()),
             run_id=self.run_id,
@@ -288,6 +292,7 @@ class PipelineService:
                 "rerun_from_stage": from_stage,
                 "rerun_mode": rerun_mode,
                 "use_human_modified_output": use_human_modified_output,
+                "feedback_constraints": feedback_constraints,
                 "auxiliary_results": {
                     k: v for k, v in seeded.items()
                     if k not in STAGE_KEY_ORDER
@@ -399,6 +404,9 @@ class PipelineService:
                 )
             self._rerun_single_stage_only = meta.get("rerun_mode", "single_stage") == "single_stage"
             self._parent_run_id_for_rerun = parent_id
+            for c in meta.get("feedback_constraints") or []:
+                if c and c not in self._human_feedback_constraints:
+                    self._human_feedback_constraints.append(c)
 
         gate = meta.get("hitl_gate") or {}
         if gate.get("resumed") and meta.get("pipeline_checkpoint"):
@@ -2165,7 +2173,12 @@ class PipelineService:
             db_stage.prompt_used = parent_exec.prompt_used
             db_stage.token_count = parent_exec.token_count
             db_stage.extra_metadata = parent_exec.extra_metadata
-            if parent_exec.output_data:
+            effective = get_effective_output(parent_exec, use_human_modified=True)
+            if effective is not None:
+                results[key] = effective
+                stages[idx].status = PipelineStageStatus.COMPLETED
+                stages[idx].output_data = parent_exec.output_data
+            elif parent_exec.output_data:
                 results[key] = parent_exec.output_data
                 stages[idx].status = PipelineStageStatus.COMPLETED
                 stages[idx].output_data = parent_exec.output_data

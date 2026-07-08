@@ -44,6 +44,7 @@ interface WorkflowPageProps {
   compact?: boolean;
   onPipelineCompleted?: (result: PipelineRunResult) => void;
   onPipelineStarted?: (runId: string) => void;
+  onHumanLoopUpdated?: (stage: string) => void;
 }
 
 type RunState = 'idle' | 'submitting' | 'running' | 'polling';
@@ -390,7 +391,15 @@ function mapStatus(status: string): AgentStatus {
 }
 
 function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNodeData {
-  const newStatus = mapStatus(stage.status);
+  const mappedStatus = mapStatus(stage.status);
+  const hasHumanEdit = Boolean(stage.human_modified_output);
+  const hasOriginalOutput = Boolean(stage.output_data ?? node.output_data);
+  const newStatus: AgentStatus =
+    hasHumanEdit
+    && hasOriginalOutput
+    && (mappedStatus === 'human_review_required' || mappedStatus === 'human_review')
+      ? 'completed'
+      : mappedStatus;
   const durationMs =
     stage.duration_ms ?? (stage.duration ? Math.round(stage.duration * 1000) : null);
 
@@ -416,13 +425,15 @@ function mergeStageData(node: AgentNodeData, stage: PipelineStageLog): AgentNode
     human_reviewed: stage.human_reviewed ?? node.human_reviewed,
     human_feedback: stage.human_feedback ?? node.human_feedback,
     edited_at: stage.edited_at ?? node.edited_at,
+    human_edited: hasHumanEdit || Boolean(stage.human_edited) || node.human_edited,
     revision_history: stage.revision_history ?? node.revision_history,
+    chat_history: stage.chat_history ?? node.chat_history,
     model: stage.model_used || node.model,
     inputSummary: stage.input_data
       ? summarizeStageData(stage.stage ?? '', stage.input_data)
       : node.inputSummary,
-    outputSummary: stage.output_data
-      ? summarizeStageData(stage.stage ?? '', stage.output_data)
+    outputSummary: (stage.human_modified_output ?? stage.output_data)
+      ? summarizeStageData(stage.stage ?? '', (stage.human_modified_output ?? stage.output_data) as Record<string, unknown>)
       : node.outputSummary,
   };
 }
@@ -484,6 +495,7 @@ export function WorkflowPage({
   compact: _compact = false,
   onPipelineCompleted,
   onPipelineStarted,
+  onHumanLoopUpdated,
 }: WorkflowPageProps) {
   const [nodes, setNodes] = useState<AgentNodeData[]>(() => createInitialNodes());
   const [selectedId, setSelectedId] = useState<string>('');
@@ -1475,7 +1487,11 @@ export function WorkflowPage({
                 humanFeedback={selectedNode.human_feedback}
                 editedAt={selectedNode.edited_at}
                 revisionHistory={selectedNode.revision_history}
-                onUpdated={() => refreshFromRunDetail(effectiveRunId)}
+                chatHistory={selectedNode.chat_history as Array<Record<string, unknown>> | undefined}
+                onUpdated={() => {
+                  refreshFromRunDetail(effectiveRunId);
+                  onHumanLoopUpdated?.(NODE_ID_TO_STAGE[selectedNode.id] || selectedNode.id);
+                }}
                 onRerunStarted={(newRunId) => {
                   setCurrentRunId(newRunId);
                   currentRunIdRef.current = newRunId;

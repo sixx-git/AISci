@@ -11,7 +11,7 @@ from typing import List, Tuple, Optional, Any
 import numpy as np
 
 from app.core.config import get_settings
-from app.services.vector_store import SentenceTransformerEmbedding, _l2_normalize
+from app.services.vector_store import BaseEmbedding, create_embedding, _l2_normalize
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -21,7 +21,12 @@ CHAT_COLLECTION_NAME = "chat_chunks"
 
 
 def _is_zvec_collection(path: str) -> bool:
-    return os.path.isdir(path) and os.path.exists(os.path.join(path, "manifest.0"))
+    if not os.path.isdir(path):
+        return False
+    try:
+        return any(name.startswith("manifest.") for name in os.listdir(path))
+    except OSError:
+        return False
 
 
 def _is_legacy_faiss_index(path: str) -> bool:
@@ -56,7 +61,7 @@ class VectorService:
         if parent:
             os.makedirs(parent, exist_ok=True)
 
-        self._embedding: Optional[SentenceTransformerEmbedding] = None
+        self._embedding: Optional[BaseEmbedding] = None
         self._collection: Optional[Any] = None
 
         if _is_legacy_faiss_index(self.collection_path) and not _is_zvec_collection(self.collection_path):
@@ -66,9 +71,9 @@ class VectorService:
             )
 
     @property
-    def embedding(self) -> SentenceTransformerEmbedding:
+    def embedding(self) -> BaseEmbedding:
         if self._embedding is None:
-            self._embedding = SentenceTransformerEmbedding()
+            self._embedding = create_embedding()
         return self._embedding
 
     @property

@@ -40,6 +40,11 @@ def test_repair_json_python_single_quotes():
     assert _repair_json("{'key': 'value', 'num': 42}") == {"key": "value", "num": 42}
 
 
+def test_repair_json_strips_null_control_characters():
+    raw = '{"a": "ok\x00bad", "b": 1}'
+    assert _repair_json(raw) == {"a": "okbad", "b": 1}
+
+
 def test_repair_json_invalid_raises():
     with pytest.raises(Exception):
         _repair_json("this is not json at all")

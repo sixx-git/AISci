@@ -61,7 +61,11 @@ class Settings(BaseSettings):
     VECTOR_BACKEND: str = "zvec"
     # Hugging Face 镜像（国内默认 hf-mirror，留空则走官方 huggingface.co）
     HF_ENDPOINT: str = "https://hf-mirror.com"
+    # embedding 后端：sentence_transformers（本地）| qwen（DashScope API，复用 QWEN_API_KEY）
+    EMBEDDING_BACKEND: str = "sentence_transformers"
     EMBEDDING_MODEL: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    # 千问 embedding 向量维度（text-embedding-v3/v4 支持 1024/768/512 等；0=使用模型默认）
+    EMBEDDING_DIMENSION: int = 0
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 50
     

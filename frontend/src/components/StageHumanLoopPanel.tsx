@@ -1,11 +1,11 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Edit3, Save, MessageSquare, GraduationCap, Play, Tag, Loader2, History,
+  Edit3, Save, MessageSquare, GraduationCap, Play, Tag, Loader2, History, Send,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import humanLoopService, { type MentorReview } from '@/services/humanLoopService';
+import humanLoopService, { type HitlInteractionMode, type MentorReview, type RerunMode } from '@/services/humanLoopService';
 import { PromptConsole } from '@/components/PromptConsole';
 
 const NODE_ID_TO_STAGE: Record<string, string> = {
@@ -19,6 +19,31 @@ const NODE_ID_TO_STAGE: Record<string, string> = {
   report: 'report_generation',
 };
 
+interface ChatTurn {
+  id?: string;
+  at?: string;
+  user_message?: string;
+  assistant_explanation?: string;
+  changes_summary?: string[];
+  applied?: boolean;
+  mode?: string;
+  revision_mode?: string;
+}
+
+const PENDING_LABELS = new Set(['正在思考…', '正在生成修订…', '正在提交重跑…']);
+
+function modeLabel(mode?: string): string {
+  if (mode === 'advisory') return '咨询';
+  if (mode === 'revise') return '修订';
+  if (mode === 'rerun_agent') return '重跑';
+  return '对话';
+}
+const INTERACTION_MODES: { id: HitlInteractionMode; label: string; hint: string }[] = [
+  { id: 'advisory', label: '咨询对话', hint: '解释图表/方法、给建议，不修改 Pipeline 输出' },
+  { id: 'revise', label: '轻量修订', hint: 'LLM 就地改当前版本，写入人工修订层' },
+  { id: 'rerun_agent', label: '重跑智能体', hint: '真正重新执行本阶段 Agent，结果可传递下游' },
+];
+
 interface StageHumanLoopPanelProps {
   projectId: string;
   runId: string;
@@ -31,6 +56,7 @@ interface StageHumanLoopPanelProps {
   humanFeedback?: string | null;
   editedAt?: string | null;
   revisionHistory?: Array<Record<string, unknown>>;
+  chatHistory?: ChatTurn[];
   onUpdated?: () => void;
   onRerunStarted?: (newRunId: string) => void;
 }
@@ -47,6 +73,7 @@ export function StageHumanLoopPanel({
   humanFeedback,
   editedAt,
   revisionHistory = [],
+  chatHistory: chatHistoryProp = [],
   onUpdated,
   onRerunStarted,
 }: StageHumanLoopPanelProps) {
@@ -56,16 +83,59 @@ export function StageHumanLoopPanel({
   const [editJson, setEditJson] = useState('');
   const [feedback, setFeedback] = useState(humanFeedback || '');
   const [chatMessage, setChatMessage] = useState('');
-  const [chatReply, setChatReply] = useState('');
+  const [interactionMode, setInteractionMode] = useState<HitlInteractionMode>('advisory');
+  const [rerunScope, setRerunScope] = useState<RerunMode>('single_stage');
+  const [chatHistory, setChatHistory] = useState<ChatTurn[]>(chatHistoryProp);
+  const [latestReply, setLatestReply] = useState('');
   const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const userChattingRef = useRef(false);
+
+  const loadChatHistory = useCallback(async () => {
+    if (!runId || !stage) return;
+    try {
+      const res = await humanLoopService.getStageDetail(runId, stage);
+      if (res.code === 200 && Array.isArray(res.data?.chat_history)) {
+        const history = res.data.chat_history as ChatTurn[];
+        setChatHistory(history);
+        const last = [...history].reverse().find(
+          (t) => t.assistant_explanation && !PENDING_LABELS.has(t.assistant_explanation),
+        );
+        if (last?.assistant_explanation) {
+          setLatestReply(last.assistant_explanation);
+        }
+      }
+    } catch {
+      /* 忽略加载失败 */
+    }
+  }, [runId, stage]);
 
   useEffect(() => {
     setEditJson(JSON.stringify(effectiveOutput, null, 2));
     setFeedback(humanFeedback || '');
   }, [effectiveOutput, humanFeedback, nodeId]);
+
+  useEffect(() => {
+    loadChatHistory();
+  }, [loadChatHistory, nodeId]);
+
+  useEffect(() => {
+    if (chatHistoryProp.length > 0) {
+      setChatHistory(chatHistoryProp);
+    }
+  }, [chatHistoryProp, nodeId, runId]);
+
+  useEffect(() => {
+    if (!userChattingRef.current) return;
+    const el = chatScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [chatHistory, busy]);
 
   const mentorTarget = useMemo(() => {
     if (stage.includes('hypothesis')) return 'hypothesis' as const;
@@ -95,25 +165,111 @@ export function StageHumanLoopPanel({
     }
   };
 
+  const chatPlaceholder = useMemo(() => {
+    if (interactionMode === 'advisory') {
+      return '例如：这个图表说明什么？有没有其他推荐方法？';
+    }
+    if (interactionMode === 'revise') {
+      return '例如：把假设 2 改得更具体 / 加强实验对照组描述';
+    }
+    return '例如：加入 VFL 约束后重新生成本阶段输出';
+  }, [interactionMode]);
+
+  const pendingChatLabel = interactionMode === 'advisory'
+    ? '正在思考…'
+    : interactionMode === 'revise'
+      ? '正在生成修订…'
+      : '正在提交重跑…';
+
   const handleChat = async () => {
     if (!chatMessage.trim()) return;
+    const userMsg = chatMessage.trim();
+    userChattingRef.current = interactionMode !== 'rerun_agent';
     setBusy('chat');
     setError(null);
+    setChatMessage('');
+    setChatHistory((prev) => [
+      ...prev,
+      {
+        id: `pending-${Date.now()}`,
+        user_message: userMsg,
+        assistant_explanation: pendingChatLabel,
+        mode: interactionMode,
+      },
+    ]);
+
     try {
+      if (interactionMode === 'rerun_agent') {
+        const res = await humanLoopService.rerunFromStage({
+          project_id: projectId,
+          run_id: runId,
+          stage,
+          use_human_modified_output: true,
+          rerun_mode: rerunScope,
+          human_feedback: userMsg,
+        });
+        const scopeLabel = rerunScope === 'single_stage' ? '仅重跑本阶段' : '从此阶段继续后续流程';
+        const explanation = res.code === 200 && res.data?.run_id
+          ? `已提交智能体重跑（${scopeLabel}）。新 run: ${res.data.run_id.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
+          : res.message || '重跑提交失败';
+        setChatHistory((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last) {
+            last.assistant_explanation = explanation;
+            last.mode = 'rerun_agent';
+            last.applied = false;
+          }
+          return next;
+        });
+        if (res.code === 200 && res.data?.run_id) {
+          onRerunStarted?.(res.data.run_id);
+        } else {
+          setError(explanation);
+        }
+        return;
+      }
+
       const res = await humanLoopService.stageChat({
         project_id: projectId,
         run_id: runId,
         stage,
-        message: chatMessage,
-        apply_change: true,
+        message: userMsg,
+        apply_change: interactionMode === 'revise',
+        mode: interactionMode,
       });
-      if (res.code === 200 && res.data) {
-        setChatReply(res.data.explanation);
-        setEditJson(JSON.stringify(res.data.revised_output, null, 2));
-        onUpdated?.();
+      if (res.code !== 200 || !res.data) {
+        throw new Error(res.message || '对话请求失败');
       }
+      if (res.data.chat_history?.length) {
+        setChatHistory(res.data.chat_history as ChatTurn[]);
+      } else {
+        setChatHistory((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last) {
+            last.assistant_explanation = res.data?.explanation;
+            last.changes_summary = res.data?.changes_summary;
+            last.applied = res.data?.applied;
+            last.mode = res.data?.mode;
+          }
+          return next;
+        });
+      }
+      if (res.data.explanation) {
+        setLatestReply(res.data.explanation);
+      }
+      if (res.data.applied && res.data.revised_output) {
+        setEditJson(JSON.stringify(res.data.revised_output, null, 2));
+      } else if (res.data.explanation?.startsWith('自动修改失败') || res.data.explanation?.startsWith('咨询回答失败')) {
+        setError(res.data.explanation);
+      }
+      onUpdated?.();
+      await loadChatHistory();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '对话修改失败');
+      setError(e instanceof Error ? e.message : '对话失败');
+      setChatHistory((prev) => prev.slice(0, -1));
+      setChatMessage(userMsg);
     } finally {
       setBusy(null);
     }
@@ -165,7 +321,7 @@ export function StageHumanLoopPanel({
 
   return (
     <>
-      <Card title="人在回路" subtitle="查看 · 编辑 · 追问 · 重跑">
+      <Card title="人在回路" subtitle="咨询 · 修订 · 可选重跑智能体">
         <div className="flex flex-wrap gap-2 mb-3">
           <Button variant="secondary" className="text-xs" onClick={() => setShowPrompt(true)}>
             <Tag className="w-3.5 h-3.5 mr-1" /> 编辑 Prompt
@@ -190,16 +346,164 @@ export function StageHumanLoopPanel({
         {humanReviewed && (
           <p className="text-xs text-bp-yellow mb-2">
             已人工审阅 {editedAt ? `· ${editedAt}` : ''}
+            {humanModifiedOutput ? ' · 当前为对话/人工修订版本' : ''}
           </p>
         )}
         {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
-        <CollapsibleBlock title="输入 input_data" data={inputData} defaultOpen={false} />
-        <CollapsibleBlock title="原始 output_data" data={outputData} defaultOpen={false} />
+        <CollapsibleBlock title="原始 input_data（阶段生成时的输入）" data={inputData} defaultOpen={false} />
+        <CollapsibleBlock title="原始 output_data（Pipeline 首次输出，不会被覆盖）" data={outputData} defaultOpen={false} />
 
-        <div className="mt-3">
+        <div className="mt-4 pt-4 border-t border-bp-border">
           <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
-            <Edit3 className="w-3.5 h-3.5" /> 编辑 output_data（保存为人工修改）
+            <MessageSquare className="w-3.5 h-3.5" /> 交互模式
+          </div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {INTERACTION_MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setInteractionMode(m.id)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  interactionMode === m.id
+                    ? 'border-bp-cyan bg-bp-cyan-tint text-bp-cyan'
+                    : 'border-bp-border text-bp-muted hover:text-bp-text'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-bp-muted/80 mb-3">
+            {INTERACTION_MODES.find((m) => m.id === interactionMode)?.hint}
+          </p>
+
+          {interactionMode === 'rerun_agent' && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
+                <input
+                  type="radio"
+                  name="rerun-scope"
+                  checked={rerunScope === 'single_stage'}
+                  onChange={() => setRerunScope('single_stage')}
+                />
+                仅重跑本阶段
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
+                <input
+                  type="radio"
+                  name="rerun-scope"
+                  checked={rerunScope === 'from_stage_onward'}
+                  onChange={() => setRerunScope('from_stage_onward')}
+                />
+                重跑并继续后续流程
+              </label>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-bp-muted">对话记录 ({chatHistory.length})</span>
+            <button
+              type="button"
+              className="text-xs text-bp-cyan hover:underline"
+              onClick={() => loadChatHistory()}
+              disabled={!!busy}
+            >
+              刷新记录
+            </button>
+          </div>
+
+          <div
+            ref={chatScrollRef}
+            className="rounded-lg border border-bp-border bg-bp-base/50 min-h-[160px] max-h-72 overflow-y-auto p-3 space-y-3 mb-3"
+          >
+            {chatHistory.length === 0 ? (
+              <p className="text-xs text-bp-muted">
+                选择上方模式后开始对话。咨询模式可问图表含义、替代方法；重跑模式会真正执行 Agent。
+              </p>
+            ) : (
+              chatHistory.map((turn, idx) => (
+                <div key={turn.id || `${turn.at}-${idx}`} className="space-y-1.5">
+                  {turn.user_message && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-lg bg-bp-cyan-dim/30 border border-bp-cyan-dim px-3 py-2 text-xs text-bp-text">
+                        <span className="text-[10px] text-bp-muted block mb-0.5">你 · {modeLabel(turn.mode)}</span>
+                        {turn.user_message}
+                      </div>
+                    </div>
+                  )}
+                  {turn.assistant_explanation && (
+                    <div className="flex justify-start">
+                      <div
+                        className={`max-w-[85%] rounded-lg border px-3 py-2 text-xs whitespace-pre-wrap ${
+                          turn.assistant_explanation.startsWith('自动修改失败')
+                            || turn.assistant_explanation.startsWith('咨询回答失败')
+                            ? 'border-danger-400/50 text-danger-400 bg-danger-400/5'
+                            : PENDING_LABELS.has(turn.assistant_explanation)
+                              ? 'border-bp-border text-bp-muted'
+                              : turn.mode === 'advisory' || turn.revision_mode === 'advisory'
+                                ? 'border-bp-purple/30 text-bp-text bg-bp-purple/5'
+                                : turn.mode === 'rerun_agent'
+                                  ? 'border-bp-yellow/30 text-bp-yellow bg-bp-yellow/5'
+                                  : 'border-bp-green/30 text-bp-green bg-bp-green/5'
+                        }`}
+                      >
+                        <span className="text-[10px] text-bp-muted block mb-0.5">AI · {modeLabel(turn.mode || turn.revision_mode)}</span>
+                        <p>{turn.assistant_explanation}</p>
+                        {turn.changes_summary && turn.changes_summary.length > 0 && (
+                          <ul className="mt-1 list-disc list-inside text-bp-muted">
+                            {turn.changes_summary.map((c) => (
+                              <li key={c}>{c}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <textarea
+              className="flex-1 min-h-[56px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2"
+              placeholder={chatPlaceholder}
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!busy) handleChat();
+                }
+              }}
+            />
+            <Button
+              variant="secondary"
+              className="text-xs self-end shrink-0"
+              onClick={handleChat}
+              disabled={busy === 'chat' || !chatMessage.trim()}
+            >
+              {busy === 'chat' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            </Button>
+          </div>
+
+          <div className="mt-3">
+            <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
+              <MessageSquare className="w-3.5 h-3.5" /> 对话输出（最新回复）
+            </div>
+            <textarea
+              readOnly
+              className="w-full min-h-[140px] rounded-lg bg-bp-base/80 border border-bp-purple/30 text-xs text-bp-text p-3 font-sans leading-relaxed"
+              placeholder="发送咨询问题后，AI 回复将显示在这里。例如：「报告中有几张图表？」"
+              value={latestReply}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-bp-border">
+          <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
+            <Edit3 className="w-3.5 h-3.5" /> 当前工作版本（human_modified_output）
           </div>
           <textarea
             className="w-full min-h-[180px] rounded-lg bg-bp-base/70 border border-bp-border text-xs font-mono text-bp-text p-3"
@@ -214,25 +518,8 @@ export function StageHumanLoopPanel({
           />
           <Button className="mt-2 text-xs" onClick={handleSaveEdit} disabled={busy === 'save'}>
             {busy === 'save' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-            保存人工修改
+            手动保存
           </Button>
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-bp-border">
-          <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
-            <MessageSquare className="w-3.5 h-3.5" /> 多轮追问修改
-          </div>
-          <textarea
-            className="w-full min-h-[64px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2"
-            placeholder="例如：重新生成更具体 / 加入 VFL 约束 / 加强数据集部分"
-            value={chatMessage}
-            onChange={(e) => setChatMessage(e.target.value)}
-          />
-          <Button variant="secondary" className="mt-2 text-xs" onClick={handleChat} disabled={busy === 'chat'}>
-            {busy === 'chat' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-            发送并应用修改
-          </Button>
-          {chatReply && <p className="text-xs text-bp-green mt-2">{chatReply}</p>}
         </div>
 
         {mentorReview && (
@@ -252,12 +539,13 @@ export function StageHumanLoopPanel({
         {revisionHistory.length > 0 && (
           <div className="mt-4 pt-4 border-t border-bp-border">
             <div className="flex items-center gap-2 text-xs text-bp-muted mb-2">
-              <History className="w-3.5 h-3.5" /> 修改历史 ({revisionHistory.length})
+              <History className="w-3.5 h-3.5" /> 修订快照 ({revisionHistory.length})
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {revisionHistory.slice().reverse().slice(0, 5).map((h) => (
                 <div key={String(h.id || h.at)} className="text-xs text-bp-muted border border-bp-border rounded p-2">
                   <span className="text-bp-muted">{String(h.at || '')}</span>
+                  {h.action ? ` · ${String(h.action)}` : ''}
                   {h.feedback ? ` · ${String(h.feedback)}` : ''}
                 </div>
               ))}

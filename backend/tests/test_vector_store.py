@@ -107,6 +107,29 @@ class TestVectorStore(TestCase):
         added = store.build_index("proj-1", db=self.mock_session, rebuild=False)
         self.assertEqual(added, 0)
 
+    def test_reset_and_rebuild_creates_zvec(self):
+        from zvec import Doc
+
+        from app.services.vector_store import _is_zvec_collection
+
+        project_id = "rebuild-test"
+        store = self.VectorStore(embedding=MockEmbedding(384))
+        path = store._collection_path(project_id)
+
+        col = store._open_collection(project_id, create=True)
+        self.assertIsNotNone(col)
+        col.upsert([
+            Doc(
+                id="c1",
+                vectors={"embedding": [0.1] * 384},
+                fields={"document_id": "d1", "content": "hello"},
+            )
+        ])
+        store._reset_project_index(project_id)
+        col2 = store._open_collection(project_id, create=True)
+        self.assertIsNotNone(col2)
+        self.assertTrue(_is_zvec_collection(path))
+
 
 class TestSearchResult(TestCase):
     def test_search_result_creation(self):
@@ -122,6 +145,23 @@ class TestSearchResult(TestCase):
         )
         self.assertEqual(result.chunk_id, "chunk-1")
         self.assertEqual(result.similarity_score, 0.95)
+
+
+class TestQwenEmbedding(TestCase):
+    def test_create_embedding_qwen_backend(self):
+        with patch("app.services.vector_store.settings") as mock_settings:
+            mock_settings.EMBEDDING_BACKEND = "qwen"
+            mock_settings.EMBEDDING_MODEL = "text-embedding-v3"
+            mock_settings.EMBEDDING_DIMENSION = 512
+            mock_settings.USE_MOCK_LLM = True
+            mock_settings.QWEN_API_KEY = ""
+
+            from app.services.vector_store import create_embedding
+
+            emb = create_embedding()
+            self.assertEqual(emb.dimension, 512)
+            vecs = emb.embed(["hello", "world"])
+            self.assertEqual(vecs.shape, (2, 512))
 
 
 class TestSyncHelpers(TestCase):

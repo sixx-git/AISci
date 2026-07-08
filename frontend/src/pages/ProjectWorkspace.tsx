@@ -151,12 +151,13 @@ function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
 }
 
-function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted, onPipelineStarted }: {
+function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted, onPipelineStarted, onHumanLoopUpdated }: {
   projectId: string;
   researchQuestion: string;
   questionSource?: 'backend' | 'localStorage' | 'none';
   onPipelineCompleted?: (result: PipelineRunResult) => void;
   onPipelineStarted?: (runId: string) => void;
+  onHumanLoopUpdated?: (stage: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -178,6 +179,7 @@ function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCo
         compact
         onPipelineCompleted={onPipelineCompleted}
         onPipelineStarted={onPipelineStarted}
+        onHumanLoopUpdated={onHumanLoopUpdated}
       />
     </div>
   );
@@ -583,6 +585,7 @@ export function ProjectWorkspace() {
             questionSource={questionSource}
             onPipelineCompleted={handlePipelineCompleted}
             onPipelineStarted={handlePipelineStarted}
+            onHumanLoopUpdated={() => setRevalidateKey((k) => k + 1)}
           />
         );
       case 'prompts':

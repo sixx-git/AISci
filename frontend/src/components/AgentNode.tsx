@@ -52,7 +52,7 @@ const statusConfig: Record<AgentStatus, {
     textClass: 'text-danger-400',
   },
   human_review: {
-    label: '待上传数据',
+    label: '待人工复核',
     ringClass: 'border-bp-yellow bg-bp-yellow/10',
     dotClass: 'bg-bp-yellow',
     cardBg: 'bg-bp-yellow/5',
@@ -61,7 +61,7 @@ const statusConfig: Record<AgentStatus, {
     textClass: 'text-bp-yellow',
   },
   human_review_required: {
-    label: '待上传数据',
+    label: '待人工复核',
     ringClass: 'border-bp-yellow bg-bp-yellow/10',
     dotClass: 'bg-bp-yellow',
     cardBg: 'bg-bp-yellow/5',
@@ -105,6 +105,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
   const isRunning = node.status === 'running';
   const isCompleted = node.status === 'completed';
   const hasError = isFailed && !!node.error_message;
+  const statusLabel = node.human_edited && isCompleted ? '已修订' : sc.label;
 
   return (
     <div className="flex">
@@ -186,7 +187,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                   (node.status === 'human_review' || node.status === 'human_review_required') && 'bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30',
                 )}>
                   <StatusIcon status={node.status} className="w-3 h-3" />
-                  {sc.label}
+                  {statusLabel}
                 </span>
               </div>
 

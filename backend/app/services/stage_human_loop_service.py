@@ -62,6 +62,7 @@ class StageHumanLoopService:
         human_feedback: str = "",
         mark_reviewed: bool = True,
         editor: str = "user",
+        action: str = "human_edit",
     ) -> PipelineStageExecution:
         run = self._get_run(run_id)
         stage_enum = PipelineStage(stage)
@@ -83,7 +84,7 @@ class StageHumanLoopService:
                 "id": str(uuid.uuid4()),
                 "at": _now_iso(),
                 "editor": editor,
-                "action": "human_edit",
+                "action": action,
                 "previous_output": copy.deepcopy(stage_exec.output_data),
                 "previous_human_output": copy.deepcopy(meta.get("human_modified_output")),
                 "new_output": copy.deepcopy(output_data),
@@ -95,14 +96,37 @@ class StageHumanLoopService:
         meta["human_reviewed"] = mark_reviewed
         meta["human_feedback"] = human_feedback
         meta["edited_at"] = _now_iso()
+        meta["human_edited"] = True
         meta["revision_history"] = history[-30:]
 
         stage_exec.extra_metadata = meta
-        if mark_reviewed:
+        # 人工修订不覆盖已完成阶段的 status，避免左侧节点误显示为「待上传数据」
+        if mark_reviewed and stage_exec.status not in (
+            PipelineStatus.COMPLETED,
+            PipelineStatus.FAILED,
+            PipelineStatus.RUNNING,
+        ):
             stage_exec.status = PipelineStatus.HUMAN_REVIEW_REQUIRED
         stage_exec.updated_at = datetime.now(CHINA_TZ)
         self.db.commit()
         self.db.refresh(stage_exec)
+
+        if stage == PipelineStage.REPORT_GENERATION.value:
+            try:
+                from app.services.report_service import ReportService
+
+                ReportService(self.db).sync_from_stage_human_output(
+                    project_id=run.project_id,
+                    run_id=run_id,
+                    stage_output=output_data,
+                )
+            except Exception as exc:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "报告阶段人工修订同步 Report 表失败 run=%s: %s", run_id, exc
+                )
+
         return stage_exec
 
     def get_stage_detail(self, run_id: str, stage: str) -> Dict[str, Any]:
@@ -130,7 +154,9 @@ class StageHumanLoopService:
             "human_reviewed": meta.get("human_reviewed", False),
             "human_feedback": meta.get("human_feedback"),
             "edited_at": meta.get("edited_at"),
+            "human_edited": meta.get("human_edited", False),
             "revision_history": meta.get("revision_history") or [],
+            "chat_history": meta.get("chat_history") or [],
             "prompt_used": stage_exec.prompt_used,
             "model_used": stage_exec.model_used,
         }

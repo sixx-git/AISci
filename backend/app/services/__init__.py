@@ -6,6 +6,8 @@ from app.services.vector_store import (
     SearchResult,
     BaseEmbedding,
     SentenceTransformerEmbedding,
+    QwenDashScopeEmbedding,
+    create_embedding,
     get_vector_store,
     build_vector_index,
     search_vector_store

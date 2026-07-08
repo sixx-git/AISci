@@ -184,6 +184,11 @@ def _repair_json(raw_text: str) -> dict:
 
     # 准备多种修复后的候选文本
     for candidate in list(candidates):
+        # 策略 3a：移除 JSON 字符串中的非法控制字符
+        ctrl_stripped = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", candidate)
+        if ctrl_stripped != candidate:
+            candidates.append(ctrl_stripped)
+
         # 策略 3：移除尾部逗号
         fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
         if fixed != candidate:

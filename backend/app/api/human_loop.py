@@ -98,6 +98,7 @@ async def rerun_from_stage(
             from_stage=body.stage,
             use_human_modified_output=body.use_human_modified_output,
             rerun_mode=body.rerun_mode,
+            human_feedback=body.human_feedback,
         )
 
         def _bg():
@@ -146,6 +147,7 @@ async def stage_chat(body: StageChatRequest, db: Session = Depends(get_db)):
             stage=body.stage,
             user_message=body.message,
             apply_change=body.apply_change,
+            mode=body.mode,
         )
         return ResponseModel(code=200, message="阶段对话完成", data=StageChatResponse(**result))
     except ValueError as e:

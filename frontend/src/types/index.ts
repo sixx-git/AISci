@@ -212,7 +212,9 @@ export interface AgentNodeData {
   human_reviewed?: boolean;
   human_feedback?: string | null;
   edited_at?: string | null;
+  human_edited?: boolean;
   revision_history?: Array<Record<string, unknown>>;
+  chat_history?: Array<Record<string, unknown>>;
 }
 
 export interface PipelineNodeData {
@@ -250,6 +252,7 @@ export interface PipelineStageExecutionSummary {
   human_feedback?: string | null;
   edited_at?: string | null;
   revision_history?: Array<Record<string, unknown>>;
+  chat_history?: Array<Record<string, unknown>>;
 }
 
 export interface PipelineRunSummary {

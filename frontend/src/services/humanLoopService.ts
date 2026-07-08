@@ -13,6 +13,7 @@ export interface StageHumanDetail {
   human_feedback?: string;
   edited_at?: string;
   revision_history?: Array<Record<string, unknown>>;
+  chat_history?: Array<Record<string, unknown>>;
   prompt_used?: string;
   model_used?: string;
 }
@@ -27,7 +28,9 @@ export interface MentorReview {
   readiness_score?: number;
 }
 
+export type StageChatMode = 'advisory' | 'revise';
 export type RerunMode = 'single_stage' | 'from_stage_onward';
+export type HitlInteractionMode = StageChatMode | 'rerun_agent';
 
 export const humanLoopService = {
   async getStageDetail(runId: string, stage: string): Promise<ApiResponse<StageHumanDetail>> {
@@ -53,6 +56,7 @@ export const humanLoopService = {
     stage: string;
     use_human_modified_output?: boolean;
     rerun_mode?: RerunMode;
+    human_feedback?: string;
   }): Promise<ApiResponse<{ run_id: string; parent_run_id: string; rerun_from_stage: string; rerun_mode?: string; status: string }>> {
     const { data } = await api.post('/human-loop/rerun-from-stage', payload);
     return data;
@@ -64,10 +68,15 @@ export const humanLoopService = {
     stage: string;
     message: string;
     apply_change?: boolean;
+    mode?: StageChatMode;
   }): Promise<ApiResponse<{
     revised_output: Record<string, unknown>;
     explanation: string;
     changes_summary: string[];
+    applied?: boolean;
+    chat_history?: Array<Record<string, unknown>>;
+    revision_mode?: string;
+    mode?: string;
   }>> {
     const { data } = await api.post('/human-loop/stage-chat', payload);
     return data;
