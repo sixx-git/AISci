@@ -5,12 +5,13 @@
 import logging
 import json
 import os
+import re
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.services.qwen_client import qwen_structured_chat
+from app.services.qwen_client import qwen_structured_chat, qwen_chat, AgentOutputParseError
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.data.preliminary_analysis_skill import PreliminaryAnalysisSkill
 from app.skills.experiment.result_verification_skill import ResultVerificationSkill
@@ -87,22 +88,11 @@ class SmallValidationAgent:
                 }
             )
             
-            # 定义 schema 示例
-            schema_example = {
-                "has_real_data": has_csv_data,
-                "analysis_script": "# 基于已上传真实数据的 Python 分析脚本...",
-                "simulated_data": "",
-                "simulation_assumptions": "",
-                "charts": "[]",
-                "statistics": "{}",
-                "run_log": "[]",
-            }
-            
             if has_csv_data:
                 prompt += (
                     "\n\n【重要】项目已提供真实数据文件。"
                     "禁止生成 simulated_data 或 simulation_assumptions；"
-                    "has_real_data 必须为 1；analysis_script 必须读取真实 CSV/表格路径。"
+                    "has_real_data 必须为 1。"
                 )
             else:
                 prompt += (
@@ -110,12 +100,50 @@ class SmallValidationAgent:
                     "禁止编造 simulated_data 或预填统计结果；"
                     "simulated_data 与 simulation_assumptions 留空，仅描述基于实验设计的验证步骤。"
                 )
-            
-            # 调用 LLM
-            result_dict = qwen_structured_chat(
-                prompt=prompt,
-                schema_example=schema_example,
-                prompt_version="small_validation"
+            prompt += (
+                "\n\n【输出约束】本次仅返回 JSON 元数据，不要包含 analysis_script 字段；"
+                "charts/statistics/run_log 使用 JSON 数组或对象，不要用字符串包裹。"
+            )
+
+            # 元数据与脚本分步生成，避免多行 Python 破坏 JSON 解析
+            schema_example = {
+                "has_real_data": has_csv_data,
+                "simulated_data": "",
+                "simulation_assumptions": "",
+                "charts": [],
+                "statistics": {},
+                "run_log": [],
+            }
+
+            try:
+                result_dict = qwen_structured_chat(
+                    prompt=prompt,
+                    schema_example=schema_example,
+                    prompt_version="small_validation",
+                )
+            except AgentOutputParseError as parse_err:
+                logger.warning(
+                    "小样验证元数据 JSON 解析失败，降级为最小 schema 重试: %s",
+                    parse_err,
+                )
+                result_dict = qwen_structured_chat(
+                    prompt=prompt + "\n\n仅返回 has_real_data、simulation_assumptions 两个字段，其余可留空。",
+                    schema_example={
+                        "has_real_data": has_csv_data,
+                        "simulation_assumptions": "",
+                    },
+                    prompt_version="small_validation_fallback",
+                )
+                for key, default in schema_example.items():
+                    result_dict.setdefault(key, default)
+
+            result_dict["analysis_script"] = self._generate_analysis_script(
+                hypothesis=hypothesis,
+                methods=methods,
+                datasets=datasets,
+                metrics=metrics,
+                has_csv_data=bool(has_csv_data),
+                csv_data_path=csv_data_path,
             )
             
             # 验证和标准化结果
@@ -370,6 +398,74 @@ class SmallValidationAgent:
         categorized["actual_results"] = actual
         return categorized
 
+    def _generate_analysis_script(
+        self,
+        *,
+        hypothesis: str,
+        methods: Optional[str],
+        datasets: Optional[str],
+        metrics: Optional[str],
+        has_csv_data: bool,
+        csv_data_path: Optional[str],
+    ) -> str:
+        """单独生成 Python 分析脚本，避免嵌入 JSON 导致解析失败。"""
+        data_hint = (
+            f"真实数据路径: {csv_data_path}"
+            if has_csv_data and csv_data_path
+            else "当前无真实 CSV，脚本应说明无法执行并优雅退出（sys.exit(0)），禁止生成随机模拟数据"
+        )
+        script_prompt = (
+            f"假设: {hypothesis}\n"
+            f"方法: {methods or '未提供'}\n"
+            f"数据集: {datasets or '未提供'}\n"
+            f"指标: {metrics or '未提供'}\n"
+            f"{data_hint}\n\n"
+            "请输出完整可运行的 Python 3 分析脚本，使用 pandas/numpy/matplotlib。"
+            "必须用 ```python 代码块包裹，不要输出 JSON 或其他说明文字。"
+        )
+        if has_csv_data and csv_data_path:
+            script_prompt += (
+                f"\n脚本必须使用 pandas.read_csv 读取: {csv_data_path}"
+            )
+        try:
+            raw = qwen_chat(
+                script_prompt,
+                system_prompt="你是数据科学家。只输出一个 ```python 代码块，不要 JSON。",
+                temperature=0.2,
+            )
+            script = self._extract_code_block(raw)
+            if script:
+                return script
+        except Exception as e:
+            logger.warning("分析脚本 LLM 生成失败，使用默认脚本: %s", e)
+        return self._generate_default_script() if has_csv_data else ""
+
+    @staticmethod
+    def _extract_code_block(text: str) -> str:
+        if not text:
+            return ""
+        match = re.search(r"```(?:python)?\s*([\s\S]*?)```", text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return text.strip()
+
+    @staticmethod
+    def _serialize_json_field(value: Any, default: str) -> str:
+        if value is None or value == "":
+            return default
+        if isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("[") or stripped.startswith("{"):
+                try:
+                    json.loads(stripped)
+                    return stripped
+                except json.JSONDecodeError:
+                    pass
+            return value
+        return json.dumps(value, ensure_ascii=False)
+
     def _validate_and_normalize_result(
         self,
         result_dict: Dict[str, Any],
@@ -390,6 +486,10 @@ class SmallValidationAgent:
                     result_dict[field] = self._generate_default_script() if has_csv_data else ""
                 else:
                     result_dict[field] = ""
+
+        result_dict["charts"] = self._serialize_json_field(result_dict.get("charts"), "[]")
+        result_dict["statistics"] = self._serialize_json_field(result_dict.get("statistics"), "{}")
+        result_dict["run_log"] = self._serialize_json_field(result_dict.get("run_log"), "[]")
         
         # 有真实数据时清除 LLM 可能生成的模拟字段
         if has_csv_data:

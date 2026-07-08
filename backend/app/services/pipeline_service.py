@@ -1445,10 +1445,11 @@ class PipelineService:
             result["human_review_required"] = True
         avg = (loop.get("critique") or {}).get("average_score")
         if avg is not None:
+            discovery_loop = (getattr(self, "_stage_results", None) or {}).get("discovery_loop") or {}
             self._record_closed_loop_event(
                 "plot_vlm_critique",
                 {
-                    "round": results.get("discovery_loop", {}).get("rounds_executed", 1),
+                    "round": discovery_loop.get("rounds_executed", 1),
                     "average_score": avg,
                     "needs_human_review": loop.get("needs_human_review"),
                     "quality_trend_entry": {"stage": "plot_critique", "score": avg},

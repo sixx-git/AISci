@@ -32,20 +32,20 @@
    - JSON 格式
 
 ## 输出格式要求
-请严格按照以下 JSON 格式输出：
+请严格按照以下 JSON 格式输出（**不要包含 analysis_script**，脚本将单独生成）：
 
 {
   "has_real_data": 0,
-  "analysis_script": "# 完整的 Python 分析脚本...\nimport pandas as pd\nimport numpy as np\n...",
-  "simulated_data": "[{\"col1\": 1, \"col2\": 2}, ...]",
+  "simulated_data": "",
   "simulation_assumptions": "详细的模拟假设说明...",
-  "charts": "[{\"type\": \"bar\", \"title\": \"示例图表\", \"data\": [...}]",
-  "statistics": "{\"mean\": 0.5, \"std\": 0.1, ...}",
-  "run_log": "[{\"timestamp\": \"2024-01-01 10:00:00\", \"level\": \"INFO\", \"message\": \"开始验证...\"}]"
+  "charts": [{"type": "bar", "title": "示例图表", "data": []}],
+  "statistics": {"mean": 0.5, "std": 0.1},
+  "run_log": [{"timestamp": "2024-01-01 10:00:00", "level": "INFO", "message": "开始验证..."}]
 }
 
 ## 注意事项
-- 分析脚本必须是完整可运行的
+- **analysis_script 不要放在 JSON 中**（多行 Python 会导致 JSON 非法）
+- charts、statistics、run_log 必须是 JSON 数组/对象，不要用字符串包裹
 - 如果没有真实数据，必须提供合理的模拟数据和假设
 - 图表和统计结果要简单明了，聚焦于验证假设
 - 代码风格要专业，包含注释
