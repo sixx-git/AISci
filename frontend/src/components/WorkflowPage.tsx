@@ -7,13 +7,9 @@ import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { ExecutionTierBadge } from '@/components/ExecutionTierBadge';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
-import { FederatedCampaignPanel } from '@/components/FederatedCampaignPanel';
 import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
-import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
-import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
-import { IdeationNoveltyPanel } from '@/components/IdeationNoveltyPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, type LoopConfigState } from '@/components/LoopConfigPanel';
@@ -24,18 +20,13 @@ import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import type {
   AgentNodeData,
   AgentStatus,
-  EnsembleReviewData,
-  ProConAdversarialData,
-  IdeationNoveltyData,
   PlotQualityData,
   PipelineRunExtraMetadata,
   PipelineRunResult,
   PipelineStageLog,
   DiscoveryLoopData,
   TeachingAutoRefinementData,
-  FederatedCampaignRefinementData,
   QualityAcceptance,
-  ReplanAction,
 } from '@/types';
 
 interface WorkflowPageProps {
@@ -531,36 +522,7 @@ export function WorkflowPage({
   const finalResearchQuestion = (researchQuestion ?? '').trim() || localResearchQuestion.trim();
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
-
-  const ensembleReview = useMemo((): EnsembleReviewData | null => {
-    if (selectedNode?.id !== 'evaluation' || !selectedNode.output_data) return null;
-    const out = selectedNode.output_data as Record<string, unknown>;
-    const so = out.skill_outputs as Record<string, unknown> | undefined;
-    const raw = (so?.ensemble_review || out.ensemble_review) as EnsembleReviewData | undefined;
-    if (!raw) return null;
-    return {
-      ...raw,
-      overall: raw.overall ?? (out.ensemble_overall as number | undefined),
-      decision: raw.decision ?? (out.ensemble_decision as string | undefined),
-    };
-  }, [selectedNode]);
-
-  const proConAdversarial = useMemo((): ProConAdversarialData | null => {
-    if (selectedNode?.id !== 'evaluation' || !selectedNode.output_data) return null;
-    const out = selectedNode.output_data as Record<string, unknown>;
-    const so = out.skill_outputs as Record<string, unknown> | undefined;
-    const raw = so?.pro_con_adversarial as ProConAdversarialData | undefined;
-    return raw?.mode && raw.mode !== 'off' ? raw : null;
-  }, [selectedNode]);
-
-  const ideationData = useMemo((): IdeationNoveltyData | null => {
-    const aux = runExtraMetadata?.auxiliary_results?.ideation_novelty as IdeationNoveltyData | undefined;
-    if (aux?.suggested_angles?.length) return aux;
-    const hypoNode = nodes.find((n) => n.id === 'hypothesis');
-    const out = hypoNode?.output_data as Record<string, unknown> | undefined;
-    const embedded = out?.ideation_novelty as IdeationNoveltyData | undefined;
-    return embedded?.suggested_angles?.length ? embedded : aux ?? null;
-  }, [nodes, runExtraMetadata]);
+  const selectedNodeId = selectedNode?.id ?? null;
 
   const plotQualityData = useMemo((): PlotQualityData | null => {
     for (const nodeId of ['validation', 'report'] as const) {
@@ -581,33 +543,9 @@ export function WorkflowPage({
     return aux?.reran ? aux : null;
   }, [runExtraMetadata]);
 
-  const federatedCampaignRefinement = useMemo((): FederatedCampaignRefinementData | null => {
-    const aux = runExtraMetadata?.auxiliary_results?.federated_campaign_refinement as
-      | FederatedCampaignRefinementData
-      | undefined;
-    return aux?.reran ? aux : null;
-  }, [runExtraMetadata]);
-
   const qualityAcceptance = useMemo((): QualityAcceptance | null => {
     return runExtraMetadata?.quality_acceptance ?? null;
   }, [runExtraMetadata]);
-
-  const federatedCampaignData = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
-    const pilot = (validationOut?.federated_pilot || validationOut?.results) as Record<string, unknown> | undefined;
-    const replanActions = (validationOut?.replan_actions || pilot?.replan_actions) as ReplanAction[] | undefined;
-    const hasPilot = pilot && Object.keys(pilot).length > 0;
-    const hasEvents = (runExtraMetadata?.closed_loop_events || []).some((e) => e.type === 'federated_campaign');
-    const hasSnapshots = (runExtraMetadata?.version_snapshots || []).some(
-      (s) => s.federated_best_method || s.federated_execution_mode
-    );
-    if (!hasPilot && !hasEvents && !hasSnapshots) return null;
-    return {
-      pilot: hasPilot ? pilot : null,
-      replanActions: replanActions || [],
-      snapshots: runExtraMetadata?.version_snapshots || [],
-    };
-  }, [nodes, runExtraMetadata]);
 
   const validationExecutionMeta = useMemo(() => {
     const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
@@ -623,12 +561,21 @@ export function WorkflowPage({
   const verifiableValidation = useMemo(() => {
     const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
     if (!validationOut) return null;
+    const checks = validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined;
+    const spec = validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
+    if (!(checks?.length) && !spec?.claim) return null;
     return {
-      checks: validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined,
+      checks,
       passed: validationOut.verifiable_passed as boolean | null | undefined,
-      spec: validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined,
+      spec,
     };
   }, [nodes]);
+
+  const hasClosedLoopTimeline = Boolean(
+    runExtraMetadata?.closed_loop_events?.length
+    || runExtraMetadata?.quality_trend?.length
+    || runExtraMetadata?.closed_loop_decisions?.length,
+  );
 
   const versionSnapshots = useMemo(
     () => runExtraMetadata?.version_snapshots ?? [],
@@ -1094,38 +1041,6 @@ export function WorkflowPage({
     [projectId, nodes, startPolling, resolveRunIdForActions, rememberLatestRunId],
   );
 
-  const handleRerunFromReview = useCallback(async () => {
-    if (!projectId) return;
-    const parentRunId = resolveRunIdForActions();
-    if (!parentRunId) {
-      setErrorMessage('未找到可重跑的运行记录，请先运行一次 Pipeline。');
-      return;
-    }
-    try {
-      const res = await humanLoopService.rerunFromStage({
-        project_id: projectId,
-        run_id: parentRunId,
-        stage: 'hypothesis_review',
-        use_human_modified_output: true,
-        rerun_mode: 'from_stage_onward',
-      });
-      if (res.code === 200 && res.data?.run_id) {
-        const newRunId = res.data.run_id;
-        setCurrentRunId(newRunId);
-        currentRunIdRef.current = newRunId;
-        rememberLatestRunId(newRunId);
-        setActiveRunId(projectId, newRunId);
-        setRunState('running');
-        startPolling(newRunId);
-      } else {
-        setErrorMessage(res.message || '从假设评审重跑失败');
-      }
-    } catch (err) {
-      console.error('从假设评审重跑失败', err);
-      setErrorMessage(err instanceof Error ? err.message : '从假设评审重跑失败');
-    }
-  }, [projectId, startPolling, resolveRunIdForActions, rememberLatestRunId]);
-
   // ========== 计算状态摘要 ==========
   const effectiveRunId = currentRunId ?? latestRunId;
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
@@ -1366,10 +1281,8 @@ export function WorkflowPage({
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
-          {(runExtraMetadata?.closed_loop_events?.length
-            || runExtraMetadata?.quality_trend?.length
-            || runExtraMetadata?.closed_loop_decisions?.length) ? (
-            <CollapsiblePanel title="闭环质量趋势" subtitle="ClosedLoopTimeline" defaultOpen={false}>
+          {selectedNodeId === 'report' && hasClosedLoopTimeline && (
+            <CollapsiblePanel title="闭环质量趋势" defaultOpen={false}>
               <ClosedLoopTimeline
                 events={runExtraMetadata?.closed_loop_events}
                 qualityTrend={runExtraMetadata?.quality_trend}
@@ -1377,62 +1290,44 @@ export function WorkflowPage({
                 runId={effectiveRunId}
               />
             </CollapsiblePanel>
-          ) : null}
+          )}
 
-          {validationExecutionMeta && (
-            <CollapsiblePanel title="执行层级" subtitle="ExecutionTierBadge" defaultOpen={false}>
+          {selectedNodeId === 'validation' && validationExecutionMeta && (
+            <CollapsiblePanel title="执行层级" defaultOpen={false}>
               <ExecutionTierBadge {...validationExecutionMeta} />
             </CollapsiblePanel>
           )}
 
-          {federatedCampaignData && (
-            <CollapsiblePanel title="联邦实验战役" subtitle="FederatedCampaignPanel" defaultOpen={false}>
-              <FederatedCampaignPanel
-                federatedPilot={federatedCampaignData.pilot}
-                replanActions={federatedCampaignData.replanActions}
-                events={runExtraMetadata?.closed_loop_events}
-                snapshots={
-                  federatedCampaignRefinement?.version_snapshots ||
-                  runExtraMetadata?.version_snapshots ||
-                  federatedCampaignData.snapshots
-                }
-                campaignRefinement={federatedCampaignRefinement}
+          {selectedNodeId === 'report' && qualityAcceptance && (
+            <CollapsiblePanel title="质量验收" defaultOpen={false}>
+              <DiscoveryLoopPanel qualityAcceptance={qualityAcceptance} sections={['quality']} />
+            </CollapsiblePanel>
+          )}
+
+          {selectedNodeId === 'validation' && teachingRefinementData?.reran && (
+            <CollapsiblePanel title="验证失败后自动重试" defaultOpen={false}>
+              <DiscoveryLoopPanel teachingRefinement={teachingRefinementData} sections={['teaching']} />
+            </CollapsiblePanel>
+          )}
+
+          {selectedNodeId === 'report' && discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
+            <CollapsiblePanel title="Discovery 迭代" defaultOpen={false}>
+              <DiscoveryLoopPanel
+                discoveryLoop={discoveryLoopData}
+                teachingRefinement={teachingRefinementData}
+                sections={['discovery', 'versions']}
               />
             </CollapsiblePanel>
           )}
 
-          {(discoveryLoopData || teachingRefinementData || qualityAcceptance) && (
-            <>
-              {qualityAcceptance && (
-                <CollapsiblePanel title="质量验收" subtitle="QualityAcceptancePanel" defaultOpen={false}>
-                  <DiscoveryLoopPanel qualityAcceptance={qualityAcceptance} sections={['quality']} />
-                </CollapsiblePanel>
-              )}
-              {teachingRefinementData?.reran && (
-                <CollapsiblePanel title="Teaching 自动精化" subtitle="TeachingAutoRefinement" defaultOpen={false}>
-                  <DiscoveryLoopPanel teachingRefinement={teachingRefinementData} sections={['teaching']} />
-                </CollapsiblePanel>
-              )}
-              {discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
-                <CollapsiblePanel title="Discovery 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
-                  <DiscoveryLoopPanel
-                    discoveryLoop={discoveryLoopData}
-                    teachingRefinement={teachingRefinementData}
-                    sections={['discovery', 'versions']}
-                  />
-                </CollapsiblePanel>
-              )}
-            </>
-          )}
-
-          {versionSnapshots.length >= 2 && (
-            <CollapsiblePanel title="证据版本对比" subtitle="EvidenceDiffPanel" defaultOpen={false}>
+          {selectedNodeId === 'report' && versionSnapshots.length >= 2 && (
+            <CollapsiblePanel title="证据版本对比" defaultOpen={false}>
               <EvidenceDiffPanel snapshots={versionSnapshots} />
             </CollapsiblePanel>
           )}
 
-          {verifiableValidation && (
-            <CollapsiblePanel title="可验证性检查" subtitle="VerifiableChecksPanel" defaultOpen={false}>
+          {selectedNodeId === 'validation' && verifiableValidation && (
+            <CollapsiblePanel title="可验证性检查" defaultOpen={false}>
               <VerifiableChecksPanel
                 checks={verifiableValidation.checks}
                 passed={verifiableValidation.passed ?? null}
@@ -1441,29 +1336,8 @@ export function WorkflowPage({
             </CollapsiblePanel>
           )}
 
-          {ideationData && (
-            <CollapsiblePanel title="Ideation 新颖性" subtitle="IdeationNoveltyPanel" defaultOpen={false}>
-              <IdeationNoveltyPanel ideation={ideationData} />
-            </CollapsiblePanel>
-          )}
-
-          {proConAdversarial && (
-            <CollapsiblePanel title="红蓝对抗" subtitle="ProConAdversarialPanel" defaultOpen>
-              <ProConAdversarialPanel data={proConAdversarial} />
-            </CollapsiblePanel>
-          )}
-
-          {ensembleReview && (
-            <CollapsiblePanel title="集成评审" subtitle="EnsembleReviewPanel（含反方质疑权重）" defaultOpen={false}>
-              <EnsembleReviewPanel
-                review={ensembleReview}
-                onRerunFromReview={effectiveRunId ? handleRerunFromReview : undefined}
-              />
-            </CollapsiblePanel>
-          )}
-
-          {plotQualityData && selectedNode && (selectedNode.id === 'validation' || selectedNode.id === 'report') && (
-            <CollapsiblePanel title="图表质量评审" subtitle="PlotCritiquePanel" defaultOpen={false}>
+          {plotQualityData && selectedNodeId && (selectedNodeId === 'validation' || selectedNodeId === 'report') && (
+            <CollapsiblePanel title="小样验证图表质量检查" defaultOpen={false}>
               <PlotCritiquePanel plotQuality={plotQualityData} />
             </CollapsiblePanel>
           )}

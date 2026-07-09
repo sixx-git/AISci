@@ -138,7 +138,7 @@ export function LoopConfigPanel({
                 className="input-field py-1.5 px-2 text-sm w-16"
               />
             </Field>
-            <Field label="CQS Δ 阈值">
+            <Field label="CQS质量分通过阈值">
               <input
                 type="number"
                 min={0}
