@@ -18,7 +18,9 @@ import { pipelineService } from '@/services/pipelineService';
 import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
 import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
+import { CounterfactualPreviewPanel } from '@/components/CounterfactualPreviewPanel';
 import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
+import { useCounterfactualPreview } from '@/hooks/useCounterfactualPreview';
 import { useToast } from '@/hooks/useToast';
 import { getErrorMessage } from '@/lib/errors';
 import { mapBackendEvidenceToItem, mapBackendHypothesisToDetailed } from '@/lib/mappers/hypothesisMapper';
@@ -83,6 +85,9 @@ export function HypothesesPage({
     adversarialMode,
     loading: reviewExtrasLoading,
   } = useHypothesisReviewExtras(_projectId, _latestRunId, _revalidateKey);
+
+  const { preview: counterfactualPreview, loading: counterfactualLoading } =
+    useCounterfactualPreview(_projectId, _latestRunId, _revalidateKey);
 
   useEffect(() => {
     if (!_projectId) {
@@ -364,6 +369,14 @@ export function HypothesesPage({
               <EnsembleReviewPanel review={ensembleReview} />
             </Card>
           )}
+        </div>
+      )}
+
+      {!counterfactualLoading && counterfactualPreview && (
+        <div className="mb-6">
+          <Card title="反事实预演" subtitle="假设评审后 · L0 定性推演（不运行沙箱）">
+            <CounterfactualPreviewPanel data={counterfactualPreview} />
+          </Card>
         </div>
       )}
 

@@ -1166,7 +1166,6 @@ export function WorkflowPage({
             value={loopConfig}
             onChange={setLoopConfig}
             disabled={runState !== 'idle'}
-            qualityTrend={runExtraMetadata?.quality_trend}
           />
           <p className="text-xs text-bp-muted mt-2">
             {loopConfig.pipelineMode === 'discovery'

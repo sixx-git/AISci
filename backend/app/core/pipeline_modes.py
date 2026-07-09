@@ -28,6 +28,7 @@ DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
 DEFAULT_DATA_SPEC_GAP_THRESHOLD = 60.0
 DEFAULT_MAX_GAP_ROUNDS = 2
 DEFAULT_CON_CHALLENGE_MAX_ROUNDS = 2
+DEFAULT_LITERATURE_MAX_PAPERS = 10
 PLOT_CRITIQUE_PASS_SCORE = 6.5
 ENSEMBLE_ACCEPT_SCORE = 6.5
 VALID_ADVERSARIAL_MODES = ("single_group", "multi_group", "off")
@@ -118,6 +119,11 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         con_max_rounds = max(1, min(int(con_max_rounds), 4))
     except (TypeError, ValueError):
         con_max_rounds = DEFAULT_CON_CHALLENGE_MAX_ROUNDS
+    literature_max = opts.get("literature_max_papers", DEFAULT_LITERATURE_MAX_PAPERS)
+    try:
+        literature_max = max(1, min(int(literature_max), 30))
+    except (TypeError, ValueError):
+        literature_max = DEFAULT_LITERATURE_MAX_PAPERS
     return {
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
@@ -143,4 +149,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "adversarial_mode": adversarial_mode,
         "con_challenge_max_rounds": con_max_rounds,
         "enable_hypothesis_evolution": bool(opts.get("enable_hypothesis_evolution", True)),
+        "enable_counterfactual_preview": bool(opts.get("enable_counterfactual_preview", True)),
+        "literature_max_papers": literature_max,
     }

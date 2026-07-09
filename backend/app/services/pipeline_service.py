@@ -456,6 +456,12 @@ class PipelineService:
             input_data = self.db_pipeline_run.input_data
         return resolve_run_options(input_data.get("options"))
 
+    def _get_literature_top_k(self) -> int:
+        try:
+            return max(1, min(int(self._run_options.get("literature_max_papers", 10)), 30))
+        except (TypeError, ValueError):
+            return 10
+
     def _is_quick_report_run(self) -> bool:
         if self._run_options.get("enable_quick_report"):
             return True
@@ -526,6 +532,61 @@ class PipelineService:
             )
         )
         return skill_result.data if skill_result.success else {}
+
+    def _exec_counterfactual_preview(
+        self,
+        hypothesis_review: Optional[Dict[str, Any]],
+        literature_mining: Optional[Dict[str, Any]],
+        research_question: str = "",
+    ) -> Dict[str, Any]:
+        """L0 定性反事实预演（非独立阶段，失败不阻断 Pipeline）。"""
+        import asyncio
+        from app.skills.counterfactual.counterfactual_preview_skill import CounterfactualPreviewSkill
+
+        skill = CounterfactualPreviewSkill()
+        skill_result = asyncio.run(
+            skill.run(
+                input_data={
+                    "hypothesis_review": hypothesis_review or {},
+                    "literature_facts": (literature_mining or {}).get("facts") or [],
+                    "research_question": research_question,
+                },
+                context={"stage": "counterfactual_preview", "research_question": research_question},
+            )
+        )
+        return skill_result.data if skill_result.success else {}
+
+    def _ensure_counterfactual_preview(
+        self,
+        results: Dict[str, Any],
+        research_question: str,
+    ) -> None:
+        if not self._run_options.get("enable_counterfactual_preview", True):
+            return
+        if results.get("counterfactual_preview"):
+            return
+        hr = results.get("hypothesis_review") or {}
+        if not (hr.get("reviews") or []):
+            return
+        try:
+            preview = self._exec_counterfactual_preview(
+                hr,
+                results.get("literature_mining"),
+                research_question,
+            )
+            if preview and not preview.get("skipped"):
+                results["counterfactual_preview"] = preview
+                self._stage_results["counterfactual_preview"] = preview
+                self._record_closed_loop_event(
+                    "counterfactual_preview",
+                    {
+                        "scenario_count": len(preview.get("scenarios") or []),
+                        "proceed": preview.get("proceed_to_experiment_design"),
+                        "summary": (preview.get("summary") or "")[:200],
+                    },
+                )
+        except Exception as exc:
+            logger.warning("[CounterfactualPreview] 跳过: %s", exc)
 
     def _build_discovery_refined_context(
         self,
@@ -858,7 +919,7 @@ class PipelineService:
             keywords=ctx["keywords"],
             previous=previous if isinstance(previous, dict) else None,
             discovery_round=discovery_round,
-            top_k=15,
+            top_k=self._get_literature_top_k(),
             db=self.db,
         )
         return self._enrich_literature_mining(self._safe_model_dump(response))
@@ -1642,10 +1703,14 @@ class PipelineService:
                     "after_hypothesis_review", results, research_question, project_id, project_mode,
                     stages=stages,
                 )
+                results.pop("counterfactual_preview", None)
+                self._stage_results.pop("counterfactual_preview", None)
+                self._ensure_counterfactual_preview(results, research_question)
                 self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
             # ── 阶段 7: ExperimentDesignAgent ──
             if start_idx <= 6:
+                self._ensure_counterfactual_preview(results, research_question)
                 self._run_stage(stages, 6, results, research_question, project_id,
                     lambda: self._exec_experiment_design(
                         results.get("hypothesis_review"),
@@ -2406,7 +2471,12 @@ class PipelineService:
 
     def _exec_literature_mining(self, project_id: str, research_question: str):
         agent = get_literature_mining_agent()
-        result = agent.mine(project_id=project_id, research_question=research_question, db=self.db)
+        result = agent.mine(
+            project_id=project_id,
+            research_question=research_question,
+            top_k=self._get_literature_top_k(),
+            db=self.db,
+        )
         return self._safe_model_dump(result)
 
     def _exec_literature_mining_stage(
@@ -2983,6 +3053,13 @@ class PipelineService:
                 plan=plan,
             )
 
+        from app.skills.counterfactual.counterfactual_preview_skill import (
+            build_counterfactual_feedback_constraints,
+        )
+
+        cf_feedback = build_counterfactual_feedback_constraints(
+            self._stage_results.get("counterfactual_preview"),
+        )
         result = agent.design_experiment(
             hypothesis=best_review.get("hypothesis", ""),
             rationale=best_review.get("rationale"),
@@ -2994,7 +3071,8 @@ class PipelineService:
             data_files=data_files,
             literature_facts=lit_mining.get("facts", []),
             project_mode=project_mode,
-            validation_feedback=list(self._validation_feedback_constraints or [])
+            validation_feedback=list(cf_feedback or [])
+            + list(self._validation_feedback_constraints or [])
             + list(self._human_feedback_constraints or []),
             pilot_results=self._last_pilot_results or None,
         )
@@ -3584,7 +3662,7 @@ class PipelineService:
             for k in (
                 "data_finder", "evidence_reasoning",
                 "ideation_novelty", "discovery_loop", "teaching_auto_refinement",
-                "federated_campaign_refinement",
+                "federated_campaign_refinement", "counterfactual_preview",
             )
             if k in safe_results
         }

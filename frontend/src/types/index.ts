@@ -628,6 +628,30 @@ export interface ProConChallenge {
   suggested_fix?: string;
 }
 
+export interface CounterfactualScenario {
+  scenario_id?: string;
+  intervention?: string;
+  question?: string;
+  predicted_outcome?: string;
+  failure_risk?: 'low' | 'medium' | 'high' | string;
+  confidence?: 'low' | 'medium' | 'high' | string;
+  evidence_fact_ids?: string[];
+  cheap_test?: string;
+  decision_impact?: string;
+  falsifiable?: boolean;
+}
+
+export interface CounterfactualPreviewData {
+  prediction_tier?: string;
+  scenarios?: CounterfactualScenario[];
+  failure_predictions?: string[];
+  recommended_pivots?: string[];
+  proceed_to_experiment_design?: boolean;
+  summary?: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
 export interface ProConAdversarialData {
   mode?: AdversarialMode;
   pro_side?: {
@@ -705,6 +729,7 @@ export type PipelineRunMode = 'teaching' | 'discovery';
 export interface PipelineRunOptions {
   pipeline_mode?: PipelineRunMode;
   num_ideas?: number;
+  literature_max_papers?: number;
   discovery_max_rounds?: number;
   force_sandbox?: boolean;
   enable_plot_vlm_critique?: boolean;

@@ -63,6 +63,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "Pipeline 编排": [
         "QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop",
         "TaskDecomposition", "Replanning", "QuestionValidator",
+        "CounterfactualPreview",
         "AcademicResearchSkills", "ResearchSkills",
     ],
     "数据建模服务": [

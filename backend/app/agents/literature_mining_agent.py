@@ -141,6 +141,7 @@ class LiteratureMiningAgent:
                     research_question,
                     db,
                     keywords=keywords,
+                    max_import=min(max(top_k, 5), 15),
                 )
 
             vs = get_vector_store()
@@ -311,7 +312,7 @@ class LiteratureMiningAgent:
                     search_query,
                     db,
                     keywords=merged_keywords,
-                    max_import=8,
+                    max_import=min(max(top_k, 5), 15),
                 )
             except Exception as exc:
                 logger.warning(f"[Discovery R{discovery_round}] 补充文献发现失败: {exc}")
