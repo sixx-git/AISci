@@ -14,7 +14,8 @@ import { reportService, type ReportBrowseItem } from '@/services/reportService';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
 const MODE_OPTIONS = [
   { value: '', label: '全部类型' },
@@ -66,6 +67,7 @@ export function Reports() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
@@ -94,7 +96,7 @@ export function Reports() {
 
   useEffect(() => {
     setPage(1);
-  }, [modeFilter, timePreset, customDateFrom, customDateTo, appliedKeyword]);
+  }, [modeFilter, timePreset, customDateFrom, customDateTo, appliedKeyword, pageSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +107,7 @@ export function Reports() {
       try {
         const res = await reportService.browse({
           page,
-          page_size: PAGE_SIZE,
+          page_size: pageSize,
           project_mode: modeFilter || undefined,
           date_from: dateRange.date_from,
           date_to: dateRange.date_to,
@@ -138,7 +140,7 @@ export function Reports() {
     })();
 
     return () => { cancelled = true; };
-  }, [page, modeFilter, dateRange, appliedKeyword, reloadTick]);
+  }, [page, pageSize, modeFilter, dateRange, appliedKeyword, reloadTick]);
 
   const clearFilters = () => {
     setModeFilter('');
@@ -284,7 +286,55 @@ export function Reports() {
     </Card>
   );
 
-  const subtitleText = `共 ${total} 份研究报告${hasFilters ? '（已筛选）' : ''}`;
+  const subtitleText = total > 0
+    ? `共 ${total} 份研究报告 · 第 ${page}/${Math.max(totalPages, 1)} 页${hasFilters ? '（已筛选）' : ''}`
+    : `共 0 份研究报告${hasFilters ? '（已筛选）' : ''}`;
+
+  const paginationBar = total > 0 ? (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 px-1">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-bp-muted">
+        <span>
+          第 {page} / {Math.max(totalPages, 1)} 页，共 {total} 条
+        </span>
+        <label className="inline-flex items-center gap-2">
+          <span className="text-xs">每页</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            disabled={isLoading}
+            className="input-field py-1 px-2 text-xs w-auto min-w-[4.5rem]"
+            style={selectChevronStyle}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} 条
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={page <= 1 || isLoading}
+          icon={<ChevronLeft className="w-4 h-4" />}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          上一页
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={page >= totalPages || isLoading || totalPages <= 1}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        >
+          下一页
+          <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   if (isLoading && reports.length === 0) {
     return shell(
@@ -316,6 +366,7 @@ export function Reports() {
   return shell(
     subtitleText,
     <>
+      {filterBar}
 
       {reports.length === 0 ? (
         <Card>
@@ -424,33 +475,7 @@ export function Reports() {
             </div>
           </Card>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 px-1">
-              <span className="text-sm text-bp-muted">
-                第 {page} / {totalPages} 页，共 {total} 条
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page <= 1 || isLoading}
-                  icon={<ChevronLeft className="w-4 h-4" />}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  上一页
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page >= totalPages || isLoading}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  下一页
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          {paginationBar}
         </>
       )}
 
