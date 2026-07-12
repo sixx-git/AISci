@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import logging
 import re
 import shutil
@@ -284,6 +285,82 @@ def _sv_has_experiment_output(sv: Dict[str, Any]) -> bool:
     return bool(actual.get("sandbox_plots") or actual.get("sandbox_metrics"))
 
 
+def _load_small_validation_from_disk(project_id: str, db: Any) -> Dict[str, Any]:
+    """DB 阶段输出被截断时，从 validations / runs 磁盘产物回填沙箱结果。"""
+    from pathlib import Path
+
+    from app.models.pipeline import PipelineRun
+
+    backend_root = Path(__file__).resolve().parent.parent.parent
+    runs_root = backend_root / "storage" / "runs"
+    val_root = backend_root / "storage" / "validations"
+
+    run_ids = [
+        r.run_id
+        for r in db.query(PipelineRun)
+        .filter(PipelineRun.project_id == project_id)
+        .order_by(PipelineRun.created_at.desc())
+        .limit(20)
+        .all()
+        if r.run_id
+    ]
+
+    candidates: List[tuple[float, Dict[str, Any]]] = []
+
+    def _score(sv: Dict[str, Any]) -> float:
+        sb = sv.get("sandbox_execution") or {}
+        if not sb.get("success"):
+            return 0.0
+        plots = len(sb.get("plots") or []) + len((sv.get("artifacts") or {}).get("plots") or [])
+        metrics = 1.0 if isinstance(sb.get("metrics"), dict) and sb.get("metrics") else 0.0
+        return plots * 10 + metrics + (2.0 if sb.get("output_complete") else 0.0)
+
+    for run_id in run_ids:
+        link_path = runs_root / run_id / "latest_validation.json"
+        if not link_path.is_file():
+            continue
+        try:
+            with open(link_path, encoding="utf-8") as f:
+                link = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        vid = link.get("validation_id")
+        val_path = val_root / vid / "result.json" if vid else None
+        if not val_path or not val_path.is_file():
+            continue
+        try:
+            with open(val_path, encoding="utf-8") as f:
+                sv = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(sv, dict) and _sv_has_experiment_output(sv):
+            candidates.append((val_path.stat().st_mtime, sv))
+
+    if not candidates:
+        if val_root.is_dir():
+            for child in val_root.iterdir():
+                result_path = child / "result.json"
+                if not result_path.is_file():
+                    continue
+                try:
+                    with open(result_path, encoding="utf-8") as f:
+                        sv = json.load(f)
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(sv, dict) or not _sv_has_experiment_output(sv):
+                    continue
+                blob = json.dumps(sv, ensure_ascii=False)
+                if project_id not in blob and "HEPAR" not in blob:
+                    continue
+                candidates.append((result_path.stat().st_mtime, sv))
+
+    if not candidates:
+        return {}
+
+    candidates.sort(key=lambda x: (_score(x[1]), x[0]), reverse=True)
+    return candidates[0][1]
+
+
 def load_experiment_context(db: Any, project_id: str) -> Dict[str, Any]:
     """加载 Pipeline 实验设计、小样验证与假设上下文。"""
     from app.models.pipeline import PipelineRun, PipelineStage, PipelineStageExecution, PipelineStatus
@@ -339,9 +416,16 @@ def load_experiment_context(db: Any, project_id: str) -> Dict[str, Any]:
         )
         if stage_row and isinstance(stage_row.output_data, dict):
             od = stage_row.output_data
+            if od.get("_truncated") and not _sv_has_experiment_output(od):
+                continue
             if _sv_has_experiment_output(od):
                 best_sv = od
                 break
+
+    if not _sv_has_experiment_output(best_sv):
+        disk_sv = _load_small_validation_from_disk(project_id, db)
+        if disk_sv:
+            best_sv = disk_sv
 
     ctx["experiment_design"] = ed_data
     ctx["small_validation"] = best_sv

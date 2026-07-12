@@ -9,10 +9,12 @@ import {
   FlaskConical, CheckCircle, XCircle, Database,
   BarChart3, ListChecks, Target, BookOpen,
   AlertTriangle, Lightbulb, Play,
-  Sparkles, Upload,
+  Sparkles, Upload, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import experimentService from '@/services/experimentService';
+import datasetService from '@/services/datasetService';
+import dataFinderService, { type ExternalCandidateItem } from '@/services/dataFinderService';
 import { pipelineService } from '@/services/pipelineService';
 import humanLoopService from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
@@ -27,7 +29,21 @@ import { selectedHypothesisKey } from '@/lib/storageKeys';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { AdversarialReviewSummary } from '@/components/AdversarialReviewSummary';
 import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
-import type { DetailedExperimentDesign, PipelineRunResult } from '@/types';
+import type { DetailedExperimentDesign, PipelineRunResult, PipelineStageLog, PipelineRunSummary } from '@/types';
+
+interface RecommendedPublicDataset {
+  dataset_name?: string;
+  source_platform?: string;
+  source?: string;
+  url?: string;
+  download_url?: string;
+  description?: string;
+  license?: string;
+  task_type?: string;
+  modalities?: string[];
+  availability?: string;
+  import_supported?: boolean;
+}
 
 interface ExperimentDataRequirements {
   upload_status?: string;
@@ -42,16 +58,200 @@ interface ExperimentDataRequirements {
   required_data_description?: string;
   validation_target?: string;
   metrics?: string;
-  recommended_public_datasets?: string[];
+  recommended_public_datasets?: RecommendedPublicDataset[];
   gaps?: string[];
   summary?: string;
   next_action?: string;
 }
 
+function normalizeRecommendedDataset(raw: unknown): RecommendedPublicDataset | null {
+  if (!raw) return null;
+  if (typeof raw === 'string' && raw.trim()) {
+    return { dataset_name: raw.trim(), url: '', download_url: '' };
+  }
+  if (typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  const url = String(
+    item.download_url || item.url || item.source_url || item.landing_page_url || '',
+  ).trim();
+  const name = String(item.dataset_name || item.name || '').trim();
+  if (!name && !url) return null;
+  return {
+    dataset_name: name || '未命名数据集',
+    source_platform: String(item.source_platform || item.source || ''),
+    url,
+    download_url: url,
+    description: String(item.description || ''),
+    license: String(item.license || ''),
+    task_type: String(item.task_type || ''),
+    modalities: Array.isArray(item.modalities) ? item.modalities.map(String) : [],
+    availability: String(item.availability || 'catalog_only'),
+    import_supported: Boolean(item.import_supported),
+  };
+}
+
+function normalizeRecommendedDatasets(raw: unknown): RecommendedPublicDataset[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeRecommendedDataset).filter((d): d is RecommendedPublicDataset => d != null);
+}
+
+function recommendedFromExternalCandidate(c: ExternalCandidateItem): RecommendedPublicDataset | null {
+  return normalizeRecommendedDataset({
+    dataset_name: c.dataset_name,
+    source_platform: c.source_platform,
+    url: c.url,
+    download_url: c.url,
+    description: c.description,
+    availability: c.availability,
+    import_supported: c.import_supported,
+  });
+}
+
+function enrichDataRequirements(
+  requirements: ExperimentDataRequirements,
+  run?: PipelineRunResult | null,
+): ExperimentDataRequirements {
+  let recommended = normalizeRecommendedDatasets(requirements.recommended_public_datasets);
+  if (!recommended.length && run?.stages?.length) {
+    const edStage = [...run.stages].reverse().find((s) => s.stage === 'experiment_design');
+    const output = edStage?.output_data;
+    if (output && typeof output === 'object') {
+      const out = output as Record<string, unknown>;
+      recommended = normalizeRecommendedDatasets(
+        out.recommended_public_datasets
+        || (out.data_requirements as Record<string, unknown> | undefined)?.recommended_public_datasets,
+      );
+    }
+  }
+  return { ...requirements, recommended_public_datasets: recommended };
+}
+
+function extractDataRequirementsFromStages(
+  stages?: PipelineStageLog[],
+): ExperimentDataRequirements | null {
+  if (!stages?.length) return null;
+  const experimentStages = stages.filter(
+    (s) => s.stage === 'experiment_design' && s.output_data && typeof s.output_data === 'object',
+  );
+  for (let i = experimentStages.length - 1; i >= 0; i -= 1) {
+    const raw = (experimentStages[i].output_data as Record<string, unknown>).data_requirements;
+    if (raw && typeof raw === 'object') {
+      return raw as ExperimentDataRequirements;
+    }
+  }
+  return null;
+}
+
 function extractDataRequirements(run: PipelineRunResult | null | undefined): ExperimentDataRequirements | null {
-  const raw = run?.experiment_design?.data_requirements;
-  if (!raw || typeof raw !== 'object') return null;
-  return raw as ExperimentDataRequirements;
+  const topLevel = run?.experiment_design?.data_requirements;
+  let base: ExperimentDataRequirements | null = null;
+  if (topLevel && typeof topLevel === 'object') {
+    base = topLevel as ExperimentDataRequirements;
+  } else {
+    const fromStages = extractDataRequirementsFromStages(run?.stages);
+    if (!fromStages) return null;
+    base = fromStages;
+  }
+  return enrichDataRequirements(base, run);
+}
+
+async function buildFallbackDataRequirements(projectId: string): Promise<ExperimentDataRequirements> {
+  try {
+    const res = await datasetService.getDataContext(projectId);
+    const datasets = res.code === 200 && res.data?.datasets ? res.data.datasets : [];
+    const uploaded = datasets.map((d) => ({
+      filename: d.filename,
+      data_type: d.data_type,
+      n_rows: d.n_rows,
+      n_columns: d.n_columns,
+      columns: d.columns,
+    }));
+    const hasData = uploaded.length > 0;
+    return {
+      upload_status: hasData ? 'ready' : 'pending_upload',
+      uploaded_dataset_count: uploaded.length,
+      uploaded_datasets: uploaded,
+      summary: hasData
+        ? `已上传 ${uploaded.length} 个数据集。运行实验设计后将结合数据结构生成方案。`
+        : '请先在「数据集」页上传 CSV/表格数据，再运行工作流中的实验设计阶段。',
+      next_action: hasData ? 'review_experiment_plan' : 'upload_datasets',
+    };
+  } catch {
+    return {
+      upload_status: 'pending_upload',
+      uploaded_dataset_count: 0,
+      uploaded_datasets: [],
+      summary: '请先在「数据集」页上传研究数据，再运行实验设计。',
+      next_action: 'upload_datasets',
+    };
+  }
+}
+
+async function loadDataRequirementsForProject(
+  projectId: string,
+  latestRunId?: string | null,
+): Promise<ExperimentDataRequirements> {
+  const candidateRunIds: string[] = [];
+  if (latestRunId) candidateRunIds.push(latestRunId);
+
+  try {
+    const runsRes = await pipelineService.getRuns(projectId);
+    if (runsRes.code === 200 && runsRes.data?.length) {
+      for (const run of runsRes.data as PipelineRunSummary[]) {
+        if (run.run_id && !candidateRunIds.includes(run.run_id)) {
+          candidateRunIds.push(run.run_id);
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  for (const runId of candidateRunIds) {
+    try {
+      const res = await pipelineService.getStatus(runId);
+      if (res.code === 200 && res.data) {
+        const requirements = extractDataRequirements(res.data);
+        if (requirements) {
+          if ((requirements.recommended_public_datasets?.length ?? 0) > 0) {
+            return requirements;
+          }
+          const withFinder = await mergeDataFinderRecommendations(projectId, requirements);
+          if ((withFinder.recommended_public_datasets?.length ?? 0) > 0) {
+            return withFinder;
+          }
+          return requirements;
+        }
+      }
+    } catch {
+      /* try next run */
+    }
+  }
+
+  const fallback = await buildFallbackDataRequirements(projectId);
+  return mergeDataFinderRecommendations(projectId, fallback);
+}
+
+async function mergeDataFinderRecommendations(
+  projectId: string,
+  requirements: ExperimentDataRequirements,
+): Promise<ExperimentDataRequirements> {
+  if ((requirements.recommended_public_datasets?.length ?? 0) > 0) {
+    return requirements;
+  }
+  try {
+    const res = await dataFinderService.getResults(projectId);
+    const candidates = res.code === 200 ? (res.data?.external_candidates ?? []) : [];
+    const recommended = candidates
+      .map(recommendedFromExternalCandidate)
+      .filter((d): d is RecommendedPublicDataset => d != null);
+    if (recommended.length) {
+      return { ...requirements, recommended_public_datasets: recommended };
+    }
+  } catch {
+    /* ignore */
+  }
+  return requirements;
 }
 
 interface ExperimentDesignPageProps {
@@ -129,6 +329,7 @@ function DataRequirementsPanel({
   const pending = requirements.upload_status === 'pending_upload'
     || (requirements.uploaded_dataset_count ?? 0) === 0;
   const uploaded = requirements.uploaded_datasets ?? [];
+  const recommended = requirements.recommended_public_datasets ?? [];
 
   return (
     <Card className={cn(
@@ -189,6 +390,60 @@ function DataRequirementsPanel({
               <li key={gap}>{gap}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {recommended.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-bp border border-bp-border">
+          <p className="text-xs text-bp-muted px-3 pt-3 mb-1">
+            推荐公开数据集（请下载后上传到「数据集」页）
+          </p>
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-bp-muted border-b border-bp-border bg-bp-panel/50">
+                <th className="px-3 py-2 font-medium min-w-[10rem]">数据集名称</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">来源</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">下载地址</th>
+                <th className="px-3 py-2 font-medium">说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recommended.map((ds) => {
+                const link = (ds.download_url || ds.url || '').trim();
+                const key = `${ds.dataset_name}-${link}`;
+                return (
+                  <tr key={key} className="border-t border-bp-border/50">
+                    <td className="px-3 py-2.5 text-bp-text font-medium align-top">
+                      {ds.dataset_name || '未命名'}
+                    </td>
+                    <td className="px-3 py-2.5 text-bp-muted whitespace-nowrap align-top">
+                      {ds.source_platform || ds.source || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap align-top">
+                      {link ? (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-bp-cyan hover:underline"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                          打开下载页
+                        </a>
+                      ) : (
+                        <span className="text-bp-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-bp-muted align-top max-w-xs">
+                      <span className="line-clamp-2" title={ds.description}>
+                        {ds.description || ds.task_type || '—'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -423,20 +678,11 @@ export function ExperimentDesignPage({
         setExperiment(null);
       });
 
-    const loadDataRequirements = resolvePipelineRunId(_projectId, _latestRunId)
-      .then(async (runId) => {
-        if (!runId) {
-          setDataRequirements(null);
-          return;
-        }
-        const res = await pipelineService.getStatus(runId);
-        if (res.code === 200 && res.data) {
-          setDataRequirements(extractDataRequirements(res.data));
-        } else {
-          setDataRequirements(null);
-        }
-      })
-      .catch(() => setDataRequirements(null));
+    const loadDataRequirements = loadDataRequirementsForProject(_projectId, _latestRunId)
+      .then((requirements) => setDataRequirements(requirements))
+      .catch(async () => {
+        setDataRequirements(await buildFallbackDataRequirements(_projectId));
+      });
 
     Promise.all([loadExperiment, loadDataRequirements]).finally(() => setLoading(false));
   }, [_projectId, _revalidateKey, _latestRunId, reloadTick]);
@@ -533,7 +779,7 @@ export function ExperimentDesignPage({
         </div>
       )}
 
-      {!loading && dataRequirements && _projectId && (
+      {!loading && dataRequirements && (
         <DataRequirementsPanel
           requirements={dataRequirements}
           onUploadClick={handleOpenDatasets}

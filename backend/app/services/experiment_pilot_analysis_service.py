@@ -291,13 +291,19 @@ def run_pilot_from_csv(
         result["warnings"].append(f"读取 CSV 失败: {exc}")
         return result
 
-    value_col = "mean" if "mean" in frame.columns else None
-    if value_col is None:
-        numeric = [c for c in frame.columns if pd.api.types.is_numeric_dtype(frame[c])]
-        value_col = numeric[0] if numeric else None
-    if not value_col:
-        result["warnings"].append("CSV 无可用数值列")
+    from app.services.tabular_encoding_utils import encode_tabular_frame, pick_value_column
+
+    encoded = encode_tabular_frame(frame)
+    if encoded.empty:
+        result["warnings"].append("CSV 编码后无可用列")
         return result
+
+    value_col = pick_value_column(encoded)
+    if not value_col:
+        result["warnings"].append("CSV 无可用数值列（分类编码后仍为空）")
+        return result
+
+    frame = encoded
 
     spatial_col = next((c for c in ("spatial_x", "spatial_y", "slice_index") if c in frame.columns), None)
     split_col = spatial_col

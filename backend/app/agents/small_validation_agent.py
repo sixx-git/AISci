@@ -15,6 +15,7 @@ from app.services.qwen_client import qwen_structured_chat, qwen_chat, AgentOutpu
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.data.preliminary_analysis_skill import PreliminaryAnalysisSkill
 from app.skills.experiment.result_verification_skill import ResultVerificationSkill
+from app.services.analysis_script_utils import sanitize_analysis_script
 from app.services.experiment_sandbox_service import get_experiment_sandbox_service
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,8 @@ class SmallValidationAgent:
             
             # 验证和标准化结果
             result = self._validate_and_normalize_result(result_dict, has_csv_data)
+            if result.get("analysis_script") and isinstance(result["analysis_script"], str):
+                result["analysis_script"] = sanitize_analysis_script(result["analysis_script"])
             
             # ── 运行初步分析 Skill ──
             skill_outputs = self._run_preliminary_analysis_sync(
@@ -184,6 +187,26 @@ class SmallValidationAgent:
                     csv_data_path=csv_data_path,
                     extra_env=extra_env,
                 )
+                if (
+                    not sandbox.get("success")
+                    and csv_data_path
+                    and os.path.exists(csv_data_path)
+                ):
+                    default_script = self._generate_default_script()
+                    if default_script and default_script.strip() != (result.get("analysis_script") or "").strip():
+                        logger.warning("LLM 分析脚本沙箱失败，使用默认脚本重试")
+                        sandbox_retry = get_experiment_sandbox_service().execute_analysis_script(
+                            run_id=run_id,
+                            analysis_script=default_script,
+                            csv_data_path=csv_data_path,
+                            extra_env=extra_env,
+                        )
+                        if sandbox_retry.get("success") and sandbox_retry.get("output_complete"):
+                            sandbox = sandbox_retry
+                            result["analysis_script"] = default_script
+                            result.setdefault("warnings", []).append(
+                                "LLM 分析脚本失败，已自动改用默认 pilot 脚本并成功执行"
+                            )
                 result["sandbox_execution"] = sandbox
                 result["artifacts"] = {
                     "experiment_id": sandbox.get("experiment_id"),
@@ -463,7 +486,11 @@ class SmallValidationAgent:
             "3. 优先调用 _aisci_load_data() 加载数据；否则使用 os.environ['AISCI_DATA_PATH']。\n"
             "4. 图表须体现假设验证或方法对比（如指标柱状图、误差对比），"
             "禁止只输出原始字段直方图/散点图作为唯一结果。\n"
-            "5. 设置 matplotlib Agg 后端，脚本 exit code 必须为 0。"
+            "5. 设置 matplotlib Agg 后端，脚本 exit code 必须为 0。\n"
+            "6. 【import 约束】wasserstein_distance 必须从 scipy.stats 导入，"
+            "禁止 from scipy.spatial.distance import wasserstein_distance；"
+            "KL 散度用 scipy.stats.entropy，勿用错误模块。\n"
+            "7. 保持脚本简洁可运行，避免过长导致超时；优先 sklearn + pandas + matplotlib。"
         )
         if has_csv_data and csv_data_path:
             script_prompt += (
@@ -478,7 +505,7 @@ class SmallValidationAgent:
             )
             script = self._extract_code_block(raw)
             if script:
-                return script
+                return sanitize_analysis_script(script)
         except Exception as e:
             logger.warning("分析脚本 LLM 生成失败，使用默认脚本: %s", e)
         return self._generate_default_script() if has_csv_data else ""
@@ -645,20 +672,33 @@ def _load_df():
     return pd.read_csv(data_path)
 
 
-df = _load_df()
+df = _aisci_encode_frame(_load_df())
 numeric = df.select_dtypes(include=[np.number])
+if numeric.empty:
+    raise RuntimeError("数据编码后仍无数值列，无法生成对比图")
+
+col = None
+for hint in ("carcinoma", "label", "target", "jaundice", "fibrosis"):
+    for c in numeric.columns:
+        if hint in str(c).lower():
+            col = c
+            break
+    if col:
+        break
+if col is None:
+    col = numeric.columns[0]
+series = numeric[col].dropna()
 metrics = {
     "rows": int(len(df)),
     "columns": int(len(df.columns)),
     "data_source": "sandbox_default_script",
+    "encoded_value_column": str(col),
 }
 
-if numeric.empty:
+if series.empty:
     metrics["primary_metric"] = 0.0
-    metrics["warning"] = "no numeric columns"
+    metrics["warning"] = "no usable values after encoding"
 else:
-    col = numeric.columns[0]
-    series = numeric[col].dropna()
     metrics["primary_metric"] = float(series.mean())
     metrics["primary_metric_std"] = float(series.std()) if len(series) > 1 else 0.0
     metrics["metric_label"] = str(col)

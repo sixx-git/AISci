@@ -80,7 +80,7 @@ FIELD_DOMAIN_KEYWORDS: Dict[str, List[str]] = {
     "math_science": ["simulation", "numerical", "PDE", "optimization", "prime"],
 }
 
-# DatasetDiscoverySkill 无精确匹配时的门户回退（dataset_name 列表）
+# 历史门户名（仅作领域检索词种子；DatasetDiscovery 已改为 live API，不再回退静态列表）
 FIELD_CATALOG_FALLBACKS: Dict[str, tuple[str, ...]] = {
     "astronomy_physics": (
         "NASA Exoplanet Archive", "JPL Horizons Ephemeris",

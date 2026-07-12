@@ -67,6 +67,7 @@ class ExperimentDesignAgent:
         possible_method: Optional[str] = None,
         risk: Optional[str] = None,
         data_files: Optional[List[str]] = None,
+        project_datasets: Optional[List[Dict[str, Any]]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
         project_mode: str = "general",
         validation_feedback: Optional[List[str]] = None,
@@ -85,6 +86,7 @@ class ExperimentDesignAgent:
             possible_method: 可能的方法
             risk: 风险
             data_files: 项目数据文件路径列表
+            project_datasets: 项目数据集 schema 摘要（列名、类型、规模等）
             literature_facts: 文献挖掘事实列表
             
         Returns:
@@ -105,8 +107,13 @@ class ExperimentDesignAgent:
                 "experiment_design",
                 {"hypothesis_info": hypothesis_info},
             )
-            if data_files:
-                prompt += "\n\n【项目已上传数据集 — 必须基于以下真实文件设计实验，禁止编造或推荐替代公开数据集】\n"
+            schema_prompt = self._format_dataset_schema_prompt(project_datasets)
+            if schema_prompt:
+                prompt += f"\n\n{schema_prompt}"
+            elif data_files:
+                prompt += (
+                    "\n\n【项目已上传数据集 — 必须基于以下真实文件设计实验，禁止编造或推荐替代公开数据集】\n"
+                )
                 for fp in data_files[:12]:
                     prompt += f"- {fp}\n"
             if validation_feedback:
@@ -171,7 +178,12 @@ class ExperimentDesignAgent:
 
             # ── 运行实验真实性审查 + 多模态数据 Skill ──
             result["skill_outputs"] = self._run_skills_sync(
-                result, hypothesis, data_files or [], literature_facts or []
+                result,
+                hypothesis,
+                data_files or [],
+                literature_facts or [],
+                required_data=required_data,
+                project_datasets=project_datasets or [],
             )
 
             ds_output = result.get("skill_outputs", {}).get("dataset_discovery", {})
@@ -180,6 +192,8 @@ class ExperimentDesignAgent:
             md_output = result.get("skill_outputs", {}).get("multimodal_data_ingest", {})
             if md_output.get("success") and md_output.get("data"):
                 result["project_datasets"] = md_output["data"].get("datasets", [])
+            elif project_datasets:
+                result["project_datasets"] = project_datasets
             elif data_files:
                 result["project_datasets"] = [{"file_path": fp} for fp in data_files]
             if not result.get("project_datasets") and not result.get("recommended_public_datasets"):
@@ -201,6 +215,8 @@ class ExperimentDesignAgent:
         hypothesis: str,
         data_files: List[str],
         literature_facts: List[Dict[str, Any]],
+        required_data: Optional[str] = None,
+        project_datasets: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -251,6 +267,7 @@ class ExperimentDesignAgent:
                             "file_paths": data_files,
                             "project_id": result.get("project_id", ""),
                             "missing_strategy": "median",
+                            "known_datasets": project_datasets or [],
                         },
                         context={"stage": "experiment_design"},
                     )
@@ -299,6 +316,13 @@ class ExperimentDesignAgent:
                     discovery_result = await discovery_skill.run(
                         input_data={
                             "research_question": hypothesis,
+                            "hypothesis": hypothesis,
+                            "required_data": required_data or "",
+                            "datasets": result.get("datasets", ""),
+                            "source_data": result.get("source_data", ""),
+                            "target_data": result.get("target_data", ""),
+                            "methods": result.get("methods", ""),
+                            "metrics": result.get("metrics", ""),
                             "keywords": [],
                             "max_results": 10,
                         },
@@ -321,6 +345,44 @@ class ExperimentDesignAgent:
         except Exception as e:
             logger.warning(f"Skills 异常: {e}")
             return {}
+
+    @staticmethod
+    def _format_dataset_schema_prompt(project_datasets: Optional[List[Dict[str, Any]]]) -> str:
+        """将 data_context 中的 schema 摘要格式化为实验设计 prompt。"""
+        if not project_datasets:
+            return ""
+        lines = [
+            "【项目已上传数据集 — 必须基于以下真实数据结构设计实验，禁止编造或推荐替代公开数据集】",
+            "说明：以下为 schema 摘要（列名/类型/规模），非全量数据；小样验证阶段将使用完整文件。",
+        ]
+        for ds in project_datasets[:12]:
+            if not isinstance(ds, dict):
+                continue
+            name = ds.get("filename") or ds.get("file_name") or "dataset"
+            dtype = ds.get("data_type", "unknown")
+            n_rows = ds.get("n_rows", "?")
+            n_cols = ds.get("n_columns", "?")
+            missing = ds.get("missing_rate")
+            cols = ds.get("columns") or []
+            dtypes = ds.get("dtypes") or {}
+            col_parts: List[str] = []
+            for c in cols[:30]:
+                col_name = str(c)
+                col_type = dtypes.get(c) or dtypes.get(col_name, "")
+                col_parts.append(f"{col_name}({col_type})" if col_type else col_name)
+            col_str = ", ".join(col_parts)
+            if len(cols) > 30:
+                col_str += f" …共{len(cols)}列"
+            line = f"- [{dtype}] {name}: {n_rows} 行 × {n_cols} 列"
+            if missing is not None:
+                line += f", 缺失率 {missing}"
+            if col_str:
+                line += f"\n  字段: {col_str}"
+            fp = ds.get("file_path")
+            if fp:
+                line += f"\n  路径: {fp}"
+            lines.append(line)
+        return "\n".join(lines)
 
     def _format_hypothesis_info(
         self,

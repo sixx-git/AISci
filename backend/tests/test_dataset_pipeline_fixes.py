@@ -44,6 +44,33 @@ def test_slim_data_context_strips_full_data_finder():
     assert slim["data_finder_results"].get("external_candidates_count") == 50
 
 
+def test_slim_small_validation_preserves_sandbox_summary():
+    huge_script = "x = 1\n" * 50_000
+    out = {
+        "has_real_data": 1,
+        "analysis_script": huge_script,
+        "sandbox_execution": {
+            "success": True,
+            "metrics": {"primary_metric": 0.91, "accuracy": 0.91},
+            "plots": [{"plot_id": "p1", "file_path": "/tmp/plot.png", "title": "对比"}],
+            "artifact_dir": "/tmp/exp",
+            "stdout": "ok" * 5000,
+        },
+        "artifacts": {
+            "plots": [{"plot_id": "p1", "file_path": "/tmp/plot.png"}],
+            "metrics": {"primary_metric": 0.91},
+        },
+    }
+    slim = slim_stage_output(out, stage_key="small_validation")
+    assert isinstance(slim.get("analysis_script"), dict)
+    assert slim["analysis_script"].get("_truncated") is True
+    assert slim["sandbox_execution"]["success"] is True
+    assert slim["sandbox_execution"]["metrics"]["primary_metric"] == 0.91
+    assert len(slim["sandbox_execution"]["plots"]) == 1
+    assert slim["artifacts"]["plots"][0]["file_path"] == "/tmp/plot.png"
+    assert len(json.dumps(slim, ensure_ascii=False)) < 120_000
+
+
 def test_slim_stage_output_experiment_design_skill_outputs():
     out = {
         "methods": "m",
@@ -103,7 +130,10 @@ def test_exec_experiment_design_passes_data_files():
         "primary_index": 0,
     }
 
-    with patch.object(svc, "_build_data_context", return_value=data_context):
+    with patch("app.services.dataset_service.DatasetService") as mock_ds_cls:
+        mock_ds = MagicMock()
+        mock_ds_cls.return_value = mock_ds
+        mock_ds.get_project_data_context.return_value = data_context
         with patch("app.services.pipeline_service.get_experiment_design_agent") as mock_get_agent:
             agent = MagicMock()
             mock_get_agent.return_value = agent
@@ -123,5 +153,67 @@ def test_exec_experiment_design_passes_data_files():
 
     call_kw = agent.design_experiment.call_args.kwargs
     assert "/data/chembl.csv" in call_kw["data_files"]
+    assert call_kw.get("project_datasets")
+    assert call_kw["project_datasets"][0]["filename"] == "chembl.csv"
     assert result.get("project_datasets")
     assert result.get("data_gap") == []
+
+
+def test_format_dataset_schema_prompt_includes_columns():
+    from app.agents.experiment_design_agent import ExperimentDesignAgent
+
+    text = ExperimentDesignAgent._format_dataset_schema_prompt([
+        {
+            "filename": "chembl.csv",
+            "file_path": "/data/chembl.csv",
+            "data_type": "tabular",
+            "n_rows": 1000000,
+            "n_columns": 3,
+            "missing_rate": 0.01,
+            "columns": ["smiles", "label", "id"],
+            "dtypes": {"smiles": "VARCHAR", "label": "DOUBLE", "id": "BIGINT"},
+        },
+    ])
+    assert "chembl.csv" in text
+    assert "smiles(VARCHAR)" in text
+    assert "schema 摘要" in text
+    assert "/data/chembl.csv" in text
+
+
+def test_multimodal_ingest_large_file_uses_probe_metadata(tmp_path):
+    import asyncio
+    from unittest.mock import patch
+
+    from app.skills.data.multimodal_ingest_skill import MultimodalDataIngestSkill
+
+    csv_path = tmp_path / "big.csv"
+    csv_path.write_text("x,y\n0,1\n1,2\n", encoding="utf-8")
+
+    skill = MultimodalDataIngestSkill()
+    with patch.object(MultimodalDataIngestSkill, "_is_large_file", return_value=True):
+        result = asyncio.run(skill.run(
+            input_data={
+                "file_paths": [str(csv_path)],
+                "known_datasets": [{
+                    "filename": "big.csv",
+                    "file_path": str(csv_path),
+                    "data_type": "tabular",
+                    "n_rows": 999999,
+                    "n_columns": 2,
+                    "columns": ["x", "y"],
+                    "dtypes": {"x": "INTEGER", "y": "INTEGER"},
+                    "preview": [{"x": 0, "y": 1}],
+                    "analysis_tier": "T2",
+                }],
+            },
+            context={"stage": "experiment_design"},
+        ))
+
+    assert result.success
+    datasets = result.data.get("datasets") or []
+    assert len(datasets) == 1
+    ds = datasets[0]
+    assert ds.get("ingest_mode") == "probe_metadata"
+    assert ds.get("columns") == ["x", "y"]
+    assert ds.get("n_rows") == 999999
+    assert not ds.get("sample_data")

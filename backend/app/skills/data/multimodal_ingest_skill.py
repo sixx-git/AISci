@@ -97,6 +97,19 @@ class MultimodalDataIngestSkill(BaseSkill):
         datasets: List[dict] = []
         failed_files: List[str] = []
         ingested_files = 0
+        known_raw = input_data.get("known_datasets") or {}
+        if isinstance(known_raw, list):
+            self._known_datasets_map = {
+                str(d.get("file_path")): d
+                for d in known_raw
+                if isinstance(d, dict) and d.get("file_path")
+            }
+        elif isinstance(known_raw, dict):
+            self._known_datasets_map = {
+                str(k): v for k, v in known_raw.items() if isinstance(v, dict)
+            }
+        else:
+            self._known_datasets_map = {}
 
         for fp in file_paths:
             try:
@@ -159,6 +172,11 @@ class MultimodalDataIngestSkill(BaseSkill):
             "statistics": {},
         }
 
+        if fmt in ("csv", "tabular", "excel", "parquet", "hdf5") and self._is_large_file(file_path):
+            return self._ingest_from_probe_metadata(
+                file_path, base, self._known_dataset_for(file_path), fmt=fmt
+            )
+
         if fmt in ("csv", "tabular"):
             return self._ingest_csv(file_path, base, missing_strategy)
         elif fmt == "json":
@@ -178,6 +196,95 @@ class MultimodalDataIngestSkill(BaseSkill):
         else:
             logger.info(f"未支持格式 {fmt}，尝试 CSV fallback: {file_path}")
             return self._ingest_csv(file_path, base, missing_strategy)
+
+    def _known_dataset_for(self, file_path: str) -> Optional[Dict[str, Any]]:
+        if not file_path:
+            return None
+        return self._known_datasets_map.get(file_path) or self._known_datasets_map.get(
+            os.path.normpath(file_path)
+        )
+
+    @staticmethod
+    def _is_large_file(file_path: str) -> bool:
+        try:
+            from app.core.config import get_settings
+
+            if not os.path.isfile(file_path):
+                return False
+            return os.path.getsize(file_path) > int(get_settings().LARGE_FILE_THRESHOLD_BYTES)
+        except OSError:
+            return False
+
+    def _ingest_from_probe_metadata(
+        self,
+        file_path: str,
+        base: dict,
+        metadata: Optional[Dict[str, Any]],
+        *,
+        fmt: str = "csv",
+    ) -> dict:
+        """大文件：复用上传探查元数据或 DuckDB 采样探查，避免全表读入内存。"""
+        if metadata and (metadata.get("columns") or metadata.get("n_columns")):
+            cols = list(metadata.get("columns") or [])
+            dtypes = metadata.get("dtypes") or {}
+            preview = metadata.get("preview") or []
+            if not isinstance(preview, list):
+                preview = []
+            base.update({
+                "columns": cols,
+                "n_rows": metadata.get("n_rows") or 0,
+                "n_columns": metadata.get("n_columns") or len(cols),
+                "missing_count": metadata.get("missing_count") or 0,
+                "dtypes": dtypes,
+                "preview": preview[:5],
+                "statistics": metadata.get("statistics") or {},
+                "ingest_mode": "probe_metadata",
+                "analysis_tier": metadata.get("analysis_tier"),
+                "data_type": metadata.get("data_type"),
+            })
+            logger.info(
+                "大文件跳过全表摄入，使用 probe 元数据: %s (%s 行)",
+                os.path.basename(file_path),
+                base.get("n_rows"),
+            )
+            return base
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in (".csv", ".tsv", ".txt"):
+            from app.services.data_probe_service import get_data_probe_service
+
+            probe = get_data_probe_service().probe_tabular(
+                file_path, filename=os.path.basename(file_path)
+            )
+            if probe.get("probe_status") == "completed":
+                cols = list(probe.get("columns") or [])
+                base.update({
+                    "columns": cols,
+                    "n_rows": probe.get("n_rows") or probe.get("row_count_est") or 0,
+                    "n_columns": probe.get("n_columns") or len(cols),
+                    "missing_count": probe.get("missing_count") or 0,
+                    "dtypes": probe.get("dtypes") or {},
+                    "preview": (probe.get("preview") or [])[:5],
+                    "statistics": probe.get("statistics") or {},
+                    "ingest_mode": "duckdb_probe",
+                    "analysis_tier": probe.get("analysis_tier"),
+                    "probe_engine": probe.get("probe_engine"),
+                })
+                logger.info(
+                    "大文件 DuckDB 探查摄入: %s (tier=%s)",
+                    os.path.basename(file_path),
+                    probe.get("analysis_tier"),
+                )
+                return base
+
+        logger.warning("大文件 %s 无可用 probe 元数据，跳过全表读取", file_path)
+        base.update({
+            "ingest_mode": "large_file_skipped",
+            "n_rows": 0,
+            "n_columns": 0,
+            "columns": [],
+        })
+        return base
 
     def _ingest_csv(self, file_path: str, base: dict, missing_strategy: str) -> dict:
         rows = []

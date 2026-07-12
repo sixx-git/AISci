@@ -19,6 +19,8 @@ from app.core.dataset_scale import (
     tier_sandbox_docker_memory,
     tier_sandbox_timeout_sec,
 )
+from app.services.analysis_script_utils import sanitize_analysis_script
+from app.services.tabular_encoding_utils import build_sandbox_encode_preamble
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +299,8 @@ class ExperimentSandboxService:
         header = (
             "# --- AISci sandbox preamble (auto-injected) ---\n"
             "import os\n"
-            "_AISCI_DATA = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
+            + build_sandbox_encode_preamble()
+            + "_AISCI_DATA = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
             "if not _AISCI_DATA:\n"
             "    raise FileNotFoundError('沙箱未注入 AISCI_DATA_PATH，请上传或合并 CSV 后重试')\n"
             "def _aisci_load_data():\n"
@@ -313,6 +316,13 @@ class ExperimentSandboxService:
             "# --- end preamble ---\n\n"
         )
         body = script or ""
+        body = sanitize_analysis_script(body) if body else body
+        if "_aisci_encode_frame" not in body:
+            body = (
+                "# --- AISci encode helpers (auto-injected) ---\n"
+                + build_sandbox_encode_preamble()
+                + body
+            )
         if data_path:
             body = re.sub(
                 r"pd\.read_csv\s*\(\s*['\"][^'\"]+['\"]",

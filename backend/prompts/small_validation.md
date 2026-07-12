@@ -24,6 +24,7 @@
 - 向 `Path(AISCI_PLOTS_DIR)` 保存至少 **1 张 PNG**，图表须体现假设验证或方法对比，禁止仅用原始字段直方图/散点图充数。
 - 优先调用 `_aisci_load_data()` 或环境变量 `AISCI_DATA_PATH` 加载数据。
 - 使用 `matplotlib` Agg 后端，进程 exit code 为 0。
+- **import 约束**：`wasserstein_distance` 必须从 `scipy.stats` 导入；KL 散度用 `scipy.stats.entropy`；禁止 `from scipy.spatial.distance import wasserstein_distance`。
 
 ## 任务要求
 根据上述信息，输出验证元数据：

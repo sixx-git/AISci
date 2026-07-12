@@ -472,6 +472,159 @@ def find_recent_report_data_on_disk(
         return {}
 
 
+def slim_sandbox_plot_entry(plot: Any) -> Dict[str, Any]:
+    if not isinstance(plot, dict):
+        return {}
+    return {
+        k: plot.get(k)
+        for k in (
+            "plot_id",
+            "title",
+            "file_path",
+            "path",
+            "filename",
+            "metric",
+            "type",
+            "source",
+            "experiment_condition",
+            "baseline_comparison",
+        )
+        if plot.get(k) is not None
+    }
+
+
+def slim_sandbox_execution(sb: Any) -> Dict[str, Any]:
+    """保留沙箱执行摘要，供报告阶段读取 metrics/plots。"""
+    if not isinstance(sb, dict):
+        return {}
+    metrics = sb.get("metrics")
+    if not isinstance(metrics, dict):
+        metrics = {}
+    plots_raw = sb.get("plots") or []
+    slim_plots = [
+        slim_sandbox_plot_entry(p)
+        for p in plots_raw[:24]
+        if isinstance(p, dict)
+    ]
+    return {
+        "success": sb.get("success"),
+        "return_code": sb.get("return_code"),
+        "duration_ms": sb.get("duration_ms"),
+        "experiment_id": sb.get("experiment_id"),
+        "artifact_dir": sb.get("artifact_dir"),
+        "manifest_path": sb.get("manifest_path"),
+        "metrics": metrics,
+        "plots": slim_plots,
+        "plots_count": len(plots_raw) if isinstance(plots_raw, list) else 0,
+        "output_complete": sb.get("output_complete"),
+        "sandbox_incomplete": sb.get("sandbox_incomplete"),
+        "data_source": sb.get("data_source"),
+        "provenance": sb.get("provenance"),
+        "analysis_tier": sb.get("analysis_tier"),
+        "execution_mode": sb.get("execution_mode"),
+        "isolation_mode": sb.get("isolation_mode"),
+        "pilot_fallback": sb.get("pilot_fallback"),
+        "stderr": _truncate_str(sb.get("stderr"), 1500),
+        "stdout": _truncate_str(sb.get("stdout"), 1500),
+    }
+
+
+def slim_small_validation_output(output: Dict[str, Any]) -> Dict[str, Any]:
+    """小样验证落库：裁掉超大 analysis_script，保留 sandbox/artifacts 供报告出图。"""
+    if not isinstance(output, dict):
+        return {}
+    out: Dict[str, Any] = {
+        "has_real_data": output.get("has_real_data"),
+        "hypothesis": _truncate_str(output.get("hypothesis"), 2000),
+        "validation_id": output.get("validation_id"),
+        "human_review_required": output.get("human_review_required"),
+        "warnings": list(output.get("warnings") or [])[:12],
+        "charts": output.get("charts"),
+        "statistics": output.get("statistics"),
+        "run_log": output.get("run_log"),
+        "analysis_summary": _truncate_str(output.get("analysis_summary"), 2000),
+    }
+
+    script = output.get("analysis_script")
+    if isinstance(script, str):
+        if len(script) > 4000:
+            out["analysis_script"] = {
+                "_truncated": True,
+                "length": len(script),
+                "preview": script[:1200] + "…",
+            }
+        else:
+            out["analysis_script"] = script
+    elif script is not None:
+        out["analysis_script"] = script
+
+    sb = output.get("sandbox_execution")
+    if isinstance(sb, dict) and sb:
+        out["sandbox_execution"] = slim_sandbox_execution(sb)
+
+    arts = output.get("artifacts")
+    if isinstance(arts, dict) and arts:
+        plots = arts.get("plots") or []
+        out["artifacts"] = {
+            "experiment_id": arts.get("experiment_id"),
+            "artifact_dir": arts.get("artifact_dir"),
+            "manifest_path": arts.get("manifest_path"),
+            "metrics": arts.get("metrics") if isinstance(arts.get("metrics"), dict) else {},
+            "plots": [
+                slim_sandbox_plot_entry(p)
+                for p in plots[:24]
+                if isinstance(p, dict)
+            ],
+            "plots_count": len(plots) if isinstance(plots, list) else 0,
+        }
+
+    results = output.get("results")
+    if isinstance(results, dict):
+        slim_results: Dict[str, Any] = {
+            "result_type_summary": results.get("result_type_summary"),
+            "result_source": results.get("result_source"),
+        }
+        actual = results.get("actual_results")
+        if isinstance(actual, dict):
+            slim_results["actual_results"] = {
+                k: actual.get(k)
+                for k in ("data_source", "sandbox_metrics", "sandbox_plots", "primary_metric")
+                if actual.get(k) is not None
+            }
+            if isinstance(actual.get("sandbox_plots"), list):
+                slim_results["actual_results"]["sandbox_plots"] = [
+                    slim_sandbox_plot_entry(p)
+                    for p in actual["sandbox_plots"][:24]
+                    if isinstance(p, dict)
+                ]
+        out["results"] = slim_results
+
+    pilot = output.get("pilot_analysis")
+    if isinstance(pilot, dict) and pilot:
+        out["pilot_analysis"] = {
+            "execution_mode": pilot.get("execution_mode"),
+            "metrics": pilot.get("metrics") if isinstance(pilot.get("metrics"), dict) else {},
+            "plots": [
+                slim_sandbox_plot_entry(p)
+                for p in (pilot.get("plots") or [])[:12]
+                if isinstance(p, dict)
+            ],
+        }
+
+    so = output.get("skill_outputs")
+    if isinstance(so, dict):
+        out["skill_outputs"] = {
+            k: {
+                "success": (v or {}).get("success"),
+                "warnings": list((v or {}).get("warnings") or [])[:5],
+            }
+            if isinstance(v, dict) else v
+            for k, v in so.items()
+        }
+
+    return out
+
+
 def slim_stage_output(output: Any, stage_key: str = "") -> Any:
     """阶段 output_data 持久化到 DB 前瘦身。"""
     if output is None:
@@ -486,6 +639,8 @@ def slim_stage_output(output: Any, stage_key: str = "") -> Any:
         output = slim_literature_mining_output(output)
     elif key == "report_generation":
         output = slim_report_generation_output(output)
+    elif key == "small_validation":
+        return slim_small_validation_output(output)
     elif key == "experiment_design":
         ed = dict(output)
         so = ed.get("skill_outputs")

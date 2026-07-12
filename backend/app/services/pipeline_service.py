@@ -2970,7 +2970,16 @@ class PipelineService:
             primary_idx = 0
         primary_idx = min(max(0, primary_idx), len(reviews) - 1)
         best_review = reviews[primary_idx]
-        data_context = self._build_data_context(project_id) if project_id else {}
+        if project_id:
+            from app.services.dataset_service import DatasetService
+            from app.services.data_finder_slim import slim_data_context
+
+            full_data_context = DatasetService(self.db).get_project_data_context(project_id)
+            data_context = slim_data_context(full_data_context)
+            project_datasets = full_data_context.get("datasets") or []
+        else:
+            data_context = {}
+            project_datasets = []
         data_files: List[str] = []
         for ds in data_context.get("datasets") or []:
             if isinstance(ds, dict) and ds.get("file_path"):
@@ -3023,6 +3032,7 @@ class PipelineService:
             possible_method=best_review.get("possible_method"),
             risk=str(best_review.get("risk", "")),
             data_files=data_files,
+            project_datasets=project_datasets,
             literature_facts=lit_mining.get("facts", []),
             project_mode=project_mode,
             validation_feedback=list(cf_feedback or [])
@@ -3031,7 +3041,6 @@ class PipelineService:
             pilot_results=self._last_pilot_results or None,
         )
         result_dict = result if isinstance(result, dict) else self._safe_model_dump(result)
-        project_datasets = data_context.get("datasets") or []
         if project_datasets:
             result_dict["project_datasets"] = project_datasets
             if not (result_dict.get("datasets") or "").strip():
@@ -3101,7 +3110,19 @@ class PipelineService:
         gaps = result_dict.get("data_gap") or []
         if isinstance(gaps, str):
             gaps = [gaps] if gaps else []
-        recommended = result_dict.get("recommended_public_datasets") or []
+        recommended = self._normalize_recommended_datasets(
+            result_dict.get("recommended_public_datasets") or []
+        )
+        if not recommended and not uploaded:
+            recommended = self._fetch_external_dataset_recommendations({
+                "hypothesis": best_review.get("hypothesis") or "",
+                "required_data": required_data,
+                "datasets": result_dict.get("datasets") or "",
+                "source_data": result_dict.get("source_data") or "",
+                "target_data": result_dict.get("target_data") or "",
+                "methods": result_dict.get("methods") or "",
+                "metrics": metrics,
+            })
         return {
             "upload_status": "ready" if uploaded else "pending_upload",
             "uploaded_dataset_count": len(uploaded),
@@ -3118,7 +3139,7 @@ class PipelineService:
             "required_data_description": required_data,
             "validation_target": validation_target,
             "metrics": metrics,
-            "recommended_public_datasets": recommended[:5] if isinstance(recommended, list) else [],
+            "recommended_public_datasets": recommended[:8],
             "gaps": gaps,
             "summary": (
                 f"已上传 {len(uploaded)} 个数据集，实验方案已结合真实数据结构。"
@@ -3127,6 +3148,64 @@ class PipelineService:
             ),
             "next_action": "upload_datasets" if not uploaded else "review_experiment_plan",
         }
+
+    @staticmethod
+    def _normalize_recommended_datasets(items: Any) -> List[Dict[str, Any]]:
+        """统一公开数据集推荐结构，并附带 download_url。"""
+        if not isinstance(items, list):
+            return []
+        normalized: List[Dict[str, Any]] = []
+        for item in items:
+            if isinstance(item, str) and item.strip():
+                normalized.append({
+                    "dataset_name": item.strip(),
+                    "source_platform": "",
+                    "url": "",
+                    "download_url": "",
+                    "description": "",
+                })
+                continue
+            if not isinstance(item, dict):
+                continue
+            url = str(
+                item.get("download_url")
+                or item.get("url")
+                or item.get("source_url")
+                or item.get("landing_page_url")
+                or ""
+            ).strip()
+            normalized.append({
+                "dataset_name": item.get("dataset_name") or item.get("name") or "未命名数据集",
+                "source_platform": item.get("source_platform") or item.get("source") or "",
+                "url": url,
+                "download_url": url,
+                "description": item.get("description") or "",
+                "license": item.get("license") or "",
+                "task_type": item.get("task_type") or "",
+                "modalities": item.get("modalities") if isinstance(item.get("modalities"), list) else [],
+                "availability": item.get("availability") or "catalog_only",
+                "import_supported": bool(item.get("import_supported", False)),
+            })
+        return normalized
+
+    def _fetch_external_dataset_recommendations(self, query_input: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """按实验设计需求动态检索开放数据集（live API，无预定义列表）。"""
+        if not isinstance(query_input, dict):
+            return []
+        try:
+            import asyncio
+            from app.skills.data.dataset_discovery_skill import DatasetDiscoverySkill
+
+            skill = DatasetDiscoverySkill()
+            result = asyncio.run(skill.run(
+                input_data={**query_input, "max_results": 10},
+                context={"stage": "experiment_design"},
+            ))
+            data = result.data if isinstance(result.data, dict) else {}
+            return self._normalize_recommended_datasets(data.get("datasets") or [])
+        except Exception as exc:
+            logger.warning("[Pipeline] 外部数据集推荐检索失败: %s", exc)
+            return []
 
     def _exec_small_validation(
         self,

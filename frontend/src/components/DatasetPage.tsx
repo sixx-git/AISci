@@ -183,26 +183,40 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
   }, [refreshAll]);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files ? Array.from(e.target.files) : [];
+    if (!fileList.length) return;
     setUploading(true);
     setError(null);
+    let succeeded = 0;
+    let lastError: string | null = null;
     try {
-      const res = await datasetService.uploadDataset(projectId, file);
-      if (res.code === 200 && res.data) {
-        setDatasets((prev) => [toSummary(res.data!), ...prev]);
-        const resumed = Boolean((res as { pipeline_resume?: unknown }).pipeline_resume);
-        showAlert(
-          resumed
-            ? `上传成功: ${file.name}，Pipeline 已自动继续`
-            : `上传成功: ${file.name}，已完成初步分析`,
-        );
-        loadDataContext();
-      } else {
-        setError(res.message || '上传失败');
+      for (const file of fileList) {
+        try {
+          const res = await datasetService.uploadDataset(projectId, file);
+          if (res.code === 200 && res.data) {
+            setDatasets((prev) => [toSummary(res.data!), ...prev]);
+            succeeded += 1;
+          } else {
+            lastError = res.message || `上传失败: ${file.name}`;
+          }
+        } catch (err: unknown) {
+          lastError = err instanceof Error ? err.message : `上传失败: ${file.name}`;
+        }
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '上传失败');
+      if (succeeded > 0) {
+        if (succeeded === fileList.length) {
+          showAlert(
+            fileList.length === 1
+              ? `上传成功: ${fileList[0].name}，已完成初步分析`
+              : `已成功上传 ${succeeded} 个数据集，已完成初步分析`,
+          );
+        } else {
+          showAlert(`已上传 ${succeeded}/${fileList.length} 个文件${lastError ? `；${lastError}` : ''}`);
+        }
+        loadDataContext();
+      } else if (lastError) {
+        setError(lastError);
+      }
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -299,7 +313,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
         <div>
           <h1 className="text-3xl font-bold text-bp-text mb-2">数据集管理</h1>
           <p className="text-bp-muted text-sm">
-            上传观测数据、实验数据、临床数据等多模态数据集，用于假设生成和实验设计。支持格式: {SUPPORTED_FORMATS}
+            上传观测数据、实验数据、临床数据等多模态数据集，用于假设生成和实验设计。支持多选批量上传。支持格式: {SUPPORTED_FORMATS}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -316,6 +330,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.fits,.fit,.fts,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
               className="hidden"
               onChange={handleUpload}
@@ -654,21 +669,12 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
           <EmptyState
             icon={<Database className="w-8 h-8" />}
             title="暂无数据集"
-            description={`请上传 CSV、Excel、JSON、图像或时间序列数据。支持格式: ${SUPPORTED_FORMATS}`}
+            description={`请上传 CSV、Excel、JSON、图像或时间序列数据（可多选）。支持格式: ${SUPPORTED_FORMATS}`}
             action={{
               label: uploading ? '上传中...' : '上传数据集',
               onClick: () => fileInputRef.current?.click(),
             }}
           />
-          <label className="sr-only">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls,.json,.jsonl,.txt,.png,.jpg,.jpeg,.tiff,.fits,.fit,.fts,.npy,.npz,.wav,.zip,.sdf,.mol,.smi,.smiles,.sdf.gz,.mol.gz"
-              onChange={handleUpload}
-              disabled={uploading}
-            />
-          </label>
         </Card>
       )}
 

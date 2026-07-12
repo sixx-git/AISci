@@ -67,7 +67,7 @@ async def upload_dataset(
             project_id=project_id,
             filename=file.filename or "unknown",
             file_path=file_path,
-            file_size=len(content),
+            file_size=file_size,
             auto_analyze=True,
         )
         from app.services.multimodal_service import get_multimodal_service, detect_modality
