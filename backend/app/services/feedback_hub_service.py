@@ -25,6 +25,22 @@ RERUN_TARGETS = {
     "full": ["literature_mining"],
 }
 
+STAGE_TO_FEEDBACK_TARGET: Dict[str, str] = {
+    "problem_understanding": "full",
+    "literature_mining": "literature",
+    "data_acquisition": "data_finder",
+    "knowledge_gap": "kg",
+    "hypothesis_generation": "hypothesis",
+    "hypothesis_review": "hypothesis",
+    "experiment_design": "experiment",
+    "small_validation": "experiment",
+    "report_generation": "full",
+}
+
+
+def stage_to_feedback_target(stage: str) -> str:
+    return STAGE_TO_FEEDBACK_TARGET.get(stage, "full")
+
 
 class FeedbackHubService:
     def __init__(self, db: Optional[Session] = None):
@@ -124,6 +140,28 @@ class FeedbackHubService:
         hub = self.load_hub(project_id)
         entries = list(hub.get("entries") or [])
         return entries[-limit:]
+
+    def record_hitl_feedback(
+        self,
+        project_id: str,
+        *,
+        stage: str,
+        message: str,
+        trigger_rerun: bool = False,
+    ) -> Dict[str, Any]:
+        """Stage HITL 写入全局约束（合并原 Feedback Hub 提交路径）。"""
+        msg = (message or "").strip()
+        if not msg:
+            return {}
+        target = stage_to_feedback_target(stage)
+        return self.submit_feedback(
+            project_id,
+            source="hitl",
+            message=msg,
+            target=target,
+            trigger_rerun=trigger_rerun,
+            payload={"stage": stage},
+        )
 
 
 def get_feedback_hub_service(db: Optional[Session] = None) -> FeedbackHubService:

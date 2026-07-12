@@ -7,7 +7,6 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { IterationHistoryPanel } from '@/components/IterationHistoryPanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
-import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -223,7 +222,7 @@ export function ResearchClosedLoopOverview({
     <div className="space-y-4">
       <Card
         title="科研闭环总览"
-        subtitle="九阶段 Pipeline · Discovery / Teaching 双模式 · CQS 质量趋势"
+        subtitle="九阶段 Pipeline · Discovery / Teaching 双模式 · 质量 Gate 趋势"
       >
         <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint/40 text-xs text-bp-muted leading-relaxed">
           <strong className="text-bp-text">人工主导</strong>：关键阶段 HITL 门控 + 单阶段重跑（推荐）。
@@ -423,13 +422,6 @@ export function ResearchClosedLoopOverview({
         </Card>
       )}
 
-      <CollapsiblePanel title="反馈中心" subtitle="FeedbackHubPanel" defaultOpen={false}>
-        <FeedbackHubPanel
-          projectId={projectId}
-          latestRunId={selectedRunId}
-          onRerunStarted={loadRuns}
-        />
-      </CollapsiblePanel>
     </div>
   );
 }

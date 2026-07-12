@@ -300,10 +300,18 @@ def _extract_scores(results: Dict[str, Any]) -> IterationRoundScores:
     chain = (results.get("evidence_reasoning") or {}).get("evidence_chain") or {}
     meta = results.get("_pipeline_extra") or {}
     trend = meta.get("quality_trend") or []
-    cqs = None
+    gate_passed = None
     if trend:
         last = trend[-1]
-        cqs = last.get("cqs") or last.get("score")
+        if "passed" in last:
+            gate_passed = bool(last["passed"])
+        else:
+            s = last.get("score")
+            if s is not None:
+                try:
+                    gate_passed = float(s) >= 50.0
+                except (TypeError, ValueError):
+                    pass
     compliance = (results.get("report_generation") or {}).get("compliance_check") or {}
     logic = (compliance.get("proposal_logic_review") or {}).get("data") or {}
 
@@ -312,7 +320,8 @@ def _extract_scores(results: Dict[str, Any]) -> IterationRoundScores:
         ensemble_overall=ensemble.get("overall") or hr.get("ensemble_overall"),
         evidence_balance=chain.get("evidence_balance_score"),
         logic_score=logic.get("logic_score") if isinstance(logic, dict) else None,
-        cqs=float(cqs) if cqs is not None else None,
+        cqs=100.0 if gate_passed else (0.0 if gate_passed is False else None),
+        gate_passed=gate_passed,
     )
 
 

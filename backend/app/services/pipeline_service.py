@@ -276,6 +276,17 @@ class PipelineService:
         feedback_constraints: List[str] = []
         if human_feedback and human_feedback.strip():
             feedback_constraints.append(human_feedback.strip())
+            try:
+                from app.services.feedback_hub_service import get_feedback_hub_service
+
+                get_feedback_hub_service(self.db).record_hitl_feedback(
+                    project_id,
+                    stage=from_stage,
+                    message=human_feedback.strip(),
+                    trigger_rerun=True,
+                )
+            except Exception as fb_err:
+                logger.warning("[Rerun] Feedback Hub 记录失败: %s", fb_err)
         self.db_pipeline_run = DB_PipelineRun(
             id=str(uuid.uuid4()),
             run_id=self.run_id,
@@ -1231,18 +1242,21 @@ class PipelineService:
             continuation = check_discovery_stagnation(
                 meta.get("quality_trend"),
                 round_num=round_num,
-                min_improvement_delta=float(
-                    self._run_options.get("min_improvement_delta", 3.0)
+                stagnant_rounds=int(
+                    self._run_options.get("gate_stagnant_rounds", 2)
                 ),
             )
             if continuation.get("action") == "stop_stagnant":
                 self._record_closed_loop_decision(
-                    trigger="cqs_stagnant",
+                    trigger="gate_stagnant",
                     action="stop_discovery",
-                    reason=continuation.get("reason", "CQS 停滞"),
+                    reason=continuation.get("reason", "质量 Gate 停滞"),
                     next_stage="human_review",
                     round_num=round_num,
-                    metadata={"cqs_delta": continuation.get("cqs_delta")},
+                    metadata={
+                        "consecutive_failures": continuation.get("stagnant_rounds_detected"),
+                        "latest_gate_passed": continuation.get("latest_gate_passed"),
+                    },
                 )
                 history.append({
                     "round": round_num,

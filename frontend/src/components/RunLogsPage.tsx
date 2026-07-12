@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { Terminal } from 'lucide-react';
 import { Card } from './Card';
 import { RunLogTable } from './RunLogTable';
@@ -12,6 +12,7 @@ import type { RunLog, PipelineRunSummary, PipelineStageExecutionSummary } from '
 interface RunLogsPageProps {
   projectId?: string;
   compact?: boolean;
+  embedded?: boolean;
   revalidateKey?: number;
   latestRunId?: string | null;
 }
@@ -88,6 +89,7 @@ function mapStageToRunLog(
 export function RunLogsPage({
   projectId,
   compact: _compact = false,
+  embedded = false,
   revalidateKey: _revalidateKey,
   latestRunId: _latestRunId,
 }: RunLogsPageProps) {
@@ -150,73 +152,62 @@ export function RunLogsPage({
     setSelectedLog(log);
   }, []);
 
-  const pageHeader = (
+  const pageHeader = embedded ? null : (
     <div className="mb-6">
       <h1 className="text-3xl font-bold text-bp-text mb-1">运行日志</h1>
       <p className="text-bp-muted text-sm">记录每次智能体运行的输入、输出、模型参数和执行状态</p>
     </div>
   );
 
+  const wrap = (content: ReactNode) =>
+    embedded ? <div>{content}</div> : <div className="max-w-7xl mx-auto">{pageHeader}{content}</div>;
+
   if (isLoading) {
-    return (
-      <div className="max-w-7xl mx-auto">
-        {pageHeader}
-        <Card>
-          <LoadingState message="正在加载运行日志..." />
-        </Card>
-      </div>
+    return wrap(
+      <Card>
+        <LoadingState message="正在加载运行日志..." />
+      </Card>,
     );
   }
 
   if (errorMsg) {
-    return (
-      <div className="max-w-7xl mx-auto">
-        {pageHeader}
-        <Card>
-          <ErrorState
-            message={errorMsg}
-            onRetry={() => setReloadTick((t) => t + 1)}
-          />
-        </Card>
-      </div>
+    return wrap(
+      <Card>
+        <ErrorState
+          message={errorMsg}
+          onRetry={() => setReloadTick((t) => t + 1)}
+        />
+      </Card>,
     );
   }
 
   if (logs.length === 0) {
-    return (
-      <div className="max-w-7xl mx-auto">
-        {pageHeader}
-        <Card>
-          <EmptyState
-            icon={<Terminal className="w-8 h-8" />}
-            title="暂无运行日志"
-            description="运行一次 Pipeline 后这里会显示日志"
-          />
-        </Card>
-      </div>
+    return wrap(
+      <Card>
+        <EmptyState
+          icon={<Terminal className="w-8 h-8" />}
+          title="暂无运行日志"
+          description="运行一次 Pipeline 后这里会显示日志"
+        />
+      </Card>,
     );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto">
-      {pageHeader}
-
-      {/* 双栏布局：左列表 · 右详情 */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        <div className="xl:col-span-7 min-w-0">
-          <RunLogTable
-            logs={logs}
-            selectedId={selectedLog?.id || null}
-            onSelect={handleSelect}
-          />
-        </div>
-
-        <div className="xl:col-span-5 min-w-0">
-          <Card className="min-h-[520px]">
-            <RunLogDetail log={selectedLog} />
-          </Card>
-        </div>
+  return wrap(
+    <div className={embedded ? 'space-y-3' : 'grid grid-cols-1 xl:grid-cols-12 gap-4 items-start'}>
+      <div className={embedded ? 'min-w-0' : 'xl:col-span-7 min-w-0'}>
+        <RunLogTable
+          logs={logs}
+          selectedId={selectedLog?.id || null}
+          onSelect={handleSelect}
+        />
       </div>
-    </div>
+
+      <div className={embedded ? 'min-w-0' : 'xl:col-span-5 min-w-0'}>
+        <Card className={embedded ? '' : 'min-h-[520px]'}>
+          <RunLogDetail log={selectedLog} />
+        </Card>
+      </div>
+    </div>,
   );
 }

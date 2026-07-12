@@ -9,7 +9,7 @@ export interface LoopConfigState {
   numIdeas: number;
   literatureMaxPapers: number;
   maxRounds: number;
-  minImprovementDelta: number;
+  gateStagnantRounds: number;
   enableProConAdversarial: boolean;
   adversarialMode: AdversarialMode;
   conChallengeMaxRounds: number;
@@ -21,7 +21,7 @@ export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   numIdeas: 3,
   literatureMaxPapers: 10,
   maxRounds: 3,
-  minImprovementDelta: 3,
+  gateStagnantRounds: 2,
   enableProConAdversarial: true,
   adversarialMode: 'single_group',
   conChallengeMaxRounds: 2,
@@ -33,7 +33,7 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
     num_ideas: config.numIdeas,
     literature_max_papers: config.literatureMaxPapers,
     discovery_max_rounds: config.maxRounds,
-    min_improvement_delta: config.minImprovementDelta,
+    gate_stagnant_rounds: config.gateStagnantRounds,
     enable_hitl_gate: config.iterationMode === 'human' ? config.enableHitl : false,
     enable_pro_con_adversarial: config.enableProConAdversarial,
     adversarial_mode: config.adversarialMode,
@@ -115,14 +115,13 @@ export function LoopConfigPanel({
                 className="input-field py-1.5 px-2 text-sm w-16"
               />
             </Field>
-            <Field label="CQS 提升阈值">
+            <Field label="Gate 停滞轮次">
               <input
                 type="number"
-                min={0}
-                max={20}
-                step={0.5}
-                value={value.minImprovementDelta}
-                onChange={(e) => patch({ minImprovementDelta: Number(e.target.value) || 3 })}
+                min={1}
+                max={4}
+                value={value.gateStagnantRounds}
+                onChange={(e) => patch({ gateStagnantRounds: Math.max(1, Math.min(4, Number(e.target.value) || 2)) })}
                 disabled={disabled}
                 className="input-field py-1.5 px-2 text-sm w-16"
               />

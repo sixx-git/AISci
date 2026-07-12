@@ -1,4 +1,4 @@
-"""Feedback Hub API"""
+"""Feedback Hub API — 保留兼容；主路径已合并至 Stage HITL（human-loop）。"""
 import logging
 import threading
 from typing import Any, Dict, List, Optional

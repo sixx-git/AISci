@@ -31,10 +31,11 @@ def simulate_loop_decisions(
     }
 
     if mode == "discovery":
+        stagnant_rounds = int(opts.get("gate_stagnant_rounds") or 2)
         stagnation = check_discovery_stagnation(
             trend,
             round_num=round_num,
-            min_improvement_delta=float(opts.get("min_improvement_delta", 3.0)),
+            stagnant_rounds=max(1, min(stagnant_rounds, 4)),
         )
         out["discovery_stagnation"] = stagnation
         if hypothesis_review is not None:

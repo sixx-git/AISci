@@ -25,6 +25,21 @@ class TestBatch6FeedbackHub(unittest.TestCase):
             constraints = svc.get_active_constraints(pid)
             self.assertGreaterEqual(len(constraints), 1)
 
+    def test_record_hitl_feedback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svc = FeedbackHubService()
+            svc.storage_root = tmp
+            pid = "hitl-proj"
+            res = svc.record_hitl_feedback(
+                pid,
+                stage="hypothesis_review",
+                message="加强对照实验描述",
+            )
+            self.assertEqual(res["entry"]["source"], "hitl")
+            self.assertEqual(res["entry"]["target"], "hypothesis")
+            constraints = svc.get_active_constraints(pid)
+            self.assertTrue(any("对照实验" in c for c in constraints))
+
 
 class TestBatch6MultimodalEvidence(unittest.TestCase):
     def test_multimodal_fact_verifiable(self):

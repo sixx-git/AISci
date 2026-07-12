@@ -111,6 +111,9 @@ class StageHumanLoopService:
         self.db.commit()
         self.db.refresh(stage_exec)
 
+        if human_feedback.strip():
+            self._record_feedback_hub(run.project_id, stage, human_feedback)
+
         if stage == PipelineStage.REPORT_GENERATION.value:
             try:
                 from app.services.report_service import ReportService
@@ -143,6 +146,7 @@ class StageHumanLoopService:
         if not stage_exec:
             raise ValueError(f"阶段 {stage} 不存在")
         meta = get_stage_meta(stage_exec)
+        feedback_ctx = self._load_feedback_context(run.project_id)
         return {
             "run_id": run.run_id,
             "project_id": run.project_id,
@@ -159,7 +163,35 @@ class StageHumanLoopService:
             "chat_history": meta.get("chat_history") or [],
             "prompt_used": stage_exec.prompt_used,
             "model_used": stage_exec.model_used,
+            **feedback_ctx,
         }
+
+    @staticmethod
+    def _load_feedback_context(project_id: str) -> Dict[str, Any]:
+        try:
+            from app.services.feedback_hub_service import get_feedback_hub_service
+
+            hub = get_feedback_hub_service()
+            return {
+                "global_constraints": hub.get_active_constraints(project_id),
+                "recent_feedback_entries": hub.list_entries(project_id, limit=10),
+            }
+        except Exception:
+            return {"global_constraints": [], "recent_feedback_entries": []}
+
+    @staticmethod
+    def _record_feedback_hub(project_id: str, stage: str, message: str, *, trigger_rerun: bool = False) -> None:
+        try:
+            from app.services.feedback_hub_service import get_feedback_hub_service
+
+            get_feedback_hub_service().record_hitl_feedback(
+                project_id,
+                stage=stage,
+                message=message,
+                trigger_rerun=trigger_rerun,
+            )
+        except Exception:
+            pass
 
     def seed_results_from_run(
         self,
@@ -346,6 +378,7 @@ class StageHumanLoopService:
         constraints: List[str] = []
         if inject_feedback and human_feedback.strip():
             constraints.append(f"人工反馈（{stage}）: {human_feedback.strip()}")
+            self._record_feedback_hub(run.project_id, stage, human_feedback)
         if inject_feedback:
             constraints.extend(self.collect_feedback_constraints(run_id))
 

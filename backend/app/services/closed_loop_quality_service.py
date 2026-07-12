@@ -1,10 +1,10 @@
-"""闭环质量验收 — 分析 quality_trend 与迭代成效"""
+"""闭环质量验收 — 基于布尔 Gate 分析 quality_trend 与迭代成效"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
 from app.core.pipeline_modes import ENSEMBLE_ACCEPT_SCORE
-from app.core.quality_scoring import summarize_cqs_trend
+from app.core.quality_scoring import summarize_gate_trend
 
 
 def compute_quality_acceptance(
@@ -13,20 +13,10 @@ def compute_quality_acceptance(
     discovery_loop: Optional[Dict[str, Any]] = None,
     hypothesis_review: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """汇总闭环是否 Accept、分数是否提升、薄弱环节。"""
+    """汇总闭环 Gate 通过情况、Accept 状态与薄弱环节。"""
     trend = list(quality_trend or [])
     events = list(closed_loop_events or [])
-    cqs_summary = summarize_cqs_trend(trend)
-    scores = []
-    for t in trend:
-        if not isinstance(t, dict):
-            continue
-        s = t.get("cqs", t.get("score"))
-        if s is not None:
-            try:
-                scores.append(float(s))
-            except (TypeError, ValueError):
-                pass
+    gate_summary = summarize_gate_trend(trend)
 
     hr = hypothesis_review or {}
     ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
@@ -41,21 +31,20 @@ def compute_quality_acceptance(
         overall_f is not None and overall_f >= ENSEMBLE_ACCEPT_SCORE
     )
 
-    improved = False
-    delta = None
-    if len(scores) >= 2:
-        delta = round(scores[-1] - scores[0], 2)
-        improved = scores[-1] > scores[0]
-
-    weak_stages: List[str] = []
-    if trend:
-        avg = sum(scores) / len(scores) if scores else 0
-        for entry in trend:
+    failed_stages: List[str] = []
+    for entry in trend:
+        if not isinstance(entry, dict):
+            continue
+        passed = entry.get("passed")
+        if passed is None:
             s = entry.get("score")
-            if s is None:
-                continue
-            if float(s) < avg * 0.85:
-                weak_stages.append(str(entry.get("stage") or entry.get("label") or "unknown"))
+            if s is not None:
+                try:
+                    passed = float(s) >= 50.0
+                except (TypeError, ValueError):
+                    passed = None
+        if passed is False:
+            failed_stages.append(str(entry.get("gate_label") or entry.get("stage") or entry.get("label") or "unknown"))
 
     sandbox_events = [e for e in events if e.get("type") == "sandbox_validation"]
     sandbox_success = any(e.get("success") for e in sandbox_events) if sandbox_events else None
@@ -69,12 +58,19 @@ def compute_quality_acceptance(
         1 for e in events if e.get("type") == "discovery_literature_refresh"
     )
 
+    gates_passed = int(gate_summary.get("gates_passed") or 0)
+    gates_failed = int(gate_summary.get("gates_failed") or 0)
+    latest_passed = gate_summary.get("latest_passed")
+    gate_improved = gate_summary.get("gate_improved")
+
     verdict = "pass"
     if not accepted:
         verdict = "needs_review"
     if sandbox_success is False:
         verdict = "needs_review"
-    if len(scores) >= 2 and not improved and not accepted:
+    if gates_failed > 0 and gates_passed == 0 and not accepted:
+        verdict = "stagnant"
+    elif gates_failed >= 2 and latest_passed is False and not accepted:
         verdict = "stagnant"
 
     summary_parts = []
@@ -82,41 +78,45 @@ def compute_quality_acceptance(
         summary_parts.append("集成评审已 Accept")
     else:
         summary_parts.append(f"集成评审未 Accept（decision={decision or '—'}）")
-    if delta is not None:
-        summary_parts.append(f"CQS 质量趋势 {'↑' if improved else '→/↓'} {delta:+.1f}")
-    elif cqs_summary.get("cqs_delta") is not None:
-        cd = cqs_summary["cqs_delta"]
-        summary_parts.append(
-            f"CQS {'↑' if cqs_summary.get('cqs_improved') else '→/↓'} {cd:+.1f}"
-        )
+    if gate_summary.get("gate_count", 0) > 0:
+        summary_parts.append(f"质量 Gate {gates_passed} 通过 / {gates_failed} 未通过")
+        if latest_passed is not None:
+            summary_parts.append(f"最近 Gate {'通过' if latest_passed else '未通过'}")
+        if gate_improved:
+            summary_parts.append("较上轮 Gate 改善")
     if discovery_rounds > 1:
         summary_parts.append(f"Discovery 执行 {discovery_rounds} 轮")
     if fed_discovery_accept:
         summary_parts.append("Discovery 联邦双门槛已通过")
     if literature_refreshes:
         summary_parts.append(f"文献刷新 {literature_refreshes} 次")
-    if weak_stages:
-        summary_parts.append(f"薄弱阶段: {', '.join(dict.fromkeys(weak_stages)[:4])}")
+    if failed_stages:
+        summary_parts.append(f"未通过: {', '.join(list(dict.fromkeys(failed_stages))[:4])}")
 
     return {
         "verdict": verdict,
         "accepted": accepted,
         "ensemble_decision": decision,
         "ensemble_overall": overall_f,
-        "score_improved": improved,
-        "score_delta": delta,
-        "first_score": scores[0] if scores else None,
-        "last_score": scores[-1] if scores else None,
-        "weak_stages": list(dict.fromkeys(weak_stages)),
+        "gates_passed": gates_passed,
+        "gates_failed": gates_failed,
+        "latest_gate_passed": latest_passed,
+        "gate_improved": gate_improved,
+        "failed_gates": list(dict.fromkeys(failed_stages)),
+        "score_improved": bool(gate_improved),
+        "score_delta": gate_summary.get("cqs_delta"),
+        "first_score": gate_summary.get("cqs_first"),
+        "last_score": gate_summary.get("cqs_last"),
+        "weak_stages": list(dict.fromkeys(failed_stages)),
         "sandbox_success": sandbox_success,
         "discovery_rounds": discovery_rounds,
         "literature_refresh_count": literature_refreshes,
         "refining_rounds": len([h for h in discovery_history if h.get("status") == "refining"]),
         "federated_discovery_accept": fed_discovery_accept,
-        "cqs_first": cqs_summary.get("cqs_first"),
-        "cqs_last": cqs_summary.get("cqs_last"),
-        "cqs_delta": cqs_summary.get("cqs_delta") if cqs_summary.get("cqs_delta") is not None else delta,
-        "cqs_improved": cqs_summary.get("cqs_improved") if cqs_summary.get("cqs_count", 0) >= 2 else improved,
+        "cqs_first": gate_summary.get("cqs_first"),
+        "cqs_last": gate_summary.get("cqs_last"),
+        "cqs_delta": gate_summary.get("cqs_delta"),
+        "cqs_improved": gate_improved,
         "summary": "；".join(summary_parts),
     }
 

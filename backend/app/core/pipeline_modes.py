@@ -35,7 +35,7 @@ DEFAULT_HITL_GATE_STAGES = (
     "small_validation",
     "report_generation",
 )
-DEFAULT_MIN_IMPROVEMENT_DELTA = 3.0
+DEFAULT_GATE_STAGNANT_ROUNDS = 2
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
 DEFAULT_DATA_SPEC_GAP_THRESHOLD = 60.0
 DEFAULT_MAX_GAP_ROUNDS = 2
@@ -148,11 +148,11 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     if not gate_stages:
         gate_stages = list(DEFAULT_HITL_GATE_STAGES)
 
-    min_delta = opts.get("min_improvement_delta", DEFAULT_MIN_IMPROVEMENT_DELTA)
+    gate_stagnant_rounds = opts.get("gate_stagnant_rounds", DEFAULT_GATE_STAGNANT_ROUNDS)
     try:
-        min_delta = float(min_delta)
+        gate_stagnant_rounds = max(1, min(int(gate_stagnant_rounds), 4))
     except (TypeError, ValueError):
-        min_delta = DEFAULT_MIN_IMPROVEMENT_DELTA
+        gate_stagnant_rounds = DEFAULT_GATE_STAGNANT_ROUNDS
 
     coverage_threshold = opts.get("coverage_gap_threshold", DEFAULT_COVERAGE_GAP_THRESHOLD)
     try:
@@ -214,7 +214,8 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_hitl_gate": enable_hitl_gate,
         "hitl_gate_stages": list(gate_stages),
         "enable_executability_gate": opts.get("enable_executability_gate", True),
-        "min_improvement_delta": min_delta,
+        "gate_stagnant_rounds": gate_stagnant_rounds,
+        "min_improvement_delta": 0.0,
         "enable_gap_search": opts.get("enable_gap_search", False),
         "enable_hf_auto_import": opts.get("enable_hf_auto_import", True),
         "coverage_gap_threshold": coverage_threshold,

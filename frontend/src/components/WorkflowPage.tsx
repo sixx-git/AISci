@@ -11,6 +11,8 @@ import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, ITERATION_MODE_HINTS, type LoopConfigState } from '@/components/LoopConfigPanel';
+import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
+import { RunHistoryPanel } from '@/components/RunHistoryPanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
@@ -1056,6 +1058,7 @@ export function WorkflowPage({
           <p className="text-xs text-bp-muted mt-2">
             {ITERATION_MODE_HINTS[loopConfig.iterationMode]}
           </p>
+          {projectId && <WorkflowAdvancedLinks projectId={projectId} />}
         </div>
       </div>
 
@@ -1221,6 +1224,16 @@ export function WorkflowPage({
           onReset={handleReset}
         />
       </div>
+
+      {projectId && (
+        <CollapsiblePanel title="运行历史" subtitle="阶段执行记录 · 模型参数 · 输入输出快照" defaultOpen={false} className="mb-6">
+          <RunHistoryPanel
+            projectId={projectId}
+            latestRunId={effectiveRunId}
+            refreshKey={completedCount + (effectiveRunId?.length ?? 0)}
+          />
+        </CollapsiblePanel>
+      )}
 
       {/* 主布局 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

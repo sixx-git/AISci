@@ -26,7 +26,6 @@ CATEGORY_LABELS: Dict[str, str] = {
     "federated_experiment": "联邦实验",
     "multimodal": "多模态",
     "evidence_reasoning": "证据推理",
-    "academic": "学术写作",
     "chinese_writing": "中文写作",
     "impact_prediction": "影响力预测",
     "general": "通用",
@@ -38,8 +37,6 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "SearchPapers", "PaperFullTextRAG", "LiteratureEvidenceRetrieval",
         "PdfEvidenceExtraction", "ArxivSearch", "ClaimExtraction",
         "CitationGrounding", "MultimodalDataLinking",
-        "PaperReading", "DeepResearch", "SourceTracing", "ResearchGenealogy",
-        "ClaudeScholar", "PaperSkill",
     ],
     "假设评审 Agent": ["HypothesisNoveltyReview", "HypothesisTournament"],
     "实验设计 Agent": [
@@ -56,15 +53,11 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "ScientificPlot", "ReportQualityCheck", "ProposalLogicReview", "ReportReviewer",
         "ChineseStyleDiagnosis", "HumanizeRewrite", "ToneControl",
         "ReportInfluencePrediction",
-        "AcademicWritingSkills", "WriteChinese", "PaperWriter", "AcademicPaperSkills",
-        "EmpiricalPaper", "NaturePaper", "CCFASkill", "PaperPilot",
-        "PaperToPatent", "PaperToStoryboard", "Paper2Beamer",
     ],
     "Pipeline 编排": [
         "QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop",
-        "TaskDecomposition", "Replanning", "QuestionValidator",
+        "TaskDecomposition", "Replanning",
         "CounterfactualPreview",
-        "AcademicResearchSkills", "ResearchSkills",
     ],
     "数据建模服务": [
         "DatasetProfiling", "DataCleaningPlan", "FeatureEngineering",
@@ -95,7 +88,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "EvidenceChainBuilder", "EvidenceStanceClassification",
         "ScientificClaimExtraction", "ClaimExtraction",
         "CitationIntegrityCheck", "CounterEvidenceRetrieval", "CounterEvidenceSearch",
-        "HypothesisRevision", "HypothesisRefinement", "MechanismReasoning", "SourceTracing",
+        "HypothesisRevision", "HypothesisRefinement", "MechanismReasoning",
     ],
     "人在回路": ["MentorReview"],
     "中文写作服务": [

@@ -155,7 +155,7 @@ class PipelineRunResult(BaseModel):
 class LoopDryRunRequest(BaseModel):
     """Loop 决策 Dry-run 请求（不调 LLM）"""
     run_options: Optional[Dict[str, Any]] = Field(default=None, description="与 Pipeline run options 相同")
-    quality_trend: Optional[List[Dict[str, Any]]] = Field(default=None, description="模拟用 CQS 趋势")
+    quality_trend: Optional[List[Dict[str, Any]]] = Field(default=None, description="模拟用质量 Gate 趋势")
     round_num: int = Field(default=2, ge=1, le=5, description="Discovery 轮次")
     hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="可选：模拟 Accept 判断")
     small_validation: Optional[Dict[str, Any]] = Field(default=None)

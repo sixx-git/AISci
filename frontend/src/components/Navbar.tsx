@@ -1,8 +1,7 @@
-
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList, Puzzle } from 'lucide-react';
+import { Home, BookOpen, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ApiManagementPanel } from '@/components/ApiManagementPanel';
+import { DeveloperMenu } from '@/components/DeveloperMenu';
 
 export function Navbar() {
   const location = useLocation();
@@ -11,7 +10,6 @@ export function Navbar() {
     { path: '/', label: '首页', icon: Home },
     { path: '/documents', label: '文献', icon: BookOpen },
     { path: '/reports', label: '报告', icon: ClipboardList },
-    { path: '/skills', label: '技能', icon: Puzzle },
   ];
 
   return (
@@ -52,7 +50,7 @@ export function Navbar() {
           </div>
 
           <div className="shrink-0">
-            <ApiManagementPanel />
+            <DeveloperMenu />
           </div>
         </div>
       </div>

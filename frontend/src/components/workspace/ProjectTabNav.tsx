@@ -1,4 +1,4 @@
-import { PROJECT_TABS } from '@/config/projectTabs';
+import { PRIMARY_PROJECT_TABS } from '@/config/projectTabs';
 import { cn } from '@/lib/utils';
 
 interface ProjectTabNavProps {
@@ -10,7 +10,7 @@ export function ProjectTabNav({ activeTab, onTabChange }: ProjectTabNavProps) {
   return (
     <div className="bp-tab-nav">
       <nav className="flex gap-1 overflow-x-auto -mb-px">
-        {PROJECT_TABS.map((tab) => {
+        {PRIMARY_PROJECT_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

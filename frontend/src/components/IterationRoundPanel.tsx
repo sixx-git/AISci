@@ -1,6 +1,7 @@
 import {
   RefreshCw, AlertCircle, CheckCircle2, Search, Database, BookOpen, GitCompare,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type {
   IterationRoundRecord,
   MaterialSupplementPlan,
@@ -21,6 +22,22 @@ const TRIGGER_LABEL: Record<string, string> = {
   validation_fail: '验证失败',
   hypothesis_review: '假设评审',
 };
+
+function GateChip({ passed }: { passed?: boolean | null }) {
+  if (passed == null) return null;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium',
+        passed
+          ? 'border-bp-green/40 bg-bp-green/10 text-bp-green'
+          : 'border-bp-yellow/40 bg-bp-yellow/10 text-bp-yellow',
+      )}
+    >
+      Gate {passed ? '✓' : '✗'}
+    </span>
+  );
+}
 
 function ScoreChip({ label, value, delta }: { label: string; value?: number | null; delta?: unknown }) {
   if (value == null) return null;
@@ -87,7 +104,7 @@ function RoundCard({ round }: { round: IterationRoundRecord }) {
       <div className="flex flex-wrap gap-1.5 mb-2">
         <ScoreChip label="评审" value={scores.ensemble_overall} delta={delta.ensemble_delta} />
         <ScoreChip label="假设树" value={scores.hypothesis_tree} delta={delta.tree_score_delta} />
-        <ScoreChip label="CQS" value={scores.cqs} />
+        <GateChip passed={scores.gate_passed ?? (scores.cqs != null ? scores.cqs >= 50 : null)} />
         <ScoreChip label="逻辑" value={scores.logic_score} />
       </div>
       {round.actions_taken && round.actions_taken.length > 0 && (

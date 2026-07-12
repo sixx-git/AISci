@@ -28,6 +28,7 @@ import {
 } from '@/lib/projectStatus';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
 import { VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { AdvancedTabNotice } from '@/components/workspace/AdvancedTabNotice';
 import { researchQuestionKey } from '@/lib/storageKeys';
 import { resolveResearchField } from '@/lib/researchField';
 import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
@@ -578,7 +579,12 @@ export function ProjectWorkspace() {
           />
         );
       case 'prompts':
-        return <PromptManagementPage projectId={id} projectMode={resolvedProjectMode} />;
+        return (
+          <>
+            <AdvancedTabNotice projectId={id} tab="prompts" />
+            <PromptManagementPage projectId={id} projectMode={resolvedProjectMode} />
+          </>
+        );
       case 'hypotheses':
         return <HypothesesTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
       case 'experiments':
@@ -601,7 +607,12 @@ export function ProjectWorkspace() {
           />
         );
       case 'logs':
-        return <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />;
+        return (
+          <>
+            <AdvancedTabNotice projectId={id} tab="logs" />
+            <LogsTab projectId={id} revalidateKey={revalidateKey} latestRunId={latestRunId} />
+          </>
+        );
       default:
         return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
     }

@@ -13,12 +13,14 @@ def check_discovery_stagnation(
     quality_trend: Optional[List[Dict[str, Any]]],
     *,
     round_num: int,
-    min_improvement_delta: float,
+    min_improvement_delta: float = 0.0,
+    stagnant_rounds: int = 2,
 ) -> Dict[str, Any]:
     return evaluate_discovery_continuation(
         quality_trend,
         round_num=round_num,
         min_improvement_delta=min_improvement_delta,
+        stagnant_rounds=stagnant_rounds,
     )
 
 

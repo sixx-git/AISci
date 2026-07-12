@@ -54,15 +54,15 @@ class TestBatch4DecisionLog(unittest.TestCase):
 class TestBatch4IterationControl(unittest.TestCase):
     def test_stop_stagnant(self):
         trend = [
-            {"stage": "r1", "cqs": 60},
-            {"stage": "r2", "cqs": 61},
-            {"stage": "r3", "cqs": 61.5},
+            {"stage": "r1", "passed": False},
+            {"stage": "r2", "passed": False},
+            {"stage": "r3", "passed": False},
         ]
-        result = evaluate_discovery_continuation(trend, round_num=4, min_improvement_delta=3.0)
+        result = evaluate_discovery_continuation(trend, round_num=4, stagnant_rounds=2)
         self.assertEqual(result["action"], "stop_stagnant")
 
     def test_continue_when_improved(self):
-        trend = [{"cqs": 55}, {"cqs": 62}]
+        trend = [{"passed": False}, {"passed": True}]
         result = evaluate_discovery_continuation(trend, round_num=2)
         self.assertEqual(result["action"], "continue")
 

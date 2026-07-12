@@ -7,8 +7,8 @@ from app.services.loops.dry_run import simulate_loop_decisions
 
 
 def test_check_discovery_stagnation_continue():
-    trend = [{"stage": "discovery_r1", "cqs": 5.0}]
-    out = check_discovery_stagnation(trend, round_num=2, min_improvement_delta=3.0)
+    trend = [{"stage": "discovery_r1", "passed": False}]
+    out = check_discovery_stagnation(trend, round_num=2, stagnant_rounds=2)
     assert out.get("action") in ("continue", "stop_stagnant", None) or "action" in out
 
 
@@ -22,7 +22,7 @@ def test_check_discovery_acceptance_by_score():
 def test_simulate_loop_decisions_discovery():
     result = simulate_loop_decisions(
         run_options={"pipeline_mode": "discovery", "discovery_max_rounds": 3},
-        quality_trend=[{"cqs": 4.0}, {"cqs": 4.1}],
+        quality_trend=[{"passed": False}, {"passed": False}],
         round_num=2,
     )
     assert result["pipeline_mode"] == "discovery"

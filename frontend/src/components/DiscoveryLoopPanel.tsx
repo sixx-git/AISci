@@ -31,13 +31,17 @@ export function QualityAcceptanceSection({ qualityAcceptance }: { qualityAccepta
       <div className="flex flex-wrap gap-3 text-xs">
         <Stat label="Accept" value={qualityAcceptance.accepted ? '是' : '否'} />
         <Stat
-          label="CQS 趋势"
+          label="质量 Gate"
           value={
-            qualityAcceptance.cqs_delta != null
-              ? `${qualityAcceptance.cqs_improved ? '↑' : '→/↓'} ${qualityAcceptance.cqs_delta >= 0 ? '+' : ''}${qualityAcceptance.cqs_delta.toFixed(1)}`
-              : qualityAcceptance.score_delta != null
-                ? `${qualityAcceptance.score_improved ? '↑' : '→/↓'} ${qualityAcceptance.score_delta >= 0 ? '+' : ''}${qualityAcceptance.score_delta.toFixed(1)}`
-                : '—'
+            qualityAcceptance.gates_passed != null
+              ? `${qualityAcceptance.gates_passed} 通过 / ${qualityAcceptance.gates_failed ?? 0} 未通过`
+              : qualityAcceptance.latest_gate_passed != null
+                ? qualityAcceptance.latest_gate_passed
+                  ? '最新：通过'
+                  : '最新：未通过'
+                : qualityAcceptance.cqs_delta != null
+                  ? `${qualityAcceptance.cqs_improved ? '↑' : '→/↓'} ${qualityAcceptance.cqs_delta >= 0 ? '+' : ''}${qualityAcceptance.cqs_delta.toFixed(0)}`
+                  : '—'
           }
         />
         <Stat label="Discovery 轮次" value={String(qualityAcceptance.discovery_rounds ?? '—')} />
@@ -169,7 +173,7 @@ export function DiscoveryHistorySection({ discoveryLoop }: { discoveryLoop: Disc
               )}
               {entry.status === 'stagnant' && entry.stagnation && (
                 <p className="text-xs text-bp-yellow mb-1">
-                  CQS 停滞: {String((entry.stagnation as { reason?: string }).reason || '建议人工介入')}
+                  Gate 停滞: {String((entry.stagnation as { reason?: string }).reason || '建议人工介入')}
                 </p>
               )}
 

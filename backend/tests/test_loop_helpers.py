@@ -32,7 +32,8 @@ def test_infer_quality_trend_evidence_loop():
     assert entries[0]["stage"] == "evidence_reasoning"
 
 
-def test_enrich_gap_loop_cqs():
+def test_enrich_gap_loop_gate():
     raw = {"stage": "data_gap_loop", "score": 72, "raw_score": 72}
     enriched = enrich_quality_trend_entry(raw, "data_gap_loop", {})
-    assert enriched["cqs"] == 72.0
+    assert enriched["passed"] is True
+    assert enriched["score"] == 100.0

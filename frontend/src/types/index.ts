@@ -275,6 +275,10 @@ export interface QualityTrendEntry {
   stage?: string;
   score?: number;
   cqs?: number;
+  passed?: boolean;
+  gate_id?: string;
+  gate_label?: string;
+  checks?: Array<{ id?: string; label?: string; passed?: boolean }>;
   raw_score?: number;
   breakdown?: Record<string, number>;
   round?: number;
@@ -357,6 +361,10 @@ export interface QualityAcceptance {
   literature_refresh_count?: number;
   refining_rounds?: number;
   federated_discovery_accept?: boolean;
+  gates_passed?: number;
+  gates_failed?: number;
+  latest_gate_passed?: boolean;
+  gate_improved?: boolean;
   cqs_first?: number;
   cqs_last?: number;
   cqs_delta?: number;
@@ -476,6 +484,7 @@ export interface IterationRoundScores {
   evidence_balance?: number | null;
   logic_score?: number | null;
   cqs?: number | null;
+  gate_passed?: boolean | null;
 }
 
 export interface IterationRoundRecord {

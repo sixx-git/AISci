@@ -96,6 +96,7 @@ class IterationRoundScores(BaseModel):
     evidence_balance: Optional[float] = None
     logic_score: Optional[float] = None
     cqs: Optional[float] = None
+    gate_passed: Optional[bool] = None
 
 
 class IterationRoundRecord(BaseModel):

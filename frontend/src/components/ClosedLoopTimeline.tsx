@@ -118,21 +118,28 @@ export function ClosedLoopTimeline({
 
       {qualityTrend.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs text-bp-muted mb-2">综合质量分 CQS（0–100，越高越好）</p>
+          <p className="text-xs text-bp-muted mb-2">质量 Gate（✓ 通过 / ✗ 未通过）</p>
           <div className="flex flex-wrap items-end gap-2">
             {qualityTrend.map((entry, idx) => {
-              const score = entry.cqs ?? entry.score ?? 0;
-              const height = Math.max(8, Math.min(48, (score / 100) * 48));
+              const passed =
+                entry.passed ??
+                (entry.score != null ? entry.score >= 50 : entry.cqs != null ? entry.cqs >= 50 : false);
               const label = entry.stage || entry.label || `R${entry.round ?? idx}`;
               const rawHint = entry.raw_score != null ? ` raw=${entry.raw_score}` : '';
+              const gateLabel = entry.gate_label || label;
               return (
                 <div key={`${label}-${idx}`} className="flex flex-col items-center gap-1 min-w-[52px]">
-                  <span className="text-xs font-mono text-bp-cyan">{formatScore(score)}</span>
                   <div
-                    className="w-8 rounded-t bg-bp-cyan/40 border border-bp-cyan/30"
-                    style={{ height: `${height}px` }}
-                    title={`${label}: CQS ${formatScore(score)}${rawHint}`}
-                  />
+                    className={cn(
+                      'w-8 h-8 rounded flex items-center justify-center text-sm font-bold border',
+                      passed
+                        ? 'bg-bp-green/20 border-bp-green/40 text-bp-green'
+                        : 'bg-bp-yellow/20 border-bp-yellow/40 text-bp-yellow',
+                    )}
+                    title={`${gateLabel}: ${passed ? '通过' : '未通过'}${rawHint}`}
+                  >
+                    {passed ? '✓' : '✗'}
+                  </div>
                   <span className="text-xs text-bp-muted text-center leading-tight max-w-[64px] truncate">
                     {label}
                   </span>

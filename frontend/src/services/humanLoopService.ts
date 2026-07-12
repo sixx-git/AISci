@@ -16,6 +16,14 @@ export interface StageHumanDetail {
   chat_history?: Array<Record<string, unknown>>;
   prompt_used?: string;
   model_used?: string;
+  global_constraints?: string[];
+  recent_feedback_entries?: Array<{
+    id?: string;
+    source?: string;
+    message?: string;
+    target?: string;
+    created_at?: string;
+  }>;
 }
 
 export interface MentorReview {

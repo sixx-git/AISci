@@ -155,7 +155,7 @@ def build_general_verifiable_hypothesis_spec(
         "stop_criteria": [
             "连续 2 轮验证无指标改善",
             "证据等级持续为 low 且无新 literature fact",
-            "集成评审未 Accept 且 CQS 停滞",
+            "集成评审未 Accept 且质量 Gate 停滞",
         ],
         "mode": "general",
         "supporting_fact_ids": fact_ids[:12],

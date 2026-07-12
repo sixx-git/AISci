@@ -1,4 +1,4 @@
-"""Batch 1 — CQS / execution metadata / HITL gate 测试"""
+"""Batch 1 — 质量 Gate / execution metadata / HITL gate 测试"""
 import unittest
 
 from app.core.execution_metadata import annotate_validation_execution_metadata
@@ -12,8 +12,15 @@ from app.services.stage_human_loop_service import StageHumanLoopService
 
 
 class TestQualityScoring(unittest.TestCase):
-    def test_normalize_ensemble_score(self):
-        self.assertEqual(normalize_raw_to_cqs(8.0, "ensemble_review"), 80.0)
+    def test_normalize_ensemble_gate(self):
+        self.assertEqual(
+            normalize_raw_to_cqs(8.0, "ensemble_review", {"overall": 8.0}),
+            100.0,
+        )
+        self.assertEqual(
+            normalize_raw_to_cqs(5.0, "ensemble_review", {"overall": 5.0}),
+            0.0,
+        )
 
     def test_enrich_trend_entry(self):
         entry = enrich_quality_trend_entry(
@@ -21,17 +28,17 @@ class TestQualityScoring(unittest.TestCase):
             "ensemble_review",
             {"decision": "Accept"},
         )
-        self.assertGreaterEqual(entry["cqs"], 75.0)
-        self.assertEqual(entry["score"], entry["cqs"])
+        self.assertTrue(entry["passed"])
+        self.assertEqual(entry["score"], 100.0)
 
-    def test_cqs_trend_summary(self):
+    def test_gate_trend_summary(self):
         trend = [
             enrich_quality_trend_entry({"stage": "a", "score": 6.0}),
             enrich_quality_trend_entry({"stage": "b", "score": 8.0}),
         ]
         summary = summarize_cqs_trend(trend)
         self.assertTrue(summary["cqs_improved"])
-        self.assertGreater(summary["cqs_delta"], 0)
+        self.assertEqual(summary["cqs_delta"], 100.0)
 
 
 class TestExecutionMetadata(unittest.TestCase):
@@ -50,15 +57,19 @@ class TestExecutionMetadata(unittest.TestCase):
         self.assertEqual(sv["execution_tier"], "csv_simulation")
 
 
-class TestClosedLoopQualityCQS(unittest.TestCase):
-    def test_quality_acceptance_uses_cqs(self):
+class TestClosedLoopQualityGate(unittest.TestCase):
+    def test_quality_acceptance_uses_gate(self):
         trend = [
             enrich_quality_trend_entry({"stage": "discovery_r2", "score": 6.0}),
-            enrich_quality_trend_entry({"stage": "discovery_r3", "score": 8.0}),
+            enrich_quality_trend_entry(
+                {"stage": "discovery_r3", "score": 8.0},
+                "ensemble_review",
+                {"decision": "Accept"},
+            ),
         ]
         qa = compute_quality_acceptance(quality_trend=trend)
-        self.assertIsNotNone(qa.get("cqs_delta"))
-        self.assertTrue(qa.get("cqs_improved"))
+        self.assertIsNotNone(qa.get("gates_passed"))
+        self.assertTrue(qa.get("latest_gate_passed"))
 
 
 class TestHitlGateService(unittest.TestCase):

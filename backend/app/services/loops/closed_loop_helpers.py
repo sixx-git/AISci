@@ -1,4 +1,4 @@
-"""闭环事件与 CQS 趋势条目构建辅助。"""
+"""闭环事件与质量 Gate 趋势条目构建辅助。"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -69,7 +69,7 @@ def build_data_gap_loop_payload(
 
 
 def infer_quality_trend_entries(event_type: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """从事件 payload 推断 quality_trend 条目（统一 CQS  enrich 入口）。"""
+    """从事件 payload 推断 quality_trend 条目（统一 Gate enrich 入口）。"""
     qt = payload.get("quality_trend_entry") or payload.get("quality_trend")
     if isinstance(qt, dict) and qt.get("stage"):
         return [qt]

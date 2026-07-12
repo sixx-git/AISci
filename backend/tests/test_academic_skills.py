@@ -1,7 +1,7 @@
-"""学术 Skills 注册发现测试。"""
+"""academic Skill 包已移除 — 确认注册表不再包含该目录技能"""
 from app.services.skill_registry_service import discover_skills
 
-EXPECTED_ACADEMIC_SKILLS = {
+REMOVED_ACADEMIC_SKILLS = {
     "PaperReading",
     "DeepResearch",
     "SourceTracing",
@@ -25,17 +25,9 @@ EXPECTED_ACADEMIC_SKILLS = {
 }
 
 
-def test_academic_skills_discovered():
+def test_academic_skills_removed_from_registry():
     skills = discover_skills(refresh=True)
-    found = {s.name for s in skills if s.category == "academic"}
-    missing = EXPECTED_ACADEMIC_SKILLS - found
-    assert not missing, f"未发现的 academic skills: {missing}"
-    assert len(found) >= len(EXPECTED_ACADEMIC_SKILLS)
-
-
-def test_academic_skills_have_consumers():
-    skills = discover_skills(refresh=True)
-    academic = [s for s in skills if s.name in EXPECTED_ACADEMIC_SKILLS]
-    assert len(academic) == len(EXPECTED_ACADEMIC_SKILLS)
-    linked = [s for s in academic if s.agents]
-    assert len(linked) >= 18
+    by_id = {s.id: s for s in skills}
+    still_present = [sid for sid in REMOVED_ACADEMIC_SKILLS if sid in by_id]
+    assert not still_present, f"应已移除的 academic skills 仍存在: {still_present}"
+    assert not any(s.category == "academic" for s in skills)

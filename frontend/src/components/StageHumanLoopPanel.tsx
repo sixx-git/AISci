@@ -91,6 +91,8 @@ export function StageHumanLoopPanel({
   const [showPrompt, setShowPrompt] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [globalConstraints, setGlobalConstraints] = useState<string[]>([]);
+  const [recentFeedbackEntries, setRecentFeedbackEntries] = useState<Array<Record<string, unknown>>>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const userChattingRef = useRef(false);
 
@@ -107,6 +109,10 @@ export function StageHumanLoopPanel({
         if (last?.assistant_explanation) {
           setLatestReply(last.assistant_explanation);
         }
+      }
+      if (res.code === 200 && res.data) {
+        setGlobalConstraints(res.data.global_constraints || []);
+        setRecentFeedbackEntries(res.data.recent_feedback_entries || []);
       }
     } catch {
       /* 忽略加载失败 */
@@ -157,7 +163,10 @@ export function StageHumanLoopPanel({
         human_feedback: feedback,
         mark_reviewed: true,
       });
-      if (res.code === 200) onUpdated?.();
+      if (res.code === 200) {
+        onUpdated?.();
+        await loadChatHistory();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败，请检查 JSON 格式');
     } finally {
@@ -321,7 +330,7 @@ export function StageHumanLoopPanel({
 
   return (
     <>
-      <Card title="人在回路" subtitle="咨询 · 修订 · 可选重跑智能体">
+      <Card title="人在回路" subtitle="咨询 · 修订 · 全局约束 · 可选重跑">
         <div className="flex flex-wrap gap-2 mb-3">
           <Button variant="secondary" className="text-xs" onClick={() => setShowPrompt(true)}>
             <Tag className="w-3.5 h-3.5 mr-1" /> 编辑 Prompt
@@ -331,7 +340,7 @@ export function StageHumanLoopPanel({
             className="text-xs"
             onClick={() => navigate(`/projects/${projectId}?tab=prompts&prompt_stage=${stage}`)}
           >
-            <Tag className="w-3.5 h-3.5 mr-1" /> Prompt 管理
+            <Tag className="w-3.5 h-3.5 mr-1" /> 高级 Prompt
           </Button>
           <Button variant="secondary" className="text-xs" onClick={handleMentorReview} disabled={!!busy}>
             {busy === 'mentor' ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <GraduationCap className="w-3.5 h-3.5 mr-1" />}
@@ -550,6 +559,27 @@ export function StageHumanLoopPanel({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {(globalConstraints.length > 0 || recentFeedbackEntries.length > 0) && (
+          <div className="mt-4 pt-4 border-t border-bp-border">
+            <p className="text-xs font-medium text-bp-purple mb-2">项目全局约束</p>
+            <p className="text-xs text-bp-muted mb-2">
+              本阶段保存、修订或重跑时的反馈会自动写入全局约束，并注入后续 Pipeline 运行。
+            </p>
+            {globalConstraints.length > 0 && (
+              <ul className="text-xs text-bp-muted space-y-1 max-h-28 overflow-y-auto mb-2">
+                {globalConstraints.slice(-6).map((c) => (
+                  <li key={c} className="line-clamp-2">• {c}</li>
+                ))}
+              </ul>
+            )}
+            {recentFeedbackEntries.length > 0 && (
+              <p className="text-xs text-bp-muted">
+                最近 {recentFeedbackEntries.length} 条 HITL 反馈已记录
+              </p>
+            )}
           </div>
         )}
       </Card>
