@@ -2595,28 +2595,30 @@ class PipelineService:
         if refinement_queries:
             search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
 
+        from app.services.project_service import ProjectService
+
+        project = ProjectService(self.db).get_project(project_id)
+        acq_cfg = (
+            (project.config or {}).get("data_acquisition") or {}
+            if project and isinstance(project.config, dict)
+            else {}
+        )
+        acquisition_mode = acq_cfg.get("mode") or "dataset_discovery"
+        if self._run_options.get("enable_quick_report"):
+            acquisition_mode = "dataset_discovery"
+        acquisition_mode = self._run_options.get("data_acquisition_mode", acquisition_mode)
+        is_full_mode = acquisition_mode == "full"
+
         gap_options = {
-            "enable_gap_search": (
-                False
-                if self._run_options.get("enable_quick_report")
-                else self._run_options.get("enable_gap_search", True)
-            ),
-            "auto_import": (
-                False
-                if self._run_options.get("enable_quick_report")
-                else self._run_options.get("enable_hf_auto_import", True)
-            ),
+            "acquisition_mode": acquisition_mode,
+            "enable_gap_search": is_full_mode and self._run_options.get("enable_gap_search", True),
+            "auto_import": is_full_mode and self._run_options.get("enable_hf_auto_import", True),
             "coverage_gap_threshold": self._run_options.get("coverage_gap_threshold"),
             "data_spec_gap_threshold": self._run_options.get("data_spec_gap_threshold"),
             "max_gap_rounds": self._run_options.get("max_gap_rounds"),
             "refinement_queries": refinement_queries,
-            "quick_report_fast": bool(self._run_options.get("enable_quick_report")),
         }
-        auto_import = (
-            False
-            if self._run_options.get("enable_quick_report")
-            else self._run_options.get("enable_hf_auto_import", True)
-        )
+        auto_import = is_full_mode and self._run_options.get("enable_hf_auto_import", True)
         final = service.run_data_acquisition_sync(
             project_id=project_id,
             research_question=search_query,
@@ -2657,26 +2659,12 @@ class PipelineService:
         results["data_acquisition"] = slim_output
         results["data_finder"] = slim_output
         logger.info(
-            f"[DataAcquisition] 完成: tables={len(final.get('extracted_tables', []))} "
+            f"[DataAcquisition] 完成 mode={acquisition_mode}: "
+            f"candidates={len(final.get('external_candidates', []))} "
+            f"tables={len(final.get('extracted_tables', []))} "
             f"merged={(final.get('merged') or {}).get('row_count')}"
         )
         return slim_output
-
-    def _exec_data_finder(
-        self,
-        project_id: str,
-        research_question: str,
-        results: Dict[str, Any],
-        project_mode: str,
-        refinement_queries: Optional[List[str]] = None,
-        selected_hypothesis: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """兼容别名 → 多源数据采集。"""
-        return self._exec_data_acquisition(
-            project_id, research_question, results, project_mode,
-            refinement_queries=refinement_queries,
-            selected_hypothesis=selected_hypothesis,
-        )
 
     def _exec_knowledge_gap(
         self,

@@ -286,7 +286,7 @@ const BASE_AGENT_NODES: AgentNodeData[] = [
   },
   {
     id: 'data', name: '多源数据采集',
-    shortDesc: 'DataSpec 驱动：PDF/外部库/补充材料 → 对齐合并',
+    shortDesc: '按问题检索 HF/Zenodo 等领域公开数据集',
     status: 'pending', duration: null,
     inputSummary: '', outputSummary: '', logs: [],
     model: '', promptVersion: '', icon: Database,

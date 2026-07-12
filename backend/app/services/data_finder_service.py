@@ -27,6 +27,16 @@ from app.skills.data_finder.pdf_table_extraction_skill import PdfTableExtraction
 
 logger = logging.getLogger(__name__)
 CHINA_TZ = timezone(timedelta(hours=8))
+ACQUISITION_MODE_DATASET_DISCOVERY = "dataset_discovery"
+ACQUISITION_MODE_FULL = "full"
+SKIPPED_PIPELINE_STEPS = (
+    "fetch_supplementary",
+    "extract",
+    "fetch_external",
+    "align",
+    "merge",
+    "gap_loop",
+)
 
 
 class DataFinderService:
@@ -113,6 +123,33 @@ class DataFinderService:
 
         return resolve_gap_thresholds(self._load_project_config(project_id), run_options)
 
+    def _resolve_acquisition_mode(
+        self,
+        project_id: str,
+        gap_options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        gap_opts = gap_options or {}
+        override = gap_opts.get("acquisition_mode")
+        if override in (ACQUISITION_MODE_DATASET_DISCOVERY, ACQUISITION_MODE_FULL):
+            return override
+        cfg = (self._load_project_config(project_id).get("data_acquisition") or {})
+        mode = cfg.get("mode") or ACQUISITION_MODE_DATASET_DISCOVERY
+        if mode not in (ACQUISITION_MODE_DATASET_DISCOVERY, ACQUISITION_MODE_FULL):
+            return ACQUISITION_MODE_DATASET_DISCOVERY
+        return mode
+
+    @staticmethod
+    def _mark_steps_skipped(
+        steps: Dict[str, Any],
+        step_meta: Dict[str, Dict[str, Any]],
+        step_keys: tuple[str, ...],
+        *,
+        reason: str,
+    ) -> None:
+        for key in step_keys:
+            steps[key] = {"skipped": True, "reason": reason}
+            step_meta[key] = {"duration_ms": 0, "error_code": None}
+
     def _project_research_domain(self, project_id: str) -> str:
         from app.services.project_service import ProjectService
 
@@ -162,19 +199,16 @@ class DataFinderService:
         filtered = filter_relevant_external_candidates(normalized, ctx)
         return ensure_candidate_ids(filtered)
 
-    async def run_search(
+    async def _build_data_spec(
         self,
         project_id: str,
         research_question: str,
-        selected_hypothesis: str = "",
-        project_mode: str = "general",
-    ) -> Dict[str, Any]:
-        project_mode = normalize_project_mode(project_mode)
-        ctx = {"stage": "data_finder", "project_id": project_id}
-
-        req_skill = DataRequirementUnderstandingSkill()
+        selected_hypothesis: str,
+        project_mode: str,
+        ctx: Dict[str, Any],
+    ) -> tuple[Dict[str, Any], Dict[str, Any], str]:
         user_hints = self._load_project_data_spec_hints(project_id)
-        req_res = await req_skill.run(
+        req_res = await DataRequirementUnderstandingSkill().run(
             {
                 "research_question": research_question,
                 "selected_hypothesis": selected_hypothesis,
@@ -198,46 +232,23 @@ class DataFinderService:
             research_question=research_question,
         )
         data_requirements["data_spec"] = data_spec
+        return data_requirements, data_spec, research_domain
 
-        project_config = self._load_project_config(project_id)
-        documents = self._load_project_documents(project_id)
-        literature_discovery: Optional[Dict[str, Any]] = None
-        from app.services.literature_discovery_adapter import (
-            discover_and_import_literature,
-            should_auto_discover_literature,
-        )
+    async def _search_external_dataset_candidates(
+        self,
+        *,
+        project_id: str,
+        research_question: str,
+        data_requirements: Dict[str, Any],
+        data_spec: Dict[str, Any],
+        research_domain: str,
+        ctx: Dict[str, Any],
+        registry_limit: int = 4,
+    ) -> tuple[List[Dict[str, Any]], List[str]]:
+        from app.services.data_sources.registry import search_all as registry_search
+        from app.services.data_sources.base import normalize_legacy_candidate
 
-        if should_auto_discover_literature(len(documents), project_config):
-            acq_cfg = (project_config.get("data_acquisition") or {})
-            try:
-                max_papers = int(acq_cfg.get("auto_literature_max_papers", 5))
-            except (TypeError, ValueError):
-                max_papers = 5
-            literature_discovery = discover_and_import_literature(
-                self.db,
-                project_id,
-                research_question,
-                data_spec,
-                max_papers=max_papers,
-            )
-            documents = self._load_project_documents(project_id)
-
-        link_skill = PaperDataLinkExtractorSkill()
-        link_res = await link_skill.run({"documents": documents}, ctx)
-        paper_extractions = link_res.data.get("paper_extractions", [])
-
-        from app.skills.data_finder.text_facts_extraction_skill import TextFactsExtractionSkill
-
-        text_facts_skill = TextFactsExtractionSkill()
-        text_facts_res = await text_facts_skill.run(
-            {"documents": documents, "data_spec": data_spec},
-            ctx,
-        )
-        text_facts = text_facts_res.data.get("text_facts") or []
-
-        ext_skill = ExternalDatasetSearchSkill()
-        research_domain = self._project_research_domain(project_id)
-        ext_res = await ext_skill.run(
+        ext_res = await ExternalDatasetSearchSkill().run(
             {
                 "research_question": research_question,
                 "dataset_keywords": data_requirements.get("dataset_keywords", []),
@@ -246,14 +257,9 @@ class DataFinderService:
             },
             ctx,
         )
-
-        from app.services.data_sources.registry import search_all as registry_search
-        from app.services.data_sources.base import normalize_legacy_candidate
-
-        reg_res = await registry_search(research_question, data_spec, limit_per_source=4)
+        reg_res = await registry_search(research_question, data_spec, limit_per_source=registry_limit)
         ext_candidates = [
-            normalize_legacy_candidate(c)
-            for c in ext_res.data.get("candidates", [])
+            normalize_legacy_candidate(c) for c in ext_res.data.get("candidates", [])
         ]
         seen_keys = {(c.get("dataset_name") or c.get("url") or "").lower() for c in ext_candidates}
         for c in reg_res.get("candidates", []):
@@ -262,13 +268,105 @@ class DataFinderService:
             if key and key not in seen_keys:
                 seen_keys.add(key)
                 ext_candidates.append(nc)
-
         ext_candidates = self._finalize_external_candidates(
             ext_candidates,
             project_id=project_id,
             research_question=research_question,
             data_requirements=data_requirements,
         )
+        warnings = list(ext_res.warnings or []) + list(reg_res.get("warnings") or [])
+        return ext_candidates, warnings
+
+    async def run_dataset_discovery(
+        self,
+        project_id: str,
+        research_question: str,
+        selected_hypothesis: str = "",
+        project_mode: str = "general",
+    ) -> Dict[str, Any]:
+        """领域数据集发现：DataSpec + 外部公开数据源检索。"""
+        project_mode = normalize_project_mode(project_mode)
+        ctx = {"stage": "data_finder", "project_id": project_id}
+        data_requirements, data_spec, research_domain = await self._build_data_spec(
+            project_id, research_question, selected_hypothesis, project_mode, ctx,
+        )
+        ext_candidates, warnings = await self._search_external_dataset_candidates(
+            project_id=project_id,
+            research_question=research_question,
+            data_requirements=data_requirements,
+            data_spec=data_spec,
+            research_domain=research_domain,
+            ctx=ctx,
+            registry_limit=4,
+        )
+        payload = {
+            "project_id": project_id,
+            "project_mode": project_mode,
+            "data_spec": data_spec,
+            "data_requirements": data_requirements,
+            "external_candidates": ext_candidates,
+            "assets_index": build_assets_index({
+                "extracted_tables": [],
+                "figures": [],
+                "external_candidates": ext_candidates,
+            }),
+            "text_facts": [],
+            "paper_extractions": [],
+            "figures": [],
+            "extracted_tables": [],
+            "alignments": [],
+            "provenance": [],
+            "merged": None,
+            "warnings": warnings,
+        }
+        self.save_results(project_id, payload)
+        return payload
+
+    async def run_search_quick(
+        self,
+        project_id: str,
+        research_question: str,
+        selected_hypothesis: str = "",
+        project_mode: str = "general",
+    ) -> Dict[str, Any]:
+        return await self.run_dataset_discovery(
+            project_id, research_question, selected_hypothesis, project_mode,
+        )
+
+    async def run_search(
+        self,
+        project_id: str,
+        research_question: str,
+        selected_hypothesis: str = "",
+        project_mode: str = "general",
+    ) -> Dict[str, Any]:
+        """完整发现（full 模式）：领域数据集检索 + 论文表格/图表挖掘。"""
+        project_mode = normalize_project_mode(project_mode)
+        ctx = {"stage": "data_finder", "project_id": project_id}
+        data_requirements, data_spec, research_domain = await self._build_data_spec(
+            project_id, research_question, selected_hypothesis, project_mode, ctx,
+        )
+        ext_candidates, search_warnings = await self._search_external_dataset_candidates(
+            project_id=project_id,
+            research_question=research_question,
+            data_requirements=data_requirements,
+            data_spec=data_spec,
+            research_domain=research_domain,
+            ctx=ctx,
+            registry_limit=4,
+        )
+
+        documents = self._load_project_documents(project_id)
+        link_res = await PaperDataLinkExtractorSkill().run({"documents": documents}, ctx)
+        paper_extractions = link_res.data.get("paper_extractions", [])
+
+        from app.skills.data_finder.text_facts_extraction_skill import TextFactsExtractionSkill
+
+        text_facts_res = await TextFactsExtractionSkill().run(
+            {"documents": documents, "data_spec": data_spec},
+            ctx,
+        )
+        text_facts = text_facts_res.data.get("text_facts") or []
 
         figures_all: List[Dict[str, Any]] = []
         fig_skill = FigureDataExtractionSkill()
@@ -291,10 +389,7 @@ class DataFinderService:
                         "file_path": file_path,
                         "paper_id": pe.get("paper_id", ""),
                         "figures": [
-                            {
-                                "figure_number": f.get("figure_number"),
-                                "caption": f.get("caption", ""),
-                            }
+                            {"figure_number": f.get("figure_number"), "caption": f.get("caption", "")}
                             for f in figures_detected
                         ],
                         "output_dir": figures_dir,
@@ -313,19 +408,13 @@ class DataFinderService:
                 ctx,
             )
             for fig in fig_res.data.get("figures", []):
-                # 合并裁剪结果中的 image_path / page
                 crop_meta = next(
                     (c for c in cropped_figures if str(c.get("figure_number")) == str(fig.get("figure_number"))),
                     {},
                 )
-                if crop_meta.get("image_path"):
-                    fig["image_path"] = crop_meta["image_path"]
-                if crop_meta.get("page"):
-                    fig["page"] = crop_meta["page"]
-                if crop_meta.get("bbox"):
-                    fig["bbox"] = crop_meta["bbox"]
-                if crop_meta.get("crop_method"):
-                    fig["crop_method"] = crop_meta["crop_method"]
+                for key in ("image_path", "page", "bbox", "crop_method"):
+                    if crop_meta.get(key):
+                        fig[key] = crop_meta[key]
 
                 fig["extraction_method"] = "rule"
                 fig["extraction_tier"] = "L1_metadata"
@@ -354,124 +443,25 @@ class DataFinderService:
                 fig["extraction_manifest"] = build_figure_extraction_manifest(fig)
             figures_all.extend(fig_res.data.get("figures", []))
 
-        assets_index = build_assets_index({
-            "extracted_tables": [],
-            "figures": figures_all,
-            "external_candidates": ext_candidates,
-        })
-
         payload = {
             "project_id": project_id,
             "project_mode": project_mode,
             "data_spec": data_spec,
             "data_requirements": data_requirements,
-            "literature_discovery": literature_discovery,
             "text_facts": text_facts,
             "paper_extractions": paper_extractions,
             "external_candidates": ext_candidates,
             "figures": figures_all,
-            "assets_index": assets_index,
+            "assets_index": build_assets_index({
+                "extracted_tables": [],
+                "figures": figures_all,
+                "external_candidates": ext_candidates,
+            }),
             "extracted_tables": [],
             "alignments": [],
             "provenance": [],
             "merged": None,
-            "warnings": link_res.warnings + ext_res.warnings + reg_res.get("warnings", []) + text_facts_res.warnings,
-        }
-        self.save_results(project_id, payload)
-        return payload
-
-    async def run_search_quick(
-        self,
-        project_id: str,
-        research_question: str,
-        selected_hypothesis: str = "",
-        project_mode: str = "general",
-    ) -> Dict[str, Any]:
-        """一键报告轻量发现：仅理解数据需求 + 外部数据集检索，跳过图表/VLM/文献再发现。"""
-        project_mode = normalize_project_mode(project_mode)
-        ctx = {"stage": "data_finder_quick", "project_id": project_id}
-        user_hints = self._load_project_data_spec_hints(project_id)
-
-        req_skill = DataRequirementUnderstandingSkill()
-        req_res = await req_skill.run(
-            {
-                "research_question": research_question,
-                "selected_hypothesis": selected_hypothesis,
-                "project_mode": project_mode,
-                "user_data_spec_hints": user_hints,
-            },
-            ctx,
-        )
-        data_requirements = req_res.data
-        data_spec = data_requirements.get("data_spec") or empty_data_spec(
-            research_question, project_mode_to_scenario(project_mode),
-        )
-        data_spec = apply_data_spec_hints(data_spec, user_hints)
-        from app.core.domain_data_catalog import enrich_data_spec_from_domain
-
-        research_domain = self._project_research_domain(project_id)
-        data_spec = enrich_data_spec_from_domain(
-            data_spec,
-            research_domain=research_domain,
-            file_description=str(data_spec.get("user_data_notes") or ""),
-            research_question=research_question,
-        )
-        data_requirements["data_spec"] = data_spec
-
-        ext_skill = ExternalDatasetSearchSkill()
-        ext_res = await ext_skill.run(
-            {
-                "research_question": research_question,
-                "dataset_keywords": data_requirements.get("dataset_keywords", []),
-                "research_domain": research_domain,
-                "data_spec": data_spec,
-            },
-            ctx,
-        )
-
-        from app.services.data_sources.registry import search_all as registry_search
-        from app.services.data_sources.base import normalize_legacy_candidate
-
-        reg_res = await registry_search(research_question, data_spec, limit_per_source=3)
-        ext_candidates = [
-            normalize_legacy_candidate(c) for c in ext_res.data.get("candidates", [])
-        ]
-        seen_keys = {(c.get("dataset_name") or c.get("url") or "").lower() for c in ext_candidates}
-        for c in reg_res.get("candidates", []):
-            nc = normalize_legacy_candidate(c)
-            key = (nc.get("dataset_name") or nc.get("url") or "").lower()
-            if key and key not in seen_keys:
-                seen_keys.add(key)
-                ext_candidates.append(nc)
-        ext_candidates = self._finalize_external_candidates(
-            ext_candidates,
-            project_id=project_id,
-            research_question=research_question,
-            data_requirements=data_requirements,
-        )
-
-        assets_index = build_assets_index({
-            "extracted_tables": [],
-            "figures": [],
-            "external_candidates": ext_candidates,
-        })
-        payload = {
-            "project_id": project_id,
-            "project_mode": project_mode,
-            "data_spec": data_spec,
-            "data_requirements": data_requirements,
-            "literature_discovery": None,
-            "text_facts": [],
-            "paper_extractions": [],
-            "external_candidates": ext_candidates,
-            "figures": [],
-            "assets_index": assets_index,
-            "extracted_tables": [],
-            "alignments": [],
-            "provenance": [],
-            "merged": None,
-            "warnings": list(ext_res.warnings or []) + list(reg_res.get("warnings") or []),
-            "quick_search": True,
+            "warnings": link_res.warnings + search_warnings + text_facts_res.warnings,
         }
         self.save_results(project_id, payload)
         return payload
@@ -551,90 +541,99 @@ class DataFinderService:
         auto_import: bool = True,
         gap_options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """完整数据采集：discover → fetch → extract → align → merge → gap 闭环。"""
+        """数据采集：默认仅领域数据集发现；mode=full 时走论文抽取与合并。"""
         steps: Dict[str, Any] = {}
         step_meta: Dict[str, Dict[str, Any]] = {}
         gap_opts = gap_options or {}
-        quick_fast = bool(gap_opts.get("quick_report_fast"))
+        acquisition_mode = self._resolve_acquisition_mode(project_id, gap_opts)
+        is_discovery = acquisition_mode == ACQUISITION_MODE_DATASET_DISCOVERY
 
         discover_coro = (
-            self.run_search_quick(project_id, research_question, selected_hypothesis, project_mode)
-            if quick_fast
+            self.run_dataset_discovery(project_id, research_question, selected_hypothesis, project_mode)
+            if is_discovery
             else self.run_search(project_id, research_question, selected_hypothesis, project_mode)
         )
         await _timed_async_step(steps, step_meta, "discover", discover_coro)
 
-        if quick_fast:
-            steps["fetch_supplementary"] = {"skipped": True, "reason": "quick_report"}
-            steps["extract"] = {"skipped": True, "reason": "quick_report"}
-            step_meta["fetch_supplementary"] = {"duration_ms": 0, "error_code": None}
-            step_meta["extract"] = {"duration_ms": 0, "error_code": None}
+        if is_discovery:
+            self._mark_steps_skipped(
+                steps,
+                step_meta,
+                SKIPPED_PIPELINE_STEPS,
+                reason=ACQUISITION_MODE_DATASET_DISCOVERY,
+            )
+            gap_loop: List[Dict[str, Any]] = []
         else:
             await _timed_async_step(steps, step_meta, "fetch_supplementary", self.run_fetch_supplementary(project_id))
             await _timed_async_step(steps, step_meta, "extract", self.run_extract_tables(project_id))
 
-        results = self.load_results(project_id) or {}
+            results = self.load_results(project_id) or {}
 
-        if auto_import and results.get("external_candidates"):
-            from app.services.external_dataset_import_service import auto_import_external_candidates_async
-            from app.skills.data_finder._utils import new_id
+            if auto_import and results.get("external_candidates"):
+                from app.services.external_dataset_import_service import auto_import_external_candidates_async
+                from app.skills.data_finder._utils import new_id
 
-            ext_dir = os.path.join(self._project_dir(project_id), "external")
+                ext_dir = os.path.join(self._project_dir(project_id), "external")
 
-            async def _fetch_external() -> Dict[str, Any]:
-                import_meta = await auto_import_external_candidates_async(
-                    results.get("external_candidates", []),
-                    ext_dir,
-                    max_imports=2,
-                )
-                for item in import_meta.get("imported") or []:
-                    table_id = item.get("table_id") or new_id("ext")
-                    results.setdefault("extracted_tables", []).append({
-                        "table_id": table_id,
-                        "paper_id": "",
-                        "source_title": item.get("dataset_name", "External"),
-                        "page": 0,
-                        "caption": f"External: {item.get('dataset_name')}",
-                        "csv_path": item.get("csv_path"),
-                        "columns": item.get("columns") or [],
-                        "quality_score": 0.65,
-                        "extraction_method": item.get("import_method", "external_import"),
-                        "source_type": item.get("provenance_source_type", "external_csv"),
-                    })
-                self.save_results(project_id, results)
-                return import_meta
+                async def _fetch_external() -> Dict[str, Any]:
+                    import_meta = await auto_import_external_candidates_async(
+                        results.get("external_candidates", []),
+                        ext_dir,
+                        max_imports=2,
+                    )
+                    for item in import_meta.get("imported") or []:
+                        table_id = item.get("table_id") or new_id("ext")
+                        results.setdefault("extracted_tables", []).append({
+                            "table_id": table_id,
+                            "paper_id": "",
+                            "source_title": item.get("dataset_name", "External"),
+                            "page": 0,
+                            "caption": f"External: {item.get('dataset_name')}",
+                            "csv_path": item.get("csv_path"),
+                            "columns": item.get("columns") or [],
+                            "quality_score": 0.65,
+                            "extraction_method": item.get("import_method", "external_import"),
+                            "source_type": item.get("provenance_source_type", "external_csv"),
+                        })
+                    self.save_results(project_id, results)
+                    return import_meta
 
-            await _timed_async_step(steps, step_meta, "fetch_external", _fetch_external())
+                await _timed_async_step(steps, step_meta, "fetch_external", _fetch_external())
+            else:
+                self._mark_steps_skipped(steps, step_meta, ("fetch_external",), reason="no_candidates_or_disabled")
 
-        if results.get("extracted_tables"):
-            await _timed_async_step(steps, step_meta, "align", self.run_align_schema(project_id))
-            await _timed_async_step(steps, step_meta, "merge", self.run_merge(project_id))
-        else:
-            steps["align"] = {"skipped": True, "reason": "no_tables"}
-            steps["merge"] = {"skipped": True, "reason": "no_tables"}
-            step_meta["align"] = {"duration_ms": 0, "error_code": None}
-            step_meta["merge"] = {"duration_ms": 0, "error_code": None}
+            results = self.load_results(project_id) or {}
+            if results.get("extracted_tables"):
+                await _timed_async_step(steps, step_meta, "align", self.run_align_schema(project_id))
+                await _timed_async_step(steps, step_meta, "merge", self.run_merge(project_id))
+            else:
+                self._mark_steps_skipped(steps, step_meta, ("align", "merge"), reason="no_tables")
 
-        gap_loop: List[Dict[str, Any]] = []
-        if gap_opts.get("enable_gap_search", True):
-            async def _gap() -> List[Dict[str, Any]]:
-                return await self.run_gap_loop(
-                    project_id,
-                    refinement_queries=gap_opts.get("refinement_queries"),
-                    auto_import=auto_import if gap_opts.get("auto_import") is None else gap_opts.get("auto_import"),
-                    run_options=gap_opts,
-                )
+            gap_loop = []
+            if gap_opts.get("enable_gap_search", True):
+                async def _gap() -> List[Dict[str, Any]]:
+                    return await self.run_gap_loop(
+                        project_id,
+                        refinement_queries=gap_opts.get("refinement_queries"),
+                        auto_import=auto_import if gap_opts.get("auto_import") is None else gap_opts.get("auto_import"),
+                        run_options=gap_opts,
+                    )
 
-            gap_loop = await _timed_async_step(steps, step_meta, "gap_loop", _gap()) or []
+                gap_loop = await _timed_async_step(steps, step_meta, "gap_loop", _gap()) or []
+            else:
+                self._mark_steps_skipped(steps, step_meta, ("gap_loop",), reason="disabled")
 
-        final = self.load_results(project_id) or results
+        final = self.load_results(project_id) or {}
         from app.services.data_acquisition_release_gate import evaluate_release_gate
 
-        release_gate = evaluate_release_gate(final)
+        gate_config = {"min_merged_rows": 0} if is_discovery else None
+        release_gate = evaluate_release_gate(final, config=gate_config)
         final["release_gate"] = release_gate
         final["data_acquisition"] = {
+            "mode": acquisition_mode,
             "steps": list(steps.keys()),
             "stats": {
+                "acquisition_mode": acquisition_mode,
                 "external_candidates": len(final.get("external_candidates") or []),
                 "tables": len(final.get("extracted_tables") or []),
                 "merged_rows": (final.get("merged") or {}).get("row_count"),

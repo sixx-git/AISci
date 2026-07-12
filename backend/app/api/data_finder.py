@@ -22,7 +22,10 @@ class DataFinderAcquireRequest(BaseModel):
     research_question: str = ""
     selected_hypothesis: str = ""
     project_mode: Optional[str] = None
-    auto_import: bool = True
+    auto_import: bool = False
+    acquisition_mode: Optional[str] = Field(
+        None, description="dataset_discovery | full；默认读取 project.config.data_acquisition.mode",
+    )
 
 
 class DataFinderSearchRequest(BaseModel):
@@ -79,18 +82,22 @@ def _resolve_project_mode(db: Session, project_id: str, override: Optional[str])
 
 @router.post("/acquire")
 async def data_finder_acquire(body: DataFinderAcquireRequest, db: Session = Depends(get_db)):
-    """端到端多源数据采集：发现 → 补充材料 → 抽取 → 对齐 → 合并。"""
+    """数据采集：默认仅检索领域公开数据集；mode=full 时含论文抽取与合并。"""
     try:
         service = get_data_finder_service(db)
         mode = _resolve_project_mode(db, body.project_id, body.project_mode)
+        gap_options: dict = {}
+        if body.acquisition_mode:
+            gap_options["acquisition_mode"] = body.acquisition_mode
         result = await service.run_data_acquisition(
             project_id=body.project_id,
             research_question=body.research_question,
             selected_hypothesis=body.selected_hypothesis,
             project_mode=mode,
             auto_import=body.auto_import,
+            gap_options=gap_options or None,
         )
-        return {"code": 200, "data": result, "message": "多源数据采集完成"}
+        return {"code": 200, "data": result, "message": "数据采集完成"}
     except Exception as e:
         logger.error(f"data_finder acquire failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -98,16 +105,17 @@ async def data_finder_acquire(body: DataFinderAcquireRequest, db: Session = Depe
 
 @router.post("/search")
 async def data_finder_search(body: DataFinderSearchRequest, db: Session = Depends(get_db)):
+    """按研究问题检索相关领域公开数据集（不抽取 PDF 表格/图表）。"""
     try:
         service = get_data_finder_service(db)
         mode = _resolve_project_mode(db, body.project_id, body.project_mode)
-        result = await service.run_search(
+        result = await service.run_dataset_discovery(
             project_id=body.project_id,
             research_question=body.research_question,
             selected_hypothesis=body.selected_hypothesis,
             project_mode=mode,
         )
-        return {"code": 200, "data": result, "message": "数据查找完成"}
+        return {"code": 200, "data": result, "message": "数据集检索完成"}
     except Exception as e:
         logger.error(f"data_finder search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -22,7 +22,7 @@ async def _run(project_id: str, research_question: str) -> dict:
     db = SessionLocal()
     try:
         svc = get_data_finder_service(db)
-        return await svc.run_search_quick(
+        return await svc.run_dataset_discovery(
             project_id=project_id,
             research_question=research_question,
         )

@@ -200,7 +200,7 @@
 | FederatedCampaignPanel | `FederatedCampaignPanel` |
 | DiscoveryLoopPanel | `DiscoveryLoopPanel` |
 
-Pipeline 9 阶段：问题理解 → 文献挖掘 → **多源数据采集** → 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
+Pipeline 9 阶段：问题理解 → 文献挖掘 → **领域数据集发现**（默认）→ 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
 
 ### Tab 4 · 文献库 `o2Fc4r`
 

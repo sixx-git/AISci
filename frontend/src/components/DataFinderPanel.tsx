@@ -192,7 +192,7 @@ export function DataFinderPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" size="sm" icon={<Workflow className="w-4 h-4" />} onClick={runAcquire} isLoading={loading && action === 'acquire'}>
-            一键多源采集
+            检索领域数据集
           </Button>
           <Button variant="secondary" size="sm" icon={<RefreshCw className="w-4 h-4" />} onClick={runGapEnrich} isLoading={loading && action === 'gap'} disabled={!result?.coverage_report?.gap_enrichment_recommended && !result?.coverage_report}>
             Gap 补搜
@@ -267,6 +267,7 @@ export function DataFinderPanel({
           {result.data_acquisition.stats && (
             <p className="text-xs text-bp-muted mt-2">
               外部候选 {result.data_acquisition.stats.external_candidates ?? 0} ·
+              模式 {result.data_acquisition.stats.acquisition_mode ?? result.data_acquisition.mode ?? 'dataset_discovery'} ·
               表格 {result.data_acquisition.stats.tables ?? 0} ·
               合并行 {result.data_acquisition.stats.merged_rows ?? '—'}
               {result.data_acquisition.stats.total_duration_ms != null && (
@@ -336,20 +337,6 @@ export function DataFinderPanel({
         </Card>
       )}
 
-      {result?.literature_discovery && (result.literature_discovery.imported ?? 0) > 0 && (
-        <Card className="p-4 border-bp-cyan/20 bg-bp-cyan/5">
-          <h4 className="text-sm font-semibold text-bp-cyan mb-1 flex items-center gap-1.5">
-            <Link2 className="w-4 h-4" />
-            自动文献发现
-          </h4>
-          <p className="text-xs text-bp-muted">
-            导入 {result.literature_discovery.imported} 篇 · 来源 {result.literature_discovery.fallback_source}
-            {result.literature_discovery.pdf_downloaded != null && (
-              <span> · PDF {result.literature_discovery.pdf_downloaded}</span>
-            )}
-          </p>
-        </Card>
-      )}
 
       <ExternalCandidateTodoPanel
         projectId={projectId}

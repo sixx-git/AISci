@@ -31,7 +31,6 @@ export interface ResearchQuestionForm {
   coverageGapThreshold: string;
   dataSpecGapThreshold: string;
   maxGapRounds: string;
-  autoLiteratureDiscovery: string;
 }
 
 const EMPTY_FORM: ResearchQuestionForm = {
@@ -50,7 +49,6 @@ const EMPTY_FORM: ResearchQuestionForm = {
   coverageGapThreshold: '70',
   dataSpecGapThreshold: '60',
   maxGapRounds: '2',
-  autoLiteratureDiscovery: 'true',
 };
 
 // ============ localStorage 工具函数 ============
@@ -194,12 +192,6 @@ function formToApiPayload(form: ResearchQuestionForm): Record<string, unknown> {
   if (!Number.isNaN(covThr)) acq.coverage_gap_threshold = covThr;
   if (!Number.isNaN(specThr)) acq.data_spec_gap_threshold = specThr;
   if (!Number.isNaN(rounds)) acq.max_gap_rounds = Math.max(1, Math.min(4, rounds));
-  acq.enable_gap_search = true;
-  if (form.autoLiteratureDiscovery === 'false') {
-    acq.auto_literature_discovery = false;
-  } else if (form.autoLiteratureDiscovery === 'true') {
-    acq.auto_literature_discovery = true;
-  }
   if (Object.keys(acq).length > 0) {
     payload.data_acquisition = acq;
   }
@@ -250,12 +242,6 @@ function projectToForm(p: ProjectOverview, prev: ResearchQuestionForm): Research
     maxGapRounds: String(
       p.config?.data_acquisition?.max_gap_rounds ?? prev.maxGapRounds,
     ),
-    autoLiteratureDiscovery:
-      p.config?.data_acquisition?.auto_literature_discovery === false
-        ? 'false'
-        : p.config?.data_acquisition?.auto_literature_discovery === true
-          ? 'true'
-          : prev.autoLiteratureDiscovery,
   };
 }
 
@@ -339,7 +325,6 @@ const FL_FORM_TEMPLATE: ResearchQuestionForm = {
   coverageGapThreshold: '70',
   dataSpecGapThreshold: '60',
   maxGapRounds: '2',
-  autoLiteratureDiscovery: 'true',
 };
 
 const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
@@ -361,7 +346,6 @@ const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
   coverageGapThreshold: '70',
   dataSpecGapThreshold: '60',
   maxGapRounds: '2',
-  autoLiteratureDiscovery: 'true',
 };
 
 export function ResearchQuestionPage({
@@ -593,7 +577,7 @@ export function ResearchQuestionPage({
               结构化数据需求（DataSpec）
             </h4>
             <p className="text-xs text-bp-muted">
-              可选：指定跨表对齐字段、目标变量与偏好数据源，将在多源数据采集阶段与自动推断的 DataSpec 合并。
+              可选：指定目标变量与偏好数据源，将在领域数据集发现阶段与自动推断的 DataSpec 合并。
             </p>
             <div>
               <label className="text-sm font-medium text-bp-text mb-1.5 block">实体 / 对齐字段（逗号分隔）</label>
@@ -683,22 +667,6 @@ export function ResearchQuestionPage({
                   className="w-full bg-bp-base border border-bp-border rounded-lg px-2 py-1.5 text-sm text-bp-text"
                 />
               </div>
-            </div>
-            <div className="pt-2 border-t border-bp-border/80">
-              <label className="flex items-center gap-2 text-sm text-bp-text cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.autoLiteratureDiscovery !== 'false'}
-                  onChange={(e) =>
-                    updateField('autoLiteratureDiscovery', e.target.checked ? 'true' : 'false')
-                  }
-                  className="rounded border-bp-border bg-bp-base text-bp-cyan focus:ring-bp-cyan/50"
-                />
-                文献不足时自动检索 arXiv / OpenAlex 并导入
-              </label>
-              <p className="text-xs text-bp-muted mt-1 ml-6">
-                项目文献少于 3 篇时触发；关闭后仅使用已上传的 PDF 与 arXiv 文献。
-              </p>
             </div>
           </div>
 

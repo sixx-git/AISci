@@ -14,7 +14,7 @@
 ### 核心流程
 
 ```
-研究问题 → 文献挖掘 → 多源数据采集 → 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
+研究问题 → 文献挖掘 → **领域数据集发现** → 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
                               ↑___________________________________________________________|
                                     科研闭环（Discovery 迭代 / HITL / CQS）
 ```
@@ -324,7 +324,7 @@ POST /api/v1/pipeline/run
 
 阶段顺序：`problem_understanding` → `literature_mining` → `data_acquisition` → `knowledge_gap` → `hypothesis_generation` → `hypothesis_review` → `experiment_design` → `small_validation` → `report_generation`
 
-9 个阶段顺序执行（含 `data_acquisition` 多源数据采集），每个阶段记录：
+9 个阶段顺序执行；其中 `data_acquisition` **默认仅检索与问题相关的公开领域数据集**（HF/Zenodo 等），完整 PDF 抽取/合并需配置 `data_acquisition.mode: "full"` 或在 Data Finder 分步操作。每个阶段记录：
 
 ```
   StageExecution
@@ -453,7 +453,7 @@ Pipeline 9 阶段：问题理解→文献→数据采集→知识缺口→假设
 | [QUICKSTART.md](./QUICKSTART.md) | 5 分钟快速入门 |
 | [backend/README.md](./backend/README.md) | 后端架构、API、测试 |
 | [backend/DATABASE.md](./backend/DATABASE.md) | 数据库表结构与闭环 metadata |
-| [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md) | Data Finder 多源数据获取与 Release Gate |
+| [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md) | 领域数据集发现（默认）与完整数据整合（可选） |
 | [backend/prompts/README.md](./backend/prompts/README.md) | Prompt 模板与范式预设索引 |
 | [backend/tests/README.md](./backend/tests/README.md) | pytest 与 batch 回归 |
 | [frontend/README.md](./frontend/README.md) | 前端组件与页面 |

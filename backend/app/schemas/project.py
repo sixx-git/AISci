@@ -47,20 +47,15 @@ class ScienceIterationConfigSchema(BaseModel):
 
 
 class DataAcquisitionConfig(BaseModel):
-    """Gap 闭环与补搜阈值（写入 project.config.data_acquisition）。"""
+    """数据采集阶段配置（写入 project.config.data_acquisition）。"""
+    mode: Optional[str] = Field(
+        None,
+        description="dataset_discovery（默认，仅检索领域数据集）| full（论文抽取+合并+Gap）",
+    )
     coverage_gap_threshold: Optional[float] = Field(None, ge=0, le=100)
     data_spec_gap_threshold: Optional[float] = Field(None, ge=0, le=100)
     max_gap_rounds: Optional[int] = Field(None, ge=1, le=4)
     enable_gap_search: Optional[bool] = None
-    auto_literature_discovery: Optional[bool] = Field(
-        None, description="是否自动检索并导入 arXiv/OpenAlex 文献",
-    )
-    auto_literature_min_docs: Optional[int] = Field(
-        None, ge=0, le=20, description="低于该文献数时触发自动发现（默认 3）",
-    )
-    auto_literature_max_papers: Optional[int] = Field(
-        None, ge=1, le=10, description="单次自动文献导入上限",
-    )
 
 
 class ProjectCreate(BaseModel):
