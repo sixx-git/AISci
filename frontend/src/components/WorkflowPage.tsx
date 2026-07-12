@@ -585,15 +585,6 @@ export function WorkflowPage({
   const autoResumeHitlGate = useCallback(async (runId: string) => {
     if (!projectId) return false;
     try {
-      const detailRes = await pipelineService.getRunDetail(runId);
-      const meta = detailRes.data?.extra_metadata as Record<string, unknown> | undefined;
-      const duGate = meta?.data_upload_gate as Record<string, unknown> | undefined;
-      if (duGate?.paused) {
-        setRunState('idle');
-        setStatusMessage('数据采集已完成，请前往「数据集 → 所需数据集」上传至少 1 个文件后继续');
-        return false;
-      }
-
       const res = await humanLoopService.resumeHitlGate({
         run_id: runId,
         project_id: projectId,

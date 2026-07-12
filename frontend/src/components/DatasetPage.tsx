@@ -113,7 +113,6 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
     'datasets' | 'required-datasets' | 'data-finder' | 'multimodal' | 'catalog'
   >('datasets');
   const [searchParams] = useSearchParams();
-  const quickReportRunId = searchParams.get('run_id');
 
   useEffect(() => {
     const sub = searchParams.get('subtab');
@@ -282,11 +281,7 @@ export function DatasetPage({ projectId, projectMode, researchQuestion = '' }: D
       ) : pageTab === 'multimodal' ? (
         <MultimodalEvidencePanel projectId={projectId} researchQuestion={researchQuestion} />
       ) : pageTab === 'required-datasets' ? (
-        <RequiredDatasetUploadPanel
-          projectId={projectId}
-          runId={quickReportRunId}
-          autoResumeOnUpload={Boolean(quickReportRunId)}
-        />
+        <RequiredDatasetUploadPanel projectId={projectId} />
       ) : pageTab === 'data-finder' ? (
         <DataFinderPanel
           projectId={projectId}

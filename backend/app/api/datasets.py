@@ -78,21 +78,12 @@ async def upload_dataset(
             get_multimodal_service(db).sync_from_dataset(dataset, rq)
 
         pipeline_resume = None
-        try:
-            from app.services.pipeline_service import try_resume_after_dataset_upload
-            pipeline_resume = try_resume_after_dataset_upload(db, project_id)
-        except Exception as resume_err:
-            logger.warning("数据集上传后续跑检查失败: %s", resume_err)
-
-        msg = "上传成功，已完成初步分析"
-        if pipeline_resume:
-            msg += "，Pipeline 已自动继续"
 
         return {
             "code": 200,
             "data": service.to_response(dataset),
             "pipeline_resume": pipeline_resume,
-            "message": msg,
+            "message": "上传成功，已完成初步分析",
         }
     except Exception as e:
         logger.error(f"创建数据集记录失败: {e}")

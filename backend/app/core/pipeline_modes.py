@@ -101,11 +101,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         max_gap_rounds = max(1, min(int(max_gap_rounds), 4))
     except (TypeError, ValueError):
         max_gap_rounds = DEFAULT_MAX_GAP_ROUNDS
-    enable_quick_report = bool(opts.get("enable_quick_report"))
-    if enable_quick_report:
-        mode = PipelineMode.DISCOVERY.value
-        enable_hitl_gate = False
-        teaching_auto = False
     enable_pro_con = opts.get("enable_pro_con_adversarial", True)
     adversarial_mode = opts.get("adversarial_mode", "single_group")
     if adversarial_mode not in VALID_ADVERSARIAL_MODES:
@@ -144,7 +139,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "coverage_gap_threshold": coverage_threshold,
         "data_spec_gap_threshold": data_spec_threshold,
         "max_gap_rounds": max_gap_rounds,
-        "enable_quick_report": enable_quick_report,
         "enable_pro_con_adversarial": bool(enable_pro_con),
         "adversarial_mode": adversarial_mode,
         "con_challenge_max_rounds": con_max_rounds,

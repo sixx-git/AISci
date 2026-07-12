@@ -43,7 +43,7 @@ def test_enrich_chemistry_data_spec():
     assert get_search_seed("chemistry") in spec["external_search_seed"]
 
 
-def test_merge_domain_hints_for_quick_report():
+def test_merge_domain_hints_into_config():
     hints = merge_domain_hints_into_config(
         {"data_need_note": "领域：生态学。气候/遥感、物种与农业生态系统监测数据。"},
     )

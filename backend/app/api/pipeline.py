@@ -26,12 +26,6 @@ from app.schemas.pipeline import (
     PipelineStage,
     LoopDryRunRequest,
 )
-from app.schemas.project import (
-    QuickReportRequest,
-    QuickReportResponse,
-    QuickReportResumeRequest,
-    QuickReportStatusResponse,
-)
 from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus as DB_PipelineStatus, PipelineStage as DB_PipelineStage
 from app.services.pipeline_service import get_pipeline_service, PipelineService
 
@@ -612,65 +606,6 @@ async def get_run_debug(
             "hint": hint,
         }
     )
-
-
-@router.post("/quick-report", response_model=ResponseModel[QuickReportResponse])
-async def start_quick_report(body: QuickReportRequest, db: Session = Depends(get_db)):
-    """一键生成报告：创建项目并自动跑 Discovery 全流程（仅数据上传时暂停）。"""
-    from app.services.quick_report_service import get_quick_report_service
-
-    try:
-        result = get_quick_report_service(db).start(body)
-        run_id = result["run_id"]
-
-        thread = threading.Thread(
-            target=_execute_pipeline_background,
-            args=(run_id,),
-            daemon=True,
-        )
-        thread.start()
-
-        return ResponseModel(
-            code=200,
-            message="一键报告已启动",
-            data=QuickReportResponse(**result),
-        )
-    except Exception as e:
-        logger.exception("一键报告启动失败")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/quick-report/status/{run_id}", response_model=ResponseModel[QuickReportStatusResponse])
-async def get_quick_report_status(run_id: str, db: Session = Depends(get_db)):
-    from app.services.quick_report_service import get_quick_report_service
-
-    try:
-        data = get_quick_report_service(db).get_status(run_id)
-        return ResponseModel(code=200, message="获取成功", data=QuickReportStatusResponse(**data))
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post("/quick-report/resume", response_model=ResponseModel[dict])
-async def resume_quick_report(body: QuickReportResumeRequest, db: Session = Depends(get_db)):
-    """上传外部数据集后继续一键报告流程。"""
-    try:
-        svc = get_pipeline_service(db)
-        result = svc.resume_after_data_upload(body.run_id, force=body.force)
-
-        def _bg():
-            bg_db = SessionLocal()
-            try:
-                get_pipeline_service(bg_db).execute_pipeline_run(body.run_id)
-            except Exception as exc:
-                logger.exception("一键报告续跑失败: %s", exc)
-            finally:
-                bg_db.close()
-
-        threading.Thread(target=_bg, daemon=True).start()
-        return ResponseModel(code=200, message="已继续生成报告", data=result)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/loop-dry-run")

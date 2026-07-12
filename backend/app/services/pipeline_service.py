@@ -41,7 +41,7 @@ from app.core.pipeline_modes import (
     ENSEMBLE_ACCEPT_SCORE,
     HITL_GATE_STAGE_LABELS,
 )
-from app.core.pipeline_exceptions import HitlGatePause, DataUploadPause, SingleStageRerunComplete, LiteratureNotFoundError
+from app.core.pipeline_exceptions import HitlGatePause, SingleStageRerunComplete, LiteratureNotFoundError
 from app.core.quality_scoring import enrich_quality_trend_entry
 from app.services.loops.closed_loop_helpers import (
     build_data_gap_loop_payload,
@@ -384,12 +384,7 @@ class PipelineService:
             self.db_stage_executions[s.stage_order] = s
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        du_gate_early = meta.get("data_upload_gate") or {}
-        data_upload_continue = bool(
-            meta.get("pipeline_checkpoint")
-            and (du_gate_early.get("resumed") or du_gate_early.get("continued_at"))
-        )
-        if meta.get("rerun_from_stage") and not data_upload_continue:
+        if meta.get("rerun_from_stage"):
             self._start_idx = STAGE_KEY_ORDER.index(meta["rerun_from_stage"])
             parent_id = meta.get("parent_run_id")
             parent = (
@@ -421,22 +416,6 @@ class PipelineService:
             except Exception:
                 pass
 
-        du_gate = meta.get("data_upload_gate") or {}
-        cp = meta.get("pipeline_checkpoint")
-        if cp and (
-            du_gate.get("resumed")
-            or (not du_gate.get("paused") and du_gate.get("continued_at"))
-        ):
-            self._checkpoint_resume = dict(cp)
-            du_gate["resumed"] = False
-            du_gate["paused"] = False
-            meta["data_upload_gate"] = du_gate
-            self._persist_extra_metadata(meta)
-            try:
-                self.db.commit()
-            except Exception:
-                pass
-
         set_prompt_project_id(project_id)
         self._run_pipeline_stages(research_question, project_id)
 
@@ -462,16 +441,6 @@ class PipelineService:
         except (TypeError, ValueError):
             return 10
 
-    def _is_quick_report_run(self) -> bool:
-        if self._run_options.get("enable_quick_report"):
-            return True
-        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        if meta.get("quick_report"):
-            return True
-        input_data = self.db_pipeline_run.input_data if isinstance(self.db_pipeline_run.input_data, dict) else {}
-        opts = input_data.get("options") if isinstance(input_data.get("options"), dict) else {}
-        return bool(opts.get("enable_quick_report"))
-
     def _persist_extra_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
         """合并写入 extra_metadata（SQLite JSON 列需 flag_modified）。"""
         merged = dict(self.db_pipeline_run.extra_metadata or {})
@@ -479,26 +448,6 @@ class PipelineService:
         self.db_pipeline_run.extra_metadata = merged
         flag_modified(self.db_pipeline_run, "extra_metadata")
         return merged
-
-    def _rebuild_checkpoint_from_stages(self) -> Dict[str, Any]:
-        """从已完成阶段 output 重建 checkpoint（元数据丢失时的兜底）。"""
-        results: Dict[str, Any] = {}
-        if not self.db_pipeline_run:
-            return {"results": results, "resume_phase": "after_data_acquisition"}
-        stages = (
-            self.db.query(DB_PipelineStageExecution)
-            .filter(DB_PipelineStageExecution.pipeline_run_id == self.db_pipeline_run.id)
-            .order_by(DB_PipelineStageExecution.stage_order)
-            .all()
-        )
-        key_by_stage = {d["db_stage_enum"]: d["key"] for d in STAGE_DEFS}
-        for s in stages:
-            if s.status != DB_PipelineStatus.COMPLETED or not s.output_data:
-                continue
-            key = key_by_stage.get(s.stage)
-            if key:
-                results[key] = s.output_data
-        return {"results": self._checkpoint_safe_results(results), "resume_phase": "after_data_acquisition"}
 
     def _exec_ideation_novelty(
         self,
@@ -1623,8 +1572,6 @@ class PipelineService:
             if start_idx <= 2:
                 self._run_stage(stages, 2, results, research_question, project_id,
                     lambda: self._exec_data_acquisition(project_id, research_question, results, project_mode))
-
-                self._maybe_pause_for_data_upload(project_id, results)
             
             # ── 阶段 4: KnowledgeGapAgent ──
             if start_idx <= 3:
@@ -1890,35 +1837,6 @@ class PipelineService:
                 failed_stage=None,
             )
 
-        except DataUploadPause as pause:
-            pipeline_end = datetime.now(CHINA_TZ)
-            total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
-            logger.info(
-                f"[Pipeline] 数据上传暂停 run_id={self.run_id} pending={pause.pending_count}"
-            )
-            meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-            return PipelineRunResult(
-                pipeline_id=self.run_id,
-                project_id=project_id,
-                research_question=research_question,
-                status=PipelineStatus.HUMAN_REVIEW_REQUIRED,
-                stages=stages,
-                total_duration=total_duration_ms / 1000.0,
-                problem_understanding=results.get('problem_understanding'),
-                literature_mining=results.get('literature_mining'),
-                knowledge_gap=results.get('knowledge_gap'),
-                hypothesis_generation=results.get('hypothesis_generation'),
-                hypothesis_review=results.get('hypothesis_review'),
-                experiment_design=results.get('experiment_design'),
-                small_validation=results.get('small_validation'),
-                report_generation=results.get('report_generation'),
-                run_id=self.run_id,
-                extra_metadata=meta,
-                created_at=pipeline_start,
-                completed_at=pipeline_end,
-                failed_stage=None,
-            )
-            
         except Exception as e:
             pipeline_end = datetime.now(CHINA_TZ)
             total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
@@ -1956,193 +1874,6 @@ class PipelineService:
             )
     
     # ────────────── 阶段执行 ──────────────
-
-    def _pending_manual_upload_count(self, project_id: str) -> int:
-        from app.services.data_finder_service import get_data_finder_service
-        from app.services.external_candidate_service import (
-            STATUS_PENDING,
-            list_manual_candidates,
-        )
-
-        try:
-            df = get_data_finder_service(self.db).load_results(project_id) or {}
-            manual = list_manual_candidates(df.get("external_candidates"))
-            return sum(1 for c in manual if c.get("user_upload_status") == STATUS_PENDING)
-        except Exception:
-            return 0
-
-    def _uploaded_manual_count(self, project_id: str) -> int:
-        from app.services.data_finder_service import get_data_finder_service
-        from app.services.external_candidate_service import (
-            STATUS_MERGED,
-            list_manual_candidates,
-        )
-
-        try:
-            df = get_data_finder_service(self.db).load_results(project_id) or {}
-            manual = list_manual_candidates(df.get("external_candidates"))
-            return sum(1 for c in manual if c.get("user_upload_status") == STATUS_MERGED)
-        except Exception:
-            return 0
-
-    def _refresh_data_acquisition_results(
-        self,
-        project_id: str,
-        results: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        from app.services.data_finder_service import get_data_finder_service
-
-        from app.services.data_finder_slim import slim_data_acquisition_output, slim_data_finder_payload
-
-        final = get_data_finder_service(self.db).load_results(project_id) or {}
-        slim_final = slim_data_finder_payload(final)
-        da = final.get("data_acquisition") or {}
-        output = {
-            "data_acquisition": da,
-            "search": slim_final,
-            "extract": slim_final,
-            "paper_link_extractions": final.get("paper_extractions", [])[:20],
-            "refinement_queries": results.get("data_acquisition", {}).get("refinement_queries", [])
-            if isinstance(results.get("data_acquisition"), dict)
-            else [],
-            "gap_enrichment": final.get("gap_enrichment") or {},
-        }
-        results["data_acquisition"] = slim_data_acquisition_output(output)
-        results["data_finder"] = results["data_acquisition"]
-        return results
-
-    def resume_after_data_upload(self, run_id: str, *, force: bool = False) -> Dict[str, Any]:
-        """一键报告：用户上传外部数据后继续 Pipeline。"""
-        self.db_pipeline_run = self.db.query(DB_PipelineRun).filter(
-            DB_PipelineRun.run_id == run_id
-        ).first()
-        if not self.db_pipeline_run:
-            raise ValueError(f"Pipeline run 未找到: {run_id}")
-
-        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        gate = dict(meta.get("data_upload_gate") or {})
-        status_val = self.db_pipeline_run.status
-        project_id = self.db_pipeline_run.project_id or ""
-        uploaded = self._uploaded_manual_count(project_id)
-        if not gate.get("paused"):
-            if (
-                self._is_quick_report_run()
-                and status_val == DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
-            ):
-                gate.setdefault("paused", True)
-                gate.setdefault("resume_phase", "after_data_acquisition")
-                if not meta.get("pipeline_checkpoint"):
-                    meta["pipeline_checkpoint"] = self._rebuild_checkpoint_from_stages()
-                meta["data_upload_gate"] = gate
-                self._persist_extra_metadata(meta)
-                self.db.commit()
-            elif (
-                status_val == DB_PipelineStatus.COMPLETED
-                and uploaded >= 1
-            ):
-                # 报告已生成但用户事后上传了外部数据：从数据采集后继续重跑下游
-                if not meta.get("pipeline_checkpoint"):
-                    meta["pipeline_checkpoint"] = self._rebuild_checkpoint_from_stages()
-                gate.setdefault("paused", True)
-                gate.setdefault("resume_phase", "after_data_acquisition")
-                if meta.get("rerun_from_stage"):
-                    meta["prior_rerun_from_stage"] = meta.get("rerun_from_stage")
-                    meta.pop("rerun_from_stage", None)
-                    meta.pop("rerun_mode", None)
-                meta["data_upload_gate"] = gate
-                self._persist_extra_metadata(meta)
-                self.db.commit()
-            else:
-                raise ValueError("Pipeline 未处于数据上传等待状态")
-
-        pending = self._pending_manual_upload_count(project_id)
-        uploaded = self._uploaded_manual_count(project_id)
-        from app.services.dataset_service import DatasetService
-
-        project_datasets = DatasetService(self.db).get_project_datasets(project_id)
-        if not force:
-            if uploaded < 1 and not project_datasets:
-                raise ValueError("请至少上传一个数据集后再继续生成报告")
-
-        checkpoint = dict(meta.get("pipeline_checkpoint") or {})
-        results = dict(checkpoint.get("results") or {})
-
-        from app.services.data_finder_service import get_data_finder_service
-
-        df_svc = get_data_finder_service(self.db)
-        try:
-            if df_svc.load_results(project_id):
-                df_svc.run_align_schema_sync(project_id)
-                df_svc.run_merge_sync(project_id)
-        except Exception as align_err:
-            logger.warning("[QuickReport] align/merge 续跑失败: %s", align_err)
-
-        results = self._refresh_data_acquisition_results(project_id, results)
-
-        gate["paused"] = False
-        gate["resumed"] = True
-        gate["continued_at"] = datetime.now(CHINA_TZ).isoformat()
-        gate["uploaded_count"] = uploaded
-        if force and pending > 0:
-            gate["skipped_pending"] = pending
-        meta["data_upload_gate"] = gate
-        meta["pipeline_checkpoint"] = {
-            "results": self._checkpoint_safe_results(results),
-            "resume_phase": "after_data_acquisition",
-        }
-        self.db_pipeline_run.status = DB_PipelineStatus.RUNNING
-        self._persist_extra_metadata(meta)
-        self.db.commit()
-
-        return {
-            "action": "continue",
-            "status": "running",
-            "run_id": run_id,
-            "project_id": project_id,
-        }
-
-    def _maybe_pause_for_data_upload(self, project_id: str, results: Dict[str, Any]) -> None:
-        if not self._run_options.get("enable_quick_report"):
-            return
-        pending = self._pending_manual_upload_count(project_id)
-        from app.services.dataset_service import DatasetService
-
-        has_project_data = bool(DatasetService(self.db).get_project_datasets(project_id))
-        # 无相关外部数据集待下载时，不阻断理论/综述类报告流程
-        if pending <= 0:
-            return
-
-        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        gate = dict(meta.get("data_upload_gate") or {})
-        gate.update({
-            "paused": True,
-            "pending_count": pending,
-            "paused_at": datetime.now(CHINA_TZ).isoformat(),
-            "resume_phase": "after_data_acquisition",
-            "require_user_upload": pending <= 0,
-        })
-        checkpoint = {
-            "results": self._checkpoint_safe_results(results),
-            "resume_phase": "after_data_acquisition",
-        }
-        self._persist_extra_metadata({
-            "data_upload_gate": gate,
-            "pipeline_checkpoint": checkpoint,
-            "quick_report": True,
-        })
-        self.db_pipeline_run.status = DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
-        self.db_pipeline_run.current_stage = "data_acquisition"
-        self.db.commit()
-        summary = (
-            f"一键报告：{pending} 个外部数据集需下载后上传"
-            if pending > 0
-            else "一键报告：请上传研究数据后继续生成报告"
-        )
-        self._record_closed_loop_event(
-            "data_upload_pause",
-            {"pending_count": pending, "summary": summary},
-        )
-        raise DataUploadPause(pending)
 
     def _should_hitl_gate(self, stage_key: str) -> bool:
         if not self._run_options.get("enable_hitl_gate"):
@@ -2494,8 +2225,7 @@ class PipelineService:
             logger.warning(f"多模态 evidence 同步失败: {mm_err}")
         lm = self._enrich_literature_mining(results.get("literature_mining") or {})
         results["literature_mining"] = lm
-        allow_empty = bool(self._run_options.get("enable_quick_report"))
-        self._validate_literature_results(lm, allow_empty=allow_empty)
+        self._validate_literature_results(lm)
         return lm
 
     @staticmethod
@@ -2504,7 +2234,7 @@ class PipelineService:
         *,
         allow_empty: bool = False,
     ) -> None:
-        """未检索到可用文献时抛出 LiteratureNotFoundError（一键报告 allow_empty 时仅警告）。"""
+        """未检索到可用文献时抛出 LiteratureNotFoundError。"""
         if not isinstance(literature_mining, dict):
             raise LiteratureNotFoundError("文献挖掘结果无效")
 
@@ -2604,8 +2334,6 @@ class PipelineService:
             else {}
         )
         acquisition_mode = acq_cfg.get("mode") or "dataset_discovery"
-        if self._run_options.get("enable_quick_report"):
-            acquisition_mode = "dataset_discovery"
         acquisition_mode = self._run_options.get("data_acquisition_mode", acquisition_mode)
         is_full_mode = acquisition_mode == "full"
 
@@ -3909,62 +3637,6 @@ class PipelineService:
         except Exception as e:
             logger.warning(f"QuestionAlignmentSkill 异常: {e}")
             return {"alignments": [], "all_off_topic": False, "off_topic_summary": ""}
-
-
-def try_resume_after_dataset_upload(db: Session, project_id: str) -> Optional[Dict[str, Any]]:
-    """用户上传数据集后，若 Pipeline 处于数据上传等待态则自动续跑。"""
-    import threading
-
-    from app.core.database import SessionLocal
-    from app.models.pipeline import PipelineRun
-
-    run = (
-        db.query(PipelineRun)
-        .filter(PipelineRun.project_id == project_id)
-        .order_by(PipelineRun.created_at.desc())
-        .first()
-    )
-    if not run:
-        return None
-
-    meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
-    gate = meta.get("data_upload_gate") or {}
-    status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
-    is_quick = bool(meta.get("quick_report"))
-    input_opts = (run.input_data or {}).get("options") if isinstance(run.input_data, dict) else {}
-    if isinstance(input_opts, dict) and input_opts.get("enable_quick_report"):
-        is_quick = True
-
-    awaiting = bool(gate.get("paused")) or (
-        status_val.lower() == "human_review_required" and (is_quick or bool(gate))
-    )
-    if not awaiting:
-        return None
-
-    from app.services.dataset_service import DatasetService
-
-    if not DatasetService(db).get_project_datasets(project_id):
-        return None
-
-    svc = get_pipeline_service(db)
-    try:
-        result = svc.resume_after_data_upload(run.run_id)
-    except ValueError:
-        return None
-
-    run_id = run.run_id
-
-    def _bg() -> None:
-        bg_db = SessionLocal()
-        try:
-            get_pipeline_service(bg_db).execute_pipeline_run(run_id)
-        except Exception as exc:
-            logger.exception("[Pipeline] 数据集上传后续跑失败 run_id=%s: %s", run_id, exc)
-        finally:
-            bg_db.close()
-
-    threading.Thread(target=_bg, daemon=True).start()
-    return result
 
 
 def _find_failed_stage(stages: List[PipelineStageLog]) -> Optional[PipelineStageLog]:

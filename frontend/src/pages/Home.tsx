@@ -209,11 +209,6 @@ export function Home() {
         subtitle="搜索、浏览和管理您的 AI 科研项目"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link to="/quick-report">
-              <Button variant="secondary" icon={<FlaskConical className="w-4 h-4" />}>
-                一键生成报告
-              </Button>
-            </Link>
             <Link to="/projects/new">
               <Button icon={<Plus className="w-4 h-4" />}>创建新项目</Button>
             </Link>

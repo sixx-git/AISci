@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Database, ExternalLink, Upload, Loader2, CheckCircle2, AlertCircle, Clock, ArrowRight,
+  ExternalLink, Upload, Loader2, CheckCircle2, AlertCircle, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import dataFinderService, { type ExternalCandidateItem } from '@/services/dataFinderService';
-import { quickReportService } from '@/services/quickReportService';
 
 interface RequiredDatasetUploadPanelProps {
   projectId: string;
-  runId?: string | null;
-  /** 上传成功后自动续跑 Pipeline */
-  autoResumeOnUpload?: boolean;
-  onResumed?: () => void;
   onCandidatesChange?: (candidates: ExternalCandidateItem[]) => void;
 }
 
@@ -32,15 +27,11 @@ function needsManualUpload(c: ExternalCandidateItem): boolean {
 
 export function RequiredDatasetUploadPanel({
   projectId,
-  runId,
-  autoResumeOnUpload = false,
-  onResumed,
   onCandidatesChange,
 }: RequiredDatasetUploadPanelProps) {
   const [candidates, setCandidates] = useState<ExternalCandidateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [resuming, setResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedCount, setUploadedCount] = useState(0);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -72,27 +63,6 @@ export function RequiredDatasetUploadPanel({
     loadCandidates();
   }, [loadCandidates]);
 
-  const handleResume = useCallback(async () => {
-    if (!runId) {
-      setError('缺少运行 ID，无法继续 Pipeline');
-      return;
-    }
-    setResuming(true);
-    setError(null);
-    try {
-      const res = await quickReportService.resume(runId, false);
-      if (res.code === 200) {
-        onResumed?.();
-      } else {
-        setError(res.message || '继续失败');
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '继续失败');
-    } finally {
-      setResuming(false);
-    }
-  }, [runId, onResumed]);
-
   const handleUpload = async (candidateId: string, file: File) => {
     setBusyId(candidateId);
     setError(null);
@@ -100,12 +70,6 @@ export function RequiredDatasetUploadPanel({
       const res = await dataFinderService.uploadExternalCandidate(projectId, candidateId, file);
       if (res.code === 200) {
         await loadCandidates();
-        if (autoResumeOnUpload && runId) {
-          const st = await quickReportService.getStatus(runId);
-          if (st.code === 200 && st.data?.can_resume) {
-            await handleResume();
-          }
-        }
       } else {
         setError(res.message || '上传失败');
       }
@@ -128,7 +92,7 @@ export function RequiredDatasetUploadPanel({
   if (!candidates.length) {
     return (
       <Card className="p-6 text-sm text-bp-muted">
-        当前研究领域未匹配到需手动下载的外部数据集。理论/综述类报告可直接继续生成，无需上传数据。
+        当前研究领域未匹配到需手动下载的外部数据集。
       </Card>
     );
   }
@@ -142,8 +106,7 @@ export function RequiredDatasetUploadPanel({
       className="border-bp-yellow/20"
     >
       <p className="text-sm text-bp-muted mb-4">
-        系统根据<strong className="text-bp-text">研究领域</strong>推荐以下开放数据源。请下载后上传 CSV/TSV/JSON/FITS 等文件，化学/结构类研究可上传 SDF/MOL/SMILES，天文光谱立方可上传 .fits，或将多文件目录打包为 ZIP；上传至少
-        <strong className="text-bp-text"> 1 个</strong> 数据集后可继续假设生成与报告流程。
+        系统根据<strong className="text-bp-text">研究领域</strong>推荐以下开放数据源。请下载后上传 CSV/TSV/JSON/FITS 等文件，化学/结构类研究可上传 SDF/MOL/SMILES，天文光谱立方可上传 .fits，或将多文件目录打包为 ZIP。
       </p>
 
       {error && (
@@ -244,26 +207,6 @@ export function RequiredDatasetUploadPanel({
           </tbody>
         </table>
       </div>
-
-      {runId && (
-        <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-bp-border">
-          <Button
-            icon={resuming ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-            disabled={resuming || uploadedCount < 1}
-            onClick={() => handleResume()}
-          >
-            {resuming ? '继续中…' : '继续生成报告'}
-          </Button>
-          <span className="text-xs text-bp-muted flex items-center gap-1">
-            <Database className="w-3.5 h-3.5" />
-            {uploadedCount < 1
-              ? '请至少上传 1 个数据集后继续'
-              : autoResumeOnUpload
-                ? '上传成功后将自动继续后续流程'
-                : '已满足最低上传要求，可手动继续'}
-          </span>
-        </div>
-      )}
     </Card>
   );
 }

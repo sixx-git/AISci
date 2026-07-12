@@ -9,14 +9,6 @@ class HitlGatePause(Exception):
         super().__init__(f"HITL gate paused at {stage_key}")
 
 
-class DataUploadPause(Exception):
-    """一键报告模式 — 外部数据需用户下载上传后暂停。"""
-
-    def __init__(self, pending_count: int = 0):
-        self.pending_count = pending_count
-        super().__init__(f"Data upload required ({pending_count} pending)")
-
-
 class SingleStageRerunComplete(Exception):
     """仅重跑单个阶段完成 — 保留上游与下游（父 run）结果。"""
 

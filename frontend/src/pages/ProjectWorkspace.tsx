@@ -17,8 +17,6 @@ import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
 import { DatasetPage } from '@/components/DatasetPage';
-import { DataUploadGateFloating } from '@/components/DataUploadGateFloating';
-import { useDataUploadGate } from '@/hooks/useDataUploadGate';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
 import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
 import { PromptManagementPage } from '@/components/PromptManagementPage';
@@ -376,15 +374,6 @@ export function ProjectWorkspace() {
     };
   }, [id, latestRun?.run_id, isRunActive, revalidateKey]);
 
-  const dataUploadGate = useDataUploadGate(
-    loading ? undefined : projectId,
-    latestRunId ?? pipelineRuns[0]?.run_id ?? null,
-  );
-  const [dataGateDismissed, setDataGateDismissed] = useState(false);
-
-  const onRequiredDatasetsTab =
-    activeTab === 'datasets' && searchParams.get('subtab') === 'required-datasets';
-
   // --- 项目数据加载 ---
   useEffect(() => {
     let cancelled = false;
@@ -639,21 +628,6 @@ export function ProjectWorkspace() {
       <div className="animate-fade-in">
         {renderTabContent()}
       </div>
-
-      {dataUploadGate.awaiting && !dataGateDismissed && !onRequiredDatasetsTab && dataUploadGate.runId && (
-        <DataUploadGateFloating
-          pendingCount={dataUploadGate.pendingCount}
-          uploadedCount={dataUploadGate.uploadedCount}
-          onGoToDatasets={() => {
-            setDataGateDismissed(true);
-            navigate(buildProjectTabUrl(id, 'datasets', {
-              subtab: 'required-datasets',
-              run_id: dataUploadGate.runId ?? undefined,
-            }));
-          }}
-          onDismiss={() => setDataGateDismissed(true)}
-        />
-      )}
     </div>
   );
 }
