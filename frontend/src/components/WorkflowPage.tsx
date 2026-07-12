@@ -6,13 +6,11 @@ import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { ExecutionTierBadge } from '@/components/ExecutionTierBadge';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
-import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
-import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
-import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
+import { IterationHistoryPanel } from '@/components/IterationHistoryPanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
-import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, type LoopConfigState } from '@/components/LoopConfigPanel';
+import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, ITERATION_MODE_HINTS, type LoopConfigState } from '@/components/LoopConfigPanel';
 import { Button } from '@/components/Button';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
@@ -24,9 +22,6 @@ import type {
   PipelineRunExtraMetadata,
   PipelineRunResult,
   PipelineStageLog,
-  DiscoveryLoopData,
-  TeachingAutoRefinementData,
-  QualityAcceptance,
 } from '@/types';
 
 interface WorkflowPageProps {
@@ -533,20 +528,6 @@ export function WorkflowPage({
     return null;
   }, [nodes]);
 
-  const discoveryLoopData = useMemo((): DiscoveryLoopData | null => {
-    const aux = runExtraMetadata?.auxiliary_results?.discovery_loop as DiscoveryLoopData | undefined;
-    return aux?.history?.length || aux?.version_snapshots?.length ? aux : null;
-  }, [runExtraMetadata]);
-
-  const teachingRefinementData = useMemo((): TeachingAutoRefinementData | null => {
-    const aux = runExtraMetadata?.auxiliary_results?.teaching_auto_refinement as TeachingAutoRefinementData | undefined;
-    return aux?.reran ? aux : null;
-  }, [runExtraMetadata]);
-
-  const qualityAcceptance = useMemo((): QualityAcceptance | null => {
-    return runExtraMetadata?.quality_acceptance ?? null;
-  }, [runExtraMetadata]);
-
   const validationExecutionMeta = useMemo(() => {
     const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
     if (!validationOut) return null;
@@ -571,16 +552,10 @@ export function WorkflowPage({
     };
   }, [nodes]);
 
-  const hasClosedLoopTimeline = Boolean(
-    runExtraMetadata?.closed_loop_events?.length
-    || runExtraMetadata?.quality_trend?.length
-    || runExtraMetadata?.closed_loop_decisions?.length,
-  );
-
-  const versionSnapshots = useMemo(
-    () => runExtraMetadata?.version_snapshots ?? [],
-    [runExtraMetadata],
-  );
+  const federatedPilot = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    return (validationOut?.federated_pilot as Record<string, unknown> | undefined) ?? null;
+  }, [nodes]);
 
   const autoResumeHitlGate = useCallback(async (runId: string) => {
     if (!projectId) return false;
@@ -1034,6 +1009,11 @@ export function WorkflowPage({
 
   // ========== 计算状态摘要 ==========
   const effectiveRunId = currentRunId ?? latestRunId;
+  const showIterationHistory = Boolean(
+    effectiveRunId
+    && selectedNodeId
+    && ['report', 'validation', 'hypothesis', 'evaluation'].includes(selectedNodeId),
+  );
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
 
@@ -1074,9 +1054,7 @@ export function WorkflowPage({
             disabled={runState !== 'idle'}
           />
           <p className="text-xs text-bp-muted mt-2">
-            {loopConfig.pipelineMode === 'discovery'
-              ? 'Discovery：未 Accept 时自动回退 ideation、刷新文献并重跑假设→实验→报告。'
-              : 'Teaching：全自动流水线；验证失败时可触发单轮自动精化。'}
+            {ITERATION_MODE_HINTS[loopConfig.iterationMode]}
           </p>
         </div>
       </div>
@@ -1272,13 +1250,12 @@ export function WorkflowPage({
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
-          {selectedNodeId === 'report' && hasClosedLoopTimeline && (
-            <CollapsiblePanel title="闭环质量趋势" defaultOpen={false}>
-              <ClosedLoopTimeline
-                events={runExtraMetadata?.closed_loop_events}
-                qualityTrend={runExtraMetadata?.quality_trend}
-                decisions={runExtraMetadata?.closed_loop_decisions}
+          {showIterationHistory && (
+            <CollapsiblePanel title="迭代历史" subtitle="里程碑 · 时间线 · 版本对比" defaultOpen>
+              <IterationHistoryPanel
                 runId={effectiveRunId}
+                extraMetadata={runExtraMetadata}
+                federatedPilot={federatedPilot}
               />
             </CollapsiblePanel>
           )}
@@ -1286,34 +1263,6 @@ export function WorkflowPage({
           {selectedNodeId === 'validation' && validationExecutionMeta && (
             <CollapsiblePanel title="执行层级" defaultOpen={false}>
               <ExecutionTierBadge {...validationExecutionMeta} />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'report' && qualityAcceptance && (
-            <CollapsiblePanel title="质量验收" defaultOpen={false}>
-              <DiscoveryLoopPanel qualityAcceptance={qualityAcceptance} sections={['quality']} />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'validation' && teachingRefinementData?.reran && (
-            <CollapsiblePanel title="验证失败后自动重试" defaultOpen={false}>
-              <DiscoveryLoopPanel teachingRefinement={teachingRefinementData} sections={['teaching']} />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'report' && discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
-            <CollapsiblePanel title="Discovery 迭代" defaultOpen={false}>
-              <DiscoveryLoopPanel
-                discoveryLoop={discoveryLoopData}
-                teachingRefinement={teachingRefinementData}
-                sections={['discovery', 'versions']}
-              />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'report' && versionSnapshots.length >= 2 && (
-            <CollapsiblePanel title="证据版本对比" defaultOpen={false}>
-              <EvidenceDiffPanel snapshots={versionSnapshots} />
             </CollapsiblePanel>
           )}
 

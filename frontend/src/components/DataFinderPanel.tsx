@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import {
   Search, FileSpreadsheet, Link2, Image, GitMerge, Download,
-  Loader2, AlertCircle, Database, CheckCircle2, Map, Workflow, RefreshCw,
+  Loader2, AlertCircle, Database, CheckCircle2, Map, Workflow,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -28,6 +28,8 @@ export function DataFinderPanel({
   const [error, setError] = useState<string | null>(null);
   const [hypothesis, setHypothesis] = useState('');
 
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const loadResults = useCallback(async () => {
     try {
       const res = await dataFinderService.getResults(projectId);
@@ -43,19 +45,25 @@ export function DataFinderPanel({
     loadResults();
   }, [loadResults]);
 
-  const runGapEnrich = async () => {
+  const runBuildLibrary = async () => {
     setLoading(true);
-    setAction('gap');
+    setAction('build-library');
     setError(null);
     try {
-      const res = await dataFinderService.gapEnrich(projectId);
-      if (res.code === 200 && res.data?.results) {
-        setResult(res.data.results);
+      const res = await dataFinderService.buildLibrary({
+        project_id: projectId,
+        research_question: researchQuestion,
+        selected_hypothesis: hypothesis,
+        project_mode: projectMode,
+        auto_import: true,
+      });
+      if (res.code === 200 && res.data) {
+        setResult(res.data);
       } else {
-        setError(res.message || 'Gap 补搜失败');
+        setError(res.message || '论文建库失败');
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gap 补搜失败');
+      setError(e instanceof Error ? e.message : '论文建库失败');
     } finally {
       setLoading(false);
       setAction(null);
@@ -179,7 +187,7 @@ export function DataFinderPanel({
           多源科学数据查找与整合
         </h3>
         <p className="text-xs text-bp-muted mb-3">
-          从已导入 PDF、论文链接与开放数据平台查找数据，抽取表格并输出可下载 CSV（含 provenance）。
+          默认按研究问题检索领域公开数据集；论文抽表/建库为高级工具，不参与 Pipeline 自迭代。
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
           <input
@@ -194,23 +202,43 @@ export function DataFinderPanel({
           <Button variant="primary" size="sm" icon={<Workflow className="w-4 h-4" />} onClick={runAcquire} isLoading={loading && action === 'acquire'}>
             检索领域数据集
           </Button>
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-4 h-4" />} onClick={runGapEnrich} isLoading={loading && action === 'gap'} disabled={!result?.coverage_report?.gap_enrichment_recommended && !result?.coverage_report}>
-            Gap 补搜
-          </Button>
           <Button variant="secondary" size="sm" icon={<Search className="w-4 h-4" />} onClick={runSearch} isLoading={loading && action === 'search'}>
             查找数据源
           </Button>
-          <Button variant="secondary" size="sm" icon={<FileSpreadsheet className="w-4 h-4" />} onClick={runExtract} isLoading={loading && action === 'extract'}>
-            抽取 PDF 表格
-          </Button>
           {result?.merged?.merged_csv_path && (
-            <>
-              <Button variant="secondary" size="sm" icon={<Database className="w-4 h-4" />} onClick={handleImport} isLoading={loading && action === 'import'}>
-                加入项目数据集
-              </Button>
-            </>
+            <Button variant="secondary" size="sm" icon={<Database className="w-4 h-4" />} onClick={handleImport} isLoading={loading && action === 'import'}>
+              加入项目数据集
+            </Button>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="text-xs text-bp-cyan mt-3 hover:underline"
+        >
+          {showAdvanced ? '收起' : '展开'}高级：论文抽表建库（不参与 Pipeline）
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 pt-3 border-t border-bp-border/60 space-y-2">
+            <p className="text-xs text-bp-muted">
+              从已入库 PDF 抽取表格/图表、对齐合并为 merged.csv；耗时较长，供后续功能开发使用。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<GitMerge className="w-4 h-4" />}
+                onClick={runBuildLibrary}
+                isLoading={loading && action === 'build-library'}
+              >
+                一键论文建库
+              </Button>
+              <Button variant="secondary" size="sm" icon={<FileSpreadsheet className="w-4 h-4" />} onClick={runExtract} isLoading={loading && action === 'extract'}>
+                抽取 PDF 表格
+              </Button>
+            </div>
+          </div>
+        )}
         {error && (
           <p className="text-xs text-danger-400 mt-2 flex items-center gap-1">
             <AlertCircle className="w-3.5 h-3.5" /> {error}
@@ -273,7 +301,9 @@ export function DataFinderPanel({
               {result.data_acquisition.stats.total_duration_ms != null && (
                 <span> · 耗时 {result.data_acquisition.stats.total_duration_ms}ms</span>
               )}
-              {result.data_acquisition.stats.release_gate_passed != null && (
+              {result.data_acquisition.stats.release_gate_passed != null
+                && (result.data_acquisition.mode === 'paper_extraction_library'
+                  || result.data_acquisition.stats.acquisition_mode === 'paper_extraction_library') && (
                 <span className={result.data_acquisition.stats.release_gate_passed ? ' text-bp-green' : ' text-bp-yellow'}>
                   {' '}· Release Gate {result.data_acquisition.stats.release_gate_passed ? '通过' : '未通过'}
                 </span>
@@ -502,17 +532,9 @@ export function DataFinderPanel({
               已自动入库外部数据集 {result.coverage_report.external_import_succeeded} 个
             </p>
           )}
-          {(result.coverage_report.gap_enrichment_recommended ?? false) && (
+          {(result.coverage_report.gap_enrichment_recommended ?? false) && showAdvanced && (
             <p className="text-xs text-bp-yellow/90 mt-2">
-              建议执行 Gap 补搜（完备性 &lt; {result.coverage_report.threshold ?? 70}% 或 DataSpec &lt; {result.coverage_report.data_spec_threshold ?? 60}%）
-            </p>
-          )}
-          {result.gap_enrichment && !result.gap_enrichment.skipped && (
-            <p className="text-xs text-bp-green mt-2">
-              最近 Gap 补搜：{result.gap_enrichment.score_before ?? '—'}→{result.gap_enrichment.score_after ?? '—'} 分
-              {result.gap_enrichment.data_spec_score_after != null && (
-                <span> · DataSpec {result.gap_enrichment.data_spec_score_after}/100</span>
-              )}
+              高级建库后可考虑 Gap 补搜（完备性 &lt; {result.coverage_report.threshold ?? 70}%）
             </p>
           )}
           {result.entity_alignment && !result.entity_alignment.skipped && result.entity_alignment.match_rate != null && (

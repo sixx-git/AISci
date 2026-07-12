@@ -30,7 +30,15 @@ def test_simulate_loop_decisions_discovery():
     assert "summary" in result
 
 
-def test_simulate_loop_decisions_teaching():
+def test_simulate_loop_decisions_human_default():
     result = simulate_loop_decisions(run_options={"pipeline_mode": "teaching"})
     assert result["pipeline_mode"] == "teaching"
+    assert result["iteration_mode"] == "human"
+    assert result["teaching_config"]["enable_hitl_gate"] is True
+
+
+def test_simulate_loop_decisions_teaching_auto():
+    result = simulate_loop_decisions(run_options={"iteration_mode": "teaching_auto"})
+    assert result["iteration_mode"] == "teaching_auto"
     assert result["teaching_config"]["enable_hitl_gate"] is False
+    assert result["teaching_config"]["enable_teaching_auto_refinement"] is True

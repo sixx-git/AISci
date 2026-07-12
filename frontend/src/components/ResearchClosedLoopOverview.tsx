@@ -5,20 +5,13 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
-import { ClosedLoopTimeline } from '@/components/ClosedLoopTimeline';
-import { GapLoopHistoryPanel } from '@/components/GapLoopHistoryPanel';
-import { LoopDependencyGraph } from '@/components/LoopDependencyGraph';
-import { DiscoveryLoopPanel } from '@/components/DiscoveryLoopPanel';
-import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
-import { IterationRoundPanel } from '@/components/IterationRoundPanel';
-import { VersionComparePanel } from '@/components/VersionComparePanel';
+import { IterationHistoryPanel } from '@/components/IterationHistoryPanel';
 import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
 import { FeedbackHubPanel } from '@/components/FeedbackHubPanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { pipelineService } from '@/services/pipelineService';
-import scienceIterationService from '@/services/scienceIterationService';
 import hypothesisService, { type BackendHypothesis } from '@/services/hypothesisService';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { useNavigate } from 'react-router-dom';
@@ -29,8 +22,6 @@ import type {
   PipelineRunResult,
   PipelineRunSummary,
   TeachingAutoRefinementData,
-  QualityAcceptance,
-  ScienceIterationSession,
 } from '@/types';
 
 interface ResearchClosedLoopOverviewProps {
@@ -100,9 +91,6 @@ export function ResearchClosedLoopOverview({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flowView, setFlowView] = useState<'micro' | 'macro'>('micro');
-  const [iterationSession, setIterationSession] = useState<ScienceIterationSession | null>(null);
-  const [iterationLoading, setIterationLoading] = useState(false);
-  const [iterationError, setIterationError] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -161,35 +149,6 @@ export function ResearchClosedLoopOverview({
     return () => { cancelled = true; };
   }, [selectedRunId, revalidateKey]);
 
-  useEffect(() => {
-    if (!selectedRunId) {
-      setIterationSession(null);
-      return;
-    }
-    let cancelled = false;
-    setIterationLoading(true);
-    setIterationError(null);
-    scienceIterationService.getIterationSession(selectedRunId)
-      .then((res) => {
-        if (cancelled) return;
-        if (res.code === 200 && res.data) {
-          setIterationSession(res.data);
-        } else {
-          setIterationSession(null);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setIterationError(e instanceof Error ? e.message : '加载自迭代会话失败');
-          setIterationSession(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIterationLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [selectedRunId, revalidateKey]);
-
   const extra = runDetail?.extra_metadata as PipelineRunExtraMetadata | undefined;
 
   const discoveryLoopData = useMemo((): DiscoveryLoopData | null => {
@@ -202,25 +161,23 @@ export function ResearchClosedLoopOverview({
     return aux?.reran ? aux : null;
   }, [extra]);
 
-  const qualityAcceptance = useMemo((): QualityAcceptance | null => {
-    return extra?.quality_acceptance ?? null;
-  }, [extra]);
-
-  const versionSnapshots = useMemo(() => {
-    const fromSession = iterationSession?.version_snapshots;
-    if (fromSession && fromSession.length >= 2) return fromSession;
-    return extra?.version_snapshots ?? [];
-  }, [extra, iterationSession]);
-
-  const pipelineMode = (extra?.run_options?.pipeline_mode as string | undefined) || 'teaching';
-
-  const gapLoopFromStage = useMemo(() => {
-    const da = runDetail?.stages?.find((s) => s.stage === 'data_acquisition');
-    const out = da?.output_data as Record<string, unknown> | undefined;
-    const nested = out?.data_acquisition as Record<string, unknown> | undefined;
-    const details = nested?.step_details as Record<string, unknown> | undefined;
-    return details?.gap_loop as Array<Record<string, unknown>> | undefined;
+  const federatedPilot = useMemo(() => {
+    const sv = runDetail?.small_validation as Record<string, unknown> | undefined;
+    if (sv?.federated_pilot) return sv.federated_pilot as Record<string, unknown>;
+    const stage = runDetail?.stages?.find((s) => s.stage === 'small_validation');
+    const out = stage?.output_data as Record<string, unknown> | undefined;
+    return (out?.federated_pilot as Record<string, unknown> | undefined) ?? null;
   }, [runDetail]);
+
+  const iterationMode =
+    (extra?.run_options?.iteration_mode as string | undefined)
+    || (extra?.iteration_mode as string | undefined)
+    || 'human';
+  const iterationModeLabel: Record<string, string> = {
+    human: '人工主导',
+    teaching_auto: '轻量自动',
+    discovery_auto: 'Discovery 自动',
+  };
 
   const verifiableValidation = useMemo(() => {
     const validationOut = runDetail?.small_validation as Record<string, unknown> | undefined;
@@ -247,14 +204,8 @@ export function ResearchClosedLoopOverview({
     Boolean(extra?.quality_trend?.length) ||
     Boolean(discoveryLoopData) ||
     Boolean(teachingRefinementData) ||
-    Boolean(iterationSession?.rounds?.length) ||
-    versionSnapshots.length >= 2;
-
-  const hasTimeline = Boolean(
-    extra?.closed_loop_events?.length ||
-    extra?.quality_trend?.length ||
-    extra?.closed_loop_decisions?.length,
-  );
+    Boolean(extra?.version_snapshots?.length) ||
+    Boolean(extra?.science_iteration?.rounds?.length);
 
   if (loading) {
     return <LoadingState message="正在加载科研闭环数据..." />;
@@ -275,12 +226,14 @@ export function ResearchClosedLoopOverview({
         subtitle="九阶段 Pipeline · Discovery / Teaching 双模式 · CQS 质量趋势"
       >
         <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint/40 text-xs text-bp-muted leading-relaxed">
-          <strong className="text-bp-text">Teaching</strong>：各阶段可 HITL 人工审核 Gate，验证失败时最多 1 轮自动精化。
+          <strong className="text-bp-text">人工主导</strong>：关键阶段 HITL 门控 + 单阶段重跑（推荐）。
           <span className="mx-2 text-bp-border">|</span>
-          <strong className="text-bp-text">Discovery</strong>：关闭 HITL，未 Accept 时自动多轮文献回退与假设→实验→报告迭代（CQS 停滞则停止）。
-          {pipelineMode && (
-            <span className="ml-2 text-bp-cyan">当前运行：{pipelineMode === 'discovery' ? 'Discovery' : 'Teaching'}</span>
-          )}
+          <strong className="text-bp-text">轻量自动</strong>：验证失败时最多 1 轮自动精化。
+          <span className="mx-2 text-bp-border">|</span>
+          <strong className="text-bp-text">Discovery 自动</strong>：未 Accept 时多轮文献回退与假设→实验→报告迭代。
+          <span className="ml-2 text-bp-cyan">
+            当前：{iterationModeLabel[iterationMode] || iterationMode}
+          </span>
         </div>
 
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -442,84 +395,12 @@ export function ResearchClosedLoopOverview({
         </Card>
       )}
 
-      {hasTimeline && (
-        <CollapsiblePanel
-          title="跨环依赖图"
-          subtitle="Discovery · Gap · Teaching · 证据迭代"
-          defaultOpen={false}
-        >
-          <LoopDependencyGraph
-            events={extra?.closed_loop_events}
-            decisions={extra?.closed_loop_decisions}
-          />
-        </CollapsiblePanel>
-      )}
-
-      {hasTimeline && (
-        <CollapsiblePanel
-          title="闭环时间线"
-          subtitle="质量趋势 · 决策事件"
-          defaultOpen
-        >
-          <ClosedLoopTimeline
-            events={extra?.closed_loop_events}
-            qualityTrend={extra?.quality_trend}
-            decisions={extra?.closed_loop_decisions}
+      {runDetail && (
+        <CollapsiblePanel title="迭代历史" subtitle="里程碑 · 时间线 · 版本对比 · 拓扑" defaultOpen>
+          <IterationHistoryPanel
             runId={selectedRunId}
-          />
-        </CollapsiblePanel>
-      )}
-
-      {(extra?.closed_loop_events?.some((e) => e.type === 'data_gap_loop') || (gapLoopFromStage?.length ?? 0) > 0) && (
-        <CollapsiblePanel title="Gap 补搜历史" subtitle="DataAcquisition · gap_loop" defaultOpen={false}>
-          <GapLoopHistoryPanel events={extra?.closed_loop_events} gapLoop={gapLoopFromStage} />
-        </CollapsiblePanel>
-      )}
-
-      {(discoveryLoopData || teachingRefinementData || qualityAcceptance) && (
-        <>
-          {qualityAcceptance && (
-            <CollapsiblePanel title="质量验收" subtitle="QualityAcceptancePanel" defaultOpen>
-              <DiscoveryLoopPanel
-                qualityAcceptance={qualityAcceptance}
-                sections={['quality']}
-              />
-            </CollapsiblePanel>
-          )}
-          {teachingRefinementData?.reran && (
-            <CollapsiblePanel title="Teaching 自动精化" subtitle="TeachingAutoRefinement" defaultOpen={false}>
-              <DiscoveryLoopPanel
-                teachingRefinement={teachingRefinementData}
-                sections={['teaching']}
-              />
-            </CollapsiblePanel>
-          )}
-          {discoveryLoopData && (discoveryLoopData.history?.length ?? 0) > 0 && (
-            <CollapsiblePanel title="Discovery 迭代" subtitle="DiscoveryLoopPanel" defaultOpen={false}>
-              <DiscoveryLoopPanel
-                discoveryLoop={discoveryLoopData}
-                sections={['discovery', 'versions']}
-              />
-            </CollapsiblePanel>
-          )}
-        </>
-      )}
-
-      {versionSnapshots.length >= 2 && (
-        <CollapsiblePanel title="版本对比与证据 Diff" subtitle="VersionCompare · EvidenceDiff" defaultOpen={false}>
-          <div className="space-y-4">
-            <VersionComparePanel snapshots={versionSnapshots} />
-            <EvidenceDiffPanel snapshots={versionSnapshots} />
-          </div>
-        </CollapsiblePanel>
-      )}
-
-      {(iterationLoading || iterationSession?.rounds?.length || iterationError) && (
-        <CollapsiblePanel title="科学自迭代" subtitle="ScienceIteration · 轮次与资料补充" defaultOpen>
-          <IterationRoundPanel
-            session={iterationSession}
-            loading={iterationLoading}
-            error={iterationError}
+            extraMetadata={extra}
+            federatedPilot={federatedPilot}
           />
         </CollapsiblePanel>
       )}

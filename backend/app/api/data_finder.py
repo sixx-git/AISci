@@ -22,10 +22,19 @@ class DataFinderAcquireRequest(BaseModel):
     research_question: str = ""
     selected_hypothesis: str = ""
     project_mode: Optional[str] = None
-    auto_import: bool = False
-    acquisition_mode: Optional[str] = Field(
-        None, description="dataset_discovery | full；默认读取 project.config.data_acquisition.mode",
-    )
+
+
+class DataFinderBuildLibraryRequest(BaseModel):
+    """独立论文建库：抽表抽图 + 对齐合并（不参与 Pipeline 自迭代）。"""
+    project_id: str
+    research_question: str = ""
+    selected_hypothesis: str = ""
+    project_mode: Optional[str] = None
+    auto_import: bool = True
+    enable_gap_search: bool = False
+    coverage_gap_threshold: Optional[float] = None
+    data_spec_gap_threshold: Optional[float] = None
+    max_gap_rounds: Optional[int] = Field(None, ge=1, le=4)
 
 
 class DataFinderSearchRequest(BaseModel):
@@ -82,24 +91,50 @@ def _resolve_project_mode(db: Session, project_id: str, override: Optional[str])
 
 @router.post("/acquire")
 async def data_finder_acquire(body: DataFinderAcquireRequest, db: Session = Depends(get_db)):
-    """数据采集：默认仅检索领域公开数据集；mode=full 时含论文抽取与合并。"""
+    """Pipeline 数据采集：仅检索领域公开数据集。"""
     try:
         service = get_data_finder_service(db)
         mode = _resolve_project_mode(db, body.project_id, body.project_mode)
-        gap_options: dict = {}
-        if body.acquisition_mode:
-            gap_options["acquisition_mode"] = body.acquisition_mode
         result = await service.run_data_acquisition(
             project_id=body.project_id,
             research_question=body.research_question,
             selected_hypothesis=body.selected_hypothesis,
             project_mode=mode,
-            auto_import=body.auto_import,
-            gap_options=gap_options or None,
         )
-        return {"code": 200, "data": result, "message": "数据采集完成"}
+        return {"code": 200, "data": result, "message": "数据集检索完成"}
     except Exception as e:
         logger.error(f"data_finder acquire failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/build-library")
+async def data_finder_build_library(body: DataFinderBuildLibraryRequest, db: Session = Depends(get_db)):
+    """独立论文建库：从已入库论文抽表抽图、对齐合并（高级工具，不参与 Pipeline）。"""
+    try:
+        service = get_data_finder_service(db)
+        mode = _resolve_project_mode(db, body.project_id, body.project_mode)
+        gap_options = {
+            k: v
+            for k, v in {
+                "enable_gap_search": body.enable_gap_search,
+                "coverage_gap_threshold": body.coverage_gap_threshold,
+                "data_spec_gap_threshold": body.data_spec_gap_threshold,
+                "max_gap_rounds": body.max_gap_rounds,
+            }.items()
+            if v is not None
+        }
+        result = await service.run_paper_extraction_pipeline(
+            project_id=body.project_id,
+            research_question=body.research_question,
+            selected_hypothesis=body.selected_hypothesis,
+            project_mode=mode,
+            auto_import=body.auto_import,
+            enable_gap_search=body.enable_gap_search,
+            gap_options=gap_options or None,
+        )
+        return {"code": 200, "data": result, "message": "论文建库完成"}
+    except Exception as e:
+        logger.error(f"data_finder build-library failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -123,7 +158,7 @@ async def data_finder_search(body: DataFinderSearchRequest, db: Session = Depend
 
 @router.post("/gap-enrich")
 async def data_finder_gap_enrich(body: DataFinderGapEnrichRequest, db: Session = Depends(get_db)):
-    """基于 Coverage / DataSpec 缺口触发多轮外部数据补搜。"""
+    """高级：基于 Coverage / DataSpec 缺口触发多轮外部数据补搜（仅用于论文建库工作流）。"""
     try:
         service = get_data_finder_service(db)
         run_options = {

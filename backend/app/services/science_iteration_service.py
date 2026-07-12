@@ -28,7 +28,12 @@ from app.schemas.science_iteration import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG = ScienceIterationConfig()
+DEFAULT_CONFIG = ScienceIterationConfig(
+    enabled=True,
+    max_rounds=5,
+    auto_triggers=[],
+    auto_literature_on_weak_evidence=False,
+)
 
 
 def resolve_science_iteration_config(

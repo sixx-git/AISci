@@ -115,7 +115,7 @@ export function IterationRoundPanel({ session, loading, error }: IterationRoundP
   if (!session?.rounds?.length) {
     return (
       <p className="text-sm text-bp-muted py-4 text-center">
-        暂无自迭代轮次记录。启用 project.config.science_iteration 后，Pipeline 将自动记录里程碑。
+        暂无迭代轮次记录。运行 Pipeline 后将自动记录假设、评审与验证里程碑，可在「版本对比」查看变化。
       </p>
     );
   }

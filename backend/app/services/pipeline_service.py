@@ -43,10 +43,7 @@ from app.core.pipeline_modes import (
 )
 from app.core.pipeline_exceptions import HitlGatePause, SingleStageRerunComplete, LiteratureNotFoundError
 from app.core.quality_scoring import enrich_quality_trend_entry
-from app.services.loops.closed_loop_helpers import (
-    build_data_gap_loop_payload,
-    infer_quality_trend_entries,
-)
+from app.services.loops.closed_loop_helpers import infer_quality_trend_entries
 from app.core.execution_metadata import annotate_validation_execution_metadata
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
@@ -672,19 +669,16 @@ class PipelineService:
         project_mode: str,
         stages: Optional[List[PipelineStageLog]] = None,
     ) -> Optional[Dict[str, Any]]:
+        """统一观测层：仅记录里程碑与会话，不触发独立 refine 环。"""
+        if not self._run_options.get("enable_science_iteration_observe", True):
+            return None
         try:
             orch = self._get_science_iteration_orchestrator()
             if hook == "after_hypothesis_generation":
                 orch.record_milestone(results, "initial", label="R1_initial")
-                return orch.maybe_supplement_literature_on_weak_evidence(
-                    results, project_id, research_question,
-                )
-            if hook == "after_hypothesis_review" and stages is not None:
+            elif hook == "after_hypothesis_review":
                 orch.record_milestone(results, "hypothesis_review", label="post_review")
-                return orch.maybe_run_standard_refinement(
-                    stages, results, research_question, project_id, project_mode,
-                )
-            if hook == "after_small_validation":
+            elif hook == "after_small_validation":
                 sv = results.get("small_validation") or {}
                 sb = sv.get("sandbox_execution") or {}
                 if sb.get("success") is False:
@@ -692,7 +686,28 @@ class PipelineService:
                         results, "validation_fail",
                         actions=["sandbox_success=False"],
                     )
-            if hook == "finalize":
+            elif hook == "after_teaching_refinement":
+                meta = results.get("teaching_auto_refinement") or {}
+                if meta.get("reran"):
+                    orch.record_milestone(
+                        results, "validation_fail",
+                        label=f"teaching_R{meta.get('round', 1)}",
+                        actions=list(meta.get("reasons") or [])[:4],
+                    )
+            elif hook == "after_discovery_round":
+                meta = results.get("discovery_loop") or {}
+                if meta.get("history"):
+                    last = meta["history"][-1] if isinstance(meta["history"], list) else {}
+                    orch.record_milestone(
+                        results, "review_reject",
+                        label=f"discovery_R{last.get('round', '?')}",
+                        actions=[str(last.get("status") or "")],
+                    )
+            elif hook == "finalize":
+                meta = dict(self.db_pipeline_run.extra_metadata or {}) if self.db_pipeline_run else {}
+                meta["iteration_mode"] = self._run_options.get("iteration_mode")
+                if self.db_pipeline_run:
+                    self._persist_extra_metadata(meta)
                 return orch.finalize_session(results)
         except Exception as exc:
             logger.warning("[ScienceIteration] hook %s 失败: %s", hook, exc)
@@ -1000,6 +1015,8 @@ class PipelineService:
         project_mode: str,
     ) -> Optional[Dict[str, Any]]:
         """P2-6: Teaching 轻量自动闭环 — 验证/sanity 失败时重跑实验设计→验证→报告。"""
+        if self._run_options.get("iteration_mode") != "teaching_auto":
+            return None
         if self._run_options.get("pipeline_mode") != PipelineMode.TEACHING.value:
             return None
         if not self._run_options.get("enable_teaching_auto_refinement", True):
@@ -1648,7 +1665,6 @@ class PipelineService:
                     lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
                 self._run_science_iteration_hooks(
                     "after_hypothesis_review", results, research_question, project_id, project_mode,
-                    stages=stages,
                 )
                 results.pop("counterfactual_preview", None)
                 self._stage_results.pop("counterfactual_preview", None)
@@ -1705,8 +1721,8 @@ class PipelineService:
                 if fed_campaign_meta:
                     results["federated_campaign_refinement"] = fed_campaign_meta
 
-            # ── P2-6: Teaching 轻量自动闭环 ──
-            if start_idx <= 7:
+            # ── P2-6: Teaching 轻量自动闭环（仅 teaching_auto 模式）──
+            if start_idx <= 7 and self._run_options.get("iteration_mode") == "teaching_auto":
                 teaching_meta = self._run_teaching_auto_refinement(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1715,6 +1731,9 @@ class PipelineService:
                     if teaching_meta.get("final_report_id"):
                         final_report_id = teaching_meta["final_report_id"]
                         teaching_report_ran = True
+                    self._run_science_iteration_hooks(
+                        "after_teaching_refinement", results, research_question, project_id, project_mode,
+                    )
             
             # ── 阶段 9: ReportGenerationAgent ──
             if getattr(self, "_finalize_report_after_gate", False):
@@ -1730,8 +1749,11 @@ class PipelineService:
                 final_report_id = self._persist_pipeline_report(project_id, results)
                 self._maybe_pause_for_hitl_gate("report_generation", results)
 
-            # ── P5: Discovery 开放循环（Sakana-like）──
-            if start_idx <= 4 and self._run_options.get("pipeline_mode") == PipelineMode.DISCOVERY.value:
+            # ── P5: Discovery 开放循环（仅 discovery_auto 模式）──
+            if (
+                start_idx <= 4
+                and self._run_options.get("iteration_mode") == "discovery_auto"
+            ):
                 discovery_meta = self._run_discovery_loop(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1739,6 +1761,9 @@ class PipelineService:
                     results["discovery_loop"] = discovery_meta
                     if discovery_meta.get("final_report_id"):
                         final_report_id = discovery_meta["final_report_id"]
+                    self._run_science_iteration_hooks(
+                        "after_discovery_round", results, research_question, project_id, project_mode,
+                    )
             
             # Pipeline 完成
             pipeline_end = datetime.now(CHINA_TZ)
@@ -1876,6 +1901,8 @@ class PipelineService:
     # ────────────── 阶段执行 ──────────────
 
     def _should_hitl_gate(self, stage_key: str) -> bool:
+        if self._run_options.get("iteration_mode") != "human":
+            return False
         if not self._run_options.get("enable_hitl_gate"):
             return False
         if self._run_options.get("pipeline_mode") != PipelineMode.TEACHING.value:
@@ -2325,52 +2352,12 @@ class PipelineService:
         if refinement_queries:
             search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
 
-        from app.services.project_service import ProjectService
-
-        project = ProjectService(self.db).get_project(project_id)
-        acq_cfg = (
-            (project.config or {}).get("data_acquisition") or {}
-            if project and isinstance(project.config, dict)
-            else {}
-        )
-        acquisition_mode = acq_cfg.get("mode") or "dataset_discovery"
-        acquisition_mode = self._run_options.get("data_acquisition_mode", acquisition_mode)
-        is_full_mode = acquisition_mode == "full"
-
-        gap_options = {
-            "acquisition_mode": acquisition_mode,
-            "enable_gap_search": is_full_mode and self._run_options.get("enable_gap_search", True),
-            "auto_import": is_full_mode and self._run_options.get("enable_hf_auto_import", True),
-            "coverage_gap_threshold": self._run_options.get("coverage_gap_threshold"),
-            "data_spec_gap_threshold": self._run_options.get("data_spec_gap_threshold"),
-            "max_gap_rounds": self._run_options.get("max_gap_rounds"),
-            "refinement_queries": refinement_queries,
-        }
-        auto_import = is_full_mode and self._run_options.get("enable_hf_auto_import", True)
         final = service.run_data_acquisition_sync(
             project_id=project_id,
             research_question=search_query,
             selected_hypothesis=selected_hypothesis or "",
             project_mode=project_mode,
-            auto_import=auto_import,
-            gap_options=gap_options,
         )
-
-        gap_meta = final.get("gap_enrichment") or {}
-        da = final.get("data_acquisition") or {}
-        gap_loop = da.get("step_details", {}).get("gap_loop") if isinstance(da.get("step_details"), dict) else None
-        if gap_loop:
-            gap_meta = {"loop": gap_loop, "rounds": len(gap_loop) if isinstance(gap_loop, list) else 0}
-            gap_payload = build_data_gap_loop_payload(gap_loop, gap_meta)
-            self._record_closed_loop_event("data_gap_loop", gap_payload)
-            if gap_meta.get("rounds", 0) > 0:
-                self._record_closed_loop_decision(
-                    trigger="data_gap_loop",
-                    action="gap_enrichment",
-                    reason=gap_payload.get("summary", "Gap 补搜完成"),
-                    next_stage="knowledge_gap",
-                    metadata={"rounds": gap_meta.get("rounds")},
-                )
 
         from app.services.data_finder_slim import slim_data_acquisition_output, slim_data_finder_payload
 
@@ -2381,16 +2368,13 @@ class PipelineService:
             "extract": slim_final,
             "paper_link_extractions": final.get("paper_extractions", [])[:20],
             "refinement_queries": refinement_queries or [],
-            "gap_enrichment": gap_meta,
         }
         slim_output = slim_data_acquisition_output(output)
         results["data_acquisition"] = slim_output
         results["data_finder"] = slim_output
         logger.info(
-            f"[DataAcquisition] 完成 mode={acquisition_mode}: "
-            f"candidates={len(final.get('external_candidates', []))} "
-            f"tables={len(final.get('extracted_tables', []))} "
-            f"merged={(final.get('merged') or {}).get('row_count')}"
+            "[DataAcquisition] 完成 dataset_discovery: "
+            f"candidates={len(final.get('external_candidates', []))}"
         )
         return slim_output
 
@@ -3138,7 +3122,7 @@ class PipelineService:
             hypotheses=hypotheses,
             research_question=research_question,
             literature_mining=lm,
-            max_rounds=2,
+            max_rounds=int(self._run_options.get("evidence_reasoning_max_rounds", 1)),
             multimodal_facts=multimodal_facts,
         )
         hg["hypotheses"] = output.get("hypotheses", hypotheses)

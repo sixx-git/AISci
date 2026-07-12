@@ -25,6 +25,7 @@ def simulate_loop_decisions(
 
     out: Dict[str, Any] = {
         "resolved_options": opts,
+        "iteration_mode": opts.get("iteration_mode"),
         "pipeline_mode": mode,
         "round_num": round_num,
     }
@@ -60,7 +61,7 @@ def simulate_loop_decisions(
     out["teaching_config"] = teaching_flags
 
     # 可读摘要
-    lines: List[str] = [f"模式: {mode}"]
+    lines: List[str] = [f"迭代模式: {opts.get('iteration_mode', mode)}"]
     if mode == "discovery" and "discovery_stagnation" in out:
         st = out["discovery_stagnation"]
         lines.append(f"Discovery 停滞判断: {st.get('action')} — {st.get('reason')}")

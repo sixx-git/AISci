@@ -2,12 +2,15 @@
 import { TrendingUp, GitBranch, FlaskConical, ShieldCheck, Sparkles, Image, BookOpen, RefreshCw, GitCommitHorizontal, Download, Database, Link2 } from 'lucide-react';
 import type { ClosedLoopEvent, ClosedLoopDecision, QualityTrendEntry } from '@/types';
 import { pipelineService } from '@/services/pipelineService';
+import { cn } from '@/lib/utils';
 
 interface ClosedLoopTimelineProps {
   events?: ClosedLoopEvent[];
   qualityTrend?: QualityTrendEntry[];
   decisions?: ClosedLoopDecision[];
   runId?: string | null;
+  /** 嵌入 IterationHistoryPanel 时去掉外层卡片边距 */
+  embedded?: boolean;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -55,7 +58,13 @@ const DECISION_LABELS: Record<string, string> = {
   gap_enrichment: 'Gap 数据补搜',
 };
 
-export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions = [], runId }: ClosedLoopTimelineProps) {
+export function ClosedLoopTimeline({
+  events = [],
+  qualityTrend = [],
+  decisions = [],
+  runId,
+  embedded = false,
+}: ClosedLoopTimelineProps) {
   const [exporting, setExporting] = useState(false);
 
   const handleExportAudit = async () => {
@@ -80,12 +89,20 @@ export function ClosedLoopTimeline({ events = [], qualityTrend = [], decisions =
   if (events.length === 0 && qualityTrend.length === 0 && decisions.length === 0) return null;
 
   return (
-    <div className="mb-6 p-4 rounded-lg border border-bp-border bg-bp-panel/30">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm font-semibold text-bp-text flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-bp-cyan" />
-          科研闭环 · 迭代质量趋势
-        </h2>
+    <div className={embedded ? 'space-y-4' : 'mb-6 p-4 rounded-lg border border-bp-border bg-bp-panel/30'}>
+      <div className={cn('flex items-center justify-between gap-2', embedded ? 'mb-1' : 'mb-3')}>
+        {!embedded && (
+          <h2 className="text-sm font-semibold text-bp-text flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-bp-cyan" />
+            科研闭环 · 迭代质量趋势
+          </h2>
+        )}
+        {embedded && (
+          <p className="text-xs text-bp-muted flex items-center gap-1">
+            <TrendingUp className="w-3.5 h-3.5 text-bp-cyan" />
+            质量趋势与闭环事件
+          </p>
+        )}
         {runId && (
           <button
             type="button"

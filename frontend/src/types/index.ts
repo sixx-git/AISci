@@ -307,6 +307,7 @@ export interface HitlGateInfo {
 }
 
 export interface PipelineRunExtraMetadata {
+  iteration_mode?: string;
   closed_loop_events?: ClosedLoopEvent[];
   closed_loop_decisions?: ClosedLoopDecision[];
   quality_trend?: QualityTrendEntry[];
@@ -726,7 +727,11 @@ export interface PlotQualityData {
 
 export type PipelineRunMode = 'teaching' | 'discovery';
 
+export type IterationMode = 'human' | 'teaching_auto' | 'discovery_auto';
+
 export interface PipelineRunOptions {
+  iteration_mode?: IterationMode;
+  iteration_mode?: IterationMode;
   pipeline_mode?: PipelineRunMode;
   num_ideas?: number;
   literature_max_papers?: number;

@@ -127,6 +127,7 @@ export interface ReleaseGateReport {
 }
 
 export interface DataAcquisitionMeta {
+  mode?: string;
   steps?: string[];
   stats?: {
     external_candidates?: number;
@@ -300,9 +301,23 @@ const dataFinderService = {
     research_question?: string;
     selected_hypothesis?: string;
     project_mode?: string;
-    auto_import?: boolean;
   }): Promise<ApiResponse<DataFinderResult>> {
     const { data } = await api.post('/data-finder/acquire', payload);
+    return data;
+  },
+
+  async buildLibrary(payload: {
+    project_id: string;
+    research_question?: string;
+    selected_hypothesis?: string;
+    project_mode?: string;
+    auto_import?: boolean;
+    enable_gap_search?: boolean;
+    coverage_gap_threshold?: number;
+    data_spec_gap_threshold?: number;
+    max_gap_rounds?: number;
+  }): Promise<ApiResponse<DataFinderResult>> {
+    const { data } = await api.post('/data-finder/build-library', payload);
     return data;
   },
 

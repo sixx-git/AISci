@@ -123,21 +123,6 @@ class DataFinderService:
 
         return resolve_gap_thresholds(self._load_project_config(project_id), run_options)
 
-    def _resolve_acquisition_mode(
-        self,
-        project_id: str,
-        gap_options: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        gap_opts = gap_options or {}
-        override = gap_opts.get("acquisition_mode")
-        if override in (ACQUISITION_MODE_DATASET_DISCOVERY, ACQUISITION_MODE_FULL):
-            return override
-        cfg = (self._load_project_config(project_id).get("data_acquisition") or {})
-        mode = cfg.get("mode") or ACQUISITION_MODE_DATASET_DISCOVERY
-        if mode not in (ACQUISITION_MODE_DATASET_DISCOVERY, ACQUISITION_MODE_FULL):
-            return ACQUISITION_MODE_DATASET_DISCOVERY
-        return mode
-
     @staticmethod
     def _mark_steps_skipped(
         steps: Dict[str, Any],
@@ -541,104 +526,33 @@ class DataFinderService:
         auto_import: bool = True,
         gap_options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """数据采集：默认仅领域数据集发现；mode=full 时走论文抽取与合并。"""
+        """Pipeline 数据采集：仅领域数据集发现（不含论文抽表/建库）。"""
+        del auto_import, gap_options
         steps: Dict[str, Any] = {}
         step_meta: Dict[str, Dict[str, Any]] = {}
-        gap_opts = gap_options or {}
-        acquisition_mode = self._resolve_acquisition_mode(project_id, gap_opts)
-        is_discovery = acquisition_mode == ACQUISITION_MODE_DATASET_DISCOVERY
 
-        discover_coro = (
-            self.run_dataset_discovery(project_id, research_question, selected_hypothesis, project_mode)
-            if is_discovery
-            else self.run_search(project_id, research_question, selected_hypothesis, project_mode)
+        await _timed_async_step(
+            steps,
+            step_meta,
+            "discover",
+            self.run_dataset_discovery(project_id, research_question, selected_hypothesis, project_mode),
         )
-        await _timed_async_step(steps, step_meta, "discover", discover_coro)
-
-        if is_discovery:
-            self._mark_steps_skipped(
-                steps,
-                step_meta,
-                SKIPPED_PIPELINE_STEPS,
-                reason=ACQUISITION_MODE_DATASET_DISCOVERY,
-            )
-            gap_loop: List[Dict[str, Any]] = []
-        else:
-            await _timed_async_step(steps, step_meta, "fetch_supplementary", self.run_fetch_supplementary(project_id))
-            await _timed_async_step(steps, step_meta, "extract", self.run_extract_tables(project_id))
-
-            results = self.load_results(project_id) or {}
-
-            if auto_import and results.get("external_candidates"):
-                from app.services.external_dataset_import_service import auto_import_external_candidates_async
-                from app.skills.data_finder._utils import new_id
-
-                ext_dir = os.path.join(self._project_dir(project_id), "external")
-
-                async def _fetch_external() -> Dict[str, Any]:
-                    import_meta = await auto_import_external_candidates_async(
-                        results.get("external_candidates", []),
-                        ext_dir,
-                        max_imports=2,
-                    )
-                    for item in import_meta.get("imported") or []:
-                        table_id = item.get("table_id") or new_id("ext")
-                        results.setdefault("extracted_tables", []).append({
-                            "table_id": table_id,
-                            "paper_id": "",
-                            "source_title": item.get("dataset_name", "External"),
-                            "page": 0,
-                            "caption": f"External: {item.get('dataset_name')}",
-                            "csv_path": item.get("csv_path"),
-                            "columns": item.get("columns") or [],
-                            "quality_score": 0.65,
-                            "extraction_method": item.get("import_method", "external_import"),
-                            "source_type": item.get("provenance_source_type", "external_csv"),
-                        })
-                    self.save_results(project_id, results)
-                    return import_meta
-
-                await _timed_async_step(steps, step_meta, "fetch_external", _fetch_external())
-            else:
-                self._mark_steps_skipped(steps, step_meta, ("fetch_external",), reason="no_candidates_or_disabled")
-
-            results = self.load_results(project_id) or {}
-            if results.get("extracted_tables"):
-                await _timed_async_step(steps, step_meta, "align", self.run_align_schema(project_id))
-                await _timed_async_step(steps, step_meta, "merge", self.run_merge(project_id))
-            else:
-                self._mark_steps_skipped(steps, step_meta, ("align", "merge"), reason="no_tables")
-
-            gap_loop = []
-            if gap_opts.get("enable_gap_search", True):
-                async def _gap() -> List[Dict[str, Any]]:
-                    return await self.run_gap_loop(
-                        project_id,
-                        refinement_queries=gap_opts.get("refinement_queries"),
-                        auto_import=auto_import if gap_opts.get("auto_import") is None else gap_opts.get("auto_import"),
-                        run_options=gap_opts,
-                    )
-
-                gap_loop = await _timed_async_step(steps, step_meta, "gap_loop", _gap()) or []
-            else:
-                self._mark_steps_skipped(steps, step_meta, ("gap_loop",), reason="disabled")
+        self._mark_steps_skipped(
+            steps,
+            step_meta,
+            SKIPPED_PIPELINE_STEPS,
+            reason=ACQUISITION_MODE_DATASET_DISCOVERY,
+        )
 
         final = self.load_results(project_id) or {}
-        from app.services.data_acquisition_release_gate import evaluate_release_gate
-
-        gate_config = {"min_merged_rows": 0} if is_discovery else None
-        release_gate = evaluate_release_gate(final, config=gate_config)
-        final["release_gate"] = release_gate
         final["data_acquisition"] = {
-            "mode": acquisition_mode,
+            "mode": ACQUISITION_MODE_DATASET_DISCOVERY,
             "steps": list(steps.keys()),
             "stats": {
-                "acquisition_mode": acquisition_mode,
+                "acquisition_mode": ACQUISITION_MODE_DATASET_DISCOVERY,
                 "external_candidates": len(final.get("external_candidates") or []),
                 "tables": len(final.get("extracted_tables") or []),
                 "merged_rows": (final.get("merged") or {}).get("row_count"),
-                "gap_rounds": len(gap_loop),
-                "release_gate_passed": release_gate.get("passed"),
                 "total_duration_ms": sum(m.get("duration_ms") or 0 for m in step_meta.values()),
             },
             "step_details": {
@@ -649,11 +563,39 @@ class DataFinderService:
         self.save_results(project_id, final)
         return final
 
+    async def run_paper_extraction_pipeline(
+        self,
+        project_id: str,
+        research_question: str,
+        selected_hypothesis: str = "",
+        project_mode: str = "general",
+        *,
+        auto_import: bool = True,
+        enable_gap_search: bool = False,
+        gap_options: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """独立论文建库流水线（不参与 Pipeline 自迭代）。"""
+        from app.services.paper_extraction_pipeline import run_paper_extraction_pipeline
+
+        return await run_paper_extraction_pipeline(
+            self,
+            project_id,
+            research_question,
+            selected_hypothesis,
+            project_mode,
+            auto_import=auto_import,
+            enable_gap_search=enable_gap_search,
+            gap_options=gap_options,
+        )
+
     def run_fetch_supplementary_sync(self, project_id: str) -> Dict[str, Any]:
         return asyncio.run(self.run_fetch_supplementary(project_id))
 
     def run_data_acquisition_sync(self, **kwargs) -> Dict[str, Any]:
         return asyncio.run(self.run_data_acquisition(**kwargs))
+
+    def run_paper_extraction_pipeline_sync(self, **kwargs) -> Dict[str, Any]:
+        return asyncio.run(self.run_paper_extraction_pipeline(**kwargs))
 
     def run_gap_loop_sync(self, **kwargs) -> List[Dict[str, Any]]:
         return asyncio.run(self.run_gap_loop(**kwargs))

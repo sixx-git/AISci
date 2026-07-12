@@ -167,8 +167,6 @@ class TestDataAcquisitionStepTiming(unittest.TestCase):
         final = asyncio.run(svc.run_data_acquisition(
             "proj-timing",
             "test question",
-            gap_options={"enable_gap_search": False},
-            auto_import=False,
         ))
         details = final["data_acquisition"]["step_details"]
         self.assertIn("duration_ms", details["discover"])
@@ -176,35 +174,31 @@ class TestDataAcquisitionStepTiming(unittest.TestCase):
         self.assertTrue(details["extract"].get("skipped"))
         self.assertEqual(final["data_acquisition"]["mode"], "dataset_discovery")
         self.assertIn("total_duration_ms", final["data_acquisition"]["stats"])
-        self.assertIn("release_gate", final)
+        self.assertNotIn("release_gate", final)
         svc.run_dataset_discovery.assert_awaited_once()
         svc.run_search.assert_not_awaited()
 
-    def test_acquire_full_mode_uses_heavy_discover(self):
+    def test_paper_extraction_pipeline_uses_heavy_discover(self):
         from app.services.data_finder_service import DataFinderService
 
         mock_db = MagicMock()
         svc = DataFinderService(mock_db)
         svc._project_dir = MagicMock(return_value=tempfile.mkdtemp())
-        svc._resolve_acquisition_mode = MagicMock(return_value="full")
         svc.load_results = MagicMock(return_value={})
         svc.save_results = MagicMock()
         svc.run_search = AsyncMock(return_value={"external_candidates": []})
-        svc.run_dataset_discovery = AsyncMock(return_value={"external_candidates": []})
-        svc.run_search_quick = AsyncMock(return_value={"external_candidates": []})
         svc.run_fetch_supplementary = AsyncMock(return_value={})
         svc.run_extract_tables = AsyncMock(return_value={"extracted_tables": []})
         svc.run_gap_loop = AsyncMock(return_value=[])
 
-        final = asyncio.run(svc.run_data_acquisition(
-            "proj-full",
-            "test question",
-            gap_options={"acquisition_mode": "full", "enable_gap_search": False},
-            auto_import=False,
-        ))
-        self.assertEqual(final["data_acquisition"]["mode"], "full")
-        svc.run_search.assert_awaited_once()
-        svc.run_dataset_discovery.assert_not_awaited()
+        with patch(
+            "app.services.paper_extraction_pipeline.run_paper_extraction_pipeline",
+            new_callable=AsyncMock,
+        ) as mock_pipeline:
+            mock_pipeline.return_value = {"data_acquisition": {"mode": "paper_extraction_library"}}
+            final = asyncio.run(svc.run_paper_extraction_pipeline("proj-lib", "test question"))
+            self.assertEqual(final["data_acquisition"]["mode"], "paper_extraction_library")
+            mock_pipeline.assert_awaited_once()
 
 
 if __name__ == "__main__":

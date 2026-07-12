@@ -10,9 +10,9 @@ from app.skills.counterfactual.counterfactual_preview_skill import (
 )
 
 
-def test_resolve_run_options_counterfactual_default_on():
+def test_resolve_run_options_counterfactual_default_off():
     opts = resolve_run_options({})
-    assert opts.get("enable_counterfactual_preview") is True
+    assert opts.get("enable_counterfactual_preview") is False
 
 
 def test_resolve_run_options_counterfactual_can_disable():
