@@ -433,6 +433,11 @@ async def get_run_detail(
             total_duration_ms=run.total_duration_ms,
             final_report_id=run.final_report_id,
             failed_stage=run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
+            current_stage=(
+                run.current_stage.value
+                if hasattr(run.current_stage, "value")
+                else str(run.current_stage)
+            ) if run.current_stage else None,
             created_at=run.created_at,
             input_data=run.input_data,
             output_data=run.output_data,
@@ -502,6 +507,11 @@ async def get_run_status(
                 total_duration=total_duration,
                 error_message=run.error_message,
                 failed_stage=run.failed_stage.value if hasattr(run.failed_stage, "value") else str(run.failed_stage) if run.failed_stage else None,
+                current_stage=(
+                    run.current_stage.value
+                    if hasattr(run.current_stage, "value")
+                    else str(run.current_stage)
+                ) if run.current_stage else None,
                 final_report_id=run.final_report_id,
                 extra_metadata=run.extra_metadata if isinstance(run.extra_metadata, dict) else None,
                 created_at=run.created_at or run.started_at,

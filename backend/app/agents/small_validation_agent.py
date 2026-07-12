@@ -22,6 +22,18 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _skill_block(skill_outputs: Optional[Dict[str, Any]], key: str) -> Dict[str, Any]:
+    if not isinstance(skill_outputs, dict):
+        return {}
+    block = skill_outputs.get(key)
+    return block if isinstance(block, dict) else {}
+
+
+def _preliminary_analysis_data(skill_outputs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    data = _skill_block(skill_outputs, "preliminary_analysis").get("data")
+    return data if isinstance(data, dict) else {}
+
+
 class SmallValidationAgent:
     """
     小样验证智能体
@@ -239,7 +251,7 @@ class SmallValidationAgent:
                 logger.warning(f"PreliminaryAnalysisSkill 失败: {e}")
                 outputs["preliminary_analysis"] = {"success": False, "error": str(e)}
 
-            pa_data = outputs.get("preliminary_analysis", {}).get("data", {})
+            pa_data = _preliminary_analysis_data(outputs)
             try:
                 verify_skill = ResultVerificationSkill()
                 verify_result = await verify_skill.run(
@@ -276,7 +288,7 @@ class SmallValidationAgent:
         experiment_design: Optional[Dict[str, Any]],
         modeling_results: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        pa_data = skill_outputs.get("preliminary_analysis", {}).get("data", {})
+        pa_data = _preliminary_analysis_data(skill_outputs)
         data_source_flag = pa_data.get("data_source_flag", "no_data")
         has_real = (data_source_flag == "real_data" or result.get("has_real_data", 0) == 1)
 
@@ -302,6 +314,8 @@ class SmallValidationAgent:
 
         if modeling_results:
             primary = modeling_results[0]
+            if not isinstance(primary, dict):
+                primary = {}
             categorized["actual_results"]["modeling_result"] = primary
             categorized["actual_results"]["modeling_results"] = modeling_results
             categorized["actual_results"]["data_source"] = "real_data"
@@ -338,7 +352,9 @@ class SmallValidationAgent:
             categorized["simulated_results"] = {"note": "未生成模拟数据"}
             categorized["expected_results"] = categorized["expected_results"] or {"note": "未提供预期结果"}
 
-        pa_warnings = skill_outputs.get("preliminary_analysis", {}).get("warnings", [])
+        pa_warnings = _skill_block(skill_outputs, "preliminary_analysis").get("warnings") or []
+        if not isinstance(pa_warnings, list):
+            pa_warnings = []
         existing_warnings = categorized.get("warnings", [])
         categorized["warnings"] = existing_warnings + pa_warnings
 

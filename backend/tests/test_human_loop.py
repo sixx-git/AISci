@@ -312,3 +312,38 @@ def test_advisory_chat_does_not_apply_changes():
     assert "标签分布" in result["explanation"]
     mock_save.assert_not_called()
 
+
+def test_summarize_downstream_context_for_rerun():
+    from unittest.mock import MagicMock
+
+    from app.models.pipeline import PipelineStage
+    from app.services.stage_human_loop_service import StageHumanLoopService
+
+    mock_db = MagicMock()
+    parent = MagicMock()
+    parent.id = "parent-db-id"
+
+    lit_exec = MagicMock()
+    lit_exec.stage = PipelineStage.SMALL_VALIDATION
+    lit_exec.stage_order = 8
+    lit_exec.output_data = {"warnings": ["数据列缺失 age"]}
+    lit_exec.extra_metadata = {"human_feedback": "请补全人口学变量"}
+
+    lit_exec2 = MagicMock()
+    lit_exec2.stage = PipelineStage.HYPOTHESIS_GENERATION
+    lit_exec2.stage_order = 5
+    lit_exec2.output_data = {"hypotheses": [{"hypothesis": "联邦学习可提升 AUC"}]}
+    lit_exec2.extra_metadata = {}
+
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        lit_exec2,
+        lit_exec,
+    ]
+
+    svc = StageHumanLoopService(mock_db)
+    summaries = svc.summarize_downstream_context_for_rerun(parent, "literature_mining")
+
+    assert any("假设" in s for s in summaries)
+    assert any("小样验证" in s or "数据列缺失" in s for s in summaries)
+    assert all(s.startswith("[项目进展]") for s in summaries)
+

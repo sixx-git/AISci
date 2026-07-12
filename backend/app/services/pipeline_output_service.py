@@ -9,11 +9,21 @@ from sqlalchemy.orm import Session
 
 from app.models.pipeline import PipelineStage, PipelineStageExecution, PipelineStatus
 from app.schemas.research import ExperimentDesignDBResponse, HypothesisResponse
-from app.services._utils.pipeline_queries import get_latest_pipeline_run, get_stage_output
+from app.services._utils.pipeline_queries import (
+    get_latest_pipeline_run,
+    get_latest_run_with_stage_output,
+    get_stage_output,
+)
 
 logger = logging.getLogger(__name__)
 
 _COMPLETED_OR_FAILED = [PipelineStatus.COMPLETED, PipelineStatus.FAILED]
+_PIPELINE_READ_STATUSES = [
+    PipelineStatus.COMPLETED,
+    PipelineStatus.FAILED,
+    PipelineStatus.RUNNING,
+    PipelineStatus.HUMAN_REVIEW_REQUIRED,
+]
 
 
 def safe_output_str(val: Any, default: str = "") -> str:
@@ -87,11 +97,38 @@ def parse_hypotheses_from_pipeline(
     return results
 
 
+def _resolve_experiment_hypothesis(db: Session, pipeline_run_id: str, output: dict) -> str:
+    hypothesis = (output.get("hypothesis") or "").strip()
+    if hypothesis:
+        return hypothesis
+    vh = output.get("verifiable_hypothesis")
+    if isinstance(vh, dict) and (vh.get("claim") or "").strip():
+        return str(vh.get("claim")).strip()
+    hr_out = get_stage_output(db, pipeline_run_id, PipelineStage.HYPOTHESIS_REVIEW)
+    if isinstance(hr_out, dict):
+        reviews = hr_out.get("reviews") or []
+        primary_idx = hr_out.get("primary_index", 0)
+        try:
+            primary_idx = int(primary_idx)
+        except (TypeError, ValueError):
+            primary_idx = 0
+        if reviews and 0 <= primary_idx < len(reviews) and isinstance(reviews[primary_idx], dict):
+            return (reviews[primary_idx].get("hypothesis") or "").strip()
+        if reviews and isinstance(reviews[0], dict):
+            return (reviews[0].get("hypothesis") or "").strip()
+    return ""
+
+
 def parse_experiment_design_from_pipeline(
     db: Session,
     project_id: str,
 ) -> List[ExperimentDesignDBResponse]:
-    latest_run = get_latest_pipeline_run(db, project_id, statuses=_COMPLETED_OR_FAILED)
+    latest_run = get_latest_run_with_stage_output(
+        db,
+        project_id,
+        PipelineStage.EXPERIMENT_DESIGN,
+        statuses=_PIPELINE_READ_STATUSES,
+    )
     if not latest_run:
         return []
 
@@ -101,11 +138,12 @@ def parse_experiment_design_from_pipeline(
 
     try:
         stage_exec = _stage_execution(db, latest_run.id, PipelineStage.EXPERIMENT_DESIGN)
+        hypothesis = _resolve_experiment_hypothesis(db, latest_run.id, output)
         return [ExperimentDesignDBResponse(
             id=f"pipeline-{latest_run.id}-experiment_design",
             project_id=project_id,
             hypothesis_id=output.get("hypothesis_id", "") or f"pipeline-run-{latest_run.id}",
-            hypothesis=output.get("hypothesis", ""),
+            hypothesis=hypothesis,
             methods=safe_output_str(output.get("methods", "")),
             datasets=safe_output_str(output.get("datasets", "")),
             source_data=safe_output_str(output.get("source_data", "")),

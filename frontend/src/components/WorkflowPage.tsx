@@ -1,5 +1,6 @@
 ﻿import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw, Database } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw, Database, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
@@ -13,7 +14,15 @@ import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, ITERATION_MODE_HINTS, type LoopConfigState } from '@/components/LoopConfigPanel';
 import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
 import { RunHistoryPanel } from '@/components/RunHistoryPanel';
+import { HitlGateModal } from '@/components/HitlGateModal';
 import { Button } from '@/components/Button';
+import { buildProjectTabUrl } from '@/lib/projectNavigation';
+import { getHitlGateReviewTarget } from '@/config/hitlGateReview';
+import {
+  buildHitlGateEventKey,
+  hasSeenHitlGateModal,
+  markHitlGateModalSeen,
+} from '@/lib/hitlGateModalStorage';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
 import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
@@ -21,6 +30,7 @@ import type {
   AgentNodeData,
   AgentStatus,
   PlotQualityData,
+  HitlGateInfo,
   PipelineRunExtraMetadata,
   PipelineRunResult,
   PipelineStageLog,
@@ -435,14 +445,108 @@ function extractRunStatusFromResponse(response: unknown): string | null {
   return typeof status === 'string' ? status : null;
 }
 
-function applyInferredRunningStage(nodes: AgentNodeData[], overallStatus: string | null): AgentNodeData[] {
-  if (overallStatus !== 'running') return nodes;
-  if (nodes.some((n) => n.status === 'running')) return nodes;
+const NODE_ORDER = BASE_AGENT_NODES.map((n) => n.id);
+
+const RESUME_PHASE_TO_NODE: Record<string, string> = {
+  after_hypothesis_generation: 'evaluation',
+  after_hypothesis_review: 'experiment',
+  after_experiment_design: 'validation',
+  after_small_validation: 'report',
+  after_data_acquisition: 'gaps',
+};
+
+function stageKeyToNodeId(stageKey?: string | null): string | null {
+  if (!stageKey) return null;
+  const normalized = normalizeStageName(stageKey);
+  return STAGE_TO_NODE_ID[normalized] ?? (NODE_ORDER.includes(normalized) ? normalized : null);
+}
+
+function extractExtraMetadataFromResponse(response: unknown): PipelineRunExtraMetadata | null {
+  if (!response || typeof response !== 'object') return null;
+  const r = response as Record<string, unknown>;
+  const data = (r.code != null && r.data != null ? r.data : response) as Record<string, unknown>;
+  if (!data || typeof data !== 'object') return null;
+  const meta = data.extra_metadata;
+  return meta && typeof meta === 'object' ? meta as PipelineRunExtraMetadata : null;
+}
+
+function extractCurrentStageFromResponse(response: unknown): string | null {
+  if (!response || typeof response !== 'object') return null;
+  const r = response as Record<string, unknown>;
+  const data = (r.code != null && r.data != null ? r.data : response) as Record<string, unknown>;
+  if (!data || typeof data !== 'object') return null;
+  const cs = data.current_stage;
+  return typeof cs === 'string' ? cs : null;
+}
+
+function inferRunningNodeId(
+  nodes: AgentNodeData[],
+  stages: PipelineStageLog[],
+  currentStage?: string | null,
+  extraMetadata?: PipelineRunExtraMetadata | null,
+): string | null {
+  const runningStage = stages.find((s) => mapStatus(s.status) === 'running');
+  if (runningStage) {
+    return stageKeyToNodeId(runningStage.stage) ?? null;
+  }
+
+  const fromCurrent = stageKeyToNodeId(currentStage);
+  if (fromCurrent) {
+    const currentNode = nodes.find((n) => n.id === fromCurrent);
+    // current_stage 在 DB 中可能滞后于阶段实际完成状态（如缺口完成后、假设生成前）
+    if (currentNode && currentNode.status !== 'completed') {
+      return fromCurrent;
+    }
+  }
+
+  const resumePhase = extraMetadata?.hitl_gate?.resume_phase;
+  if (resumePhase && RESUME_PHASE_TO_NODE[resumePhase]) {
+    return RESUME_PHASE_TO_NODE[resumePhase];
+  }
+
+  const cleared = extraMetadata?.hitl_gate?.cleared_stages ?? [];
+  const lastCleared = cleared[cleared.length - 1];
+  if (lastCleared) {
+    const afterPhase = `after_${lastCleared}`;
+    if (RESUME_PHASE_TO_NODE[afterPhase]) {
+      return RESUME_PHASE_TO_NODE[afterPhase];
+    }
+  }
+
+  let lastCompletedIdx = -1;
+  nodes.forEach((node, idx) => {
+    if (node.status === 'completed') lastCompletedIdx = idx;
+  });
+  if (lastCompletedIdx >= 0 && lastCompletedIdx < nodes.length - 1) {
+    return nodes[lastCompletedIdx + 1].id;
+  }
+
   const firstPending = nodes.findIndex((n) => n.status === 'pending');
-  if (firstPending < 0) return nodes;
-  return nodes.map((node, idx) => (
-    idx === firstPending ? { ...node, status: 'running' as AgentStatus } : node
-  ));
+  return firstPending >= 0 ? nodes[firstPending].id : null;
+}
+
+function applyInferredRunningStage(
+  nodes: AgentNodeData[],
+  overallStatus: string | null,
+  stages: PipelineStageLog[] = [],
+  currentStage?: string | null,
+  extraMetadata?: PipelineRunExtraMetadata | null,
+): AgentNodeData[] {
+  if (overallStatus !== 'running') return nodes;
+
+  const runningNodeId = inferRunningNodeId(nodes, stages, currentStage, extraMetadata);
+  if (!runningNodeId) return nodes;
+
+  // 仅一个节点为 running；已完成节点不被 current_stage 滞后拖回 running
+  return nodes.map((node) => {
+    if (node.id === runningNodeId) {
+      return node.status === 'completed' ? node : { ...node, status: 'running' as AgentStatus };
+    }
+    if (node.status === 'running') {
+      return { ...node, status: 'completed' as AgentStatus };
+    }
+    return node;
+  });
 }
 
 function extractStagesFromResponse(response: unknown): PipelineStageLog[] {
@@ -485,6 +589,7 @@ export function WorkflowPage({
   onPipelineStarted,
   onHumanLoopUpdated,
 }: WorkflowPageProps) {
+  const navigate = useNavigate();
   const [nodes, setNodes] = useState<AgentNodeData[]>(() => createInitialNodes());
   const [selectedId, setSelectedId] = useState<string>('');
 
@@ -497,14 +602,19 @@ export function WorkflowPage({
   const [staleWarning, setStaleWarning] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
-  const [, setPipelineRunStatus] = useState<string | null>(null);
+  const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
   const [loopConfig, setLoopConfig] = useState<LoopConfigState>(DEFAULT_LOOP_CONFIG);
+  const [showHitlModal, setShowHitlModal] = useState(false);
+  const [hitlGateInfo, setHitlGateInfo] = useState<HitlGateInfo | null>(null);
+  const [hitlGateRunId, setHitlGateRunId] = useState<string | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
   const allPendingCountRef = useRef(0);
   const currentRunIdRef = useRef<string | null>(null);
   const latestRunIdRef = useRef<string | null>(null);
+  const hitlModalShownForRunRef = useRef<string | null>(null);
+  const hitlGateEventKeyRef = useRef<string | null>(null);
 
   const rememberLatestRunId = useCallback((runId: string) => {
     latestRunIdRef.current = runId;
@@ -520,6 +630,10 @@ export function WorkflowPage({
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
   const selectedNodeId = selectedNode?.id ?? null;
+
+  const experimentDesignOutput = useMemo(() => {
+    return nodes.find((n) => n.id === 'experiment')?.output_data as Record<string, unknown> | undefined;
+  }, [nodes]);
 
   const plotQualityData = useMemo((): PlotQualityData | null => {
     for (const nodeId of ['validation', 'report'] as const) {
@@ -543,45 +657,129 @@ export function WorkflowPage({
 
   const verifiableValidation = useMemo(() => {
     const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
-    if (!validationOut) return null;
-    const checks = validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined;
-    const spec = validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
-    if (!(checks?.length) && !spec?.claim) return null;
+    if (validationOut) {
+      const checks = validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined;
+      const spec = validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
+      if (checks?.length || spec?.claim) {
+        return {
+          checks,
+          passed: validationOut.verifiable_passed as boolean | null | undefined,
+          spec,
+          isPreview: false,
+        };
+      }
+    }
+    const expSpec = experimentDesignOutput?.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
+    const expExpected = experimentDesignOutput?.expected_results;
+    if (expSpec?.claim || expExpected) {
+      return {
+        checks: undefined,
+        passed: null,
+        spec: expSpec?.claim
+          ? expSpec
+          : { claim: typeof expExpected === 'string' ? expExpected.slice(0, 300) : undefined },
+        isPreview: true,
+      };
+    }
+    return null;
+  }, [nodes, experimentDesignOutput]);
+
+  const validationPendingPreview = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data;
+    const experimentStatus = nodes.find((n) => n.id === 'experiment')?.status;
+    if (validationOut || experimentStatus !== 'completed' || !experimentDesignOutput) return null;
     return {
-      checks,
-      passed: validationOut.verifiable_passed as boolean | null | undefined,
-      spec,
+      verifiable_hypothesis: experimentDesignOutput.verifiable_hypothesis,
+      expected_results: experimentDesignOutput.expected_results,
+      methods: experimentDesignOutput.methods,
+      metrics: experimentDesignOutput.metrics,
+      hypothesis: experimentDesignOutput.hypothesis,
     };
-  }, [nodes]);
+  }, [nodes, experimentDesignOutput]);
 
   const federatedPilot = useMemo(() => {
     const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
     return (validationOut?.federated_pilot as Record<string, unknown> | undefined) ?? null;
   }, [nodes]);
 
-  const autoResumeHitlGate = useCallback(async (runId: string) => {
-    if (!projectId) return false;
+  const openHitlGateModal = useCallback(async (runId: string) => {
+    setHitlGateRunId(runId);
+    rememberLatestRunId(runId);
+
+    let gate: HitlGateInfo = { paused: true };
     try {
-      const res = await humanLoopService.resumeHitlGate({
-        run_id: runId,
-        project_id: projectId,
-        action: 'continue',
-      });
-      if (res.code === 200) {
-        const newRunId = res.data?.run_id;
-        if (newRunId && newRunId !== runId) {
-          setCurrentRunId(newRunId);
-          currentRunIdRef.current = newRunId;
-          setActiveRunId(projectId, newRunId);
-          return newRunId;
+      const [gateRes, detailRes] = await Promise.all([
+        humanLoopService.getHitlGateStatus(runId),
+        pipelineService.getRunDetail(runId),
+      ]);
+      if (gateRes.code === 200 && gateRes.data) {
+        const { run_id: _runId, status: _status, ...rest } = gateRes.data;
+        gate = { ...gate, ...rest };
+      }
+      if (detailRes.code === 200 && detailRes.data) {
+        const runDetail = detailRes.data;
+        setPipelineRunStatus((runDetail.status as string) ?? null);
+        setRunExtraMetadata(runDetail.extra_metadata ?? null);
+        if (runDetail.extra_metadata?.hitl_gate) {
+          gate = { ...gate, ...runDetail.extra_metadata.hitl_gate };
         }
-        return runId;
+        const mergedNodes = createInitialNodes().map((node) => {
+          const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
+          return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
+        });
+        setNodes(applyInferredRunningStage(
+          mergedNodes,
+          (runDetail.status as string) ?? null,
+          runDetail.stages as PipelineStageLog[] ?? [],
+          (runDetail as { current_stage?: string }).current_stage ?? null,
+          runDetail.extra_metadata ?? null,
+        ));
       }
     } catch {
-      /* ignore */
+      if (runExtraMetadata?.hitl_gate) {
+        gate = { ...gate, ...runExtraMetadata.hitl_gate };
+      }
     }
-    return false;
-  }, [projectId]);
+
+    setHitlGateInfo(gate);
+    const eventKey = buildHitlGateEventKey(runId, gate);
+    hitlGateEventKeyRef.current = eventKey;
+
+    if (hasSeenHitlGateModal(eventKey)) {
+      setRunState('idle');
+      setStatusMessage('流程暂停中，请前往审阅后确认继续');
+      return;
+    }
+
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    hitlModalShownForRunRef.current = runId;
+    setRunState('idle');
+    setStaleWarning(false);
+    setStatusMessage('流程已暂停，等待人工确认后继续');
+    markHitlGateModalSeen(eventKey);
+    setShowHitlModal(true);
+  }, [rememberLatestRunId, runExtraMetadata]);
+
+  const handleDismissHitlModal = useCallback(() => {
+    if (hitlGateEventKeyRef.current) {
+      markHitlGateModalSeen(hitlGateEventKeyRef.current);
+    }
+    setShowHitlModal(false);
+    setStatusMessage('流程暂停中，请前往审阅后确认继续');
+  }, []);
+
+  const handleGoToHitlReview = useCallback((tab: string) => {
+    if (!projectId) return;
+    if (hitlGateEventKeyRef.current) {
+      markHitlGateModalSeen(hitlGateEventKeyRef.current);
+    }
+    setShowHitlModal(false);
+    setStatusMessage('流程暂停中，请审阅后确认继续');
+    navigate(buildProjectTabUrl(projectId, tab));
+  }, [projectId, navigate]);
 
   // ========== 生命周期：挂载时恢复 active run ==========
   useEffect(() => {
@@ -622,15 +820,14 @@ export function WorkflowPage({
               setErrorMessage(errMsg || 'Pipeline 执行失败');
               setHasExistingRuns(true);
               rememberLatestRunId(savedRunId);
+              await refreshFromRunDetail(savedRunId);
+              const detailRes = await pipelineService.getRunDetail(savedRunId);
+              if (detailRes.data?.extra_metadata?.hitl_gate?.paused) {
+                await openHitlGateModal(savedRunId);
+              }
             }
           } else if (status === 'human_review_required') {
-            const resumedRunId = await autoResumeHitlGate(savedRunId);
-            if (resumedRunId) {
-              startPolling(typeof resumedRunId === 'string' ? resumedRunId : savedRunId);
-            } else {
-              setRunState('idle');
-              setStatusMessage('流程暂停，请重新运行 Pipeline');
-            }
+            await openHitlGateModal(savedRunId);
           } else if (status === 'running') {
             startPolling(savedRunId);
           } else {
@@ -693,10 +890,20 @@ export function WorkflowPage({
           return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
         });
       });
+
+      const runStatus = (runDetail.status as string) ?? null;
+      const hitlPaused = runDetail.extra_metadata?.hitl_gate?.paused;
+      if (hitlPaused || runStatus === 'human_review_required') {
+        const gate = runDetail.extra_metadata?.hitl_gate;
+        const eventKey = buildHitlGateEventKey(latestRun.run_id, gate);
+        if (!hasSeenHitlGateModal(eventKey)) {
+          await openHitlGateModal(latestRun.run_id);
+        }
+      }
     } catch {
       setHasExistingRuns(false);
     }
-  }, [projectId, rememberLatestRunId]);
+  }, [projectId, rememberLatestRunId, openHitlGateModal]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -716,7 +923,13 @@ export function WorkflowPage({
         const matchedStage = runDetail.stages?.find((s) => matchStageToNode(s as PipelineStageLog, node));
         return matchedStage ? mergeStageData(node, matchedStage as PipelineStageLog) : node;
       });
-      setNodes(applyInferredRunningStage(mergedNodes, runStatus));
+      setNodes(applyInferredRunningStage(
+        mergedNodes,
+        runStatus,
+        runDetail.stages as PipelineStageLog[] ?? [],
+        (runDetail as { current_stage?: string }).current_stage ?? null,
+        runDetail.extra_metadata ?? null,
+      ));
     } catch {
       /* ignore */
     }
@@ -726,9 +939,14 @@ export function WorkflowPage({
   const updateNodesFromStages = useCallback((response: unknown) => {
     const stages = extractStagesFromResponse(response);
     const overallStatus = extractRunStatusFromResponse(response);
+    const currentStage = extractCurrentStageFromResponse(response);
+    const extraMetadata = extractExtraMetadataFromResponse(response);
 
     if (overallStatus) {
       setPipelineRunStatus(overallStatus);
+    }
+    if (extraMetadata) {
+      setRunExtraMetadata(extraMetadata);
     }
 
     setNodes((prev) => {
@@ -739,7 +957,13 @@ export function WorkflowPage({
         return matchedStage ? mergeStageData(node, matchedStage) : node;
       });
 
-      return applyInferredRunningStage(updated, overallStatus);
+      return applyInferredRunningStage(
+        updated,
+        overallStatus,
+        stages,
+        currentStage,
+        extraMetadata,
+      );
     });
 
     if (import.meta.env.DEV && stages.length > 0) {
@@ -770,7 +994,7 @@ export function WorkflowPage({
       setStaleWarning(false);
       setStatusMessage('正在同步阶段状态…');
 
-      pollingRef.current = setInterval(async () => {
+      const pollOnce = async () => {
         try {
           const response = await pipelineService.getStatus(runId);
 
@@ -805,15 +1029,21 @@ export function WorkflowPage({
                   ? `执行失败在阶段: ${resultData.failed_stage}`
                   : 'Pipeline 执行失败');
               setErrorMessage(errMsg);
+              const detailRes = await pipelineService.getRunDetail(runId);
+              if (detailRes.data?.extra_metadata?.hitl_gate?.paused) {
+                await openHitlGateModal(runId);
+              }
             }
             return;
           }
 
           if (status === 'human_review_required') {
-            const resumedRunId = await autoResumeHitlGate(runId);
-            if (resumedRunId) {
-              startPolling(typeof resumedRunId === 'string' ? resumedRunId : runId);
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
             }
+            setRunState('idle');
+            await openHitlGateModal(runId);
             return;
           }
 
@@ -850,9 +1080,12 @@ export function WorkflowPage({
             setErrorMessage('无法获取 Pipeline 状态，请检查后端服务是否仍在运行。');
           }
         }
-      }, POLL_INTERVAL_MS);
+      };
+
+      void pollOnce();
+      pollingRef.current = setInterval(pollOnce, POLL_INTERVAL_MS);
     },
-    [updateNodesFromStages, refreshFromRunDetail, onPipelineCompleted, projectId, isAllPending],
+    [updateNodesFromStages, refreshFromRunDetail, onPipelineCompleted, projectId, isAllPending, openHitlGateModal],
   );
 
   // ========== handleRunAll ==========
@@ -880,6 +1113,11 @@ export function WorkflowPage({
     allPendingCountRef.current = 0;
     consecutiveFailuresRef.current = 0;
     setNodes(createInitialNodes());
+    setShowHitlModal(false);
+    setHitlGateInfo(null);
+    setHitlGateRunId(null);
+    hitlModalShownForRunRef.current = null;
+    hitlGateEventKeyRef.current = null;
 
     try {
       console.log('[Pipeline] submitting POST /pipeline/run projectId=', projectId, 'question=', finalResearchQuestion?.slice(0, 50));
@@ -1011,6 +1249,17 @@ export function WorkflowPage({
 
   // ========== 计算状态摘要 ==========
   const effectiveRunId = currentRunId ?? latestRunId;
+  const effectiveHitlRunId = hitlGateRunId ?? effectiveRunId;
+  const isHitlGatePaused = Boolean(
+    projectId
+    && effectiveHitlRunId
+    && !showHitlModal
+    && (
+      runExtraMetadata?.hitl_gate?.paused
+      || pipelineRunStatus === 'human_review_required'
+      || nodes.some((n) => n.status === 'human_review_required')
+    ),
+  );
   const showIterationHistory = Boolean(
     effectiveRunId
     && selectedNodeId
@@ -1021,6 +1270,11 @@ export function WorkflowPage({
 
   const runningStageName = nodes.find((n) => n.status === 'running')?.name ?? null;
   const failedStageName = nodes.find((n) => n.status === 'failed')?.name ?? null;
+
+  const hitlReviewTarget = useMemo(
+    () => getHitlGateReviewTarget(runExtraMetadata?.hitl_gate?.stage ?? hitlGateInfo?.stage),
+    [runExtraMetadata?.hitl_gate?.stage, hitlGateInfo?.stage],
+  );
 
   // ========== JSX ==========
   return (
@@ -1214,6 +1468,26 @@ export function WorkflowPage({
         </div>
       )}
 
+      {/* HITL 暂停提示条 */}
+      {isHitlGatePaused && effectiveHitlRunId && projectId && (
+        <div className="mb-6 p-4 bg-bp-yellow/10 border border-bp-yellow/30 rounded-bp flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-bp-yellow shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-bp-yellow font-medium">{hitlReviewTarget.continueTitle}</p>
+            <p className="text-xs text-bp-muted mt-1">{hitlReviewTarget.continueDescription}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => handleGoToHitlReview(hitlReviewTarget.tab)}
+            className="gap-1.5 shrink-0"
+          >
+            {hitlReviewTarget.ctaLabel}
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      )}
+
       {/* 操作栏 */}
       <div className="mb-6">
         <WorkflowActionBar
@@ -1263,6 +1537,22 @@ export function WorkflowPage({
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
+          {selectedNodeId === 'validation' && validationPendingPreview && (
+            <Card title="待验证方案" subtitle="实验设计已完成，小样验证尚未产出结果时将显示此处预览">
+              <div className="p-3 rounded-bp border bg-bp-cyan/5 border-bp-cyan/20 space-y-2 text-sm text-bp-text">
+                {typeof validationPendingPreview.hypothesis === 'string' && validationPendingPreview.hypothesis && (
+                  <p><span className="text-bp-muted">假设：</span>{validationPendingPreview.hypothesis}</p>
+                )}
+                {typeof validationPendingPreview.methods === 'string' && validationPendingPreview.methods && (
+                  <p><span className="text-bp-muted">方法：</span>{validationPendingPreview.methods.slice(0, 280)}{validationPendingPreview.methods.length > 280 ? '…' : ''}</p>
+                )}
+                {typeof validationPendingPreview.expected_results === 'string' && validationPendingPreview.expected_results && (
+                  <p><span className="text-bp-muted">预期结果：</span>{validationPendingPreview.expected_results.slice(0, 280)}{validationPendingPreview.expected_results.length > 280 ? '…' : ''}</p>
+                )}
+              </div>
+            </Card>
+          )}
+
           {showIterationHistory && (
             <CollapsiblePanel title="迭代历史" subtitle="里程碑 · 时间线 · 版本对比" defaultOpen>
               <IterationHistoryPanel
@@ -1280,7 +1570,10 @@ export function WorkflowPage({
           )}
 
           {selectedNodeId === 'validation' && verifiableValidation && (
-            <CollapsiblePanel title="可验证性检查" defaultOpen={false}>
+            <CollapsiblePanel
+              title={verifiableValidation.isPreview ? '可验证性检查（实验设计预览）' : '可验证性检查'}
+              defaultOpen={false}
+            >
               <VerifiableChecksPanel
                 checks={verifiableValidation.checks}
                 passed={verifiableValidation.passed ?? null}
@@ -1330,6 +1623,13 @@ export function WorkflowPage({
           )}
         </div>
       </div>
+
+      <HitlGateModal
+        open={showHitlModal}
+        gate={hitlGateInfo}
+        onDismiss={handleDismissHitlModal}
+        onGoReview={handleGoToHitlReview}
+      />
     </div>
   );
 }

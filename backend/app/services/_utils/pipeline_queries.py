@@ -20,6 +20,34 @@ def get_latest_pipeline_run(
     return query.order_by(PipelineRun.created_at.desc()).first()
 
 
+def get_latest_run_with_stage_output(
+    db: Session,
+    project_id: str,
+    stage: PipelineStage,
+    *,
+    statuses: Optional[List[PipelineStatus]] = None,
+) -> Optional[PipelineRun]:
+    """返回最近一条指定阶段已有 output_data 的 Pipeline run。"""
+    if statuses is None:
+        statuses = [
+            PipelineStatus.COMPLETED,
+            PipelineStatus.FAILED,
+            PipelineStatus.RUNNING,
+            PipelineStatus.HUMAN_REVIEW_REQUIRED,
+        ]
+    runs = (
+        db.query(PipelineRun)
+        .filter(PipelineRun.project_id == project_id, PipelineRun.status.in_(statuses))
+        .order_by(PipelineRun.created_at.desc())
+        .limit(12)
+        .all()
+    )
+    for run in runs:
+        if get_stage_output(db, run.id, stage):
+            return run
+    return None
+
+
 def get_stage_output(
     db: Session,
     pipeline_run_id: str,

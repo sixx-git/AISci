@@ -806,6 +806,7 @@ export interface PipelineRunResult {
   final_report?: Record<string, unknown>;
   final_report_id?: string;
   failed_stage?: string;
+  current_stage?: string;
   error_message?: string;
   extra_metadata?: PipelineRunExtraMetadata;
   created_at: string;

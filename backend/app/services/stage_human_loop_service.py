@@ -30,6 +30,18 @@ STAGE_KEY_ORDER = [
     "report_generation",
 ]
 
+STAGE_LABELS_ZH = {
+    "problem_understanding": "问题理解",
+    "literature_mining": "文献挖掘",
+    "data_acquisition": "数据采集",
+    "knowledge_gap": "知识缺口",
+    "hypothesis_generation": "假设生成",
+    "hypothesis_review": "假设评审",
+    "experiment_design": "实验设计",
+    "small_validation": "小样验证",
+    "report_generation": "报告生成",
+}
+
 
 def _now_iso() -> str:
     return datetime.now(CHINA_TZ).isoformat()
@@ -225,6 +237,83 @@ class StageHumanLoopService:
                 results[k] = parent_output[k]
         return results
 
+    def summarize_downstream_context_for_rerun(
+        self,
+        parent_run: PipelineRun,
+        from_stage: str,
+    ) -> List[str]:
+        """从重跑起点之后的父 run 阶段输出提取摘要，供早期阶段 Agent 感知当前项目进展。"""
+        if from_stage not in STAGE_KEY_ORDER:
+            return []
+        start_idx = STAGE_KEY_ORDER.index(from_stage)
+        stages = (
+            self.db.query(PipelineStageExecution)
+            .filter(PipelineStageExecution.pipeline_run_id == parent_run.id)
+            .order_by(PipelineStageExecution.stage_order)
+            .all()
+        )
+        stage_map = {
+            s.stage.value if hasattr(s.stage, "value") else str(s.stage): s for s in stages
+        }
+        summaries: List[str] = []
+        for key in STAGE_KEY_ORDER[start_idx + 1 :]:
+            exec_row = stage_map.get(key)
+            if not exec_row:
+                continue
+            output = get_effective_output(exec_row, use_human_modified=True)
+            if not isinstance(output, dict) or not output:
+                continue
+            label = STAGE_LABELS_ZH.get(key, key)
+            meta = get_stage_meta(exec_row)
+            human_fb = (meta.get("human_feedback") or "").strip()
+
+            if key == "hypothesis_generation":
+                hyps = output.get("hypotheses") or []
+                if hyps:
+                    primary = (hyps[0].get("hypothesis") or "")[:220]
+                    summaries.append(f"{label}: 已生成 {len(hyps)} 条假设，主假设「{primary}」")
+            elif key == "hypothesis_review":
+                score = output.get("overall_score") or output.get("ensemble_score")
+                verdict = output.get("verdict") or output.get("recommendation")
+                if score is not None or verdict:
+                    summaries.append(f"{label}: 评分={score}，结论={verdict}")
+            elif key == "experiment_design":
+                plan = (output.get("experiment_plan") or output.get("summary") or "")[:200]
+                if plan:
+                    summaries.append(f"{label}: {plan}")
+            elif key == "small_validation":
+                for w in (output.get("warnings") or [])[:3]:
+                    summaries.append(f"{label}警告: {w}")
+                pa = (
+                    ((output.get("skill_outputs") or {}).get("preliminary_analysis") or {}).get("data")
+                    or {}
+                )
+                if isinstance(pa, dict) and pa.get("summary"):
+                    summaries.append(f"{label}预分析: {str(pa['summary'])[:200]}")
+            elif key == "literature_mining":
+                facts_n = len(output.get("facts") or [])
+                papers_n = len(output.get("retrieved_papers") or output.get("source_papers") or [])
+                summaries.append(f"{label}: {facts_n} 条 facts，{papers_n} 篇文献")
+            elif key == "data_acquisition":
+                stats = (output.get("data_acquisition") or {}).get("stats") or {}
+                summaries.append(
+                    f"{label}: 外部候选 {stats.get('external_candidates', '?')}，"
+                    f"表格 {stats.get('tables', '?')}"
+                )
+            elif key == "knowledge_gap":
+                gaps = output.get("knowledge_gaps") or []
+                if gaps:
+                    summaries.append(f"{label}: {len(gaps)} 个缺口，首条「{str(gaps[0])[:120]}」")
+            elif key == "report_generation":
+                title = (output.get("title") or output.get("report_title") or "")[:120]
+                if title:
+                    summaries.append(f"{label}: {title}")
+
+            if human_fb:
+                summaries.append(f"{label}人工反馈: {human_fb[:300]}")
+
+        return [f"[项目进展] {s}" for s in summaries[:12]]
+
     def collect_feedback_constraints(self, run_id: str) -> List[str]:
         """汇总各阶段 human_feedback 为下一轮约束。"""
         run = self._get_run(run_id)
@@ -274,11 +363,40 @@ class StageHumanLoopService:
                 pass
         return gate
 
+    def _repair_stuck_pre_resume_stages(self, run: PipelineRun, gate_stage: str) -> None:
+        """HITL 继续前修复误从头重跑导致的 RUNNING 阶段（假设已生成场景）。"""
+        if gate_stage != "hypothesis_generation":
+            return
+        stages = (
+            self.db.query(PipelineStageExecution)
+            .filter(PipelineStageExecution.pipeline_run_id == run.id)
+            .order_by(PipelineStageExecution.stage_order)
+            .all()
+        )
+        hg = next((s for s in stages if s.stage_order == 5), None)
+        if not hg or hg.status != PipelineStatus.COMPLETED:
+            return
+        now = datetime.now(CHINA_TZ)
+        changed = False
+        for s in stages:
+            if s.stage_order >= 6:
+                continue
+            if s.status != PipelineStatus.RUNNING:
+                continue
+            if s.output_data:
+                s.status = PipelineStatus.COMPLETED
+                if not s.completed_at:
+                    s.completed_at = now
+            else:
+                s.status = PipelineStatus.FAILED
+                s.error_message = "HITL 恢复：取消误启动的阶段"
+                s.completed_at = now
+            changed = True
+        if changed:
+            self.db.commit()
+
     def _ensure_hitl_checkpoint(self, run: PipelineRun, stage_key: str) -> Dict[str, Any]:
         meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
-        if meta.get("pipeline_checkpoint"):
-            return meta
-
         if stage_key not in STAGE_KEY_ORDER:
             return meta
 
@@ -288,8 +406,10 @@ class StageHumanLoopService:
 
         next_stage = STAGE_KEY_ORDER[stage_idx + 1]
         results = self.seed_results_from_run(run, next_stage)
+        from app.services.data_finder_slim import slim_results_for_checkpoint
+
         meta["pipeline_checkpoint"] = {
-            "results": results,
+            "results": slim_results_for_checkpoint(results),
             "resume_phase": f"after_{stage_key}",
         }
         run.extra_metadata = meta
@@ -365,6 +485,7 @@ class StageHumanLoopService:
         gate.setdefault("stage_label", HITL_GATE_STAGE_LABELS.get(stage, stage))
         meta = self._ensure_hitl_checkpoint(run, stage)
         gate = dict(meta.get("hitl_gate") or gate)
+        self._repair_stuck_pre_resume_stages(run, stage)
 
         next_stage_map = {
             "hypothesis_generation": "hypothesis_review",

@@ -103,6 +103,7 @@ class PipelineService:
         self._validation_feedback_constraints: List[str] = []
         self._human_feedback_constraints: List[str] = []
         self._checkpoint_resume: Optional[Dict[str, Any]] = None
+        self._checkpoint_was_loaded: bool = False
         self._finalize_report_after_gate: bool = False
         self._skip_to_post_validation: bool = False
         self._last_pilot_results: Dict[str, Any] = {}
@@ -274,6 +275,10 @@ class PipelineService:
 
         version = (parent.version or 1) + 1
         feedback_constraints: List[str] = []
+        downstream_ctx = human_loop.summarize_downstream_context_for_rerun(parent, from_stage)
+        for c in downstream_ctx:
+            if c and c not in feedback_constraints:
+                feedback_constraints.append(c)
         if human_feedback and human_feedback.strip():
             feedback_constraints.append(human_feedback.strip())
             try:
@@ -301,6 +306,7 @@ class PipelineService:
                 "rerun_mode": rerun_mode,
                 "use_human_modified_output": use_human_modified_output,
                 "feedback_constraints": feedback_constraints,
+                "rerun_downstream_context": downstream_ctx,
                 "auxiliary_results": {
                     k: v for k, v in seeded.items()
                     if k not in STAGE_KEY_ORDER
@@ -410,19 +416,32 @@ class PipelineService:
             for c in meta.get("feedback_constraints") or []:
                 if c and c not in self._human_feedback_constraints:
                     self._human_feedback_constraints.append(c)
+            for c in meta.get("rerun_downstream_context") or []:
+                if c and c not in self._human_feedback_constraints:
+                    self._human_feedback_constraints.append(c)
 
         gate = meta.get("hitl_gate") or {}
-        if gate.get("resumed") and meta.get("pipeline_checkpoint"):
-            self._checkpoint_resume = dict(meta["pipeline_checkpoint"])
+        cp = meta.get("pipeline_checkpoint")
+        if isinstance(cp, dict) and cp.get("resume_phase") and not meta.get("rerun_from_stage"):
+            self._checkpoint_resume = dict(cp)
             self._human_feedback_constraints = list(gate.get("feedback_constraints") or [])
-            gate["resumed"] = False
+            gate = dict(gate)
             gate["paused"] = False
+            gate["resumed"] = False
+            gate["checkpoint_consumed"] = True
+            meta = dict(meta)
             meta["hitl_gate"] = gate
             self.db_pipeline_run.extra_metadata = meta
+            flag_modified(self.db_pipeline_run, "extra_metadata")
             try:
                 self.db.commit()
             except Exception:
                 pass
+            logger.info(
+                "[Pipeline] 已加载 HITL checkpoint run_id=%s phase=%s",
+                run_id,
+                cp.get("resume_phase"),
+            )
 
         set_prompt_project_id(project_id)
         self._run_pipeline_stages(research_question, project_id)
@@ -1506,6 +1525,195 @@ class PipelineService:
             )
         return result
 
+    def _resume_phase_to_start_idx(self, resume_phase: str) -> int:
+        mapping = {
+            "after_hypothesis_generation": 5,
+            "after_hypothesis_review": 6,
+            "after_experiment_design": 7,
+            "after_small_validation": 8,
+            "after_data_acquisition": 3,
+            "after_report_generation": 8,
+        }
+        return mapping.get(resume_phase, 0)
+
+    @staticmethod
+    def _is_truncated_stage_output(output: Any) -> bool:
+        return isinstance(output, dict) and output.get("_truncated") is True
+
+    def _load_stage_output_from_db(self, stage_key: str) -> Optional[Dict[str, Any]]:
+        for idx, d in enumerate(STAGE_DEFS):
+            if d["key"] != stage_key:
+                continue
+            exec_row = self.db_stage_executions.get(idx + 1)
+            if exec_row and exec_row.output_data and isinstance(exec_row.output_data, dict):
+                if not self._is_truncated_stage_output(exec_row.output_data):
+                    return exec_row.output_data
+            break
+        return None
+
+    def _hydrate_hypothesis_generation(
+        self,
+        hypothesis_generation: Optional[Dict[str, Any]],
+        project_id: str = "",
+    ) -> Dict[str, Any]:
+        """确保 hypothesis_generation 含 hypotheses（checkpoint 截断或缺失时从 DB 回填）。"""
+        hg = dict(hypothesis_generation or {})
+        if hg.get("hypotheses"):
+            return hg
+
+        db_out = self._load_stage_output_from_db("hypothesis_generation")
+        if db_out and db_out.get("hypotheses"):
+            hg.update(db_out)
+            return hg
+
+        if project_id and self.db:
+            db_hypos = HypothesisService(self.db).get_hypotheses_by_project(project_id, limit=20)
+            if db_hypos:
+                hyps: List[Dict[str, Any]] = []
+                for row in db_hypos:
+                    sfi = row.supporting_fact_ids
+                    if isinstance(sfi, str):
+                        try:
+                            sfi = json.loads(sfi)
+                        except (TypeError, ValueError):
+                            sfi = []
+                    hyps.append({
+                        "hypothesis": row.hypothesis,
+                        "rationale": row.rationale or "",
+                        "novelty": row.novelty or "",
+                        "testability": row.testability or "",
+                        "required_data": row.required_data or "",
+                        "possible_method": row.possible_method or "",
+                        "risk": row.risk or "",
+                        "supporting_fact_ids": sfi or [],
+                        "evidence_level": row.evidence_level or "medium",
+                        "validation_target": row.validation_target or "",
+                        "expected_measurable_effect": row.expected_measurable_effect or "",
+                    })
+                hg["hypotheses"] = hyps
+                if db_out:
+                    hg.setdefault("alignment", db_out.get("alignment"))
+                    hg.setdefault("summary", db_out.get("summary"))
+        return hg
+
+    def _repair_checkpoint_results(self, results: Dict[str, Any], start_idx: int) -> int:
+        """HITL checkpoint 恢复后修复截断阶段输出，必要时回退 start_idx 以重跑失败阶段。"""
+        for idx in range(min(start_idx, len(STAGE_DEFS))):
+            key = STAGE_DEFS[idx]["key"]
+            if key in results and self._is_truncated_stage_output(results[key]):
+                db_out = self._load_stage_output_from_db(key)
+                if db_out:
+                    results[key] = db_out
+                    logger.info(
+                        "[Pipeline] checkpoint 阶段 %s 已从 DB 回填 run_id=%s",
+                        key,
+                        self.run_id,
+                    )
+
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        hg = self._hydrate_hypothesis_generation(results.get("hypothesis_generation"), project_id)
+        if hg.get("hypotheses"):
+            results["hypothesis_generation"] = hg
+
+        hr = results.get("hypothesis_review") or {}
+        reviews = hr.get("reviews") or []
+        hyps = (results.get("hypothesis_generation") or {}).get("hypotheses") or []
+        if hyps and not reviews and start_idx >= 6:
+            for stale_key in (
+                "hypothesis_review",
+                "experiment_design",
+                "small_validation",
+                "report_generation",
+            ):
+                results.pop(stale_key, None)
+            logger.warning(
+                "[Pipeline] 假设评审无有效 reviews，回退至 hypothesis_review 重跑 run_id=%s",
+                self.run_id,
+            )
+            return 5
+        return start_idx
+
+    def _sync_db_stages_for_start_idx(self, start_idx: int, results: Dict[str, Any]) -> None:
+        """HITL 恢复时，将跳过的阶段在 DB 中标记为已完成，避免误显示为从头运行。"""
+        if start_idx <= 0:
+            return
+        from app.services.data_finder_slim import slim_stage_output
+
+        now = datetime.now(CHINA_TZ)
+        changed = False
+        for idx in range(start_idx):
+            order = idx + 1
+            stage_def = STAGE_DEFS[idx]
+            key = stage_def["key"]
+            existing = self.db_stage_executions.get(order)
+            if not existing:
+                continue
+            output = results.get(key) or existing.output_data
+            if output is None:
+                continue
+            slimmed = slim_stage_output(output, stage_key=key) if isinstance(output, dict) else output
+            if existing.status != DB_PipelineStatus.COMPLETED or not existing.output_data:
+                existing.status = DB_PipelineStatus.COMPLETED
+                existing.output_data = slimmed
+                existing.error_message = None
+                if not existing.completed_at:
+                    existing.completed_at = now
+                if existing.started_at and not existing.duration_ms:
+                    try:
+                        started = existing.started_at
+                        if started.tzinfo is None:
+                            started = started.replace(tzinfo=CHINA_TZ)
+                        existing.duration_ms = max(
+                            0,
+                            int((now - started).total_seconds() * 1000),
+                        )
+                    except Exception:
+                        pass
+                changed = True
+        if changed:
+            self.db.commit()
+            logger.info(
+                "[Pipeline] 已同步 DB 阶段状态至 start_idx=%s run_id=%s",
+                start_idx,
+                self.run_id,
+            )
+
+    def _maybe_bump_start_idx_for_hitl(self, start_idx: int, results: Dict[str, Any], meta: Dict[str, Any]) -> int:
+        """安全网：假设已生成但 start_idx 仍为 0 时，强制从 hypothesis_review 继续。"""
+        if start_idx >= 5:
+            return start_idx
+        gate = meta.get("hitl_gate") or {}
+        cp = meta.get("pipeline_checkpoint") or {}
+        paused_stage = gate.get("stage") or ""
+        hg_exec = self.db_stage_executions.get(5)
+        hr_exec = self.db_stage_executions.get(6)
+        hg_done = hg_exec and hg_exec.status == DB_PipelineStatus.COMPLETED and hg_exec.output_data
+        hr_pending = not hr_exec or hr_exec.status in (
+            DB_PipelineStatus.PENDING,
+            DB_PipelineStatus.RUNNING,
+        )
+        should_bump = (
+            hg_done
+            and hr_pending
+            and (
+                paused_stage == "hypothesis_generation"
+                or cp.get("resume_phase") == "after_hypothesis_generation"
+                or gate.get("resume_phase") == "after_hypothesis_generation"
+            )
+        )
+        if not should_bump:
+            return start_idx
+        if hg_exec and hg_exec.output_data and "hypothesis_generation" not in results:
+            results["hypothesis_generation"] = hg_exec.output_data
+        if cp.get("results") and isinstance(cp["results"], dict):
+            results.update(cp["results"])
+        logger.warning(
+            "[Pipeline] HITL 安全恢复: start_idx %s -> 5 (假设已生成) run_id=%s",
+            start_idx,
+            self.run_id,
+        )
+        return 5
+
     def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
         """执行 Pipeline 所有阶段（支持从中间阶段 rerun）。"""
         project_mode = self._get_project_mode(project_id)
@@ -1532,18 +1740,11 @@ class PipelineService:
         ]
 
         results: Dict[str, Any] = dict(self._seeded_results or {})
-        for idx, d in enumerate(STAGE_DEFS):
-            if idx < start_idx:
-                key = d["key"]
-                if key in results:
-                    stages[idx].status = PipelineStageStatus.COMPLETED
-                    stages[idx].output_data = results[key]
-                else:
-                    exec_row = self.db_stage_executions.get(idx + 1)
-                    if exec_row and exec_row.output_data:
-                        stages[idx].status = PipelineStageStatus.COMPLETED
-                        stages[idx].output_data = exec_row.output_data
-                        results[key] = exec_row.output_data
+        run_meta = (
+            self.db_pipeline_run.extra_metadata
+            if isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
 
         if getattr(self, "_checkpoint_resume", None):
             cp = self._checkpoint_resume
@@ -1551,22 +1752,43 @@ class PipelineService:
             if isinstance(cp_results, dict):
                 results.update(cp_results)
             resume_phase = cp.get("resume_phase") or ""
-            if resume_phase == "after_hypothesis_generation":
-                start_idx = max(start_idx, 5)
-            elif resume_phase == "after_hypothesis_review":
-                start_idx = max(start_idx, 6)
-            elif resume_phase == "after_experiment_design":
-                start_idx = max(start_idx, 7)
-            elif resume_phase == "after_small_validation":
-                start_idx = max(start_idx, 8)
+            start_idx = max(start_idx, self._resume_phase_to_start_idx(resume_phase))
+            if resume_phase == "after_small_validation":
                 self._skip_to_post_validation = True
-            elif resume_phase == "after_data_acquisition":
-                start_idx = 3
             elif resume_phase == "after_report_generation":
-                start_idx = max(start_idx, 8)
                 self._finalize_report_after_gate = True
             self._checkpoint_resume = None
+            self._checkpoint_was_loaded = True
             logger.info(f"[Pipeline] 从 HITL checkpoint 恢复 phase={resume_phase} start_idx={start_idx}")
+
+        start_idx = self._maybe_bump_start_idx_for_hitl(start_idx, results, run_meta)
+        if getattr(self, "_checkpoint_was_loaded", False):
+            start_idx = self._repair_checkpoint_results(results, start_idx)
+
+        for idx, d in enumerate(STAGE_DEFS):
+            if idx < start_idx:
+                key = d["key"]
+                if key in results:
+                    stage_out = results[key]
+                    if self._is_truncated_stage_output(stage_out):
+                        exec_row = self.db_stage_executions.get(idx + 1)
+                        if (
+                            exec_row
+                            and exec_row.output_data
+                            and not self._is_truncated_stage_output(exec_row.output_data)
+                        ):
+                            stage_out = exec_row.output_data
+                            results[key] = stage_out
+                    stages[idx].status = PipelineStageStatus.COMPLETED
+                    stages[idx].output_data = stage_out
+                else:
+                    exec_row = self.db_stage_executions.get(idx + 1)
+                    if exec_row and exec_row.output_data:
+                        stages[idx].status = PipelineStageStatus.COMPLETED
+                        stages[idx].output_data = exec_row.output_data
+                        results[key] = exec_row.output_data
+
+        self._sync_db_stages_for_start_idx(start_idx, results)
 
         final_report_id: Optional[str] = None
         pipeline_start = datetime.now(CHINA_TZ)
@@ -1614,6 +1836,10 @@ class PipelineService:
             
             # ── 阶段 5: HypothesisGenerationAgent ──
             if start_idx <= 4:
+                # 缺口完成后立即更新 current_stage，避免轮询间隙 UI 仍显示缺口运行中
+                self.db_pipeline_run.current_stage = STAGE_DEFS[4]["key"]
+                self.db.commit()
+
                 # ── P3: Ideation 新颖性预检（OpenAlex + Semantic Scholar）──
                 try:
                     ideation = self._exec_ideation_novelty(
@@ -2241,11 +2467,21 @@ class PipelineService:
 
         return data_context
 
+    def _augment_query_for_rerun(self, research_question: str) -> str:
+        """将人工约束与下游进展摘要并入检索 query（跨阶段重跑时）。"""
+        notes = [c for c in (self._human_feedback_constraints or []) if c and str(c).strip()]
+        if not notes:
+            return research_question
+        suffix = " ".join(str(n) for n in notes[:6])[:900]
+        combined = f"{research_question} [修正约束与项目进展: {suffix}]"
+        return combined[:1200]
+
     def _exec_literature_mining(self, project_id: str, research_question: str):
         agent = get_literature_mining_agent()
+        query = self._augment_query_for_rerun(research_question)
         result = agent.mine(
             project_id=project_id,
-            research_question=research_question,
+            research_question=query,
             top_k=self._get_literature_top_k(),
             db=self.db,
         )
@@ -2362,9 +2598,13 @@ class PipelineService:
                 selected_hypothesis = str(angles[0])[:200]
 
         service = get_data_finder_service(self.db)
+        merged_refinement = list(refinement_queries or [])
+        for c in getattr(self, "_human_feedback_constraints", []) or []:
+            if c and c not in merged_refinement:
+                merged_refinement.append(c)
         search_query = research_question
-        if refinement_queries:
-            search_query = f"{research_question} {' '.join(refinement_queries[:4])}"[:500]
+        if merged_refinement:
+            search_query = f"{research_question} {' '.join(str(q) for q in merged_refinement[:6])}"[:800]
 
         final = service.run_data_acquisition_sync(
             project_id=project_id,
@@ -2543,8 +2783,14 @@ class PipelineService:
         from app.agents.hypothesis_review_agent import HypothesisCandidate
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         agent = get_hypothesis_review_agent()
-        hg = hypothesis_generation or {}
+        hg = self._hydrate_hypothesis_generation(hypothesis_generation, project_id)
         hypotheses = hg.get("hypotheses", [])
+        if not hypotheses:
+            logger.warning(
+                "[Pipeline] 假设评估无候选假设 run_id=%s project_id=%s",
+                self.run_id,
+                project_id,
+            )
         alignment_data = hg.get("alignment", {})
         alignments = alignment_data.get("alignments", []) if alignment_data else []
         enriched_candidates = []
@@ -2718,7 +2964,21 @@ class PipelineService:
         hr = hypothesis_review or {}
         reviews = hr.get("reviews", [])
         if not reviews:
-            return {}
+            pid = project_id or (self.db_pipeline_run.project_id if self.db_pipeline_run else "")
+            hg = self._hydrate_hypothesis_generation(
+                self._stage_results.get("hypothesis_generation"),
+                pid,
+            )
+            if hg.get("hypotheses"):
+                return {
+                    "error": "missing_hypothesis_reviews",
+                    "summary": "假设评审结果为空，无法生成实验设计。请重新运行「假设评估」阶段。",
+                    "hypothesis_count": len(hg.get("hypotheses") or []),
+                }
+            return {
+                "error": "missing_hypothesis_reviews",
+                "summary": "未找到候选假设或评审结果，无法生成实验设计。",
+            }
 
         primary_idx = hr.get("primary_index")
         if primary_idx is None:
@@ -2828,6 +3088,7 @@ class PipelineService:
             experiment_design=result_dict,
         )
         result_dict["verifiable_hypothesis"] = spec
+        result_dict["hypothesis"] = best_review.get("hypothesis", "") or ""
         if hg.get("hypotheses"):
             refreshed = attach_verifiable_specs_to_hypotheses(
                 hg,
@@ -2847,16 +3108,16 @@ class PipelineService:
         agent = get_small_validation_agent()
         ed = experiment_design or {}
         hr = hypothesis_review or {}
-        reviews = hr.get("reviews", [])
-        hypothesis = ed.get("hypothesis") or (
-            reviews[0].get("hypothesis", "") if reviews else ""
-        )
+        reviews = hr.get("reviews") or []
+        primary_review = reviews[0] if reviews and isinstance(reviews[0], dict) else {}
+        hypothesis = ed.get("hypothesis") or primary_review.get("hypothesis", "")
 
-        multimodal_datasets = []
-        ed_skill_outputs = ed.get("skill_outputs", {})
-        ingest_output = ed_skill_outputs.get("multimodal_data_ingest", {})
-        if isinstance(ingest_output, dict) and ingest_output.get("data"):
-            multimodal_datasets = ingest_output["data"].get("datasets", [])
+        multimodal_datasets: List[Dict[str, Any]] = []
+        ed_skill_outputs = ed.get("skill_outputs") or {}
+        ingest_output = ed_skill_outputs.get("multimodal_data_ingest") or {}
+        ingest_data = ingest_output.get("data") if isinstance(ingest_output, dict) else None
+        if isinstance(ingest_data, dict):
+            multimodal_datasets = list(ingest_data.get("datasets") or [])
 
         modeling_results = []
         if project_id:
@@ -2894,10 +3155,9 @@ class PipelineService:
                             "extra_metadata": ds.extra_metadata,
                         }
                     )
-                df_results = get_data_finder_service(self.db).load_results(project_id)
-                merged_path = (df_results or {}).get("merged", {}).get("cleaned_csv_path") or (
-                    (df_results or {}).get("merged", {}).get("merged_csv_path")
-                )
+                df_results = get_data_finder_service(self.db).load_results(project_id) or {}
+                merged = df_results.get("merged") if isinstance(df_results.get("merged"), dict) else {}
+                merged_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
                 if merged_path and os.path.exists(merged_path):
                     multimodal_datasets.insert(0, {
                         "dataset_id": "data_finder_merged",

@@ -115,6 +115,7 @@ class PipelineRunSummary(BaseModel):
     total_duration_ms: Optional[int]
     final_report_id: Optional[str]
     failed_stage: Optional[str]
+    current_stage: Optional[str] = None
     created_at: datetime
     extra_metadata: Optional[Dict[str, Any]] = None
 
@@ -147,6 +148,7 @@ class PipelineRunResult(BaseModel):
     final_report: Optional[Dict[str, Any]] = None
     final_report_id: Optional[str] = Field(None, description="生成的报告 ID")
     failed_stage: Optional[str] = Field(None, description="失败的阶段名称")
+    current_stage: Optional[str] = Field(None, description="当前执行阶段 key")
     extra_metadata: Optional[Dict[str, Any]] = Field(None, description="闭环事件与质量趋势")
     created_at: datetime
     completed_at: Optional[datetime] = None

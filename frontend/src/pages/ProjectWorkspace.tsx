@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   HelpCircle,
@@ -262,6 +262,7 @@ export function ProjectWorkspace() {
   const [latestRunStages, setLatestRunStages] = useState<
     Array<{ stage?: string; status?: string; output_data?: unknown }>
   >([]);
+  const experimentDesignSyncedRef = useRef<string | null>(null);
   const [project, setProject] = useState<ProjectOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -374,6 +375,19 @@ export function ProjectWorkspace() {
       if (timer) clearInterval(timer);
     };
   }, [id, latestRun?.run_id, isRunActive, revalidateKey]);
+
+  useEffect(() => {
+    const runId = latestRun?.run_id;
+    if (!runId) return;
+    const expStage = latestRunStages.find(
+      (s) => (s.stage ?? '').toLowerCase() === 'experiment_design',
+    );
+    if (expStage?.status !== 'completed') return;
+    const syncKey = `${runId}:experiment_design`;
+    if (experimentDesignSyncedRef.current === syncKey) return;
+    experimentDesignSyncedRef.current = syncKey;
+    setRevalidateKey((k) => k + 1);
+  }, [latestRun?.run_id, latestRunStages]);
 
   // --- 项目数据加载 ---
   useEffect(() => {

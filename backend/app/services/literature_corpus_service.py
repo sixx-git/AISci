@@ -6,7 +6,12 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.skills.literature.literature_discovery_pipeline import score_paper_relevance
+from app.skills.literature.literature_discovery_pipeline import (
+    extract_core_concepts,
+    filter_papers_by_llm_relevance,
+    passes_concept_filter,
+    score_paper_relevance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +88,8 @@ def ensure_corpora_from_search(
     if (search_papers_output or {}).get("queries"):
         terms.extend((search_papers_output or {}).get("queries") or [])
 
+    core_concepts = extract_core_concepts(research_question, extra_terms=terms)
+
     ranked = sorted(
         papers,
         key=lambda p: _score_paper_relevance(p, research_question, terms),
@@ -90,13 +97,13 @@ def ensure_corpora_from_search(
     )[: max_import * 3]
 
     effective_min = min_score
-    if len(ranked) < 3:
-        effective_min = min(min_score, 0.3)
 
     to_import: List[Dict[str, Any]] = []
     for p in ranked:
         if len(to_import) >= max_import:
             break
+        if not passes_concept_filter(p, core_concepts):
+            continue
         if _score_paper_relevance(p, research_question, terms) < effective_min:
             continue
         ext_id = p.get("external_id") or p.get("arxiv_id") or p.get("doi") or ""
@@ -109,6 +116,20 @@ def ensure_corpora_from_search(
 
     if not to_import:
         return {"imported": 0, "skipped": True, "reason": "无足够相关论文"}
+
+    domain_hint = "；".join(core_concepts[:10])
+    to_import, llm_gate = filter_papers_by_llm_relevance(
+        to_import,
+        research_question,
+        domain_hint=domain_hint,
+    )
+    if not to_import:
+        return {
+            "imported": 0,
+            "skipped": True,
+            "reason": "LLM 相关性门控未通过",
+            "llm_relevance_gate": llm_gate,
+        }
 
     service = LiteratureIngestionService(db)
     arxiv_batch = [p for p in to_import if p.get("arxiv_id") or p.get("source") == "arxiv"]
@@ -164,6 +185,8 @@ def ensure_corpora_from_search(
         "retrieval_provenance": {
             "query": research_question[:200],
             "expanded_queries": terms[:8],
+            "core_concepts": core_concepts[:12],
+            "llm_relevance_gate": llm_gate,
             "source_api": (search_papers_output or {}).get("sources_searched") or [],
             "discovery_mode": (search_papers_output or {}).get("discovery_mode"),
             "imported_ids": imported_ids,

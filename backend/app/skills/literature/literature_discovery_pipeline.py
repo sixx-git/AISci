@@ -29,6 +29,153 @@ INTER_QUERY_DELAY_SEC = 4.0
 MAX_CITATION_SEEDS = 2
 MAX_CITATION_PER_SEED = 5
 
+# 泛化检索：停用词过滤（非领域硬编码）
+_SEARCH_STOPWORDS = frozenset({
+    "the", "and", "for", "with", "how", "what", "whether", "are", "is", "in", "on", "to", "of",
+    "a", "an", "or", "not", "can", "does", "do", "be", "by", "from", "this", "that", "which",
+    "问题", "如何", "是否", "有没有", "方案", "研究", "应用", "场景", "不同", "存在", "实现",
+    "方法", "机制", "设计", "一种", "解决", "从而", "以及", "进行", "关于", "对于", "全局",
+    "稳定", "高精度", "预测", "模型", "数据", "设备", "客户端", "空间", "重叠",
+})
+
+
+def normalize_api_search_query(query: str) -> str:
+    """将 LLM 布尔检索式转为 API 友好的空格关键词（arXiv/OpenAlex 不支持 AND/OR/括号）。"""
+    q = (query or "").strip()
+    if not q:
+        return ""
+    phrases = re.findall(r'"([^"]+)"', q)
+    q = re.sub(r"\b(AND|OR|NOT)\b", " ", q, flags=re.I)
+    q = re.sub(r'["\(\)]', " ", q)
+    tokens: List[str] = []
+    for p in phrases:
+        p = p.strip()
+        if len(p) >= 2:
+            tokens.append(p)
+    for t in re.split(r"[\s,，；;、/|]+", q):
+        t = t.strip()
+        if len(t) >= 2 and t.lower() not in ("and", "or", "not"):
+            tokens.append(t)
+    seen: Set[str] = set()
+    out: List[str] = []
+    for t in tokens:
+        key = t.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(t)
+    return " ".join(out[:12])[:240]
+
+
+def extract_core_concepts(
+    research_question: str,
+    keywords: Optional[List[str]] = None,
+    extra_terms: Optional[List[str]] = None,
+) -> List[str]:
+    """概念泛化：从问题/关键词提取可迁移的核心术语（跨领域通用，无硬编码领域表）。"""
+    raw_parts: List[str] = [research_question or ""]
+    raw_parts.extend(str(k) for k in (keywords or []) if k)
+    raw_parts.extend(str(t) for t in (extra_terms or []) if t)
+
+    concepts: List[str] = []
+    seen: Set[str] = set()
+
+    def _add(c: str) -> None:
+        c = c.strip()
+        if len(c) < 2:
+            return
+        key = c.lower()
+        if key in _SEARCH_STOPWORDS:
+            return
+        if key not in seen:
+            seen.add(key)
+            concepts.append(c)
+
+    for part in raw_parts:
+        norm = normalize_api_search_query(str(part)) or str(part)
+        for zh in re.findall(r"[\u4e00-\u9fff]{2,12}", norm):
+            _add(zh)
+        for token in re.split(r"[\s,，。；;、/|]+", norm):
+            token = token.strip(".,;:")
+            if not token:
+                continue
+            if re.fullmatch(r"[A-Za-z]{2,}", token):
+                _add(token)
+            elif len(token) >= 3 and re.search(r"[A-Za-z]", token):
+                _add(token)
+    return concepts[:24]
+
+
+def concept_overlap_stats(
+    paper: Dict[str, Any],
+    core_concepts: List[str],
+) -> Tuple[int, float, List[str]]:
+    """术语过滤：统计论文与核心概念的重叠（标题权重高于摘要）。"""
+    title = (paper.get("title") or "").lower()
+    abstract = (paper.get("abstract") or "").lower()
+    matched: List[str] = []
+    weight = 0.0
+    for concept in core_concepts:
+        c = concept.lower().strip()
+        if len(c) < 2:
+            continue
+        in_title = c in title or (len(c) >= 4 and c in title.replace("-", " "))
+        in_abstract = c in abstract
+        if in_title:
+            matched.append(concept)
+            weight += 2.0
+        elif in_abstract:
+            matched.append(concept)
+            weight += 1.0
+    return len(matched), weight, matched
+
+
+def passes_concept_filter(
+    paper: Dict[str, Any],
+    core_concepts: List[str],
+    *,
+    min_matches: Optional[int] = None,
+) -> bool:
+    """跨领域可迁移：要求论文覆盖足够数量的核心概念，而非维护领域黑名单。"""
+    if not core_concepts:
+        return True
+    count, _, matched = concept_overlap_stats(paper, core_concepts)
+    required = min_matches if min_matches is not None else max(2, min(4, len(core_concepts) // 4))
+    if len(core_concepts) <= 3:
+        required = 1
+    if count >= required:
+        return True
+    title = (paper.get("title") or "").lower()
+    if any(len(m) >= 6 and m.lower() in title for m in matched):
+        return count >= 1
+    return False
+
+
+def build_generalized_queries(
+    research_question: str,
+    keywords: Optional[List[str]] = None,
+) -> List[str]:
+    """用核心概念组合生成可迁移的 API 检索式（与领域无关）。"""
+    concepts = extract_core_concepts(research_question, keywords=keywords)
+    if not concepts:
+        return heuristic_expand_queries(research_question, keywords)
+
+    en = [c for c in concepts if re.search(r"[A-Za-z]", c)]
+    zh = [c for c in concepts if re.search(r"[\u4e00-\u9fff]", c)]
+    queries: List[str] = []
+    if en:
+        queries.append(" ".join(en[:6])[:200])
+        if len(en) > 3:
+            queries.append(" ".join(en[3:9])[:200])
+    if zh:
+        queries.append(" ".join(zh[:5])[:120])
+    merged = heuristic_expand_queries(research_question, keywords)
+    seen = {q.lower() for q in queries}
+    for q in merged:
+        if q.lower() not in seen and len(queries) < MAX_QUERIES:
+            queries.append(q)
+            seen.add(q.lower())
+    return queries[:MAX_QUERIES] or merged
+
 
 def _tokenize_query(text: str) -> List[str]:
     text = (text or "").strip()
@@ -78,19 +225,20 @@ def expand_queries_llm(research_question: str, keywords: Optional[List[str]] = N
 
     settings = get_settings()
     if settings.USE_MOCK_LLM or not settings.QWEN_API_KEY:
-        return heuristic_expand_queries(research_question, keywords)
+        return build_generalized_queries(research_question, keywords)
 
     kw_hint = ", ".join(keywords or [])[:200]
     prompt = (
-        "你是学术文献检索专家。根据研究问题生成 3~5 条互补的英文学术检索式，"
-        "覆盖同义词、方法名、应用领域与相关子问题。避免重复。\n\n"
+        "你是学术文献检索专家。根据研究问题生成 3 条互补的英文学术检索式。\n"
+        "要求：每条为 4~8 个英文关键词，用空格分隔；不要使用 AND/OR/NOT、括号或引号。\n"
+        "覆盖方法名、应用场景与核心机制，避免重复。\n\n"
         f"研究问题: {research_question}\n"
         f"已知关键词: {kw_hint or '无'}\n"
     )
     schema = {
         "queries": [
-            "query 1 focused on core mechanism",
-            "query 2 focused on methods",
+            "federated learning IoT heterogeneous labels",
+            "vertical federated learning label alignment privacy",
         ],
         "rationale": "brief explanation",
     }
@@ -102,26 +250,40 @@ def expand_queries_llm(research_question: str, keywords: Optional[List[str]] = N
             prompt_version="literature_query_expand_v1",
         )
         queries = result.get("queries") if isinstance(result, dict) else []
-        cleaned = [str(q).strip() for q in (queries or []) if str(q).strip()]
+        cleaned = [
+            normalize_api_search_query(str(q).strip())
+            for q in (queries or [])
+            if str(q).strip()
+        ]
+        cleaned = [q for q in cleaned if q]
         if cleaned:
             merged = heuristic_expand_queries(research_question, keywords)
             for q in merged:
-                if q not in cleaned and len(cleaned) < MAX_QUERIES:
-                    cleaned.append(q)
+                norm = normalize_api_search_query(q)
+                if norm and norm not in cleaned and len(cleaned) < MAX_QUERIES:
+                    cleaned.append(norm)
             return cleaned[:MAX_QUERIES]
     except Exception as exc:
         logger.warning("LLM 检索词扩展失败，使用启发式: %s", exc)
-    return heuristic_expand_queries(research_question, keywords)
+    return build_generalized_queries(research_question, keywords)
 
 
-def score_paper_relevance(paper: Dict[str, Any], research_question: str, extra_terms: Optional[List[str]] = None) -> float:
-    """Selector 打分 — 标题/摘要词匹配 + 引用量（PaperSeek/Feynman 式）。"""
+def score_paper_relevance(
+    paper: Dict[str, Any],
+    research_question: str,
+    extra_terms: Optional[List[str]] = None,
+    *,
+    keywords: Optional[List[str]] = None,
+) -> float:
+    """Selector 打分 — 词匹配 + 核心概念重叠 + 引用量。"""
+    core = extract_core_concepts(research_question, keywords=keywords, extra_terms=extra_terms)
     q = (research_question or "").lower()
     title = (paper.get("title") or "").lower()
     abstract = (paper.get("abstract") or "").lower()
     terms: List[str] = []
-    for src in [q] + [t.lower() for t in (extra_terms or [])]:
-        for t in re.split(r"[\s,，。；;、/|]+", src):
+    for src in [q] + list(extra_terms or []):
+        norm_src = normalize_api_search_query(str(src)) or str(src)
+        for t in re.split(r"[\s,，。；;、/|]+", norm_src.lower()):
             t = t.strip()
             if len(t) >= 2:
                 terms.append(t)
@@ -141,6 +303,9 @@ def score_paper_relevance(paper: Dict[str, Any], research_question: str, extra_t
         elif len(term) >= 3 and any(term in w for w in title.split()):
             score += 1.2
 
+    _, overlap_w, _ = concept_overlap_stats(paper, core)
+    score += overlap_w * 0.9
+
     if paper.get("arxiv_id") or paper.get("pdf_url"):
         score += 0.5
     try:
@@ -153,6 +318,94 @@ def score_paper_relevance(paper: Dict[str, Any], research_question: str, extra_t
     if paper.get("selector_relevant") is False:
         score -= 5.0
     return score
+
+
+def filter_papers_by_llm_relevance(
+    papers: List[Dict[str, Any]],
+    research_question: str,
+    *,
+    domain_hint: str = "",
+    max_check: int = 12,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """最终 LLM 门控：批量判断候选论文是否与输入问题或其研究领域相关。"""
+    from app.core.config import get_settings
+    from app.services.qwen_client import qwen_structured_chat
+
+    if not papers:
+        return [], {"skipped": True, "reason": "empty_candidates"}
+
+    settings = get_settings()
+    if settings.USE_MOCK_LLM or not (settings.QWEN_API_KEY or "").strip():
+        return papers, {"skipped": True, "reason": "llm_unavailable"}
+
+    batch = papers[:max_check]
+    catalog = [
+        {
+            "index": i,
+            "title": (p.get("title") or "")[:220],
+            "abstract": (p.get("abstract") or "")[:450],
+        }
+        for i, p in enumerate(batch)
+    ]
+    prompt = (
+        "你是学术文献相关性审稿人。请判断每篇候选论文是否与「研究问题」或其学科领域真正相关。\n"
+        "规则：\n"
+        "- 研究对象、应用场景、方法目标应与问题一致或高度相关；\n"
+        "- 仅因泛化词（如 privacy、learning、transfer）部分重叠但领域明显不同的，判为不相关；\n"
+        "- 跨学科但直接回答问题的综述/方法论文可判为相关。\n\n"
+        f"研究问题:\n{research_question[:700]}\n\n"
+        f"领域/关键词提示: {(domain_hint or '无')[:300]}\n\n"
+        f"候选论文:\n{json.dumps(catalog, ensure_ascii=False, indent=2)}"
+    )
+    schema = {
+        "reviews": [
+            {
+                "index": 0,
+                "relevant": True,
+                "reason": "与问题领域直接相关的一句话理由",
+            }
+        ],
+    }
+    meta: Dict[str, Any] = {"checked": len(batch), "kept": len(batch)}
+    try:
+        result = qwen_structured_chat(
+            prompt=prompt,
+            schema_example=schema,
+            temperature=0.1,
+            prompt_version="literature_relevance_gate_v1",
+        )
+        reviews = result.get("reviews") if isinstance(result, dict) else []
+        reject: Set[int] = set()
+        review_log: List[Dict[str, Any]] = []
+        for row in reviews or []:
+            if not isinstance(row, dict):
+                continue
+            idx = row.get("index")
+            if idx is None or not isinstance(idx, int) or idx < 0 or idx >= len(batch):
+                continue
+            relevant = bool(row.get("relevant"))
+            reason = str(row.get("reason") or "")[:200]
+            review_log.append({"index": idx, "relevant": relevant, "reason": reason, "title": catalog[idx]["title"][:120]})
+            if not relevant:
+                reject.add(idx)
+        kept = [p for i, p in enumerate(batch) if i not in reject]
+        meta = {
+            "skipped": False,
+            "checked": len(batch),
+            "kept": len(kept),
+            "rejected": len(reject),
+            "reviews": review_log[:20],
+        }
+        logger.info(
+            "[文献相关性门控] checked=%s kept=%s rejected=%s",
+            meta["checked"],
+            meta["kept"],
+            meta["rejected"],
+        )
+        return kept, meta
+    except Exception as exc:
+        logger.warning("[文献相关性门控] LLM 失败，保留概念过滤结果: %s", exc)
+        return papers, {"skipped": True, "reason": "llm_error", "error": str(exc)[:200]}
 
 
 async def _http_get_json(url: str, *, source_name: str = "openalex") -> dict:
@@ -284,10 +537,11 @@ class LiteratureDiscoveryPipeline:
         for qi, query in enumerate(queries):
             if qi > 0:
                 await asyncio.sleep(INTER_QUERY_DELAY_SEC)
+            api_query = normalize_api_search_query(query) or query
             try:
                 result = await self.search_skill.run(
                     input_data={
-                        "research_question": query,
+                        "research_question": api_query,
                         "keywords": keywords or [],
                         "max_results": max(10, max_results // max(1, len(queries))),
                         "sources": self.sources,
@@ -296,7 +550,7 @@ class LiteratureDiscoveryPipeline:
                 )
                 papers = (result.data or {}).get("papers") or []
                 all_papers.extend(papers)
-                per_query_status.append({"query": query, "count": len(papers), "success": result.success})
+                per_query_status.append({"query": api_query, "count": len(papers), "success": result.success})
                 source_warnings.extend((result.data or {}).get("warnings") or [])
             except Exception as exc:
                 per_query_status.append({"query": query, "count": 0, "success": False, "error": str(exc)[:120]})
@@ -309,7 +563,7 @@ class LiteratureDiscoveryPipeline:
         if expand_citations and deduped:
             ranked_seeds = sorted(
                 deduped,
-                key=lambda p: score_paper_relevance(p, research_question, queries),
+                key=lambda p: score_paper_relevance(p, research_question, queries, keywords=keywords),
                 reverse=True,
             )
             cite_papers, citation_warnings = await expand_citations_openalex(ranked_seeds)
@@ -320,7 +574,7 @@ class LiteratureDiscoveryPipeline:
 
         ranked = sorted(
             deduped,
-            key=lambda p: score_paper_relevance(p, research_question, queries),
+            key=lambda p: score_paper_relevance(p, research_question, queries, keywords=keywords),
             reverse=True,
         )[:max_results]
 

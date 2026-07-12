@@ -16,6 +16,7 @@ import hypothesisService from '@/services/hypothesisService';
 import scienceIterationService from '@/services/scienceIterationService';
 import { pipelineService } from '@/services/pipelineService';
 import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
+import { HitlGateContinueBar } from '@/components/HitlGateContinueBar';
 import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
 import { CounterfactualPreviewPanel } from '@/components/CounterfactualPreviewPanel';
@@ -327,6 +328,15 @@ export function HypothesesPage({
 
   return (
     <div className="max-w-7xl mx-auto">
+      {_projectId && (
+        <HitlGateContinueBar
+          projectId={_projectId}
+          runId={_latestRunId}
+          stages={['hypothesis_generation', 'hypothesis_review']}
+          revalidateKey={_revalidateKey}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-bp-text mb-2">候选假设</h1>

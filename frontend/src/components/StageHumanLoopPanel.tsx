@@ -11,6 +11,7 @@ import { PromptConsole } from '@/components/PromptConsole';
 const NODE_ID_TO_STAGE: Record<string, string> = {
   problem: 'problem_understanding',
   literature: 'literature_mining',
+  data: 'data_acquisition',
   gaps: 'knowledge_gap',
   hypothesis: 'hypothesis_generation',
   evaluation: 'hypothesis_review',
@@ -18,6 +19,18 @@ const NODE_ID_TO_STAGE: Record<string, string> = {
   validation: 'small_validation',
   report: 'report_generation',
 };
+
+const STAGE_RERUN_OPTIONS: { key: string; label: string }[] = [
+  { key: 'problem_understanding', label: '问题理解' },
+  { key: 'literature_mining', label: '文献挖掘' },
+  { key: 'data_acquisition', label: '数据采集' },
+  { key: 'knowledge_gap', label: '知识缺口' },
+  { key: 'hypothesis_generation', label: '假设生成' },
+  { key: 'hypothesis_review', label: '假设评审' },
+  { key: 'experiment_design', label: '实验设计' },
+  { key: 'small_validation', label: '小样验证' },
+  { key: 'report_generation', label: '报告生成' },
+];
 
 interface ChatTurn {
   id?: string;
@@ -79,12 +92,14 @@ export function StageHumanLoopPanel({
 }: StageHumanLoopPanelProps) {
   const navigate = useNavigate();
   const stage = NODE_ID_TO_STAGE[nodeId] || nodeId;
+  const currentStageLabel = STAGE_RERUN_OPTIONS.find((s) => s.key === stage)?.label || stage;
   const effectiveOutput = humanModifiedOutput || outputData || {};
   const [editJson, setEditJson] = useState('');
   const [feedback, setFeedback] = useState(humanFeedback || '');
   const [chatMessage, setChatMessage] = useState('');
   const [interactionMode, setInteractionMode] = useState<HitlInteractionMode>('advisory');
   const [rerunScope, setRerunScope] = useState<RerunMode>('single_stage');
+  const [rerunTargetStage, setRerunTargetStage] = useState(stage);
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>(chatHistoryProp);
   const [latestReply, setLatestReply] = useState('');
   const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
@@ -95,6 +110,10 @@ export function StageHumanLoopPanel({
   const [recentFeedbackEntries, setRecentFeedbackEntries] = useState<Array<Record<string, unknown>>>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const userChattingRef = useRef(false);
+
+  useEffect(() => {
+    setRerunTargetStage(stage);
+  }, [stage]);
 
   const loadChatHistory = useCallback(async () => {
     if (!runId || !stage) return;
@@ -212,14 +231,15 @@ export function StageHumanLoopPanel({
         const res = await humanLoopService.rerunFromStage({
           project_id: projectId,
           run_id: runId,
-          stage,
+          stage: rerunTargetStage,
           use_human_modified_output: true,
           rerun_mode: rerunScope,
           human_feedback: userMsg,
         });
+        const targetLabel = STAGE_RERUN_OPTIONS.find((s) => s.key === rerunTargetStage)?.label || rerunTargetStage;
         const scopeLabel = rerunScope === 'single_stage' ? '仅重跑本阶段' : '从此阶段继续后续流程';
         const explanation = res.code === 200 && res.data?.run_id
-          ? `已提交智能体重跑（${scopeLabel}）。新 run: ${res.data.run_id.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
+          ? `已提交智能体重跑（${targetLabel} · ${scopeLabel}）。新 run: ${res.data.run_id.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
           : res.message || '重跑提交失败';
         setChatHistory((prev) => {
           const next = [...prev];
@@ -314,9 +334,10 @@ export function StageHumanLoopPanel({
       const res = await humanLoopService.rerunFromStage({
         project_id: projectId,
         run_id: runId,
-        stage,
+        stage: rerunTargetStage,
         use_human_modified_output: true,
         rerun_mode: 'from_stage_onward',
+        human_feedback: feedback.trim() || undefined,
       });
       if (res.code === 200 && res.data?.run_id) {
         onRerunStarted?.(res.data.run_id);
@@ -388,25 +409,48 @@ export function StageHumanLoopPanel({
           </p>
 
           {interactionMode === 'rerun_agent' && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
-                <input
-                  type="radio"
-                  name="rerun-scope"
-                  checked={rerunScope === 'single_stage'}
-                  onChange={() => setRerunScope('single_stage')}
-                />
-                仅重跑本阶段
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
-                <input
-                  type="radio"
-                  name="rerun-scope"
-                  checked={rerunScope === 'from_stage_onward'}
-                  onChange={() => setRerunScope('from_stage_onward')}
-                />
-                重跑并继续后续流程
-              </label>
+            <div className="space-y-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-bp-muted">重跑起点</span>
+                <select
+                  className="text-xs rounded-bp border border-bp-border bg-bp-base px-2 py-1 text-bp-text"
+                  value={rerunTargetStage}
+                  onChange={(e) => setRerunTargetStage(e.target.value)}
+                  disabled={!!busy}
+                >
+                  {STAGE_RERUN_OPTIONS.map((opt) => (
+                    <option key={opt.key} value={opt.key}>{opt.label}</option>
+                  ))}
+                </select>
+                {rerunTargetStage !== stage && (
+                  <span className="text-xs text-bp-yellow">
+                    从「{STAGE_RERUN_OPTIONS.find((s) => s.key === rerunTargetStage)?.label}」重跑（当前查看：{currentStageLabel}）
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-bp-muted/80">
+                跨阶段重跑会保留起点之前的阶段结果，并将你在对话中的问题与下游进展摘要注入目标智能体。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
+                  <input
+                    type="radio"
+                    name="rerun-scope"
+                    checked={rerunScope === 'single_stage'}
+                    onChange={() => setRerunScope('single_stage')}
+                  />
+                  仅重跑本阶段
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
+                  <input
+                    type="radio"
+                    name="rerun-scope"
+                    checked={rerunScope === 'from_stage_onward'}
+                    onChange={() => setRerunScope('from_stage_onward')}
+                  />
+                  重跑并继续后续流程
+                </label>
+              </div>
             </div>
           )}
 

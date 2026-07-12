@@ -44,6 +44,34 @@ function JsonBlock({ data }: { data: unknown }) {
   if (data === null || data === undefined) {
     return <span className="text-sm text-bp-muted italic">无数据</span>;
   }
+  if (
+    typeof data === 'object'
+    && !Array.isArray(data)
+    && Object.keys(data as object).length === 0
+  ) {
+    return (
+      <span className="text-sm text-bp-muted italic">
+        无有效输出（阶段未产生结构化结果）
+      </span>
+    );
+  }
+  if (
+    typeof data === 'object'
+    && data !== null
+    && !Array.isArray(data)
+    && 'error' in data
+    && typeof (data as Record<string, unknown>).summary === 'string'
+  ) {
+    const err = data as Record<string, unknown>;
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-danger-400">{String(err.summary)}</p>
+        <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-bp p-3 max-h-48 overflow-y-auto">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </div>
+    );
+  }
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   return (
     <pre className="text-xs text-bp-muted font-mono whitespace-pre-wrap bg-bp-base/60 border border-bp-border rounded-bp p-3 max-h-48 overflow-y-auto">

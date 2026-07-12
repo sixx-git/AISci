@@ -136,12 +136,70 @@ def slim_data_acquisition_output(output: Any) -> Dict[str, Any]:
     }
 
 
+def slim_hypothesis_generation_for_checkpoint(output: Dict[str, Any]) -> Dict[str, Any]:
+    """Checkpoint 保留完整 hypotheses 列表，仅裁剪非关键大块字段。"""
+    if not isinstance(output, dict):
+        return output if isinstance(output, dict) else {}
+    out: Dict[str, Any] = {
+        "summary": _truncate_str(output.get("summary"), 2000),
+        "primary_verifiable_spec": output.get("primary_verifiable_spec"),
+    }
+    hyps = output.get("hypotheses") or []
+    slim_hyps: List[Dict[str, Any]] = []
+    for h in hyps:
+        if not isinstance(h, dict):
+            continue
+        slim_hyps.append({
+            "hypothesis": _truncate_str(h.get("hypothesis"), 4000),
+            "rationale": _truncate_str(h.get("rationale"), 2000),
+            "novelty": _truncate_str(h.get("novelty"), 1000),
+            "testability": _truncate_str(h.get("testability"), 1000),
+            "required_data": _truncate_str(h.get("required_data"), 1000),
+            "possible_method": _truncate_str(h.get("possible_method"), 1000),
+            "risk": _truncate_str(h.get("risk"), 1000),
+            "supporting_fact_ids": list(h.get("supporting_fact_ids") or [])[:40],
+            "validation_target": _truncate_str(h.get("validation_target"), 500),
+            "expected_measurable_effect": _truncate_str(h.get("expected_measurable_effect"), 500),
+            "evidence_level": h.get("evidence_level"),
+            "verifiable_spec": h.get("verifiable_spec") if isinstance(h.get("verifiable_spec"), dict) else {},
+            "alignment_score": h.get("alignment_score"),
+            "off_topic": h.get("off_topic"),
+        })
+    out["hypotheses"] = slim_hyps
+
+    align = output.get("alignment")
+    if isinstance(align, dict):
+        out["alignment"] = {
+            "alignments": (align.get("alignments") or [])[:20],
+            "summary": _truncate_str(align.get("summary"), 1000),
+        }
+
+    ht = output.get("hypothesis_tree")
+    if isinstance(ht, dict):
+        branches = ht.get("branches") or []
+        out["hypothesis_tree"] = {
+            "summary": _truncate_str(ht.get("summary"), 1000),
+            "branches": [
+                {
+                    "hypothesis_index": b.get("hypothesis_index"),
+                    "composite_score": b.get("composite_score"),
+                    "hypothesis": _truncate_str(b.get("hypothesis"), 800),
+                }
+                for b in branches[:5]
+                if isinstance(b, dict)
+            ],
+        }
+    return out
+
+
 def slim_results_for_checkpoint(results: Dict[str, Any]) -> Dict[str, Any]:
     """Checkpoint / stage 输入持久化前的 results 瘦身。"""
     safe: Dict[str, Any] = {}
     for key, val in results.items():
         if key in ("data_finder", "data_acquisition"):
             safe[key] = slim_data_acquisition_output(val if isinstance(val, dict) else {})
+        elif key == "hypothesis_generation" and isinstance(val, dict):
+            safe[key] = slim_hypothesis_generation_for_checkpoint(val)
         elif key == "literature_mining" and isinstance(val, dict):
             lm = dict(val)
             so = lm.get("skill_outputs")
