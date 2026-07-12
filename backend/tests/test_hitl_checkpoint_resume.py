@@ -10,12 +10,12 @@ from app.services.pipeline_service import PipelineService
 
 def test_resume_phase_to_start_idx_hypothesis_generation():
     svc = PipelineService(db=None)  # type: ignore[arg-type]
-    assert svc._resume_phase_to_start_idx("after_hypothesis_generation") == 5
+    assert svc._resume_phase_to_start_idx("after_hypothesis_generation") == 4
 
 
 def test_resume_phase_to_start_idx_hypothesis_review():
     svc = PipelineService(db=None)  # type: ignore[arg-type]
-    assert svc._resume_phase_to_start_idx("after_hypothesis_review") == 6
+    assert svc._resume_phase_to_start_idx("after_hypothesis_review") == 5
 
 
 def test_resume_phase_unknown_defaults_zero():
@@ -60,7 +60,7 @@ def test_repair_checkpoint_results_backfills_truncated_hypothesis_generation():
     svc = PipelineService(db=None)  # type: ignore[arg-type]
     svc.run_id = "test-run"
     svc.db_pipeline_run = SimpleNamespace(project_id="proj-1")
-    svc.db_stage_executions = {5: exec_row}
+    svc.db_stage_executions = {4: exec_row}
 
     results = {
         "hypothesis_generation": {"_truncated": True, "preview": "..."},
@@ -68,7 +68,7 @@ def test_repair_checkpoint_results_backfills_truncated_hypothesis_generation():
     }
     new_idx = svc._repair_checkpoint_results(results, start_idx=6)
 
-    assert new_idx == 5
+    assert new_idx == 4
     assert len(results["hypothesis_generation"]["hypotheses"]) == 1
     assert "hypothesis_review" not in results
     assert "experiment_design" not in results
@@ -91,7 +91,7 @@ def test_hydrate_hypothesis_generation_from_db_stage():
     }
     exec_row = SimpleNamespace(output_data=full_hg)
     svc = PipelineService(db=None)  # type: ignore[arg-type]
-    svc.db_stage_executions = {5: exec_row}
+    svc.db_stage_executions = {4: exec_row}
 
     hg = svc._hydrate_hypothesis_generation({"_truncated": True}, project_id="")
     assert len(hg["hypotheses"]) == 1

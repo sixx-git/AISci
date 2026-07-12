@@ -9,7 +9,7 @@ import {
   FlaskConical, CheckCircle, XCircle, Database,
   BarChart3, ListChecks, Target, BookOpen,
   AlertTriangle, Lightbulb, Play,
-  Sparkles,
+  Sparkles, Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import experimentService from '@/services/experimentService';
@@ -27,7 +27,32 @@ import { selectedHypothesisKey } from '@/lib/storageKeys';
 import { navigateToProjectTab } from '@/lib/projectNavigation';
 import { AdversarialReviewSummary } from '@/components/AdversarialReviewSummary';
 import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
-import type { DetailedExperimentDesign } from '@/types';
+import type { DetailedExperimentDesign, PipelineRunResult } from '@/types';
+
+interface ExperimentDataRequirements {
+  upload_status?: string;
+  uploaded_dataset_count?: number;
+  uploaded_datasets?: Array<{
+    filename?: string;
+    data_type?: string;
+    n_rows?: number;
+    n_columns?: number;
+    columns?: string[];
+  }>;
+  required_data_description?: string;
+  validation_target?: string;
+  metrics?: string;
+  recommended_public_datasets?: string[];
+  gaps?: string[];
+  summary?: string;
+  next_action?: string;
+}
+
+function extractDataRequirements(run: PipelineRunResult | null | undefined): ExperimentDataRequirements | null {
+  const raw = run?.experiment_design?.data_requirements;
+  if (!raw || typeof raw !== 'object') return null;
+  return raw as ExperimentDataRequirements;
+}
 
 interface ExperimentDesignPageProps {
   projectId?: string;
@@ -88,6 +113,135 @@ async function pollPipelineUntilDone(runId: string): Promise<'completed' | 'fail
     }
   }
   return 'timeout';
+}
+
+function DataRequirementsPanel({
+  requirements,
+  onUploadClick,
+  onRegenerate,
+  regenerating,
+}: {
+  requirements: ExperimentDataRequirements;
+  onUploadClick: () => void;
+  onRegenerate: () => void;
+  regenerating?: boolean;
+}) {
+  const pending = requirements.upload_status === 'pending_upload'
+    || (requirements.uploaded_dataset_count ?? 0) === 0;
+  const uploaded = requirements.uploaded_datasets ?? [];
+
+  return (
+    <Card className={cn(
+      'mb-6 border',
+      pending ? 'border-bp-yellow/40 bg-bp-yellow/5' : 'border-bp-green/30 bg-bp-green/5',
+    )}>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Database className={cn('w-5 h-5 shrink-0', pending ? 'text-bp-yellow' : 'text-bp-green')} />
+          <div>
+            <h3 className="text-sm font-semibold text-bp-text">数据需求与上传状态</h3>
+            <p className="text-xs text-bp-muted mt-0.5">
+              {requirements.summary || (pending
+                ? '请先在「数据集」页上传研究数据，再重跑实验设计。'
+                : '已结合上传数据生成实验方案。')}
+            </p>
+          </div>
+        </div>
+        <span className={cn(
+          'text-xs px-2 py-1 rounded-full border font-medium',
+          pending
+            ? 'text-bp-yellow border-bp-yellow/40 bg-bp-yellow/10'
+            : 'text-bp-green border-bp-green/30 bg-bp-green/10',
+        )}>
+          {pending ? '待上传数据' : `已上传 ${requirements.uploaded_dataset_count ?? uploaded.length} 个数据集`}
+        </span>
+      </div>
+
+      {requirements.required_data_description && (
+        <div className="mt-4 p-3 rounded-lg bg-bp-base/60 border border-bp-border">
+          <p className="text-xs text-bp-muted mb-1">所需数据</p>
+          <p className="text-sm text-bp-text whitespace-pre-wrap">{requirements.required_data_description}</p>
+        </div>
+      )}
+
+      {(requirements.validation_target || requirements.metrics) && (
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          {requirements.validation_target && (
+            <div>
+              <span className="text-xs text-bp-muted">验证目标</span>
+              <p className="text-bp-text mt-0.5">{requirements.validation_target}</p>
+            </div>
+          )}
+          {requirements.metrics && (
+            <div>
+              <span className="text-xs text-bp-muted">评估指标</span>
+              <p className="text-bp-text mt-0.5">{requirements.metrics}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {Array.isArray(requirements.gaps) && requirements.gaps.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs text-bp-muted mb-1.5">数据缺口</p>
+          <ul className="text-sm text-bp-text space-y-1 list-disc list-inside">
+            {requirements.gaps.map((gap) => (
+              <li key={gap}>{gap}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {uploaded.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <p className="text-xs text-bp-muted mb-2">已上传数据集</p>
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-bp-muted border-b border-bp-border">
+                <th className="py-1.5 pr-3 font-medium">文件名</th>
+                <th className="py-1.5 pr-3 font-medium">类型</th>
+                <th className="py-1.5 pr-3 font-medium">规模</th>
+                <th className="py-1.5 font-medium">列（节选）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uploaded.map((ds) => (
+                <tr key={ds.filename || JSON.stringify(ds)} className="border-b border-bp-border/50">
+                  <td className="py-1.5 pr-3 text-bp-text">{ds.filename || '—'}</td>
+                  <td className="py-1.5 pr-3 text-bp-muted">{ds.data_type || '—'}</td>
+                  <td className="py-1.5 pr-3 text-bp-muted">
+                    {ds.n_rows != null && ds.n_columns != null
+                      ? `${ds.n_rows} × ${ds.n_columns}`
+                      : '—'}
+                  </td>
+                  <td className="py-1.5 text-bp-muted truncate max-w-[200px]">
+                    {(ds.columns ?? []).slice(0, 6).join(', ') || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" icon={<Upload className="w-4 h-4" />} onClick={onUploadClick}>
+          前往数据集页上传
+        </Button>
+        {pending && (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Sparkles className="w-4 h-4" />}
+            onClick={onRegenerate}
+            isLoading={regenerating}
+          >
+            上传后重跑实验设计
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 function VerifiabilityChecklist({ exp }: { exp: DetailedExperimentDesign }) {
@@ -227,6 +381,7 @@ export function ExperimentDesignPage({
   const navigate = useNavigate();
   const { message: alertMsg, showAlert } = useToast();
   const [experiment, setExperiment] = useState<DetailedExperimentDesign | null>(null);
+  const [dataRequirements, setDataRequirements] = useState<ExperimentDataRequirements | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
@@ -255,11 +410,10 @@ export function ExperimentDesignPage({
     setLoading(true);
     setError(null);
 
-    experimentService.getProjectExperimentDesigns(_projectId)
+    const loadExperiment = experimentService.getProjectExperimentDesigns(_projectId)
       .then((res) => {
         if (res.code === 200 && Array.isArray(res.data) && res.data.length > 0) {
-          const mapped = mapBackendExperimentDesignToDetailed(res.data[0]);
-          setExperiment(mapped);
+          setExperiment(mapBackendExperimentDesignToDetailed(res.data[0]));
         } else {
           setExperiment(null);
         }
@@ -267,9 +421,31 @@ export function ExperimentDesignPage({
       .catch((err) => {
         setError(getErrorMessage(err, '获取实验设计失败，请检查后端服务是否启动'));
         setExperiment(null);
+      });
+
+    const loadDataRequirements = resolvePipelineRunId(_projectId, _latestRunId)
+      .then(async (runId) => {
+        if (!runId) {
+          setDataRequirements(null);
+          return;
+        }
+        const res = await pipelineService.getStatus(runId);
+        if (res.code === 200 && res.data) {
+          setDataRequirements(extractDataRequirements(res.data));
+        } else {
+          setDataRequirements(null);
+        }
       })
-      .finally(() => setLoading(false));
+      .catch(() => setDataRequirements(null));
+
+    Promise.all([loadExperiment, loadDataRequirements]).finally(() => setLoading(false));
   }, [_projectId, _revalidateKey, _latestRunId, reloadTick]);
+
+  const handleOpenDatasets = useCallback(() => {
+    if (_projectId) {
+      navigateToProjectTab(navigate, _projectId, 'datasets');
+    }
+  }, [_projectId, navigate]);
 
   const handleOpenWorkflow = useCallback(() => {
     if (_projectId) {
@@ -335,7 +511,7 @@ export function ExperimentDesignPage({
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-bp-text mb-2">实验设计</h1>
         <p className="text-bp-muted">
-          为选定科学假设生成可执行、可复现的验证方案
+          为选定科学假设生成可执行、可复现的验证方案；请先在工作流完成假设评估，上传数据集后再运行实验设计
           {projectMode === 'federated_learning' && (
             <span className="ml-2 text-bp-cyan text-sm">· 联邦学习模式</span>
           )}
@@ -355,6 +531,15 @@ export function ExperimentDesignPage({
             onViewDetail={() => navigateToProjectTab(navigate, _projectId, 'hypotheses')}
           />
         </div>
+      )}
+
+      {!loading && dataRequirements && _projectId && (
+        <DataRequirementsPanel
+          requirements={dataRequirements}
+          onUploadClick={handleOpenDatasets}
+          onRegenerate={handleGenerate}
+          regenerating={generatingDesign}
+        />
       )}
 
       {loading && (
@@ -381,8 +566,8 @@ export function ExperimentDesignPage({
               : <AlertTriangle className="w-8 h-8 text-bp-yellow" />}
             title={selectedHypothesisId ? '当前主假设尚未生成实验设计' : '暂无实验设计'}
             description={selectedHypothesisId
-              ? '请在候选假设页面选择主假设后，运行工作流中的实验设计阶段。'
-              : '请先在候选假设页面选择一个主假设，然后运行 Pipeline 的实验设计阶段。'}
+              ? '请在工作流完成假设评估；在「数据集」页上传 CSV 后运行实验设计阶段。'
+              : '请先在候选假设页面选择一个主假设，完成评估并上传数据集后运行实验设计。'}
             action={{ label: '前往工作流', onClick: handleGenerate }}
           />
         </Card>

@@ -50,6 +50,8 @@ export function LlmConfigForm({
   const [customModel, setCustomModel] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const keyConfigured = config?.api_key_configured ?? false;
 
@@ -65,6 +67,7 @@ export function LlmConfigForm({
     setModelSelect(select);
     setCustomModel(custom);
     setBaseUrl(c.base_url);
+    setTestResult(null);
   }, []);
 
   const loadConfig = useCallback(async () => {
@@ -91,6 +94,30 @@ export function LlmConfigForm({
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  const runConnectionTest = useCallback(async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await llmConfigService.testConnection();
+      if (res.code === 200 && res.data) {
+        setTestResult(res.data.ok
+          ? `✓ ${res.data.message}${res.data.latency_ms != null ? `（${res.data.latency_ms}ms）` : ''}`
+          : `✗ ${res.data.message}`);
+        if (!res.data.ok) {
+          setError(res.data.message);
+        }
+      } else {
+        setTestResult(`✗ ${res.message || '测试失败'}`);
+      }
+    } catch (err) {
+      const msg = getErrorMessage(err, '连接测试失败');
+      setTestResult(`✗ ${msg}`);
+      setError(msg);
+    } finally {
+      setTesting(false);
+    }
+  }, []);
 
   const handleSave = async () => {
     if (!qwenModel) {
@@ -135,6 +162,7 @@ export function LlmConfigForm({
         syncFormFromConfig(res.data);
         setApiKeyInput('');
         onConfigChange?.(res.data);
+        await runConnectionTest();
       } else {
         setError(res.message || '保存失败');
       }
@@ -320,6 +348,18 @@ export function LlmConfigForm({
             <span>（已覆盖 .env 默认 {config.env_model}）</span>
           )}
           <span className="block mt-1">切换后请点击「保存配置」；将持久化到 backend/data/llm_runtime.json，重启后端仍生效。</span>
+          <span className="block mt-1 text-bp-yellow/90">注意：百炼免费额度按模型独立计费，换模型后请用「测试连接」确认该模型可用，否则会持续 403。</span>
+        </p>
+      )}
+
+      {testResult && (
+        <p className={cn(
+          'text-xs rounded-bp border px-2.5 py-2',
+          testResult.startsWith('✓')
+            ? 'border-bp-green/30 bg-bp-green/10 text-bp-green'
+            : 'border-danger-500/30 bg-danger-500/10 text-danger-300',
+        )}>
+          {testResult}
         </p>
       )}
 
@@ -331,15 +371,25 @@ export function LlmConfigForm({
       )}
 
       {showFooter && (
-        <Button
-          size="sm"
-          className="w-full sm:w-auto"
-          onClick={handleSave}
-          isLoading={saving}
-          disabled={loading}
-        >
-          保存配置
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={handleSave}
+            isLoading={saving}
+            disabled={loading || testing}
+          >
+            保存配置
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void runConnectionTest()}
+            isLoading={testing}
+            disabled={loading || saving}
+          >
+            测试连接
+          </Button>
+        </div>
       )}
     </div>
   );

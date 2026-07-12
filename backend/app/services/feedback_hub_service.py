@@ -18,7 +18,7 @@ VALID_SOURCES = {
 }
 RERUN_TARGETS = {
     "literature": ["literature_mining"],
-    "data_finder": ["data_acquisition"],
+    "data_finder": ["experiment_design"],
     "hypothesis": ["hypothesis_generation", "hypothesis_review"],
     "experiment": ["experiment_design", "small_validation"],
     "kg": ["knowledge_gap"],

@@ -96,7 +96,7 @@ def update_llm_config(body: LlmConfigUpdateRequest):
 
 @router.post("/test", response_model=ResponseModel[LlmTestResponse])
 def test_llm_connection():
-    """测试当前配置能否初始化 LLM 客户端"""
+    """测试当前配置能否用所选模型成功调用千问 API。"""
     from app.core.llm_runtime import get_effective_use_mock_llm, get_effective_model
 
     if get_effective_use_mock_llm():
@@ -107,25 +107,29 @@ def test_llm_connection():
 
     import time
     t0 = time.time()
+    model = get_effective_model()
     try:
+        reset_qwen_client()
         client = QwenClient()
-        ok = bool(client.api_key and client.client)
-        latency = int((time.time() - t0) * 1000)
-        if not ok:
+        if not client.api_key:
+            latency = int((time.time() - t0) * 1000)
             return success_response(
                 data=LlmTestResponse(
                     ok=False,
-                    model=client.model,
-                    message="API Key 未配置或客户端初始化失败",
+                    model=model,
+                    message="API Key 未配置",
                     latency_ms=latency,
                 ),
                 message="连接测试完成",
             )
+        content = client.chat("请只回复 OK", temperature=0, max_tokens=8)
+        latency = int((time.time() - t0) * 1000)
+        preview = (content or "").strip()[:40]
         return success_response(
             data=LlmTestResponse(
                 ok=True,
-                model=client.model,
-                message="客户端初始化成功",
+                model=model,
+                message=f"模型 {model} 调用成功：{preview or 'OK'}",
                 latency_ms=latency,
             ),
             message="连接测试完成",
@@ -135,8 +139,8 @@ def test_llm_connection():
         return success_response(
             data=LlmTestResponse(
                 ok=False,
-                model=get_effective_model(),
-                message=str(e)[:300],
+                model=model,
+                message=str(e)[:500],
                 latency_ms=latency,
             ),
             message="连接测试完成",

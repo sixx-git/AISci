@@ -36,4 +36,9 @@ export const llmConfigService = {
     const { data } = await api.put<ApiResponse<LlmConfig>>('/llm/config', payload);
     return data;
   },
+
+  async testConnection(): Promise<ApiResponse<{ ok: boolean; model: string; message: string; latency_ms?: number }>> {
+    const { data } = await api.post<ApiResponse<{ ok: boolean; model: string; message: string; latency_ms?: number }>>('/llm/test');
+    return data;
+  },
 };

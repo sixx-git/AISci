@@ -69,19 +69,17 @@ STAGE_DEFS: List[Dict[str, Any]] = [
      "db_stage_enum": DB_PipelineStage.PROBLEM_UNDERSTANDING, "label": "问题理解"},
     {"idx": 1, "key": "literature_mining", "stage_enum": PipelineStage.LITERATURE_MINING,
      "db_stage_enum": DB_PipelineStage.LITERATURE_MINING, "label": "文献挖掘"},
-    {"idx": 2, "key": "data_acquisition", "stage_enum": PipelineStage.DATA_ACQUISITION,
-     "db_stage_enum": DB_PipelineStage.DATA_ACQUISITION, "label": "多源数据采集"},
-    {"idx": 3, "key": "knowledge_gap", "stage_enum": PipelineStage.KNOWLEDGE_GAP,
+    {"idx": 2, "key": "knowledge_gap", "stage_enum": PipelineStage.KNOWLEDGE_GAP,
      "db_stage_enum": DB_PipelineStage.KNOWLEDGE_GAP, "label": "知识缺口"},
-    {"idx": 4, "key": "hypothesis_generation", "stage_enum": PipelineStage.HYPOTHESIS_GENERATION,
+    {"idx": 3, "key": "hypothesis_generation", "stage_enum": PipelineStage.HYPOTHESIS_GENERATION,
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_GENERATION, "label": "假设生成"},
-    {"idx": 5, "key": "hypothesis_review", "stage_enum": PipelineStage.HYPOTHESIS_REVIEW,
+    {"idx": 4, "key": "hypothesis_review", "stage_enum": PipelineStage.HYPOTHESIS_REVIEW,
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_REVIEW, "label": "假设评估"},
-    {"idx": 6, "key": "experiment_design", "stage_enum": PipelineStage.EXPERIMENT_DESIGN,
+    {"idx": 5, "key": "experiment_design", "stage_enum": PipelineStage.EXPERIMENT_DESIGN,
      "db_stage_enum": DB_PipelineStage.EXPERIMENT_DESIGN, "label": "实验设计"},
-    {"idx": 7, "key": "small_validation", "stage_enum": PipelineStage.SMALL_VALIDATION,
+    {"idx": 6, "key": "small_validation", "stage_enum": PipelineStage.SMALL_VALIDATION,
      "db_stage_enum": DB_PipelineStage.SMALL_VALIDATION, "label": "小样验证"},
-    {"idx": 8, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
+    {"idx": 7, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
      "db_stage_enum": DB_PipelineStage.REPORT_GENERATION, "label": "报告生成"},
 ]
 
@@ -247,6 +245,8 @@ class PipelineService:
         human_feedback: str = "",
     ) -> str:
         """从指定阶段重新运行：默认仅重跑本阶段，保留上下游结果。"""
+        stage_aliases = {"data_acquisition": "knowledge_gap"}
+        from_stage = stage_aliases.get(from_stage, from_stage)
         if from_stage not in STAGE_KEY_ORDER:
             raise ValueError(f"无效 stage: {from_stage}")
         if rerun_mode not in ("single_stage", "from_stage_onward"):
@@ -941,25 +941,9 @@ class PipelineService:
         refresh_meta = lm.get("discovery_refresh") if isinstance(lm, dict) else {}
 
         self._run_stage(
-            stages, 3, results, research_question, project_id,
+            stages, 2, results, research_question, project_id,
             lambda: self._exec_knowledge_gap(lm, project_id),
         )
-
-        try:
-            df_out = self._exec_data_acquisition(
-                project_id,
-                research_question,
-                results,
-                project_mode,
-                refinement_queries=refinement_notes,
-            )
-            refresh_meta = dict(refresh_meta or {})
-            refresh_meta["data_finder_rerun"] = True
-            refresh_meta["data_finder_tables"] = len(
-                (df_out.get("extract") or {}).get("extracted_tables") or []
-            )
-        except Exception as df_err:
-            logger.warning(f"Discovery R{round_num} Data Finder 重跑失败: {df_err}")
 
         ideation = {}
         try:
@@ -1079,7 +1063,7 @@ class PipelineService:
             },
         )
 
-        self._run_stage(stages, 6, results, research_question, project_id,
+        self._run_stage(stages, 5, results, research_question, project_id,
             lambda: self._exec_experiment_design(
                 results.get("hypothesis_review"), project_id, project_mode,
             ))
@@ -1088,7 +1072,7 @@ class PipelineService:
             self._executability_blocked
             and self._run_options.get("enable_executability_gate", True)
         ):
-            self._run_stage(stages, 7, results, research_question, project_id,
+            self._run_stage(stages, 6, results, research_question, project_id,
                 lambda: self._exec_small_validation(
                     results.get("experiment_design"),
                     results.get("hypothesis_review"),
@@ -1103,7 +1087,7 @@ class PipelineService:
         def _exec_report():
             return self._exec_report_generation(results, self._build_pipeline_run_info(), project_mode)
 
-        self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
+        self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
         final_report_id = self._persist_pipeline_report(project_id, results)
         post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_after")
 
@@ -1181,11 +1165,11 @@ class PipelineService:
             },
         )
 
-        self._run_stage(stages, 6, results, research_question, project_id,
+        self._run_stage(stages, 5, results, research_question, project_id,
             lambda: self._exec_experiment_design(
                 results.get("hypothesis_review"), project_id, project_mode,
             ))
-        self._run_stage(stages, 7, results, research_question, project_id,
+        self._run_stage(stages, 6, results, research_question, project_id,
             lambda: self._exec_small_validation(
                 results.get("experiment_design"),
                 results.get("hypothesis_review"),
@@ -1363,7 +1347,7 @@ class PipelineService:
             )
             self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
 
-            self._run_stage(stages, 4, results, research_question, project_id,
+            self._run_stage(stages, 3, results, research_question, project_id,
                 lambda: self._exec_hypothesis_generation(
                     results.get("problem_understanding"),
                     results.get("literature_mining"),
@@ -1389,9 +1373,9 @@ class PipelineService:
             except Exception:
                 pass
 
-            self._run_stage(stages, 5, results, research_question, project_id,
+            self._run_stage(stages, 4, results, research_question, project_id,
                 lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
-            self._run_stage(stages, 6, results, research_question, project_id,
+            self._run_stage(stages, 5, results, research_question, project_id,
                 lambda: self._exec_experiment_design(
                     results.get("hypothesis_review"), project_id, project_mode,
                 ))
@@ -1400,7 +1384,7 @@ class PipelineService:
                 "enable_executability_gate", True
             )
             if not skip_validation:
-                self._run_stage(stages, 7, results, research_question, project_id,
+                self._run_stage(stages, 6, results, research_question, project_id,
                     lambda: self._exec_small_validation(
                         results.get("experiment_design"),
                         results.get("hypothesis_review"),
@@ -1440,7 +1424,7 @@ class PipelineService:
                     results, self._build_pipeline_run_info(), project_mode,
                 )
 
-            self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
+            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
             final_report_id = self._persist_pipeline_report(project_id, results)
             post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
             history[-1]["snapshot_after"] = post_snapshot
@@ -1527,12 +1511,12 @@ class PipelineService:
 
     def _resume_phase_to_start_idx(self, resume_phase: str) -> int:
         mapping = {
-            "after_hypothesis_generation": 5,
-            "after_hypothesis_review": 6,
-            "after_experiment_design": 7,
-            "after_small_validation": 8,
-            "after_data_acquisition": 3,
-            "after_report_generation": 8,
+            "after_hypothesis_generation": 4,
+            "after_hypothesis_review": 5,
+            "after_experiment_design": 6,
+            "after_small_validation": 7,
+            "after_data_acquisition": 2,
+            "after_report_generation": 7,
         }
         return mapping.get(resume_phase, 0)
 
@@ -1618,7 +1602,7 @@ class PipelineService:
         hr = results.get("hypothesis_review") or {}
         reviews = hr.get("reviews") or []
         hyps = (results.get("hypothesis_generation") or {}).get("hypotheses") or []
-        if hyps and not reviews and start_idx >= 6:
+        if hyps and not reviews and start_idx >= 5:
             for stale_key in (
                 "hypothesis_review",
                 "experiment_design",
@@ -1630,7 +1614,7 @@ class PipelineService:
                 "[Pipeline] 假设评审无有效 reviews，回退至 hypothesis_review 重跑 run_id=%s",
                 self.run_id,
             )
-            return 5
+            return 4
         return start_idx
 
     def _sync_db_stages_for_start_idx(self, start_idx: int, results: Dict[str, Any]) -> None:
@@ -1680,13 +1664,13 @@ class PipelineService:
 
     def _maybe_bump_start_idx_for_hitl(self, start_idx: int, results: Dict[str, Any], meta: Dict[str, Any]) -> int:
         """安全网：假设已生成但 start_idx 仍为 0 时，强制从 hypothesis_review 继续。"""
-        if start_idx >= 5:
+        if start_idx >= 4:
             return start_idx
         gate = meta.get("hitl_gate") or {}
         cp = meta.get("pipeline_checkpoint") or {}
         paused_stage = gate.get("stage") or ""
-        hg_exec = self.db_stage_executions.get(5)
-        hr_exec = self.db_stage_executions.get(6)
+        hg_exec = self.db_stage_executions.get(4)
+        hr_exec = self.db_stage_executions.get(5)
         hg_done = hg_exec and hg_exec.status == DB_PipelineStatus.COMPLETED and hg_exec.output_data
         hr_pending = not hr_exec or hr_exec.status in (
             DB_PipelineStatus.PENDING,
@@ -1708,11 +1692,11 @@ class PipelineService:
         if cp.get("results") and isinstance(cp["results"], dict):
             results.update(cp["results"])
         logger.warning(
-            "[Pipeline] HITL 安全恢复: start_idx %s -> 5 (假设已生成) run_id=%s",
+            "[Pipeline] HITL 安全恢复: start_idx %s -> 4 (假设已生成) run_id=%s",
             start_idx,
             self.run_id,
         )
-        return 5
+        return 4
 
     def _run_pipeline_stages(self, research_question: str, project_id: str) -> PipelineRunResult:
         """执行 Pipeline 所有阶段（支持从中间阶段 rerun）。"""
@@ -1822,22 +1806,18 @@ class PipelineService:
                         project_id, research_question, results
                     ))
 
+            # ── 阶段 3: KnowledgeGapAgent ──
             if start_idx <= 2:
                 self._run_stage(stages, 2, results, research_question, project_id,
-                    lambda: self._exec_data_acquisition(project_id, research_question, results, project_mode))
-            
-            # ── 阶段 4: KnowledgeGapAgent ──
-            if start_idx <= 3:
-                self._run_stage(stages, 3, results, research_question, project_id,
                     lambda: self._exec_knowledge_gap(
                         results.get("literature_mining"),
                         project_id,
                     ))
             
-            # ── 阶段 5: HypothesisGenerationAgent ──
-            if start_idx <= 4:
+            # ── 阶段 4: HypothesisGenerationAgent ──
+            if start_idx <= 3:
                 # 缺口完成后立即更新 current_stage，避免轮询间隙 UI 仍显示缺口运行中
-                self.db_pipeline_run.current_stage = STAGE_DEFS[4]["key"]
+                self.db_pipeline_run.current_stage = STAGE_DEFS[3]["key"]
                 self.db.commit()
 
                 # ── P3: Ideation 新颖性预检（OpenAlex + Semantic Scholar）──
@@ -1865,7 +1845,7 @@ class PipelineService:
                 except Exception as ide_err:
                     logger.warning(f"Ideation 新颖性检查失败: {ide_err}")
 
-                self._run_stage(stages, 4, results, research_question, project_id,
+                self._run_stage(stages, 3, results, research_question, project_id,
                     lambda: self._exec_hypothesis_generation(
                         results.get("problem_understanding"),
                         results.get("literature_mining"),
@@ -1899,9 +1879,9 @@ class PipelineService:
                 )
                 self._maybe_pause_for_hitl_gate("hypothesis_generation", results)
             
-            # ── 阶段 6: HypothesisReviewAgent ──
-            if start_idx <= 5:
-                self._run_stage(stages, 5, results, research_question, project_id,
+            # ── 阶段 5: HypothesisReviewAgent ──
+            if start_idx <= 4:
+                self._run_stage(stages, 4, results, research_question, project_id,
                     lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
                 self._run_science_iteration_hooks(
                     "after_hypothesis_review", results, research_question, project_id, project_mode,
@@ -1911,10 +1891,10 @@ class PipelineService:
                 self._ensure_counterfactual_preview(results, research_question)
                 self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
-            # ── 阶段 7: ExperimentDesignAgent ──
-            if start_idx <= 6:
+            # ── 阶段 6: ExperimentDesignAgent ──
+            if start_idx <= 5:
                 self._ensure_counterfactual_preview(results, research_question)
-                self._run_stage(stages, 6, results, research_question, project_id,
+                self._run_stage(stages, 5, results, research_question, project_id,
                     lambda: self._exec_experiment_design(
                         results.get("hypothesis_review"),
                         project_id,
@@ -1928,8 +1908,8 @@ class PipelineService:
             skip_validation_run = getattr(self, "_skip_to_post_validation", False)
             if self._executability_blocked and self._run_options.get("enable_executability_gate", True):
                 skip_validation_run = True
-            if start_idx <= 7 and not skip_validation_run:
-                self._run_stage(stages, 7, results, research_question, project_id,
+            if start_idx <= 6 and not skip_validation_run:
+                self._run_stage(stages, 6, results, research_question, project_id,
                     lambda: self._exec_small_validation(
                         results.get("experiment_design"),
                         results.get("hypothesis_review"),
@@ -1954,7 +1934,7 @@ class PipelineService:
                 self._skip_to_post_validation = False
 
             # ── 联邦 Campaign 自动第二轮（实验设计→pilot 迭代）──
-            if start_idx <= 7 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            if start_idx <= 6 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
                 fed_campaign_meta = self._run_federated_campaign_refinement(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1962,7 +1942,7 @@ class PipelineService:
                     results["federated_campaign_refinement"] = fed_campaign_meta
 
             # ── P2-6: Teaching 轻量自动闭环（仅 teaching_auto 模式）──
-            if start_idx <= 7 and self._run_options.get("iteration_mode") == "teaching_auto":
+            if start_idx <= 6 and self._run_options.get("iteration_mode") == "teaching_auto":
                 teaching_meta = self._run_teaching_auto_refinement(
                     stages, results, research_question, project_id, project_mode
                 )
@@ -1979,19 +1959,19 @@ class PipelineService:
             if getattr(self, "_finalize_report_after_gate", False):
                 self._finalize_report_after_gate = False
                 final_report_id = self._persist_pipeline_report(project_id, results)
-            elif start_idx <= 8 and not teaching_report_ran:
+            elif start_idx <= 7 and not teaching_report_ran:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
                         results, pipeline_run_info, project_mode
                     )
-                self._run_stage(stages, 8, results, research_question, project_id, _exec_report)
+                self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
                 final_report_id = self._persist_pipeline_report(project_id, results)
                 self._maybe_pause_for_hitl_gate("report_generation", results)
 
             # ── P5: Discovery 开放循环（仅 discovery_auto 模式）──
             if (
-                start_idx <= 4
+                start_idx <= 3
                 and self._run_options.get("iteration_mode") == "discovery_auto"
             ):
                 discovery_meta = self._run_discovery_loop(
@@ -3089,6 +3069,12 @@ class PipelineService:
         )
         result_dict["verifiable_hypothesis"] = spec
         result_dict["hypothesis"] = best_review.get("hypothesis", "") or ""
+        result_dict["data_requirements"] = self._build_data_requirements(
+            best_review=best_review if isinstance(best_review, dict) else {},
+            hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
+            data_context=data_context,
+            result_dict=result_dict,
+        )
         if hg.get("hypotheses"):
             refreshed = attach_verifiable_specs_to_hypotheses(
                 hg,
@@ -3098,6 +3084,50 @@ class PipelineService:
             self._stage_results["hypothesis_generation"] = refreshed
         return result_dict
     
+    def _build_data_requirements(
+        self,
+        *,
+        best_review: Dict[str, Any],
+        hypo_meta: Dict[str, Any],
+        data_context: Dict[str, Any],
+        result_dict: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """实验设计阶段输出：告知用户需上传何种数据，并摘要已上传数据集。"""
+        datasets = data_context.get("datasets") or []
+        uploaded = [d for d in datasets if isinstance(d, dict)]
+        required_data = (best_review.get("required_data") or hypo_meta.get("required_data") or "").strip()
+        validation_target = (hypo_meta.get("validation_target") or "").strip()
+        metrics = (result_dict.get("metrics") or "").strip()
+        gaps = result_dict.get("data_gap") or []
+        if isinstance(gaps, str):
+            gaps = [gaps] if gaps else []
+        recommended = result_dict.get("recommended_public_datasets") or []
+        return {
+            "upload_status": "ready" if uploaded else "pending_upload",
+            "uploaded_dataset_count": len(uploaded),
+            "uploaded_datasets": [
+                {
+                    "filename": d.get("filename"),
+                    "data_type": d.get("data_type"),
+                    "n_rows": d.get("n_rows"),
+                    "n_columns": d.get("n_columns"),
+                    "columns": list(d.get("columns") or [])[:30],
+                }
+                for d in uploaded[:8]
+            ],
+            "required_data_description": required_data,
+            "validation_target": validation_target,
+            "metrics": metrics,
+            "recommended_public_datasets": recommended[:5] if isinstance(recommended, list) else [],
+            "gaps": gaps,
+            "summary": (
+                f"已上传 {len(uploaded)} 个数据集，实验方案已结合真实数据结构。"
+                if uploaded
+                else "请先在「数据集」页上传 CSV/表格数据；上传后重跑实验设计以生成可执行方案与小样验证。"
+            ),
+            "next_action": "upload_datasets" if not uploaded else "review_experiment_plan",
+        }
+
     def _exec_small_validation(
         self,
         experiment_design: Optional[Dict],

@@ -54,18 +54,27 @@ const MAX_ALL_PENDING_POLLS = 5;
 const STAGE_TO_NODE_ID: Record<string, string> = {
   problem_understanding: 'problem',
   literature_mining: 'literature',
-  data_acquisition: 'data',
   knowledge_gap: 'gaps',
   hypothesis_generation: 'hypothesis',
   hypothesis_review: 'evaluation',
   experiment_design: 'experiment',
   small_validation: 'validation',
   report_generation: 'report',
+  // 历史 run 兼容：旧数据采集阶段仍高亮同一节点
+  data_acquisition: 'gaps',
 };
 
-const NODE_ID_TO_STAGE: Record<string, string> = Object.fromEntries(
-  Object.entries(STAGE_TO_NODE_ID).map(([stage, nodeId]) => [nodeId, stage]),
-);
+/** 节点 → Pipeline 阶段（用于重跑/HITL）；勿用 STAGE_TO_NODE_ID 反查，避免 gaps 被 data_acquisition 覆盖 */
+const NODE_ID_TO_STAGE: Record<string, string> = {
+  problem: 'problem_understanding',
+  literature: 'literature_mining',
+  gaps: 'knowledge_gap',
+  hypothesis: 'hypothesis_generation',
+  evaluation: 'hypothesis_review',
+  experiment: 'experiment_design',
+  validation: 'small_validation',
+  report: 'report_generation',
+};
 
 // ============ localStorage 工具 ============
 
@@ -292,13 +301,6 @@ const BASE_AGENT_NODES: AgentNodeData[] = [
     model: '', promptVersion: '', icon: BookOpen,
   },
   {
-    id: 'data', name: '多源数据采集',
-    shortDesc: '按问题检索 HF/Zenodo 等领域公开数据集',
-    status: 'pending', duration: null,
-    inputSummary: '', outputSummary: '', logs: [],
-    model: '', promptVersion: '', icon: Database,
-  },
-  {
     id: 'gaps', name: '知识缺口发现智能体',
     shortDesc: '分析现有文献，识别知识空白与研究机会',
     status: 'pending', duration: null,
@@ -321,7 +323,7 @@ const BASE_AGENT_NODES: AgentNodeData[] = [
   },
   {
     id: 'experiment', name: '实验设计智能体',
-    shortDesc: '规划验证假设所需的实验方案',
+    shortDesc: '分析已上传数据并规划可验证实验方案',
     status: 'pending', duration: null,
     inputSummary: '', outputSummary: '', logs: [],
     model: '', promptVersion: '', icon: FlaskConical,
@@ -452,7 +454,6 @@ const RESUME_PHASE_TO_NODE: Record<string, string> = {
   after_hypothesis_review: 'experiment',
   after_experiment_design: 'validation',
   after_small_validation: 'report',
-  after_data_acquisition: 'gaps',
 };
 
 function stageKeyToNodeId(stageKey?: string | null): string | null {

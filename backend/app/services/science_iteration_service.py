@@ -269,7 +269,7 @@ def build_material_supplement_plan(
             action_type="data_gap_enrich",
             description=f"Coverage {coverage}% 低于阈值，触发 Gap 补搜与 CSV 合并",
             priority="high",
-            target="data_acquisition",
+            target="experiment_design",
         ))
 
     ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}

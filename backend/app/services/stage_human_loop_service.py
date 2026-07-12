@@ -21,7 +21,6 @@ CHINA_TZ = timezone(timedelta(hours=8))
 STAGE_KEY_ORDER = [
     "problem_understanding",
     "literature_mining",
-    "data_acquisition",
     "knowledge_gap",
     "hypothesis_generation",
     "hypothesis_review",
@@ -33,7 +32,6 @@ STAGE_KEY_ORDER = [
 STAGE_LABELS_ZH = {
     "problem_understanding": "问题理解",
     "literature_mining": "文献挖掘",
-    "data_acquisition": "数据采集",
     "knowledge_gap": "知识缺口",
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
@@ -492,7 +490,6 @@ class StageHumanLoopService:
             "hypothesis_review": "experiment_design",
             "experiment_design": "small_validation",
             "small_validation": "report_generation",
-            "data_acquisition": "knowledge_gap",
         }
         run.current_stage = next_stage_map.get(stage, stage)
 

@@ -257,7 +257,7 @@ def main() -> int:
         print(f"  PipelineRun: {db_run.status.value}, 阶段数: {len(db_run.stage_executions)}")
 
         assert result.status == "completed", f"Pipeline 应该完成，实际: {result.status}"
-        assert len(result.stages) == 9, f"应该 9 个阶段，实际 {len(result.stages)}"
+        assert len(result.stages) == 8, f"应该 8 个阶段，实际 {len(result.stages)}"
         completed_count = sum(1 for s in result.stages if s.status == "completed")
         assert completed_count >= 7, f"至少 7 个阶段应完成，实际 {completed_count}/9"
         assert result.final_report_id is not None, "应该有报告 ID"

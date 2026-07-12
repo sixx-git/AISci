@@ -24,6 +24,7 @@ AVAILABLE_QWEN_MODELS: List[str] = [
     "qwen3.6-max-preview",
     "qwen3.6-plus",
     "qwen3.6-flash",
+    "qwen3.6-27b",
     # Qwen3.5
     "qwen3.5-plus",
     "qwen3.5-flash",

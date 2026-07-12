@@ -66,7 +66,6 @@ STALE_STAGE_TIMEOUT_BY_KEY: dict[str, int] = {
 PIPELINE_STAGES_ORDERED = [
     PipelineStage.PROBLEM_UNDERSTANDING,
     PipelineStage.LITERATURE_MINING,
-    PipelineStage.DATA_ACQUISITION,
     PipelineStage.KNOWLEDGE_GAP,
     PipelineStage.HYPOTHESIS_GENERATION,
     PipelineStage.HYPOTHESIS_REVIEW,

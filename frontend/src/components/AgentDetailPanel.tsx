@@ -381,7 +381,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
         {showHumanReview && (
           <div className="p-3 bg-bp-yellow/10 border border-bp-yellow/30 rounded-bp flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
-            <p className="text-xs text-bp-yellow">数据采集已完成，请前往数据集页面上传文件后继续生成报告。</p>
+            <p className="text-xs text-bp-yellow">实验设计已生成数据需求，请前往「数据集」页上传 CSV/表格后重跑实验设计与小样验证。</p>
           </div>
         )}
       </Card>

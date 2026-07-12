@@ -41,12 +41,14 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
   },
   experiment_design: {
     title: '实验设计已完成',
-    description: '请前往「实验设计」审阅方案与参数，确认后继续小样验证。',
+    description:
+      '请审阅实验方案与数据需求清单。若尚未上传数据集，请先在「数据集」页上传后再继续小样验证。',
     tab: 'experiments',
     ctaLabel: '前往审阅实验设计',
-    continueHint: '审阅完成后，将运行小样验证及报告生成。',
+    continueHint: '确认方案且数据就绪后，将运行小样验证及报告生成。',
     continueTitle: '实验设计已完成',
-    continueDescription: '确认方案后，将依次运行：小样验证 → 报告生成。',
+    continueDescription:
+      '请确认已上传所需数据；确认后将依次运行：小样验证 → 报告生成。',
     continueButtonLabel: '运行小样验证及后续智能体',
   },
   small_validation: {

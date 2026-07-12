@@ -8,15 +8,11 @@ from app.services.stage_human_loop_service import STAGE_KEY_ORDER, get_stage_met
 
 
 
-def test_stage_key_order_has_nine_stages():
-
-    assert len(STAGE_KEY_ORDER) == 9
-
-    assert STAGE_KEY_ORDER[2] == "data_acquisition"
-
-    assert STAGE_KEY_ORDER[4] == "hypothesis_generation"
-
-    assert STAGE_KEY_ORDER[6] == "experiment_design"
+def test_stage_key_order_has_eight_stages():
+    assert len(STAGE_KEY_ORDER) == 8
+    assert STAGE_KEY_ORDER[2] == "knowledge_gap"
+    assert STAGE_KEY_ORDER[3] == "hypothesis_generation"
+    assert STAGE_KEY_ORDER[5] == "experiment_design"
 
 
 
@@ -325,13 +321,13 @@ def test_summarize_downstream_context_for_rerun():
 
     lit_exec = MagicMock()
     lit_exec.stage = PipelineStage.SMALL_VALIDATION
-    lit_exec.stage_order = 8
+    lit_exec.stage_order = 7
     lit_exec.output_data = {"warnings": ["数据列缺失 age"]}
     lit_exec.extra_metadata = {"human_feedback": "请补全人口学变量"}
 
     lit_exec2 = MagicMock()
     lit_exec2.stage = PipelineStage.HYPOTHESIS_GENERATION
-    lit_exec2.stage_order = 5
+    lit_exec2.stage_order = 4
     lit_exec2.output_data = {"hypotheses": [{"hypothesis": "联邦学习可提升 AUC"}]}
     lit_exec2.extra_metadata = {}
 

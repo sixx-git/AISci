@@ -11,7 +11,7 @@ import { PromptConsole } from '@/components/PromptConsole';
 const NODE_ID_TO_STAGE: Record<string, string> = {
   problem: 'problem_understanding',
   literature: 'literature_mining',
-  data: 'data_acquisition',
+  data: 'experiment_design',
   gaps: 'knowledge_gap',
   hypothesis: 'hypothesis_generation',
   evaluation: 'hypothesis_review',
@@ -23,7 +23,6 @@ const NODE_ID_TO_STAGE: Record<string, string> = {
 const STAGE_RERUN_OPTIONS: { key: string; label: string }[] = [
   { key: 'problem_understanding', label: '问题理解' },
   { key: 'literature_mining', label: '文献挖掘' },
-  { key: 'data_acquisition', label: '数据采集' },
   { key: 'knowledge_gap', label: '知识缺口' },
   { key: 'hypothesis_generation', label: '假设生成' },
   { key: 'hypothesis_review', label: '假设评审' },

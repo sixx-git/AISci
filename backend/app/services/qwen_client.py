@@ -95,6 +95,39 @@ def _truncate(text: str, max_len: int = 500) -> str:
     return text[:max_len] + "...[truncated]"
 
 
+def _format_api_status_error(status_code: int, message: str) -> str:
+    """将 DashScope/OpenAI 兼容 API 错误转为更易读的中文提示。"""
+    raw = str(message or "")
+    lower = raw.lower()
+    if status_code == 401 or "invalid_api_key" in lower or "incorrect api key" in lower:
+        return (
+            "千问 API 密钥无效或未授权 (401)。请检查 backend/.env 中的 QWEN_API_KEY，"
+            "或在「设置 → LLM 配置」更新密钥。"
+        )
+    if status_code == 403 and "allocationquota.freetieronly" in lower:
+        return (
+            "当前 API Key 在「仅使用免费额度」模式下，所选模型已无免费额度 (403)。"
+            "换模型不一定能恢复——不同模型额度独立；请用「测试连接」确认可用模型，"
+            "或在百炼控制台开通按量付费并关闭「仅免费」限制。"
+        )
+    if status_code == 403 and (
+        "quota" in lower
+        or "free" in lower
+        or "exhausted" in lower
+        or "额度" in raw
+        or "配额" in raw
+    ):
+        return (
+            "千问 API 额度不足 (403)。请在百炼控制台查看该模型的剩余额度，"
+            "或开通按量付费；也可尝试切换到当前 Key 仍有额度的其他模型。"
+        )
+    if status_code == 429 or "rate limit" in lower or "throttl" in lower:
+        return (
+            "千问 API 请求过于频繁或触发限流 (429)。请稍后重试，或切换到更轻量的模型。"
+        )
+    return f"API Error: {status_code} - {raw}"
+
+
 # ==================== JSON 修复工具 ====================
 
 def _safe_json_loads(text: str) -> dict:
@@ -333,7 +366,7 @@ class QwenClient:
                 except APIStatusError as e:
                     _shutdown_executor(wait=False)
                     logger.error(f"Qwen API Status Error: {e.status_code} - {e.message}")
-                    raise QwenAPIError(f"API Error: {e.status_code} - {e.message}") from e
+                    raise QwenAPIError(_format_api_status_error(e.status_code, str(e.message))) from e
                 except APIConnectionError as e:
                     _shutdown_executor(wait=False)
                     last_error = QwenAPIError(f"Connection Error: {str(e)}")
@@ -683,13 +716,32 @@ class QwenClient:
 # ==================== 全局单例 ====================
 
 _qwen_client: Optional[QwenClient] = None
+_qwen_client_fingerprint: Optional[str] = None
+
+
+def _runtime_fingerprint() -> str:
+    """运行时 LLM 配置指纹，用于检测模型/密钥切换后自动重建客户端。"""
+    from app.core.llm_runtime import get_runtime_state
+
+    key = get_effective_api_key()
+    key_tail = key[-6:] if key else ""
+    state = get_runtime_state()
+    return "|".join([
+        get_effective_base_url(),
+        get_effective_model(),
+        key_tail,
+        "env" if state.use_env_api_key else "custom",
+    ])
 
 
 def get_qwen_client() -> QwenClient:
-    """获取 Qwen 客户端单例"""
-    global _qwen_client
-    if _qwen_client is None:
+    """获取 Qwen 客户端单例（模型/密钥变更后自动重建）。"""
+    global _qwen_client, _qwen_client_fingerprint
+    fp = _runtime_fingerprint()
+    if _qwen_client is None or _qwen_client_fingerprint != fp:
         _qwen_client = QwenClient()
+        _qwen_client_fingerprint = fp
+        logger.info("Qwen 客户端已按当前运行时配置重建 model=%s", _qwen_client.model)
     return _qwen_client
 
 
@@ -701,8 +753,9 @@ def _set_qwen_client(client: Optional[QwenClient]) -> None:
 
 def reset_qwen_client() -> None:
     """清除单例，下次 get_qwen_client 按当前运行时配置重建"""
-    global _qwen_client
+    global _qwen_client, _qwen_client_fingerprint
     _qwen_client = None
+    _qwen_client_fingerprint = None
 
 
 # ==================== 便捷函数 ====================

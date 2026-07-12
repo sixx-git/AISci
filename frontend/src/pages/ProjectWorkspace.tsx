@@ -485,7 +485,6 @@ export function ProjectWorkspace() {
     () => [
       { id: 'problem_understanding', label: '问题理解', icon: HelpCircle },
       { id: 'literature_mining', label: '文献挖掘', icon: BookOpen },
-      { id: 'data_acquisition', label: '数据采集', icon: Database },
       { id: 'knowledge_gap', label: '知识缺口', icon: AlertTriangle },
       { id: 'hypothesis_generation', label: '假设生成', icon: Lightbulb },
       { id: 'hypothesis_review', label: '假设评估', icon: CheckCircle2 },

@@ -32,13 +32,12 @@ interface ResearchClosedLoopOverviewProps {
 const PIPELINE_STAGES = [
   { key: 'problem_understanding', label: 'P0 问题理解', tab: 'questions' },
   { key: 'literature_mining', label: 'P1 文献挖掘', tab: 'literature' },
-  { key: 'data_acquisition', label: 'P2 数据采集', tab: 'datasets' },
-  { key: 'knowledge_gap', label: 'P3 知识缺口', tab: 'workflow' },
-  { key: 'hypothesis_generation', label: 'P4 假设生成', tab: 'hypotheses' },
-  { key: 'hypothesis_review', label: 'P5 假设评估', tab: 'hypotheses' },
-  { key: 'experiment_design', label: 'P6 实验设计', tab: 'experiments' },
-  { key: 'small_validation', label: 'P7 小样验证', tab: 'experiments' },
-  { key: 'report_generation', label: 'P8 报告生成', tab: 'reports' },
+  { key: 'knowledge_gap', label: 'P2 知识缺口', tab: 'workflow' },
+  { key: 'hypothesis_generation', label: 'P3 假设生成', tab: 'hypotheses' },
+  { key: 'hypothesis_review', label: 'P4 假设评估', tab: 'hypotheses' },
+  { key: 'experiment_design', label: 'P5 实验设计', tab: 'experiments' },
+  { key: 'small_validation', label: 'P6 小样验证', tab: 'experiments' },
+  { key: 'report_generation', label: 'P7 报告生成', tab: 'reports' },
 ] as const;
 
 const MACRO_FLOW_STEPS = [

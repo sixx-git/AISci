@@ -28,6 +28,7 @@ export const QWEN_MODEL_GROUPS: QwenModelGroup[] = [
       { id: 'qwen3.6-max-preview', hint: '旗舰预览' },
       { id: 'qwen3.6-plus', hint: '1M 上下文，工具调用' },
       { id: 'qwen3.6-flash', hint: '高性价比' },
+      { id: 'qwen3.6-27b', hint: '开源规格，部分账号仍有免费额度' },
     ],
   },
   {
