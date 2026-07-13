@@ -177,7 +177,14 @@ class SmallValidationAgent:
             
             # ── 运行初步分析 Skill ──
             skill_outputs = self._run_preliminary_analysis_sync(
-                hypothesis, methods, datasets, metrics, experiment_design, multimodal_datasets
+                hypothesis,
+                methods,
+                datasets,
+                metrics,
+                experiment_design,
+                multimodal_datasets,
+                modeling_results=modeling_results,
+                has_real_data=has_csv_data,
             )
             result["skill_outputs"] = skill_outputs
 
@@ -238,6 +245,26 @@ class SmallValidationAgent:
                         incomplete=bool(sandbox.get("sandbox_incomplete")),
                     )
 
+                result["skill_outputs"] = self._refresh_result_verification(
+                    result.get("skill_outputs") or {},
+                    hypothesis=hypothesis,
+                    experiment_design=experiment_design,
+                    has_real_data=has_csv_data,
+                    modeling_results=modeling_results,
+                    sandbox=result.get("sandbox_execution") or sandbox,
+                    pilot=result.get("pilot_analysis") or {},
+                )
+                rv = (result.get("skill_outputs") or {}).get("result_verification") or {}
+                rv_warnings = rv.get("warnings") or []
+                if isinstance(rv_warnings, list):
+                    base_warnings = [
+                        w for w in (result.get("warnings") or [])
+                        if isinstance(w, str) and not w.startswith("结果验证未通过")
+                    ]
+                    result["warnings"] = base_warnings + [
+                        w for w in rv_warnings if w not in base_warnings
+                    ]
+
             validation_id = self._save_validation_files(result, run_id=run_id)
             if validation_id:
                 result["validation_id"] = validation_id
@@ -258,6 +285,9 @@ class SmallValidationAgent:
         metrics: Optional[str] = None,
         experiment_design: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
+        *,
+        modeling_results: Optional[List[Dict[str, Any]]] = None,
+        has_real_data: int = 0,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -294,6 +324,8 @@ class SmallValidationAgent:
                         "experiment_design": experiment_design or {},
                         "preliminary_analysis": pa_data,
                         "expected_results": (experiment_design or {}).get("expected_results", ""),
+                        "modeling_results": modeling_results or [],
+                        "has_real_data": has_real_data,
                     },
                     context={"stage": "small_validation"},
                 )
@@ -313,7 +345,53 @@ class SmallValidationAgent:
         except Exception as e:
             logger.warning(f"PreliminaryAnalysisSkill 异常: {e}")
             return {}
-    
+
+    @staticmethod
+    def _refresh_result_verification(
+        skill_outputs: Dict[str, Any],
+        *,
+        hypothesis: str,
+        experiment_design: Optional[Dict[str, Any]],
+        has_real_data: int,
+        modeling_results: Optional[List[Dict[str, Any]]],
+        sandbox: Dict[str, Any],
+        pilot: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """沙箱/pilot 完成后二次验证，避免「有 CSV 但验证早于沙箱」误报。"""
+        import asyncio
+
+        pa_data = _preliminary_analysis_data(skill_outputs)
+
+        async def _run():
+            verify_skill = ResultVerificationSkill()
+            return await verify_skill.run(
+                input_data={
+                    "hypothesis": hypothesis,
+                    "experiment_design": experiment_design or {},
+                    "preliminary_analysis": pa_data,
+                    "expected_results": (experiment_design or {}).get("expected_results", ""),
+                    "modeling_results": modeling_results or [],
+                    "has_real_data": has_real_data,
+                    "sandbox_execution": sandbox or {},
+                    "pilot_analysis": pilot or {},
+                },
+                context={"stage": "small_validation_post_sandbox"},
+            )
+
+        try:
+            verify_result = asyncio.run(_run())
+            updated = dict(skill_outputs)
+            updated["result_verification"] = {
+                "success": verify_result.success,
+                "data": verify_result.data,
+                "warnings": verify_result.warnings,
+                "errors": verify_result.errors,
+            }
+            return updated
+        except Exception as exc:
+            logger.warning("沙箱后结果验证失败: %s", exc)
+            return skill_outputs
+
     def _build_categorized_results(
         self,
         result: Dict[str, Any],

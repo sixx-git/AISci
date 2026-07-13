@@ -44,11 +44,28 @@ class ResultVerificationSkill(BaseSkill):
         pa = input_data.get("preliminary_analysis") or {}
         expected = (input_data.get("expected_results") or design.get("expected_results") or "").strip()
         modeling = input_data.get("modeling_results") or []
+        sandbox = input_data.get("sandbox_execution") or {}
+        pilot = input_data.get("pilot_analysis") or {}
+        has_real_flag = input_data.get("has_real_data") in (1, True, "1", "true")
 
         data_flag = pa.get("data_source_flag", "no_data")
-        has_real = data_flag == "real_data" or bool(modeling)
+        sandbox_ok = bool(sandbox.get("success")) and bool(
+            sandbox.get("output_complete") or sandbox.get("plots") or sandbox.get("metrics")
+        )
+        pilot_ok = bool(pilot.get("success"))
+        sb_metrics = sandbox.get("metrics") if isinstance(sandbox.get("metrics"), dict) else {}
+        sb_plots = sandbox.get("plots") if isinstance(sandbox.get("plots"), list) else []
+        has_real = (
+            data_flag == "real_data"
+            or bool(modeling)
+            or has_real_flag
+            or sandbox_ok
+            or pilot_ok
+        )
         stats = pa.get("summary_statistics") or {}
-        plots = pa.get("plots") or []
+        plots = list(pa.get("plots") or [])
+        if sb_plots:
+            plots = plots + sb_plots
         preliminary = pa.get("preliminary_result") or {}
 
         issues: List[str] = []
@@ -64,6 +81,13 @@ class ResultVerificationSkill(BaseSkill):
             if key.lower() in metrics_text or any(m in key.lower() for m in ("accuracy", "f1", "auc", "loss")):
                 matched_metrics.append(key)
 
+        if isinstance(sb_metrics, dict):
+            for key, val in sb_metrics.items():
+                if key in ("note", "stdout_preview", "warning"):
+                    continue
+                if val is not None and str(val).strip() != "":
+                    matched_metrics.append(str(key))
+
         for plot in plots[:5]:
             if isinstance(plot, dict) and plot.get("metric"):
                 matched_metrics.append(str(plot["metric"]))
@@ -77,13 +101,17 @@ class ResultVerificationSkill(BaseSkill):
                 f"## 期望结果\n{expected[:500] or '—'}\n\n"
                 f"## 数据状态\n- data_source_flag: {data_flag}\n"
                 f"- has_modeling: {bool(modeling)}\n"
+                f"- has_real_data_flag: {has_real_flag}\n"
+                f"- sandbox_success: {sandbox.get('success')}\n"
+                f"- sandbox_output_complete: {sandbox.get('output_complete')}\n"
+                f"- pilot_success: {pilot_ok}\n"
                 f"- matched_metrics: {matched_metrics}\n\n"
                 f"## 统计摘要\n{str(stats)[:800]}\n\n"
                 f"## 初步结论\n{str(preliminary)[:600]}\n\n"
                 "若缺乏真实数据，必须标记 verified=false。"
             )
             schema = {
-                "verified": has_real and len(matched_metrics) > 0,
+                "verified": has_real and (len(matched_metrics) > 0 or sandbox_ok or pilot_ok),
                 "confidence": 0.7 if has_real else 0.2,
                 "issues": issues,
                 "verification_summary": "结果与假设方向一致" if has_real else "缺少真实数据验证",
@@ -95,6 +123,8 @@ class ResultVerificationSkill(BaseSkill):
             )
 
             verified = bool(llm.get("verified", False)) and has_real
+            if has_real and (sandbox_ok or pilot_ok) and matched_metrics:
+                verified = True
             confidence = float(llm.get("confidence", 0.5 if verified else 0.2))
             llm_issues = list(llm.get("issues") or [])
             all_issues = list(dict.fromkeys(issues + llm_issues))

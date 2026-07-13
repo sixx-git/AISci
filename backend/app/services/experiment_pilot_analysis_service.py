@@ -286,7 +286,9 @@ def run_pilot_from_csv(
         return result
 
     try:
-        frame = pd.read_csv(csv_path, nrows=5000)
+        from app.services.tabular_encoding_utils import read_tabular_file
+
+        frame = read_tabular_file(csv_path, nrows=5000)
     except Exception as exc:
         result["warnings"].append(f"读取 CSV 失败: {exc}")
         return result

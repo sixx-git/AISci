@@ -16,6 +16,18 @@ from app.skills.literature.literature_discovery_pipeline import (
 logger = logging.getLogger(__name__)
 
 
+def _literature_import_settings() -> tuple[int, float, float, int]:
+    from app.core.config import get_settings
+
+    s = get_settings()
+    return (
+        int(getattr(s, "LITERATURE_IMPORT_MAX", 16) or 16),
+        float(getattr(s, "LITERATURE_IMPORT_MIN_SCORE", 0.5) or 0.5),
+        float(getattr(s, "LITERATURE_IMPORT_HIGH_SCORE", 1.8) or 1.8),
+        int(getattr(s, "LITERATURE_IMPORT_MIN_KEEP", 4) or 4),
+    )
+
+
 def _score_paper_relevance(
     paper: Dict[str, Any],
     query: str,
@@ -30,11 +42,14 @@ def ensure_corpora_from_discovery(
     discovery_output: Optional[Dict[str, Any]],
     db: Session,
     *,
-    max_import: int = 8,
+    max_import: Optional[int] = None,
     auto_parse: bool = True,
-    min_score: float = 0.8,
+    min_score: Optional[float] = None,
 ) -> Dict[str, Any]:
     """将文献发现流水线（Crawler+Selector）结果自动导入文献库并索引。"""
+    default_max, default_min, _, _ = _literature_import_settings()
+    max_import = max_import if max_import is not None else default_max
+    min_score = min_score if min_score is not None else default_min
     queries = (discovery_output or {}).get("queries") or []
     search_like = {
         "papers": (discovery_output or {}).get("papers") or [],
@@ -70,9 +85,9 @@ def ensure_corpora_from_search(
     search_papers_output: Optional[Dict[str, Any]],
     db: Session,
     *,
-    max_import: int = 8,
+    max_import: Optional[int] = None,
     auto_parse: bool = True,
-    min_score: float = 0.8,
+    min_score: Optional[float] = None,
     extra_terms: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """将 search_papers 高相关结果自动导入文献库并索引。"""
@@ -80,9 +95,13 @@ def ensure_corpora_from_search(
     from app.services.literature_ingestion_service import LiteratureIngestionService
     from app.services.vector_store import build_vector_index
 
+    default_max, default_min, high_score, min_keep = _literature_import_settings()
+    max_import = max_import if max_import is not None else default_max
+    min_score = min_score if min_score is not None else default_min
+
     papers = (search_papers_output or {}).get("papers") or []
     if not papers:
-        return {"imported": 0, "skipped": True, "reason": "无 search_papers 结果"}
+        return {"imported": 0, "skipped": True, "reason": "无 search_papers 结果", "candidate_count": 0}
 
     terms = list(extra_terms or [])
     if (search_papers_output or {}).get("queries"):
@@ -90,21 +109,13 @@ def ensure_corpora_from_search(
 
     core_concepts = extract_core_concepts(research_question, extra_terms=terms)
 
-    ranked = sorted(
-        papers,
-        key=lambda p: _score_paper_relevance(p, research_question, terms),
-        reverse=True,
-    )[: max_import * 3]
-
-    effective_min = min_score
-
-    to_import: List[Dict[str, Any]] = []
-    for p in ranked:
-        if len(to_import) >= max_import:
-            break
-        if not passes_concept_filter(p, core_concepts):
+    scored: List[tuple[float, Dict[str, Any]]] = []
+    for p in papers:
+        score = _score_paper_relevance(p, research_question, terms)
+        if score < min_score:
             continue
-        if _score_paper_relevance(p, research_question, terms) < effective_min:
+        concept_ok = passes_concept_filter(p, core_concepts)
+        if not concept_ok and score < high_score:
             continue
         ext_id = p.get("external_id") or p.get("arxiv_id") or p.get("doi") or ""
         if not ext_id and not p.get("title"):
@@ -112,16 +123,29 @@ def ensure_corpora_from_search(
         item = dict(p)
         if not item.get("external_id"):
             item["external_id"] = ext_id or item.get("title", "")[:40]
-        to_import.append(item)
+        scored.append((score, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    scored_pool = scored[: max_import * 4]
+    to_import = [p for _, p in scored_pool[:max_import]]
 
     if not to_import:
-        return {"imported": 0, "skipped": True, "reason": "无足够相关论文"}
+        return {
+            "imported": 0,
+            "skipped": True,
+            "reason": "无足够相关论文",
+            "candidate_count": len(papers),
+            "scored_count": len(scored),
+        }
 
     domain_hint = "；".join(core_concepts[:10])
     to_import, llm_gate = filter_papers_by_llm_relevance(
         to_import,
         research_question,
         domain_hint=domain_hint,
+        scored_fallback=scored_pool,
+        min_keep=min_keep,
+        high_score_threshold=high_score,
     )
     if not to_import:
         return {
@@ -129,6 +153,8 @@ def ensure_corpora_from_search(
             "skipped": True,
             "reason": "LLM 相关性门控未通过",
             "llm_relevance_gate": llm_gate,
+            "candidate_count": len(papers),
+            "scored_count": len(scored),
         }
 
     service = LiteratureIngestionService(db)
@@ -180,6 +206,7 @@ def ensure_corpora_from_search(
         "parsed": parsed,
         "pdf_downloaded": pdf_downloaded,
         "candidate_count": len(papers),
+        "scored_count": len(scored),
         "selected_count": len(to_import),
         "import_results": import_results[:10],
         "retrieval_provenance": {

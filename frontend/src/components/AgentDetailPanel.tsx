@@ -8,6 +8,7 @@ import {
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import type { AgentNodeData } from '@/types';
+import { extractLiteratureStats } from '@/lib/literatureStats';
 
 interface AgentDetailPanelProps {
   node: AgentNodeData | null;
@@ -322,6 +323,37 @@ function formatSkillName(key: string): string {
   return map[key] || key.replace(/_/g, ' ');
 }
 
+function LiteratureStatsCard({ outputData }: { outputData: Record<string, unknown> }) {
+  const stats = extractLiteratureStats(outputData);
+  if (!stats) return null;
+
+  const items = [
+    { label: '检索候选', value: stats.searchedCount ?? '—', unit: '篇' },
+    { label: '本轮入库', value: stats.importedCount ?? '—', unit: '篇' },
+    { label: '筛选通过', value: stats.selectedCount ?? '—', unit: '篇' },
+    { label: '提取事实', value: stats.factsCount ?? '—', unit: '条' },
+  ];
+
+  return (
+    <Card title="文献检索与入库" subtitle="多源检索候选 vs 实际写入文献库的数量">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {items.map((item) => (
+          <div key={item.label} className="bp-metric-box text-center py-3">
+            <div className="text-xl font-bold text-bp-cyan">
+              {item.value}
+              <span className="text-xs font-normal text-bp-muted ml-0.5">{item.unit}</span>
+            </div>
+            <div className="text-xs text-bp-muted mt-1">{item.label}</div>
+          </div>
+        ))}
+      </div>
+      {typeof outputData.warning === 'string' && outputData.warning.trim() && (
+        <p className="text-xs text-bp-yellow/90 mt-3 leading-relaxed">{outputData.warning}</p>
+      )}
+    </Card>
+  );
+}
+
 export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
   const hasRealData = !!(node?.input_data || node?.output_data || node?.model_parameters || node?.prompt_used);
 
@@ -339,6 +371,10 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
 
   return (
     <div className="space-y-4">
+      {node.id === 'literature' && node.output_data && typeof node.output_data === 'object' && (
+        <LiteratureStatsCard outputData={node.output_data as Record<string, unknown>} />
+      )}
+
       {/* ────── 智能体头部 ────── */}
       <Card>
         <div className="flex items-center justify-between mb-4">

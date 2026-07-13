@@ -4,6 +4,7 @@ import {
   AlertTriangle, ChevronRight, Circle,
 } from 'lucide-react';
 import type { AgentNodeData, AgentStatus } from '@/types';
+import { extractLiteratureStats, formatLiteratureStatsSummary } from '@/lib/literatureStats';
 
 // ============ 状态配置 ============
 const statusConfig: Record<AgentStatus, {
@@ -106,6 +107,10 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
   const isCompleted = node.status === 'completed';
   const hasError = isFailed && !!node.error_message;
   const statusLabel = node.human_edited && isCompleted ? '已修订' : sc.label;
+  const literatureStats = node.id === 'literature'
+    ? extractLiteratureStats(node.output_data)
+    : null;
+  const literatureSummary = literatureStats ? formatLiteratureStatsSummary(literatureStats) : null;
 
   return (
     <div className="flex">
@@ -198,6 +203,15 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               )}>
                 {node.shortDesc}
               </p>
+
+              {/* 文献挖掘：检索 / 入库统计 */}
+              {literatureSummary && (isCompleted || isRunning) && (
+                <div className="ml-6 mt-1.5">
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/20">
+                    {literatureSummary}
+                  </span>
+                </div>
+              )}
 
               {/* 耗时 */}
               {node.duration !== null && (

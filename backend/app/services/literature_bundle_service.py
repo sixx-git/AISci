@@ -242,6 +242,17 @@ def enrich_literature_mining(literature_mining: Optional[Dict[str, Any]]) -> Dic
     lm["verified_references"] = verified
     lm["evidence_facts"] = len(facts)
     lm["verified_references_count"] = len(verified)
+    if not lm.get("literature_search_count"):
+        lm["literature_search_count"] = int(
+            lm.get("candidate_references_count")
+            or len(lm.get("retrieved_papers") or [])
+            or 0
+        )
+    if lm.get("literature_import_count") is None or lm.get("literature_import_count") == 0:
+        corpus = (lm.get("skill_outputs") or {}).get("corpus_auto_import") or {}
+        if isinstance(corpus, dict) and corpus.get("imported") is not None:
+            lm["literature_import_count"] = int(corpus.get("imported") or 0)
+            lm["imported_documents"] = lm["literature_import_count"]
     if not lm.get("candidate_references_count"):
-        lm["candidate_references_count"] = len(lm.get("retrieved_papers") or [])
+        lm["candidate_references_count"] = lm.get("literature_search_count")
     return lm

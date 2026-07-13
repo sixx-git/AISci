@@ -86,7 +86,10 @@ class LiteratureMiningResponse(BaseModel):
     warning: Optional[str] = Field(None, description="警告信息（文献库为空 / 无检索结果时）")
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
     retrieved_papers: List[Dict[str, Any]] = Field(default_factory=list, description="SearchPapersSkill 搜到的论文（candidate_papers）")
-    imported_documents: int = Field(0, description="已导入的文献文档数")
+    imported_documents: int = Field(0, description="本轮入库的文献文档数")
+    literature_search_count: int = Field(0, description="多源检索候选论文数")
+    literature_import_count: int = Field(0, description="本轮自动入库论文数")
+    literature_selected_count: int = Field(0, description="通过相关性筛选、待入库论文数")
     evidence_facts: int = Field(0, description="从文献中提取的事实数")
     verified_references_count: int = Field(0, description="已验证的引用数")
     candidate_references_count: int = Field(0, description="候选引用数（未导入文献库）")
@@ -141,7 +144,7 @@ class LiteratureMiningAgent:
                     research_question,
                     db,
                     keywords=keywords,
-                    max_import=min(max(top_k, 5), 15),
+                    max_import=self._resolve_max_import(top_k),
                 )
 
             vs = get_vector_store()
@@ -184,7 +187,7 @@ class LiteratureMiningAgent:
                     research_question,
                     db,
                     keywords=keywords,
-                    max_import=10,
+                    max_import=self._resolve_max_import(top_k),
                     expand_citations=True,
                 )
                 if vs.has_index(project_id):
@@ -230,24 +233,34 @@ class LiteratureMiningAgent:
                 response.skill_outputs["corpus_auto_import"] = corpus_meta
                 if corpus_meta.get("imported", 0) > 0:
                     response.retrieval_provenance = corpus_meta.get("retrieval_provenance")
-                    extra = f"已从多源检索自动导入 {corpus_meta['imported']} 篇文献并索引"
-                    response.warning = (
-                        f"{response.warning}; {extra}" if response.warning else extra
-                    )
 
             if discovery_output.get("papers"):
                 response.retrieved_papers = discovery_output["papers"]
-                response.candidate_references_count = len(response.retrieved_papers)
-
-            response.imported_documents = len(response.citation_map)
-            response.evidence_facts = len(response.facts)
-            response.verified_references_count = len(response.citation_map)
 
             if not response.retrieved_papers:
                 search_output = response.skill_outputs.get("search_papers", {})
                 if search_output.get("success") and search_output.get("data"):
                     response.retrieved_papers = search_output["data"].get("papers", [])
-                    response.candidate_references_count = len(response.retrieved_papers)
+
+            response = self._apply_import_stats(
+                response,
+                discovery_output=discovery_output,
+                corpus_meta=corpus_meta,
+            )
+            response = self._finalize_literature_stats(response)
+            response.evidence_facts = len(response.facts)
+            response.verified_references_count = len(response.citation_map)
+
+            if response.literature_search_count:
+                stats_msg = (
+                    f"检索 {response.literature_search_count} 篇 / "
+                    f"入库 {response.literature_import_count} 篇"
+                )
+                if response.literature_import_count == 0:
+                    stats_msg += "（候选未通过相关性筛选或已存在重复）"
+                response.warning = (
+                    f"{response.warning}; {stats_msg}" if response.warning else stats_msg
+                )
 
             if response.retrieved_papers and not response.citation_map:
                 response.warning = (
@@ -312,7 +325,7 @@ class LiteratureMiningAgent:
                     search_query,
                     db,
                     keywords=merged_keywords,
-                    max_import=min(max(top_k, 5), 15),
+                    max_import=self._resolve_max_import(top_k),
                 )
             except Exception as exc:
                 logger.warning(f"[Discovery R{discovery_round}] 补充文献发现失败: {exc}")
@@ -375,9 +388,16 @@ class LiteratureMiningAgent:
             response.retrieved_papers = search_output["data"].get("papers", [])
             response.candidate_references_count = len(response.retrieved_papers)
 
-        response.imported_documents = len(response.citation_map)
         response.evidence_facts = len(response.facts)
         response.verified_references_count = len(response.citation_map)
+        if previous:
+            response.literature_import_count = int(
+                (previous or {}).get("literature_import_count")
+                or (previous or {}).get("imported_documents")
+                or 0
+            )
+            response.imported_documents = response.literature_import_count
+        response = self._finalize_literature_stats(response)
 
         fresh_dict = response.model_dump()
         merged_dict = self._merge_mining_dicts(
@@ -1024,6 +1044,62 @@ class LiteratureMiningAgent:
             logger.warning(f"Skills 运行异常: {e}")
             return {}
 
+    @staticmethod
+    def _resolve_max_import(top_k: int) -> int:
+        from app.core.config import get_settings
+
+        cap = int(getattr(get_settings(), "LITERATURE_IMPORT_MAX", 16) or 16)
+        return min(max(top_k, 6), cap)
+
+    @staticmethod
+    def _apply_import_stats(
+        response: LiteratureMiningResponse,
+        *,
+        discovery_output: Optional[Dict[str, Any]] = None,
+        corpus_meta: Optional[Dict[str, Any]] = None,
+    ) -> LiteratureMiningResponse:
+        meta = corpus_meta or {}
+        discovery = discovery_output or {}
+        searched = int(
+            meta.get("candidate_count")
+            or discovery.get("candidate_count")
+            or discovery.get("total")
+            or len(discovery.get("papers") or [])
+            or 0
+        )
+        imported = int(meta.get("imported") or 0)
+        selected = int(meta.get("selected_count") or 0)
+
+        response.literature_search_count = searched
+        response.literature_import_count = imported
+        response.literature_selected_count = selected
+        response.imported_documents = imported
+        if searched:
+            response.candidate_references_count = max(response.candidate_references_count or 0, searched)
+        return response
+
+    @staticmethod
+    def _finalize_literature_stats(response: LiteratureMiningResponse) -> LiteratureMiningResponse:
+        searched = int(
+            response.literature_search_count
+            or response.candidate_references_count
+            or len(response.retrieved_papers or [])
+            or 0
+        )
+        if response.retrieved_papers:
+            searched = max(searched, len(response.retrieved_papers))
+
+        search_output = (response.skill_outputs or {}).get("search_papers") or {}
+        if isinstance(search_output, dict) and search_output.get("success") and search_output.get("data"):
+            data = search_output["data"]
+            if isinstance(data, dict):
+                sp_total = int(data.get("total") or len(data.get("papers") or []))
+                searched = max(searched, sp_total)
+
+        response.literature_search_count = searched
+        response.candidate_references_count = searched
+        return response
+
     # ────────── 空响应 ──────────
 
     def _empty_response(
@@ -1042,7 +1118,7 @@ class LiteratureMiningAgent:
         if corpus_meta:
             skill_outputs["corpus_auto_import"] = corpus_meta
 
-        return LiteratureMiningResponse(
+        resp = LiteratureMiningResponse(
             facts=[],
             evidence=[],
             source_papers=[],
@@ -1053,6 +1129,11 @@ class LiteratureMiningAgent:
             retrieved_papers=retrieved_papers or (discovery_output or {}).get("papers") or [],
             candidate_references_count=len(retrieved_papers or (discovery_output or {}).get("papers") or []),
             retrieval_provenance=(corpus_meta or {}).get("retrieval_provenance"),
+        )
+        return self._apply_import_stats(
+            resp,
+            discovery_output=discovery_output,
+            corpus_meta=corpus_meta,
         )
 
 

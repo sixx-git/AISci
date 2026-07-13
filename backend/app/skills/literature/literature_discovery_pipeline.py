@@ -325,7 +325,10 @@ def filter_papers_by_llm_relevance(
     research_question: str,
     *,
     domain_hint: str = "",
-    max_check: int = 12,
+    max_check: int = 16,
+    scored_fallback: Optional[List[Tuple[float, Dict[str, Any]]]] = None,
+    min_keep: int = 4,
+    high_score_threshold: float = 1.8,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """最终 LLM 门控：批量判断候选论文是否与输入问题或其研究领域相关。"""
     from app.core.config import get_settings
@@ -402,6 +405,18 @@ def filter_papers_by_llm_relevance(
             meta["kept"],
             meta["rejected"],
         )
+        if not kept and scored_fallback:
+            high = [p for s, p in scored_fallback if s >= high_score_threshold]
+            if high:
+                kept = high[:min_keep]
+                meta["fallback"] = "high_score"
+                meta["kept"] = len(kept)
+                logger.info("[文献相关性门控] LLM 全拒，高打分回退保留 %s 篇", len(kept))
+            elif scored_fallback:
+                kept = [p for _, p in scored_fallback[:min_keep]]
+                meta["fallback"] = "top_score"
+                meta["kept"] = len(kept)
+                logger.info("[文献相关性门控] LLM 全拒，Top 打分回退保留 %s 篇", len(kept))
         return kept, meta
     except Exception as exc:
         logger.warning("[文献相关性门控] LLM 失败，保留概念过滤结果: %s", exc)

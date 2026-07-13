@@ -1,10 +1,83 @@
 """表格数据编码 — 将分类/序数列转为数值，供 pilot 与沙箱分析使用。"""
 from __future__ import annotations
 
+import os
 import re
 from typing import List, Optional
 
 import pandas as pd
+
+
+def read_tabular_file(file_path: str, *, nrows: Optional[int] = None) -> pd.DataFrame:
+    """读取 CSV/TSV（含分号分隔），与 DatasetService 预处理逻辑一致。"""
+    from app.services.dataset_service import DatasetService
+
+    return DatasetService._read_tabular_dataframe(file_path, nrows=nrows)
+
+
+def build_sandbox_load_data_preamble() -> str:
+    """沙箱内 _aisci_load_data：多分隔符 CSV 读取（注入到 analysis.py 头部）。"""
+    return (
+        "def _aisci_guess_csv_sep(path):\n"
+        "    try:\n"
+        "        with open(path, 'r', encoding='utf-8', errors='replace') as fh:\n"
+        "            header = fh.readline()\n"
+        "    except OSError:\n"
+        "        return None\n"
+        "    if not header.strip():\n"
+        "        return None\n"
+        "    cands = [(';', header.count(';')), (',', header.count(',')), ('\\t', header.count('\\t')), ('|', header.count('|'))]\n"
+        "    best_sep, best_count = max(cands, key=lambda item: item[1])\n"
+        "    return best_sep if best_count > 0 else None\n"
+        "\n"
+        "def _aisci_read_csv(path, nrows=None):\n"
+        "    import pandas as pd\n"
+        "    kwargs = {'nrows': nrows} if nrows else {}\n"
+        "    guessed = _aisci_guess_csv_sep(path)\n"
+        "    attempts = []\n"
+        "    if guessed:\n"
+        "        attempts.append({'sep': guessed})\n"
+        "    attempts.extend([{}, {'sep': ';'}, {'sep': '\\t'}, {'sep': '|'}, {'sep': None, 'engine': 'python'}])\n"
+        "    seen = set()\n"
+        "    best_df = None\n"
+        "    last_error = None\n"
+        "    for extra in attempts:\n"
+        "        key = tuple(sorted(extra.items()))\n"
+        "        if key in seen:\n"
+        "            continue\n"
+        "        seen.add(key)\n"
+        "        try:\n"
+        "            df = pd.read_csv(path, **kwargs, **extra)\n"
+        "            if len(df.columns) <= 1 and guessed and extra.get('sep') != guessed:\n"
+        "                continue\n"
+        "            if best_df is None or len(df.columns) > len(best_df.columns):\n"
+        "                best_df = df\n"
+        "            if len(df.columns) > 1:\n"
+        "                return df\n"
+        "        except Exception as exc:\n"
+        "            last_error = exc\n"
+        "    if best_df is not None:\n"
+        "        return best_df\n"
+        "    if last_error:\n"
+        "        raise last_error\n"
+        "    raise ValueError('无法解析 CSV: ' + str(path))\n"
+        "\n"
+        "def _aisci_load_data():\n"
+        "    import os\n"
+        "    path = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
+        "    if not path:\n"
+        "        raise FileNotFoundError('沙箱未注入 AISCI_DATA_PATH')\n"
+        "    tier = os.environ.get('AISCI_DATA_TIER', 'T0')\n"
+        "    sample_pq = os.environ.get('AISCI_SAMPLE_PARQUET') or ''\n"
+        "    nrows = int(os.environ.get('AISCI_SAMPLE_ROWS') or '0')\n"
+        "    if tier in ('T1', 'T2', 'T3') and sample_pq and os.path.exists(sample_pq):\n"
+        "        import pandas as pd\n"
+        "        return pd.read_parquet(sample_pq)\n"
+        "    if tier in ('T1', 'T2', 'T3') and nrows > 0:\n"
+        "        return _aisci_read_csv(path, nrows=nrows)\n"
+        "    return _aisci_read_csv(path)\n"
+        "\n"
+    )
 
 
 _PRESENT_ABSENT = {

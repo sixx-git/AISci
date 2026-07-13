@@ -111,6 +111,11 @@ function summarizeStageData(stageName: string, data: unknown): string {
 
   if (stageName === 'literature_mining') {
     const parts: string[] = [];
+    const searched = d.literature_search_count ?? d.candidate_references_count;
+    const imported = d.literature_import_count ?? d.imported_documents;
+    if (searched != null || imported != null) {
+      parts.push(`检索 ${searched ?? '—'} 篇 / 入库 ${imported ?? '—'} 篇`);
+    }
     const so = d.skill_outputs as Record<string, unknown> | undefined;
     if (so) {
       const sp = so.search_papers as Record<string, unknown> | undefined;

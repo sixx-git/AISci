@@ -20,7 +20,10 @@ from app.core.dataset_scale import (
     tier_sandbox_timeout_sec,
 )
 from app.services.analysis_script_utils import sanitize_analysis_script
-from app.services.tabular_encoding_utils import build_sandbox_encode_preamble
+from app.services.tabular_encoding_utils import (
+    build_sandbox_encode_preamble,
+    build_sandbox_load_data_preamble,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -300,24 +303,22 @@ class ExperimentSandboxService:
             "# --- AISci sandbox preamble (auto-injected) ---\n"
             "import os\n"
             + build_sandbox_encode_preamble()
+            + build_sandbox_load_data_preamble()
             + "_AISCI_DATA = os.environ.get('AISCI_DATA_PATH') or os.environ.get('CSV_DATA_PATH') or ''\n"
             "if not _AISCI_DATA:\n"
             "    raise FileNotFoundError('沙箱未注入 AISCI_DATA_PATH，请上传或合并 CSV 后重试')\n"
-            "def _aisci_load_data():\n"
-            "    import pandas as pd\n"
-            "    tier = os.environ.get('AISCI_DATA_TIER', 'T0')\n"
-            "    sample_pq = os.environ.get('AISCI_SAMPLE_PARQUET') or ''\n"
-            "    nrows = int(os.environ.get('AISCI_SAMPLE_ROWS') or '0')\n"
-            "    if tier in ('T1', 'T2', 'T3') and sample_pq and os.path.exists(sample_pq):\n"
-            "        return pd.read_parquet(sample_pq)\n"
-            "    if tier in ('T1', 'T2', 'T3') and nrows > 0:\n"
-            "        return pd.read_csv(_AISCI_DATA, nrows=nrows)\n"
-            "    return pd.read_csv(_AISCI_DATA)\n"
             "# --- end preamble ---\n\n"
         )
         body = script or ""
         body = sanitize_analysis_script(body) if body else body
-        if "_aisci_encode_frame" not in body:
+        if data_path and "# --- AISci sandbox preamble" not in body:
+            if "_aisci_encode_frame" not in body:
+                body = (
+                    "# --- AISci encode helpers (auto-injected) ---\n"
+                    + build_sandbox_encode_preamble()
+                    + body
+                )
+        elif "_aisci_encode_frame" not in body:
             body = (
                 "# --- AISci encode helpers (auto-injected) ---\n"
                 + build_sandbox_encode_preamble()
@@ -325,19 +326,22 @@ class ExperimentSandboxService:
             )
         if data_path:
             body = re.sub(
-                r"pd\.read_csv\s*\(\s*['\"][^'\"]+['\"]",
-                "pd.read_csv(_AISCI_DATA",
+                r"pd\.read_csv\s*\(\s*['\"][^'\"]+['\"][^)]*\)",
+                "_aisci_load_data()",
                 body,
             )
             body = re.sub(
-                r"read_csv\s*\(\s*['\"][^'\"]+['\"]",
-                "read_csv(_AISCI_DATA",
+                r"(?<![.\w])read_csv\s*\(\s*['\"][^'\"]+['\"][^)]*\)",
+                "_aisci_load_data()",
                 body,
             )
-        if "AISCI_DATA_PATH" not in body and "CSV_DATA_PATH" not in body and "_AISCI_DATA" not in body:
-            body = header + body
-        elif "_AISCI_DATA" not in body:
-            body = header + body
+            body = re.sub(
+                r"pd\.read_csv\s*\(\s*_AISCI_DATA[^)]*\)",
+                "_aisci_load_data()",
+                body,
+            )
+            if "# --- AISci sandbox preamble" not in body:
+                body = header + body
         return body
 
     @staticmethod
