@@ -238,7 +238,9 @@ export function StageHumanLoopPanel({
         const targetLabel = STAGE_RERUN_OPTIONS.find((s) => s.key === rerunTargetStage)?.label || rerunTargetStage;
         const scopeLabel = rerunScope === 'single_stage' ? '仅重跑本阶段' : '从此阶段继续后续流程';
         const explanation = res.code === 200 && res.data?.run_id
-          ? `已提交智能体重跑（${targetLabel} · ${scopeLabel}）。新 run: ${res.data.run_id.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
+          ? (res.data.in_place ?? res.data.run_id === runId)
+            ? `已提交智能体重跑（${targetLabel} · ${scopeLabel}），仍在当前运行 ${runId.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
+            : `已提交智能体重跑（${targetLabel} · ${scopeLabel}）。新 run: ${res.data.run_id.slice(0, 8)}…\n修改意见已作为约束注入：${userMsg}`
           : res.message || '重跑提交失败';
         setChatHistory((prev) => {
           const next = [...prev];
@@ -251,7 +253,8 @@ export function StageHumanLoopPanel({
           return next;
         });
         if (res.code === 200 && res.data?.run_id) {
-          onRerunStarted?.(res.data.run_id);
+          const inPlace = res.data.in_place ?? res.data.run_id === runId;
+          onRerunStarted?.(inPlace ? runId : res.data.run_id);
         } else {
           setError(explanation);
         }

@@ -43,6 +43,7 @@ class RerunFromStageResponse(BaseModel):
     rerun_from_stage: str
     rerun_mode: str = "single_stage"
     status: str
+    in_place: bool = Field(default=False, description="single_stage 时为 True，表示未创建新 run")
 
 
 class PromptOverrideRequest(BaseModel):

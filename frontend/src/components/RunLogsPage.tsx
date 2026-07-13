@@ -97,6 +97,7 @@ export function RunLogsPage({
   const [selectedLog, setSelectedLog] = useState<RunLog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showAllRuns, setShowAllRuns] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
   // 加载运行日志
@@ -128,16 +129,22 @@ export function RunLogsPage({
         detailResults.forEach((result) => {
           if (result.status === 'fulfilled' && result.value.code === 200 && result.value.data) {
             const detail = result.value.data;
-            const run = runs.find((r) => r.run_id === detail.run_id)!;
+            const run = runs.find((r) => r.run_id === detail.run_id);
+            if (!run) return;
             detail.stages?.forEach((stage) => {
               allLogs.push(mapStageToRunLog(stage, run));
             });
           }
         });
 
-        setLogs(allLogs);
-        if (allLogs.length > 0) {
-          setSelectedLog(allLogs[0]);
+        const effectiveRunId = _latestRunId || runs[0]?.run_id;
+        const filteredLogs = !showAllRuns && effectiveRunId
+          ? allLogs.filter((log) => log.runId === effectiveRunId)
+          : allLogs;
+
+        setLogs(filteredLogs);
+        if (filteredLogs.length > 0) {
+          setSelectedLog(filteredLogs[0]);
         }
       } catch (err) {
         console.error('加载运行日志失败:', err);
@@ -146,7 +153,7 @@ export function RunLogsPage({
         setIsLoading(false);
       }
     })();
-  }, [projectId, _revalidateKey, _latestRunId, reloadTick]);
+  }, [projectId, _revalidateKey, _latestRunId, reloadTick, showAllRuns]);
 
   const handleSelect = useCallback((log: RunLog) => {
     setSelectedLog(log);
@@ -196,6 +203,15 @@ export function RunLogsPage({
   return wrap(
     <div className={embedded ? 'space-y-3' : 'grid grid-cols-1 xl:grid-cols-12 gap-4 items-start'}>
       <div className={embedded ? 'min-w-0' : 'xl:col-span-7 min-w-0'}>
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => setShowAllRuns((v) => !v)}
+            className="text-xs text-bp-cyan hover:text-bp-text transition-colors"
+          >
+            {showAllRuns ? '仅显示当前运行' : '显示全部历史运行'}
+          </button>
+        </div>
         <RunLogTable
           logs={logs}
           selectedId={selectedLog?.id || null}

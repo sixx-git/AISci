@@ -556,10 +556,11 @@ async def rerun_from_stage(
             message=msg,
             data=RerunFromStageResponse(
                 run_id=new_run_id,
-                parent_run_id=body.run_id,
+                parent_run_id=body.run_id if rerun_mode != "single_stage" else new_run_id,
                 rerun_from_stage=body.stage,
                 rerun_mode=body.rerun_mode,
                 status="running",
+                in_place=rerun_mode == "single_stage",
             ),
         )
     except ValueError as e:

@@ -88,7 +88,6 @@ export interface LiteratureItem {
   id: string;
   title: string;
   authors: string;
-  year: number;
   type: '论文' | '综述' | '会议' | '预印本';
   parseStatus: 'pending' | 'parsing' | 'completed' | 'error';
   snippetCount: number;

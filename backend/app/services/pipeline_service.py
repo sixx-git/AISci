@@ -1,6 +1,7 @@
 """
 Pipeline 服务 - 负责按顺序执行各个 Agent
 """
+import copy
 import uuid
 import json
 import logging
@@ -48,7 +49,7 @@ from app.core.execution_metadata import annotate_validation_execution_metadata
 from app.services.hypothesis_service import HypothesisService
 from app.services.qwen_client import get_call_logs, clear_call_logs, CallLog
 from app.services.prompt_context import set_project_id as set_prompt_project_id
-from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService, get_effective_output
+from app.services.stage_human_loop_service import STAGE_KEY_ORDER, StageHumanLoopService, get_effective_output, get_stage_meta
 from app.services.report_service import merge_report_extra_metadata
 from app.services.prompt_override_service import get_prompt_override_service
 
@@ -245,13 +246,165 @@ class PipelineService:
         rerun_mode: str = "single_stage",
         human_feedback: str = "",
     ) -> str:
-        """从指定阶段重新运行：默认仅重跑本阶段，保留上下游结果。"""
+        """从指定阶段重新运行：single_stage 原地更新同一 run；from_stage_onward 分叉新 run。"""
+        if rerun_mode not in ("single_stage", "from_stage_onward"):
+            raise ValueError(f"无效 rerun_mode: {rerun_mode}")
+        if rerun_mode == "single_stage":
+            return self._prepare_in_place_single_stage_rerun(
+                project_id=project_id,
+                run_id=parent_run_id,
+                from_stage=from_stage,
+                use_human_modified_output=use_human_modified_output,
+                human_feedback=human_feedback,
+            )
+        return self._prepare_fork_rerun_from_stage(
+            project_id=project_id,
+            parent_run_id=parent_run_id,
+            from_stage=from_stage,
+            use_human_modified_output=use_human_modified_output,
+            human_feedback=human_feedback,
+        )
+
+    @staticmethod
+    def _archive_stage_output_for_rerun(stage_exec: DB_PipelineStageExecution, from_stage: str) -> None:
+        meta = get_stage_meta(stage_exec)
+        history: List[Dict[str, Any]] = list(meta.get("revision_history") or [])
+        history.append(
+            {
+                "id": str(uuid.uuid4()),
+                "at": datetime.now(CHINA_TZ).isoformat(),
+                "editor": "system",
+                "action": "agent_rerun",
+                "stage": from_stage,
+                "previous_output": copy.deepcopy(stage_exec.output_data),
+                "previous_human_output": copy.deepcopy(meta.get("human_modified_output")),
+            }
+        )
+        meta["revision_history"] = history[-30:]
+        stage_exec.extra_metadata = meta
+        flag_modified(stage_exec, "extra_metadata")
+
+    def _prepare_in_place_single_stage_rerun(
+        self,
+        project_id: str,
+        run_id: str,
+        from_stage: str,
+        use_human_modified_output: bool = True,
+        human_feedback: str = "",
+    ) -> str:
         stage_aliases = {"data_acquisition": "knowledge_gap"}
         from_stage = stage_aliases.get(from_stage, from_stage)
         if from_stage not in STAGE_KEY_ORDER:
             raise ValueError(f"无效 stage: {from_stage}")
-        if rerun_mode not in ("single_stage", "from_stage_onward"):
-            raise ValueError(f"无效 rerun_mode: {rerun_mode}")
+
+        run = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == run_id).first()
+        if not run:
+            raise ValueError(f"run 未找到: {run_id}")
+        if run.project_id != project_id:
+            raise ValueError("project_id 与 run 不匹配")
+
+        start_idx = STAGE_KEY_ORDER.index(from_stage)
+        human_loop = StageHumanLoopService(self.db)
+        stage_rows = (
+            self.db.query(DB_PipelineStageExecution)
+            .filter(DB_PipelineStageExecution.pipeline_run_id == run.id)
+            .order_by(DB_PipelineStageExecution.stage_order)
+            .all()
+        )
+        stage_map = {
+            (s.stage.value if hasattr(s.stage, "value") else str(s.stage)): s for s in stage_rows
+        }
+        target_exec = stage_map.get(from_stage)
+        if not target_exec:
+            raise ValueError(f"阶段 {from_stage} 不存在于 run {run_id}")
+
+        if target_exec.output_data is not None or get_stage_meta(target_exec).get("human_modified_output") is not None:
+            self._archive_stage_output_for_rerun(target_exec, from_stage)
+
+        target_exec.status = DB_PipelineStatus.PENDING
+        target_exec.started_at = None
+        target_exec.completed_at = None
+        target_exec.duration_ms = None
+        target_exec.error_message = None
+        target_exec.output_data = None
+
+        feedback_constraints: List[str] = []
+        downstream_ctx = human_loop.summarize_downstream_context_for_rerun(run, from_stage)
+        for c in downstream_ctx:
+            if c and c not in feedback_constraints:
+                feedback_constraints.append(c)
+        if human_feedback and human_feedback.strip():
+            feedback_constraints.append(human_feedback.strip())
+            try:
+                from app.services.feedback_hub_service import get_feedback_hub_service
+
+                get_feedback_hub_service(self.db).record_hitl_feedback(
+                    project_id,
+                    stage=from_stage,
+                    message=human_feedback.strip(),
+                    trigger_rerun=True,
+                )
+            except Exception as fb_err:
+                logger.warning("[Rerun] Feedback Hub 记录失败: %s", fb_err)
+
+        run.version = (run.version or 1) + 1
+        run.status = DB_PipelineStatus.PENDING
+        meta = dict(run.extra_metadata or {})
+        meta.update(
+            {
+                "rerun_from_stage": from_stage,
+                "rerun_mode": "single_stage",
+                "in_place_rerun": True,
+                "use_human_modified_output": use_human_modified_output,
+                "feedback_constraints": feedback_constraints,
+                "rerun_downstream_context": downstream_ctx,
+                "downstream_stale_from": from_stage,
+            }
+        )
+        meta.pop("parent_run_id", None)
+        run.extra_metadata = meta
+        flag_modified(run, "extra_metadata")
+
+        for idx in range(start_idx + 1, len(STAGE_DEFS)):
+            key = STAGE_DEFS[idx]["key"]
+            downstream_exec = stage_map.get(key)
+            if not downstream_exec:
+                continue
+            ds_meta = get_stage_meta(downstream_exec)
+            ds_meta["stale_after_upstream_rerun"] = from_stage
+            downstream_exec.extra_metadata = ds_meta
+            flag_modified(downstream_exec, "extra_metadata")
+
+        self.db.commit()
+        self.run_id = run_id
+        self.db_pipeline_run = run
+        self._start_idx = start_idx
+        self._seeded_results = human_loop.seed_results_from_run(run, from_stage, use_human_modified_output)
+        self._rerun_single_stage_only = True
+        self._in_place_rerun = True
+        self._parent_run_id_for_rerun = None
+        for s in stage_rows:
+            self.db_stage_executions[s.stage_order] = s
+        logger.info(
+            "[Pipeline] 单阶段原地重跑已准备 run_id=%s stage=%s version=%s",
+            run_id,
+            from_stage,
+            run.version,
+        )
+        return run_id
+
+    def _prepare_fork_rerun_from_stage(
+        self,
+        project_id: str,
+        parent_run_id: str,
+        from_stage: str,
+        use_human_modified_output: bool = True,
+        human_feedback: str = "",
+    ) -> str:
+        stage_aliases = {"data_acquisition": "knowledge_gap"}
+        from_stage = stage_aliases.get(from_stage, from_stage)
+        if from_stage not in STAGE_KEY_ORDER:
+            raise ValueError(f"无效 stage: {from_stage}")
 
         parent = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == parent_run_id).first()
         if not parent:
@@ -304,7 +457,8 @@ class PipelineService:
             extra_metadata={
                 "parent_run_id": parent_run_id,
                 "rerun_from_stage": from_stage,
-                "rerun_mode": rerun_mode,
+                "rerun_mode": "from_stage_onward",
+                "in_place_rerun": False,
                 "use_human_modified_output": use_human_modified_output,
                 "feedback_constraints": feedback_constraints,
                 "rerun_downstream_context": downstream_ctx,
@@ -363,7 +517,8 @@ class PipelineService:
         self.db.commit()
         self._start_idx = start_idx
         self._seeded_results = seeded
-        self._rerun_single_stage_only = rerun_mode == "single_stage"
+        self._rerun_single_stage_only = False
+        self._in_place_rerun = False
         self._parent_run_id_for_rerun = parent_run_id
         return self.run_id
 
@@ -399,7 +554,23 @@ class PipelineService:
             self.db_stage_executions[s.stage_order] = s
 
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
-        if meta.get("rerun_from_stage"):
+        if meta.get("in_place_rerun") and meta.get("rerun_from_stage"):
+            self._start_idx = STAGE_KEY_ORDER.index(meta["rerun_from_stage"])
+            self._seeded_results = StageHumanLoopService(self.db).seed_results_from_run(
+                self.db_pipeline_run,
+                meta["rerun_from_stage"],
+                meta.get("use_human_modified_output", True),
+            )
+            self._rerun_single_stage_only = True
+            self._in_place_rerun = True
+            self._parent_run_id_for_rerun = None
+            for c in meta.get("feedback_constraints") or []:
+                if c and c not in self._human_feedback_constraints:
+                    self._human_feedback_constraints.append(c)
+            for c in meta.get("rerun_downstream_context") or []:
+                if c and c not in self._human_feedback_constraints:
+                    self._human_feedback_constraints.append(c)
+        elif meta.get("rerun_from_stage"):
             self._start_idx = STAGE_KEY_ORDER.index(meta["rerun_from_stage"])
             parent_id = meta.get("parent_run_id")
             parent = (
@@ -413,6 +584,7 @@ class PipelineService:
                     meta.get("use_human_modified_output", True),
                 )
             self._rerun_single_stage_only = meta.get("rerun_mode", "single_stage") == "single_stage"
+            self._in_place_rerun = False
             self._parent_run_id_for_rerun = parent_id
             for c in meta.get("feedback_constraints") or []:
                 if c and c not in self._human_feedback_constraints:
@@ -2333,6 +2505,7 @@ class PipelineService:
             logger.info(
                 f"[Pipeline] 单阶段重跑完成 run_id={self.run_id} stage={done.stage_key}"
             )
+            self._finalize_in_place_rerun_metadata(done.stage_key)
             final_report_id = self.db_pipeline_run.final_report_id
             if done.stage_key == "report_generation":
                 created = self._persist_pipeline_report(project_id, results)
@@ -2510,6 +2683,26 @@ class PipelineService:
         logger.info(
             f"[Pipeline] 单阶段重跑完成，已从父 run 恢复下游阶段 parent={parent_run_id}"
         )
+
+    def _finalize_in_place_rerun_metadata(self, stage_key: str) -> None:
+        """单阶段原地重跑完成后清理临时 metadata。"""
+        if not self.db_pipeline_run:
+            return
+        meta = dict(self.db_pipeline_run.extra_metadata or {})
+        if not meta.get("in_place_rerun"):
+            return
+        meta["last_in_place_rerun"] = {
+            "stage": stage_key,
+            "at": datetime.now(CHINA_TZ).isoformat(),
+        }
+        for key in ("rerun_from_stage", "in_place_rerun", "rerun_mode", "feedback_constraints", "rerun_downstream_context"):
+            meta.pop(key, None)
+        self.db_pipeline_run.extra_metadata = meta
+        flag_modified(self.db_pipeline_run, "extra_metadata")
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
     
     def _run_stage(
         self,
@@ -2567,7 +2760,8 @@ class PipelineService:
                 )
 
             if getattr(self, "_rerun_single_stage_only", False) and idx == getattr(self, "_start_idx", 0):
-                self._restore_downstream_from_parent_run(idx, results, stages)
+                if not getattr(self, "_in_place_rerun", False):
+                    self._restore_downstream_from_parent_run(idx, results, stages)
                 raise SingleStageRerunComplete(stage_key)
 
         except SingleStageRerunComplete as done:

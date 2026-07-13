@@ -1,5 +1,4 @@
 ﻿import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Upload, FileText,
   Database, Eye, Sparkles, Trash2,
@@ -16,7 +15,6 @@ import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
 import type { VectorIndexStats } from '@/services/vectorService';
-import dataFinderService from '@/services/dataFinderService';
 import type { DocumentInfo } from '@/services/documentService';
 import type { ArxivPaper, ImportedDocument, ImportArxivResult, ParseIndexResult } from '@/services/literatureService';
 import { useStatusToast, type StatusToastMessage } from '@/hooks/useToast';
@@ -44,7 +42,6 @@ function mapStatus(status: DocumentInfo['status']): LiteratureItem['parseStatus'
 
 // ============ DocumentInfo → LiteratureItem ============
 function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
-  const year = doc.created_at ? new Date(doc.created_at).getFullYear() : new Date().getFullYear();
   const source = (doc.source_type || '').toLowerCase();
   const type: LiteratureItem['type'] =
     source === 'arxiv' || source === 'openalex' ? '预印本' : inferDocType(doc);
@@ -52,7 +49,6 @@ function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
     id: doc.id,
     title: doc.title || doc.filename.replace(/\.\w+$/, ''),
     authors: doc.authors || '—',
-    year,
     type,
     parseStatus: mapStatus(doc.status),
     snippetCount: doc.chunk_count ?? 0,
@@ -102,12 +98,10 @@ const importStatusConfig: Record<string, { label: string; className: string }> =
 const TABLE_COLUMNS = [
   { key: 'title', label: '论文标题', className: 'text-left' },
   { key: 'authors', label: '作者', className: 'text-left' },
-  { key: 'year', label: '年份', className: 'text-center' },
   { key: 'type', label: '类型', className: 'text-center' },
   { key: 'parseStatus', label: '解析状态', className: 'text-center' },
   { key: 'snippetCount', label: '切片', className: 'text-center' },
   { key: 'factCount', label: '事实', className: 'text-center' },
-  { key: 'dataFinder', label: 'Data Finder', className: 'text-center' },
   { key: 'actions', label: '操作', className: 'text-right' },
 ] as const;
 
@@ -142,7 +136,6 @@ export function LiteratureLibrary({
   compact: _compact = false,
   showHeader = true,
 }: LiteratureLibraryProps) {
-  const navigate = useNavigate();
   // ========== Tab 状态 ==========
   const [activeTab, setActiveTab] = useState<'upload' | 'arxiv' | 'library'>('upload');
 
@@ -153,9 +146,6 @@ export function LiteratureLibrary({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [buildingIndex, setBuildingIndex] = useState(false);
   const [search, setSearch] = useState('');
-  const [extractionStats, setExtractionStats] = useState<
-    Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>
-  >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ========== arXiv 检索状态 ==========
@@ -212,18 +202,6 @@ export function LiteratureLibrary({
     }
   }, [projectId, showStatus]);
 
-  const loadExtractionStats = useCallback(async () => {
-    if (!projectId || projectId === 'default') return;
-    try {
-      const res = await dataFinderService.getPaperExtractionStats(projectId);
-      if (res.code === 200 && res.data?.by_paper) {
-        setExtractionStats(res.data.by_paper);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [projectId]);
-
   const loadIndexStats = useCallback(async () => {
     if (!projectId || projectId === 'default') return;
     setIndexStatsLoading(true);
@@ -238,12 +216,6 @@ export function LiteratureLibrary({
       setIndexStatsLoading(false);
     }
   }, [projectId]);
-
-  const openDataFinder = useCallback(() => {
-    if (projectId && projectId !== 'default') {
-      navigate(`/projects/${projectId}?tab=datasets&subtab=data-finder`);
-    }
-  }, [navigate, projectId]);
 
   const loadImportedDocs = useCallback(async () => {
     if (!projectId) return;
@@ -265,11 +237,10 @@ export function LiteratureLibrary({
   useEffect(() => {
     loadDocuments();
     loadImportedDocs();
-    loadExtractionStats();
     // 索引统计走轻量 API，延迟加载避免与主列表争抢连接
     const timer = window.setTimeout(() => loadIndexStats(), 300);
     return () => window.clearTimeout(timer);
-  }, [loadDocuments, loadImportedDocs, loadExtractionStats, loadIndexStats]);
+  }, [loadDocuments, loadImportedDocs, loadIndexStats]);
 
   // ========== 上传 PDF ==========
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -703,8 +674,6 @@ export function LiteratureLibrary({
               deleting={deleting}
               onDelete={handleDelete}
               onViewDetail={handleViewDetail}
-              extractionStats={extractionStats}
-              onOpenDataFinder={openDataFinder}
             />
           </div>
         )}
@@ -1274,15 +1243,13 @@ function LibraryTabContent({
 
 // ---------- 已有文献表格 ----------
 function LiteratureTable({
-  items, loading, deleting, onDelete, onViewDetail, extractionStats = {}, onOpenDataFinder,
+  items, loading, deleting, onDelete, onViewDetail,
 }: {
   items: LiteratureItem[];
   loading: boolean;
   deleting: string | null;
   onDelete: (id: string) => void;
   onViewDetail: (id: string) => void;
-  extractionStats?: Record<string, { tables: number; figures_confirmed: number; figures_pending: number }>;
-  onOpenDataFinder?: () => void;
 }) {
   return (
     <Card className="overflow-hidden p-0">
@@ -1324,7 +1291,6 @@ function LiteratureTable({
                       {truncateText(item.authors, 48)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center text-bp-text whitespace-nowrap">{item.year}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium border', tConf.className)}>{tConf.label}</span>
                   </td>
@@ -1340,26 +1306,6 @@ function LiteratureTable({
                   <td className="px-4 py-3 text-center text-bp-text">{item.snippetCount}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={item.factCount > 0 ? 'text-bp-yellow font-medium' : 'text-bp-muted'}>{item.factCount}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {(() => {
-                      const st = extractionStats[item.id];
-                      if (!st || (st.tables === 0 && st.figures_confirmed === 0)) {
-                        return <span className="text-bp-muted text-xs">—</span>;
-                      }
-                      return (
-                        <button
-                          type="button"
-                          onClick={onOpenDataFinder}
-                          className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:text-bp-cyan/80"
-                          title="跳转 Data Finder 详情"
-                        >
-                          <Database className="w-3 h-3" />
-                          {st.tables}表
-                          {st.figures_confirmed > 0 ? ` · ${st.figures_confirmed}图` : ''}
-                        </button>
-                      );
-                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -1400,7 +1346,6 @@ function formatPublicationYear(doc: DocumentInfo): string {
   }
   const metaYear = doc.metadata_json?.year;
   if (metaYear != null) return String(metaYear);
-  if (doc.created_at) return String(new Date(doc.created_at).getFullYear());
   return '—';
 }
 

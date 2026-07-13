@@ -1256,12 +1256,16 @@ export function WorkflowPage({
         });
         if (res.code === 200 && res.data?.run_id) {
           const newRunId = res.data.run_id;
-          setCurrentRunId(newRunId);
-          currentRunIdRef.current = newRunId;
-          rememberLatestRunId(newRunId);
-          setActiveRunId(projectId, newRunId);
+          const inPlace = res.data.in_place ?? (newRunId === parentRunId);
+          if (!inPlace) {
+            setCurrentRunId(newRunId);
+            currentRunIdRef.current = newRunId;
+            rememberLatestRunId(newRunId);
+            setActiveRunId(projectId, newRunId);
+          }
           setRunState('running');
-          startPolling(newRunId);
+          startPolling(inPlace ? parentRunId : newRunId);
+          setStatusMessage(`正在重新运行「${nodeName}」（${inPlace ? '原地更新本阶段' : '从本阶段继续'}）…`);
         } else {
           setStatusMessage(null);
           setErrorMessage(res.message || '本阶段重跑失败');
@@ -1648,12 +1652,14 @@ export function WorkflowPage({
                   refreshFromRunDetail(effectiveRunId);
                   onHumanLoopUpdated?.(NODE_ID_TO_STAGE[selectedNode.id] || selectedNode.id);
                 }}
-                onRerunStarted={(newRunId) => {
-                  setCurrentRunId(newRunId);
-                  currentRunIdRef.current = newRunId;
-                  rememberLatestRunId(newRunId);
-                  if (projectId) setActiveRunId(projectId, newRunId);
-                  startPolling(newRunId);
+                onRerunStarted={(runIdForPoll) => {
+                  if (runIdForPoll !== currentRunIdRef.current) {
+                    setCurrentRunId(runIdForPoll);
+                    currentRunIdRef.current = runIdForPoll;
+                    rememberLatestRunId(runIdForPoll);
+                    if (projectId) setActiveRunId(projectId, runIdForPoll);
+                  }
+                  startPolling(runIdForPoll);
                 }}
               />
             </CollapsiblePanel>
