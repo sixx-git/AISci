@@ -81,11 +81,12 @@ class Settings(BaseSettings):
     SANDBOX_TIMEOUT_T2_SEC: int = 600
     ALLOWED_EXTENSIONS: str = "txt,pdf,docx,md,csv"
     
-    # 文献自动入库（Pipeline 文献挖掘阶段）
+    # 文献自动入库（Pipeline 文献挖掘阶段 — LLM 推荐模式）
     LITERATURE_IMPORT_MAX: int = 16
-    LITERATURE_IMPORT_MIN_SCORE: float = 0.5
-    LITERATURE_IMPORT_HIGH_SCORE: float = 1.8
-    LITERATURE_IMPORT_MIN_KEEP: int = 4
+    LITERATURE_RECOMMEND_MAX: int = 12
+    LITERATURE_MIN_VERIFIED: int = 4
+    LITERATURE_SUPPLEMENT_API: bool = True
+    LITERATURE_IMPORT_UNVERIFIED: bool = False
 
     # arXiv 配置
     ARXIV_TIMEOUT: int = 15

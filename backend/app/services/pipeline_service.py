@@ -932,6 +932,9 @@ class PipelineService:
             discovery_round=discovery_round,
             top_k=self._get_literature_top_k(),
             db=self.db,
+            research_domain=(
+                (results.get("problem_understanding") or {}).get("research_domain") or ""
+            ).strip(),
         )
         return self._enrich_literature_mining(self._safe_model_dump(response))
 
@@ -2729,14 +2732,22 @@ class PipelineService:
         combined = f"{research_question} [修正约束与项目进展: {suffix}]"
         return combined[:1200]
 
-    def _exec_literature_mining(self, project_id: str, research_question: str):
+    def _exec_literature_mining(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Optional[Dict[str, Any]] = None,
+    ):
         agent = get_literature_mining_agent()
         query = self._augment_query_for_rerun(research_question)
+        pu = (results or {}).get("problem_understanding") or {}
+        domain = (pu.get("research_domain") or "").strip() if isinstance(pu, dict) else ""
         result = agent.mine(
             project_id=project_id,
             research_question=query,
             top_k=self._get_literature_top_k(),
             db=self.db,
+            research_domain=domain,
         )
         return self._safe_model_dump(result)
 
@@ -2747,7 +2758,7 @@ class PipelineService:
         results: Dict[str, Any],
     ) -> Dict[str, Any]:
         """文献挖掘 + 多模态 evidence 合并，并在无文献时终止工作流。"""
-        dump = self._exec_literature_mining(project_id, research_question)
+        dump = self._exec_literature_mining(project_id, research_question, results)
         results["literature_mining"] = dump
         try:
             self._exec_multimodal_sync(project_id, research_question, results)

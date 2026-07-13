@@ -49,14 +49,11 @@
 研究问题：{{research_question}}  
 领域描述：{{domain_description}}
 
-## 垂直联邦学习（VFL）识别指引
+## 联邦学习场景识别（勿过度套用 VFL）
 
-若研究问题或领域描述涉及以下概念，请在 keywords 与 constraints 中明确标注：
-
-- 垂直联邦学习 / VFL / SplitNN / 特征方 / 标签方
-- 样本对齐（entity_id、aligned_id、PSI）
-- 隐私保护（privacy_budget、差分隐私、Secure Aggregation）
-- 纵向特征融合、通信开销、对齐成功率
+- 若用户强调**合成/生成数据、跌倒/危险场景、Sim-to-Real、Non-IID**：按**水平/跨设备联邦 + 生成式数据增强**理解，不要默认改写为垂直联邦(VFL)。
+- 仅当用户**明确**提到 VFL、SplitNN、特征方/标签方、PSI 样本对齐时，才在 keywords/constraints 中标注 VFL。
+- `main_contradiction` 与 `retrieval_dimensions` 必须优先对齐**用户原句**，不得用 VFL/特征对齐替换「合成数据补充危险样本」类问题。
 
 ## 输出格式要求
 

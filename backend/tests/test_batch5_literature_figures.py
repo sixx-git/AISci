@@ -3,7 +3,7 @@ import unittest
 
 from app.core.figure_extraction import extract_rule_series_from_caption, write_figure_series_csv
 from app.services.data_finder_gap_search import build_gap_search_queries
-from app.services.literature_corpus_service import _score_paper_relevance, ensure_corpora_from_search
+from app.services.literature_corpus_service import ensure_corpora_from_search
 from app.skills.data_finder.external_dataset_search_skill import ExternalDatasetSearchSkill
 
 
@@ -35,11 +35,6 @@ class TestBatch5FigureExtraction(unittest.TestCase):
 
 
 class TestBatch5LiteratureCorpus(unittest.TestCase):
-    def test_score_paper_relevance(self):
-        paper = {"title": "Federated learning privacy", "abstract": "We study federated learning", "arxiv_id": "1234.5678"}
-        score = _score_paper_relevance(paper, "federated learning privacy")
-        self.assertGreater(score, 2.0)
-
     def test_ensure_corpora_empty(self):
         result = ensure_corpora_from_search("proj", "query", None, db=None)
         self.assertEqual(result.get("imported", 0), 0)

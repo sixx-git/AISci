@@ -98,7 +98,7 @@ class SearchPapersSkill(BaseSkill):
             result.add_error("搜索关键词为空")
             return result
 
-        from app.skills.literature.literature_discovery_pipeline import normalize_api_search_query
+        from app.services.literature_search_utils import normalize_api_search_query
 
         search_query = normalize_api_search_query(" ".join(query_terms[:5]))
         if not search_query:

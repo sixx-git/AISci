@@ -1,4 +1,4 @@
-"""文献检索结果自动入库 — Search → Import → Parse → Index"""
+"""文献推荐结果自动入库 — Recommend → Verify → Import → Index"""
 from __future__ import annotations
 
 import logging
@@ -6,158 +6,41 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.skills.literature.literature_discovery_pipeline import (
-    extract_core_concepts,
-    filter_papers_by_llm_relevance,
-    passes_concept_filter,
-    score_paper_relevance,
-)
-
 logger = logging.getLogger(__name__)
 
 
-def _literature_import_settings() -> tuple[int, float, float, int]:
+def _literature_import_settings() -> tuple[int, bool]:
     from app.core.config import get_settings
 
     s = get_settings()
     return (
-        int(getattr(s, "LITERATURE_IMPORT_MAX", 16) or 16),
-        float(getattr(s, "LITERATURE_IMPORT_MIN_SCORE", 0.5) or 0.5),
-        float(getattr(s, "LITERATURE_IMPORT_HIGH_SCORE", 1.8) or 1.8),
-        int(getattr(s, "LITERATURE_IMPORT_MIN_KEEP", 4) or 4),
+        int(getattr(s, "LITERATURE_RECOMMEND_MAX", 12) or getattr(s, "LITERATURE_IMPORT_MAX", 12) or 12),
+        bool(getattr(s, "LITERATURE_IMPORT_UNVERIFIED", False)),
     )
 
 
-def _score_paper_relevance(
-    paper: Dict[str, Any],
-    query: str,
-    extra_terms: Optional[List[str]] = None,
-) -> float:
-    return score_paper_relevance(paper, query, extra_terms)
-
-
-def ensure_corpora_from_discovery(
-    project_id: str,
-    research_question: str,
-    discovery_output: Optional[Dict[str, Any]],
-    db: Session,
+def _importable_papers(
+    papers: List[Dict[str, Any]],
     *,
-    max_import: Optional[int] = None,
-    auto_parse: bool = True,
-    min_score: Optional[float] = None,
-) -> Dict[str, Any]:
-    """将文献发现流水线（Crawler+Selector）结果自动导入文献库并索引。"""
-    default_max, default_min, _, _ = _literature_import_settings()
-    max_import = max_import if max_import is not None else default_max
-    min_score = min_score if min_score is not None else default_min
-    queries = (discovery_output or {}).get("queries") or []
-    search_like = {
-        "papers": (discovery_output or {}).get("papers") or [],
-        "sources_searched": (discovery_output or {}).get("sources_searched") or [],
-        "queries": queries,
-        "discovery_mode": (discovery_output or {}).get("discovery_mode"),
-        "citation_expanded": (discovery_output or {}).get("citation_expanded", 0),
-    }
-    meta = ensure_corpora_from_search(
-        project_id,
-        research_question,
-        search_like,
-        db,
-        max_import=max_import,
-        auto_parse=auto_parse,
-        min_score=min_score,
-        extra_terms=queries,
-    )
-    if discovery_output:
-        meta["discovery"] = {
-            "queries": queries,
-            "candidate_count": discovery_output.get("candidate_count"),
-            "citation_expanded": discovery_output.get("citation_expanded"),
-            "per_query_status": discovery_output.get("per_query_status"),
-            "warnings": discovery_output.get("warnings"),
-        }
-    return meta
-
-
-def ensure_corpora_from_search(
-    project_id: str,
-    research_question: str,
-    search_papers_output: Optional[Dict[str, Any]],
-    db: Session,
-    *,
-    max_import: Optional[int] = None,
-    auto_parse: bool = True,
-    min_score: Optional[float] = None,
-    extra_terms: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """将 search_papers 高相关结果自动导入文献库并索引。"""
-    from app.models import SourceType
-    from app.services.literature_ingestion_service import LiteratureIngestionService
-    from app.services.vector_store import build_vector_index
-
-    default_max, default_min, high_score, min_keep = _literature_import_settings()
-    max_import = max_import if max_import is not None else default_max
-    min_score = min_score if min_score is not None else default_min
-
-    papers = (search_papers_output or {}).get("papers") or []
-    if not papers:
-        return {"imported": 0, "skipped": True, "reason": "无 search_papers 结果", "candidate_count": 0}
-
-    terms = list(extra_terms or [])
-    if (search_papers_output or {}).get("queries"):
-        terms.extend((search_papers_output or {}).get("queries") or [])
-
-    core_concepts = extract_core_concepts(research_question, extra_terms=terms)
-
-    scored: List[tuple[float, Dict[str, Any]]] = []
+    import_unverified: bool,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
     for p in papers:
-        score = _score_paper_relevance(p, research_question, terms)
-        if score < min_score:
-            continue
-        concept_ok = passes_concept_filter(p, core_concepts)
-        if not concept_ok and score < high_score:
-            continue
-        ext_id = p.get("external_id") or p.get("arxiv_id") or p.get("doi") or ""
-        if not ext_id and not p.get("title"):
-            continue
-        item = dict(p)
-        if not item.get("external_id"):
-            item["external_id"] = ext_id or item.get("title", "")[:40]
-        scored.append((score, item))
+        status = p.get("verification_status") or ""
+        if status in ("verified", "partial"):
+            out.append(p)
+        elif import_unverified and status == "unverified" and p.get("title"):
+            out.append(p)
+    return out
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    scored_pool = scored[: max_import * 4]
-    to_import = [p for _, p in scored_pool[:max_import]]
 
-    if not to_import:
-        return {
-            "imported": 0,
-            "skipped": True,
-            "reason": "无足够相关论文",
-            "candidate_count": len(papers),
-            "scored_count": len(scored),
-        }
+def _import_paper_batches(
+    service: Any,
+    project_id: str,
+    to_import: List[Dict[str, Any]],
+) -> tuple[List[str], List[Dict[str, Any]]]:
+    from app.models import SourceType
 
-    domain_hint = "；".join(core_concepts[:10])
-    to_import, llm_gate = filter_papers_by_llm_relevance(
-        to_import,
-        research_question,
-        domain_hint=domain_hint,
-        scored_fallback=scored_pool,
-        min_keep=min_keep,
-        high_score_threshold=high_score,
-    )
-    if not to_import:
-        return {
-            "imported": 0,
-            "skipped": True,
-            "reason": "LLM 相关性门控未通过",
-            "llm_relevance_gate": llm_gate,
-            "candidate_count": len(papers),
-            "scored_count": len(scored),
-        }
-
-    service = LiteratureIngestionService(db)
     arxiv_batch = [p for p in to_import if p.get("arxiv_id") or p.get("source") == "arxiv"]
     other_batch = [p for p in to_import if p not in arxiv_batch]
 
@@ -177,6 +60,48 @@ def ensure_corpora_from_search(
         for r in res.get("results") or []:
             if r.get("document_id") and not r.get("duplicate"):
                 imported_ids.append(r["document_id"])
+
+    return imported_ids, import_results
+
+
+def ensure_corpora_from_recommendations(
+    project_id: str,
+    research_question: str,
+    recommendation_output: Optional[Dict[str, Any]],
+    db: Session,
+    *,
+    max_import: Optional[int] = None,
+    auto_parse: bool = True,
+) -> Dict[str, Any]:
+    """将 LLM 推荐 + API 校验后的论文导入文献库并索引。"""
+    from app.services.literature_ingestion_service import LiteratureIngestionService
+    from app.services.vector_store import build_vector_index
+
+    default_max, import_unverified = _literature_import_settings()
+    max_import = max_import if max_import is not None else default_max
+
+    papers = (recommendation_output or {}).get("papers") or []
+    if not papers:
+        return {
+            "imported": 0,
+            "skipped": True,
+            "reason": "无推荐论文",
+            "candidate_count": 0,
+        }
+
+    to_import = _importable_papers(papers, import_unverified=import_unverified)[:max_import]
+    if not to_import:
+        return {
+            "imported": 0,
+            "skipped": True,
+            "reason": "无通过校验的论文可入库",
+            "candidate_count": len(papers),
+            "verified_count": (recommendation_output or {}).get("verified_count", 0),
+            "unverified_count": (recommendation_output or {}).get("unverified_count", 0),
+        }
+
+    service = LiteratureIngestionService(db)
+    imported_ids, import_results = _import_paper_batches(service, project_id, to_import)
 
     parsed = 0
     pdf_downloaded = 0
@@ -201,22 +126,64 @@ def ensure_corpora_from_search(
         except Exception as idx_err:
             logger.warning("自动索引失败: %s", idx_err)
 
+    rec = recommendation_output or {}
     return {
         "imported": len(imported_ids),
         "parsed": parsed,
         "pdf_downloaded": pdf_downloaded,
         "candidate_count": len(papers),
-        "scored_count": len(scored),
         "selected_count": len(to_import),
         "import_results": import_results[:10],
+        "verified_count": rec.get("verified_count", 0),
+        "partial_count": rec.get("partial_count", 0),
+        "unverified_count": rec.get("unverified_count", 0),
         "retrieval_provenance": {
             "query": research_question[:200],
-            "expanded_queries": terms[:8],
-            "core_concepts": core_concepts[:12],
-            "llm_relevance_gate": llm_gate,
-            "source_api": (search_papers_output or {}).get("sources_searched") or [],
-            "discovery_mode": (search_papers_output or {}).get("discovery_mode"),
+            "research_domain": rec.get("research_domain") or "",
+            "discovery_mode": rec.get("discovery_mode", "llm_recommend_web_v3"),
+            "subtopics": rec.get("subtopics") or [],
+            "rationale": (rec.get("rationale") or "")[:500],
+            "search_queries": rec.get("search_queries") or [],
+            "supplement_used": rec.get("supplement_used", False),
             "imported_ids": imported_ids,
             "auto_parse": auto_parse,
         },
+        "discovery": {
+            "subtopics": rec.get("subtopics") or [],
+            "verified_count": rec.get("verified_count"),
+            "unverified_count": rec.get("unverified_count"),
+            "supplement_used": rec.get("supplement_used"),
+            "search_queries": rec.get("search_queries") or [],
+            "warnings": rec.get("warnings"),
+        },
     }
+
+
+def ensure_corpora_from_search(
+    project_id: str,
+    research_question: str,
+    search_papers_output: Optional[Dict[str, Any]],
+    db: Session,
+    *,
+    max_import: Optional[int] = None,
+    auto_parse: bool = True,
+    **_: Any,
+) -> Dict[str, Any]:
+    """兼容旧调用：将 search_papers 结果按 verified 逻辑入库（Data Finder 等）。"""
+    papers = (search_papers_output or {}).get("papers") or []
+    for p in papers:
+        if not p.get("verification_status"):
+            p["verification_status"] = "verified" if (p.get("abstract") or "").strip() else "partial"
+    fake_rec = {
+        "papers": papers,
+        "discovery_mode": (search_papers_output or {}).get("discovery_mode") or "search_papers",
+        "verified_count": len(papers),
+    }
+    return ensure_corpora_from_recommendations(
+        project_id,
+        research_question,
+        fake_rec,
+        db,
+        max_import=max_import,
+        auto_parse=auto_parse,
+    )

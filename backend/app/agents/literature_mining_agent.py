@@ -19,9 +19,7 @@ from app.services.vector_store import (
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
-from app.skills.literature.arxiv_search_skill import ArxivSearchSkill
 from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
-from app.skills.literature.search_papers_skill import SearchPapersSkill
 from app.skills.literature.paper_full_text_rag_skill import PaperFullTextRAGSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
@@ -85,7 +83,7 @@ class LiteratureMiningResponse(BaseModel):
     uncertain_points: List[str] = Field(default_factory=list, description="不确定的点")
     warning: Optional[str] = Field(None, description="警告信息（文献库为空 / 无检索结果时）")
     skill_outputs: Dict[str, Any] = Field(default_factory=dict, description="Skill 执行输出")
-    retrieved_papers: List[Dict[str, Any]] = Field(default_factory=list, description="SearchPapersSkill 搜到的论文（candidate_papers）")
+    retrieved_papers: List[Dict[str, Any]] = Field(default_factory=list, description="LLM 推荐并校验的论文列表")
     imported_documents: int = Field(0, description="本轮入库的文献文档数")
     literature_search_count: int = Field(0, description="多源检索候选论文数")
     literature_import_count: int = Field(0, description="本轮自动入库论文数")
@@ -102,7 +100,7 @@ class LiteratureMiningAgent:
     """文献挖掘智能体
 
     工作流程：
-      1. Crawler+Selector 多源检索（扩展 query、引用网络）→ 自动入库建索引
+      1. LLM 网页式推荐论文（问题 + 领域）→ API 校验 → 自动入库建索引
       2. Zvec 向量检索 → 获取 Top-K 相关 Chunk
       3. 格式化 Chunk（含完整文献元数据）→ 送入 LLM
       4. LLM 输出结构化事实 + 证据 + citation_map
@@ -118,23 +116,26 @@ class LiteratureMiningAgent:
         research_question: str,
         top_k: int = 10,
         db: Optional[Session] = None,
+        research_domain: str = "",
     ) -> LiteratureMiningResponse:
         """
         从项目文献库挖掘相关科学事实
 
-        当项目缺少文献或检索无结果时，自动运行文献发现流水线（多源检索 + 引用扩展）并导入。
+        当项目缺少文献或检索无结果时，自动运行 LLM 文献推荐（网页式单次推荐 + API 校验）并导入。
 
         Args:
             project_id: 项目 ID
             research_question: 研究问题
             top_k: 检索的文献片段数量
-            db: 数据库会话（用于 arXiv 自动导入）
+            db: 数据库会话（用于自动导入）
+            research_domain: 研究领域（来自问题理解，仅传此项给文献推荐）
 
         Returns:
             LiteratureMiningResponse
         """
         try:
-            keywords = self._extract_keywords(research_question)
+            domain = (research_domain or "").strip()
+            keywords = self._domain_keywords(domain)
             discovery_output: Dict[str, Any] = {}
             corpus_meta: Dict[str, Any] = {}
 
@@ -143,7 +144,7 @@ class LiteratureMiningAgent:
                     project_id,
                     research_question,
                     db,
-                    keywords=keywords,
+                    research_domain=domain,
                     max_import=self._resolve_max_import(top_k),
                 )
 
@@ -171,24 +172,37 @@ class LiteratureMiningAgent:
                 top_k=top_k,
             )
 
-            if not search_results and discovery_output.get("queries"):
-                fallback_query = " ".join(discovery_output["queries"][:2])
-                logger.info(f"[文献挖掘] 主 query 无结果，尝试扩展 query: {fallback_query[:80]}")
-                search_results = search_vector_store(
-                    project_id=project_id,
-                    query=fallback_query,
-                    top_k=top_k,
-                )
+            if not search_results:
+                fallback_queries: List[str] = []
+                for st in discovery_output.get("subtopics") or []:
+                    if not isinstance(st, dict):
+                        continue
+                    for key in ("summary", "label"):
+                        text = str(st.get(key) or "").strip()
+                        if text:
+                            fallback_queries.append(text)
+                            break
+                for q in discovery_output.get("search_queries") or []:
+                    if str(q).strip():
+                        fallback_queries.append(str(q).strip())
+                for fallback_query in fallback_queries[:3]:
+                    logger.info(f"[文献挖掘] 主 query 无结果，尝试子主题 query: {fallback_query[:80]}")
+                    search_results = search_vector_store(
+                        project_id=project_id,
+                        query=fallback_query,
+                        top_k=top_k,
+                    )
+                    if search_results:
+                        break
 
             if not search_results and db is not None:
-                logger.info("[文献挖掘] 向量检索仍无结果，二次运行文献发现流水线")
+                logger.info("[文献挖掘] 向量检索仍无结果，二次运行文献推荐")
                 discovery_output, corpus_meta = self._discover_and_import_literature(
                     project_id,
                     research_question,
                     db,
-                    keywords=keywords,
+                    research_domain=domain,
                     max_import=self._resolve_max_import(top_k),
-                    expand_citations=True,
                 )
                 if vs.has_index(project_id):
                     search_results = search_vector_store(
@@ -238,9 +252,9 @@ class LiteratureMiningAgent:
                 response.retrieved_papers = discovery_output["papers"]
 
             if not response.retrieved_papers:
-                search_output = response.skill_outputs.get("search_papers", {})
-                if search_output.get("success") and search_output.get("data"):
-                    response.retrieved_papers = search_output["data"].get("papers", [])
+                discovery_data = (response.skill_outputs.get("literature_discovery") or {}).get("data") or {}
+                if isinstance(discovery_data, dict) and discovery_data.get("papers"):
+                    response.retrieved_papers = discovery_data["papers"]
 
             response = self._apply_import_stats(
                 response,
@@ -291,8 +305,9 @@ class LiteratureMiningAgent:
         discovery_round: int = 1,
         top_k: int = 15,
         db: Optional[Session] = None,
+        research_domain: str = "",
     ) -> LiteratureMiningResponse:
-        """Discovery 低分回退：用精炼 query 补充 arXiv 导入、重检索并合并文献事实。"""
+        """Discovery 低分回退：用精炼 query 补充推荐导入、重检索并合并文献事实。"""
         parts = [research_question.strip()]
         for q in refinement_queries or []:
             if q and str(q).strip():
@@ -307,28 +322,20 @@ class LiteratureMiningAgent:
         )
 
         prev_fact_count = len((previous or {}).get("facts") or [])
+        domain = (research_domain or "").strip()
 
+        discovery_output: Dict[str, Any] = {}
         if db is not None:
             try:
-                understanding_keywords = self._extract_keywords(research_question)
-                for kw in understanding_keywords or []:
-                    if kw and str(kw).strip():
-                        parts.append(str(kw).strip())
-                search_query = " ".join(dict.fromkeys(parts))[:500]
-                merged_keywords = list(dict.fromkeys(
-                    list(keywords or [])
-                    + list(understanding_keywords or [])
-                    + [str(q) for q in (refinement_queries or []) if q]
-                ))[:12]
-                self._discover_and_import_literature(
+                discovery_output, _ = self._discover_and_import_literature(
                     project_id,
                     search_query,
                     db,
-                    keywords=merged_keywords,
+                    research_domain=domain,
                     max_import=self._resolve_max_import(top_k),
                 )
             except Exception as exc:
-                logger.warning(f"[Discovery R{discovery_round}] 补充文献发现失败: {exc}")
+                logger.warning(f"[Discovery R{discovery_round}] 补充文献推荐失败: {exc}")
 
         vs = get_vector_store()
         if not vs.has_index(project_id):
@@ -383,9 +390,8 @@ class LiteratureMiningAgent:
         )
         response = self._merge_supplementary_facts(response, search_results)
 
-        search_output = response.skill_outputs.get("search_papers", {})
-        if search_output.get("success") and search_output.get("data"):
-            response.retrieved_papers = search_output["data"].get("papers", [])
+        if discovery_output.get("papers"):
+            response.retrieved_papers = discovery_output["papers"]
             response.candidate_references_count = len(response.retrieved_papers)
 
         response.evidence_facts = len(response.facts)
@@ -498,18 +504,12 @@ class LiteratureMiningAgent:
         return out
 
     @staticmethod
-    def _extract_keywords(research_question: str) -> List[str]:
-        keywords: List[str] = []
-        try:
-            from app.agents.problem_understanding_agent import get_problem_understanding_agent
-
-            agent = get_problem_understanding_agent()
-            analysis = agent.analyze(research_question=research_question)
-            if analysis.keywords:
-                keywords = list(analysis.keywords)
-        except Exception as ex:
-            logger.warning(f"[文献发现] 关键词提取失败: {ex}")
-        return keywords
+    def _domain_keywords(research_domain: str) -> List[str]:
+        domain = (research_domain or "").strip()
+        if not domain:
+            return []
+        parts = [p.strip() for p in domain.replace("，", ",").replace("、", ",").split(",") if p.strip()]
+        return parts[:8]
 
     def _discover_and_import_literature(
         self,
@@ -517,26 +517,20 @@ class LiteratureMiningAgent:
         research_question: str,
         db: Session,
         *,
-        keywords: Optional[List[str]] = None,
+        research_domain: str = "",
         max_import: int = 8,
-        expand_citations: bool = True,
     ) -> tuple[Dict[str, Any], Dict[str, Any]]:
-        """PaSa/PaperSeek 式文献发现 → 自动入库建索引。"""
-        from app.services.literature_corpus_service import ensure_corpora_from_discovery
-        from app.skills.literature.literature_discovery_pipeline import run_literature_discovery_sync
+        """LLM 网页式推荐 → API 校验 → 自动入库建索引。"""
+        from app.services.literature_corpus_service import ensure_corpora_from_recommendations
+        from app.services.literature_recommendation_service import run_literature_recommendation_sync
 
+        domain = (research_domain or "").strip()
         logger.info(
-            f"[文献发现] 启动 Crawler+Selector: project={project_id}, "
-            f"question='{research_question[:80]}...'"
+            f"[文献推荐] 启动 LLM 推荐: project={project_id}, "
+            f"question='{research_question[:80]}...', domain='{domain[:60]}'"
         )
-        discovery = run_literature_discovery_sync(
-            research_question,
-            keywords=keywords,
-            max_results=30,
-            expand_citations=expand_citations,
-            use_llm_expand=True,
-        )
-        corpus_meta = ensure_corpora_from_discovery(
+        discovery = run_literature_recommendation_sync(research_question, domain)
+        corpus_meta = ensure_corpora_from_recommendations(
             project_id,
             research_question,
             discovery,
@@ -544,129 +538,10 @@ class LiteratureMiningAgent:
             max_import=max_import,
         )
         logger.info(
-            f"[文献发现] 完成: candidates={discovery.get('candidate_count', 0)}, "
-            f"ranked={discovery.get('total', 0)}, imported={corpus_meta.get('imported', 0)}"
+            f"[文献推荐] 完成: recommended={discovery.get('candidate_count', 0)}, "
+            f"verified={discovery.get('verified_count', 0)}, imported={corpus_meta.get('imported', 0)}"
         )
         return discovery, corpus_meta
-
-    def _auto_import_arxiv(
-        self,
-        project_id: str,
-        research_question: str,
-        db: Session,
-    ) -> None:
-        """当项目缺少文献时，自动从 arXiv 检索并导入"""
-        from app.services.literature_ingestion_service import LiteratureIngestionService
-        from app.services.literature_sources.arxiv_source import ArxivSource
-        from app.models import SourceType
-
-        service = LiteratureIngestionService(db)
-        imported_count = 0
-        auto_results = []
-
-        # 尝试提取关键词
-        keywords: List[str] = []
-        try:
-            from app.agents.problem_understanding_agent import get_problem_understanding_agent
-            agent = get_problem_understanding_agent()
-            analysis = agent.analyze(research_question=research_question)
-            if analysis.keywords and len(analysis.keywords) > 0:
-                keywords = analysis.keywords
-        except Exception as ex:
-            logger.warning(f"[arXiv 自动检索] 关键词提取失败: {ex}")
-
-        # 生成搜索查询
-        if keywords:
-            query_terms = [f"all:{kw}" for kw in keywords[:5]]
-            arxiv_query = " AND ".join(query_terms)
-        else:
-            arxiv_query = research_question.strip()
-
-        logger.info(f"[arXiv 自动检索] 查询关键词: {keywords}")
-        logger.info(f"[arXiv 自动检索] arXiv Query: {arxiv_query}")
-
-        try:
-            source = ArxivSource()
-            auto_papers, fallback, warning_msg = source.search_with_fallback(
-                query=arxiv_query,
-                max_results=15,
-            )
-        except Exception as e:
-            logger.error(f"[arXiv 自动检索] arXiv 搜索失败: {e}")
-            return
-
-        if not auto_papers:
-            logger.warning("[arXiv 自动检索] arXiv 返回 0 篇论文")
-            return
-
-        logger.info(
-            f"[arXiv 自动检索] arXiv 返回 {len(auto_papers)} 篇论文: "
-            f"{[p.title[:60] for p in auto_papers if hasattr(p, 'title')]}"
-        )
-
-        results_for_import = []
-        for p in auto_papers:
-            d = p.to_dict() if hasattr(p, 'to_dict') else p
-            if not d.get('title'):
-                continue
-            results_for_import.append(d)
-
-        if not results_for_import:
-            logger.warning("[arXiv 自动检索] 无可导入的论文（标题为空）")
-            return
-
-        try:
-            import_result = service.import_arxiv_papers(
-                project_id=project_id,
-                papers=results_for_import,
-                source_type=SourceType.ARXIV,
-                fallback=fallback,
-            )
-            imported_count = import_result.get("imported", 0)
-            logger.info(
-                f"[arXiv 自动检索] 导入完成: "
-                f"total={import_result.get('total', 0)}, "
-                f"imported={imported_count}, "
-                f"duplicates={import_result.get('duplicates', 0)}, "
-                f"failed={import_result.get('failed', 0)}"
-            )
-
-            # 为导入的 arXiv 论文构建向量索引
-            if imported_count > 0:
-                logger.info("[arXiv 自动检索] 开始为导入的 arXiv 论文构建向量索引")
-                from app.models import Document
-                docs = (
-                    db.query(Document)
-                    .filter(Document.project_id == project_id)
-                    .all()
-                )
-                chunk_ids: Set[str] = set()
-                for doc in docs:
-                    try:
-                        service.parse_document(
-                            project_id=project_id,
-                            document_id=doc.id,
-                        )
-                    except Exception as parse_err:
-                        logger.warning(f"[arXiv 自动检索] 解析文档 {doc.id} 失败: {parse_err}")
-                        continue
-
-                logger.info("[arXiv 自动检索] 构建联合向量索引...")
-                chunk_count = build_vector_index(project_id=project_id)
-                logger.info(
-                    f"[arXiv 自动检索] 向量索引构建完成: {chunk_count} chunks"
-                )
-        except Exception as e:
-            logger.error(f"[arXiv 自动检索] 导入 arXiv 论文失败: {e}", exc_info=True)
-
-        if warning_msg:
-            logger.warning(f"[arXiv 自动检索] arXiv 警告: {warning_msg}")
-
-        if imported_count == 0:
-            logger.warning(
-                "[arXiv 自动检索] 未能导入任何新论文（可能全部重复），"
-                "文献事实将基于现有文献提取。"
-            )
 
     # ────────── 格式化 ──────────
 
@@ -967,27 +842,6 @@ class LiteratureMiningAgent:
                 outputs["pdf_evidence_extraction"] = {"success": False, "error": str(e)}
 
             try:
-                search_skill = SearchPapersSkill()
-                search_result = await search_skill.run(
-                    input_data={
-                        "research_question": research_question,
-                        "keywords": list(keywords or [])[:8],
-                        "max_results": min(max(top_k, 10), 30),
-                        "sources": ["openalex", "semantic_scholar", "arxiv"],
-                    },
-                    context={"stage": "literature_mining"},
-                )
-                outputs["search_papers"] = {
-                    "success": search_result.success,
-                    "data": search_result.data,
-                    "warnings": search_result.warnings,
-                    "errors": search_result.errors,
-                }
-            except Exception as e:
-                logger.warning(f"SearchPapersSkill 运行失败: {e}")
-                outputs["search_papers"] = {"success": False, "error": str(e)}
-
-            try:
                 rag_skill = PaperFullTextRAGSkill()
                 rag_result = await rag_skill.run(
                     input_data={
@@ -1088,13 +942,6 @@ class LiteratureMiningAgent:
         )
         if response.retrieved_papers:
             searched = max(searched, len(response.retrieved_papers))
-
-        search_output = (response.skill_outputs or {}).get("search_papers") or {}
-        if isinstance(search_output, dict) and search_output.get("success") and search_output.get("data"):
-            data = search_output["data"]
-            if isinstance(data, dict):
-                sp_total = int(data.get("total") or len(data.get("papers") or []))
-                searched = max(searched, sp_total)
 
         response.literature_search_count = searched
         response.candidate_references_count = searched

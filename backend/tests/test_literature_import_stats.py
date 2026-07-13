@@ -1,73 +1,45 @@
-"""文献入库阈值与统计字段回归测试。"""
+"""文献推荐入库统计测试。"""
+import unittest
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from app.agents.literature_mining_agent import LiteratureMiningAgent, LiteratureMiningResponse
-from app.services.literature_corpus_service import ensure_corpora_from_search
-from app.skills.literature.literature_discovery_pipeline import filter_papers_by_llm_relevance
+from app.services.literature_corpus_service import ensure_corpora_from_recommendations
 
 
-def test_filter_papers_llm_fallback_on_all_reject():
-    papers = [
-        {"title": "Federated learning privacy IoT", "abstract": "federated learning privacy"},
-        {"title": "Vertical federated learning healthcare", "abstract": "vertical federated"},
-    ]
-    scored = [(2.5, papers[0]), (2.1, papers[1])]
+class TestLiteratureImportStats(unittest.TestCase):
+    def test_ensure_corpora_empty(self):
+        result = ensure_corpora_from_recommendations("proj", "query", None, db=None)
+        self.assertEqual(result.get("imported", 0), 0)
 
-    with patch(
-        "app.services.qwen_client.qwen_structured_chat",
-        return_value={"reviews": [{"index": 0, "relevant": False, "reason": "x"}, {"index": 1, "relevant": False, "reason": "y"}]},
-    ):
-        kept, meta = filter_papers_by_llm_relevance(
-            papers,
-            "federated learning privacy IoT",
-            scored_fallback=scored,
-            min_keep=2,
-            high_score_threshold=1.8,
-        )
+    @patch("app.services.literature_ingestion_service.LiteratureIngestionService")
+    @patch("app.services.vector_store.build_vector_index")
+    def test_ensure_corpora_imports_verified(self, mock_index, mock_service_cls):
+        mock_service = MagicMock()
+        mock_service_cls.return_value = mock_service
+        mock_service.import_arxiv_papers.return_value = {
+            "results": [{"document_id": "doc-1", "duplicate": False}],
+        }
 
-    assert len(kept) == 2
-    assert meta.get("fallback") == "high_score"
+        db = MagicMock()
+        doc = MagicMock()
+        doc.pdf_url = None
+        db.query.return_value.filter.return_value.first.return_value = doc
 
-
-def test_apply_import_stats_sets_counts():
-    agent = LiteratureMiningAgent()
-    response = LiteratureMiningResponse()
-    discovery = {"papers": [{"title": "A"}, {"title": "B"}], "candidate_count": 2}
-    corpus = {"imported": 1, "selected_count": 2, "candidate_count": 2}
-
-    updated = agent._apply_import_stats(
-        response,
-        discovery_output=discovery,
-        corpus_meta=corpus,
-    )
-
-    assert updated.literature_search_count == 2
-    assert updated.literature_import_count == 1
-    assert updated.literature_selected_count == 2
-    assert updated.imported_documents == 1
+        rec = {
+            "discovery_mode": "llm_recommend_v1",
+            "papers": [
+                {
+                    "title": "Verified Paper",
+                    "abstract": "abstract text",
+                    "verification_status": "verified",
+                    "doi": "10.1/xyz",
+                }
+            ],
+            "verified_count": 1,
+        }
+        result = ensure_corpora_from_recommendations("proj", "query", rec, db, auto_parse=True)
+        self.assertEqual(result.get("imported"), 1)
+        mock_index.assert_called_once()
 
 
-def test_ensure_corpora_scores_without_db():
-    papers = [
-        {
-            "title": "Federated Learning for Smart Healthcare",
-            "abstract": "We study federated learning and privacy in healthcare IoT settings.",
-            "arxiv_id": "2401.00001",
-            "source": "arxiv",
-        },
-        {
-            "title": "Unrelated quantum chemistry review",
-            "abstract": "molecular dynamics simulation",
-            "source": "openalex",
-        },
-    ]
-    result = ensure_corpora_from_search(
-        "proj",
-        "federated learning privacy healthcare IoT",
-        {"papers": papers},
-        db=None,
-    )
-    assert result.get("imported", 0) == 0
-    assert result.get("scored_count", 0) >= 1
+if __name__ == "__main__":
+    unittest.main()
