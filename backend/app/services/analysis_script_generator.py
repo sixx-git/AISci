@@ -1,12 +1,13 @@
 """实验分析脚本生成 — 实验设计与小样验证共用。"""
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any, Dict, Optional
 
 from app.services.analysis_script_utils import sanitize_analysis_script
-from app.services.experiment_spec_service import format_spec_for_prompt
+from app.services.experiment_spec_service import format_spec_for_prompt, normalize_experiment_spec
 from app.services.qwen_client import qwen_chat
 
 logger = logging.getLogger(__name__)
@@ -39,9 +40,34 @@ def extract_code_block(text: str) -> str:
     return text.strip()
 
 
-def default_analysis_script() -> str:
-    """符合沙箱契约的默认分析脚本（真实数据兜底）。"""
-    return '''import json
+def default_analysis_script(experiment_spec: Optional[Dict[str, Any]] = None) -> str:
+    """符合沙箱契约的 spec 对齐验证脚本；无 spec 时返回空（禁止代理兜底）。"""
+    if experiment_spec:
+        return build_spec_validation_script(experiment_spec)
+    return ""
+
+
+def build_spec_validation_script(experiment_spec: Dict[str, Any]) -> str:
+    """按 experiment_spec 生成确定性小样验证脚本：目标列 + 基线 vs proposed + 主指标。"""
+    spec = normalize_experiment_spec(experiment_spec)
+    embedded = json.dumps(
+        {
+            "target_column": spec.get("target_column"),
+            "feature_columns": spec.get("feature_columns") or [],
+            "baselines": (spec.get("baselines") or ["Baseline（对照）", "Proposed（本文方法）"])[:2],
+            "primary_metric": spec.get("primary_metric") or "accuracy",
+            "task_type": spec.get("task_type") or "classification",
+            "split_strategy": spec.get("split_strategy") or "train_test",
+        },
+        ensure_ascii=False,
+    )
+    body = _SPEC_VALIDATION_SCRIPT_TEMPLATE.replace(
+        "__SPEC_JSON_LITERAL__", repr(embedded)
+    )
+    return sanitize_analysis_script(body)
+
+
+_SPEC_VALIDATION_SCRIPT_TEMPLATE = '''import json
 import os
 from pathlib import Path
 
@@ -50,68 +76,151 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.dummy import DummyRegressor
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    mean_squared_error,
+    roc_auc_score,
+)
+from sklearn.model_selection import train_test_split
 
+SPEC = json.loads(__SPEC_JSON_LITERAL__)
 run_dir = Path(os.environ.get("AISCI_RUN_DIR", "."))
 plots_dir = Path(os.environ.get("AISCI_PLOTS_DIR", str(run_dir / "plots")))
 plots_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _load_df():
-    if "globals" in dir() and callable(globals().get("_aisci_load_data")):
-        return _aisci_load_data()
-    data_path = os.environ.get("AISCI_DATA_PATH") or os.environ.get("CSV_DATA_PATH")
-    if not data_path:
-        raise RuntimeError("缺少 AISCI_DATA_PATH，无法加载数据")
-    return pd.read_csv(data_path)
+def _resolve_target(df, spec_target):
+    if spec_target and spec_target in df.columns:
+        return spec_target
+    hints = ("carcinoma", "label", "target", "outcome", "class", "jaundice")
+    for hint in hints:
+        for col in df.columns:
+            if hint in str(col).lower():
+                return col
+    numeric = df.select_dtypes(include=[np.number]).columns
+    return str(numeric[-1]) if len(numeric) else None
 
 
-df = _aisci_encode_frame(_load_df())
-numeric = df.select_dtypes(include=[np.number])
-if numeric.empty:
-    raise RuntimeError("数据编码后仍无数值列，无法生成对比图")
+def _resolve_features(df, target, spec_features):
+    cols = [c for c in (spec_features or []) if c in df.columns and c != target]
+    if cols:
+        return cols
+    numeric = [c for c in df.select_dtypes(include=[np.number]).columns if c != target]
+    if numeric:
+        return list(numeric)
+    return [c for c in df.columns if c != target]
 
-col = None
-for hint in ("carcinoma", "label", "target", "jaundice", "fibrosis"):
-    for c in numeric.columns:
-        if hint in str(c).lower():
-            col = c
-            break
-    if col:
-        break
-if col is None:
-    col = numeric.columns[0]
-series = numeric[col].dropna()
+
+def _metric_score(y_true, y_pred, y_prob, metric_name, task_type):
+    m = (metric_name or "accuracy").lower()
+    if task_type == "regression" or m in ("rmse", "mse", "mae"):
+        return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    if m in ("f1", "f1_score"):
+        avg = "binary" if len(np.unique(y_true)) <= 2 else "macro"
+        return float(f1_score(y_true, y_pred, average=avg, zero_division=0))
+    if m == "auc" and y_prob is not None and len(np.unique(y_true)) == 2:
+        return float(roc_auc_score(y_true, y_prob))
+    return float(accuracy_score(y_true, y_pred))
+
+
+df = _aisci_encode_frame(_aisci_load_data())
+target = _resolve_target(df, SPEC.get("target_column"))
+if not target or target not in df.columns:
+    raise RuntimeError("无法解析目标列: " + str(SPEC.get("target_column")))
+
+features = _resolve_features(df, target, SPEC.get("feature_columns"))
+if not features:
+    raise RuntimeError("无可用特征列，无法完成假设验证")
+
+work = df[features + [target]].dropna()
+if len(work) < 8:
+    raise RuntimeError("有效样本过少 (n=" + str(len(work)) + ")，无法完成小样验证")
+
+X = work[features]
+y_raw = work[target]
+task_type = SPEC.get("task_type") or "classification"
+if task_type != "regression":
+    if pd.api.types.is_numeric_dtype(y_raw):
+        y = y_raw.astype(int)
+    else:
+        y = pd.factorize(y_raw)[0]
+    stratify = y if len(np.unique(y)) > 1 and len(np.unique(y)) < len(y) else None
+    split_strategy = (SPEC.get("split_strategy") or "train_test").lower()
+    if split_strategy == "row_half":
+        mid = max(4, len(work) // 2)
+        X_train, X_test = X.iloc[:mid], X.iloc[mid:]
+        y_train, y_test = y[:mid], y[mid:]
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.25, random_state=42, stratify=stratify
+        )
+    baseline_model = LogisticRegression(max_iter=800)
+    proposed_model = LogisticRegression(max_iter=800, class_weight="balanced")
+    baseline_model.fit(X_train, y_train)
+    proposed_model.fit(X_train, y_train)
+    y_pred_b = baseline_model.predict(X_test)
+    y_pred_p = proposed_model.predict(X_test)
+    prob_b = (
+        baseline_model.predict_proba(X_test)[:, 1]
+        if hasattr(baseline_model, "predict_proba") and len(np.unique(y)) == 2
+        else None
+    )
+    prob_p = (
+        proposed_model.predict_proba(X_test)[:, 1]
+        if hasattr(proposed_model, "predict_proba") and len(np.unique(y)) == 2
+        else None
+    )
+else:
+    y = pd.to_numeric(y_raw, errors="coerce")
+    work = work.loc[y.notna()]
+    X = work[features]
+    y = y.loc[work.index]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+    baseline_model = DummyRegressor(strategy="mean")
+    proposed_model = Ridge(alpha=1.0)
+    baseline_model.fit(X_train, y_train)
+    proposed_model.fit(X_train, y_train)
+    y_pred_b = baseline_model.predict(X_test)
+    y_pred_p = proposed_model.predict(X_test)
+    prob_b = prob_p = None
+
+metric_name = SPEC.get("primary_metric") or "accuracy"
+baseline_score = _metric_score(y_test, y_pred_b, prob_b, metric_name, task_type)
+proposed_score = _metric_score(y_test, y_pred_p, prob_p, metric_name, task_type)
+baseline_name, proposed_name = (SPEC.get("baselines") or ["Baseline", "Proposed"])[:2]
+
 metrics = {
-    "rows": int(len(df)),
-    "columns": int(len(df.columns)),
-    "data_source": "sandbox_default_script",
-    "encoded_value_column": str(col),
+    "validation_mode": "spec_aligned",
+    "data_source": "spec_validation_script",
+    "target_column": target,
+    "feature_count": len(features),
+    "n_samples": int(len(work)),
+    "task_type": task_type,
+    "primary_metric": proposed_score,
+    "primary_metric_name": metric_name,
+    "baseline_score": baseline_score,
+    "proposed_score": proposed_score,
+    "baseline_name": baseline_name,
+    "proposed_name": proposed_name,
+    metric_name: proposed_score,
+    "baseline_" + str(metric_name): baseline_score,
+    "proposed_" + str(metric_name): proposed_score,
+    "improvement": float(proposed_score - baseline_score),
 }
 
-if series.empty:
-    metrics["primary_metric"] = 0.0
-    metrics["warning"] = "no usable values after encoding"
-else:
-    metrics["primary_metric"] = float(series.mean())
-    metrics["primary_metric_std"] = float(series.std()) if len(series) > 1 else 0.0
-    metrics["metric_label"] = str(col)
-
-    mid = max(1, len(series) // 2)
-    group_a = series.iloc[:mid]
-    group_b = series.iloc[mid:]
-    metrics["baseline_mean"] = float(group_a.mean())
-    metrics["proposed_mean"] = float(group_b.mean())
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    names = ["Baseline（前半）", "Proposed（后半）"]
-    vals = [metrics["baseline_mean"], metrics["proposed_mean"]]
-    ax.bar(names, vals, color=["#4C72B0", "#DD8452"], alpha=0.9)
-    ax.set_ylabel(str(col))
-    ax.set_title(f"Pilot：{col} 分区对比")
-    ax.grid(True, axis="y", alpha=0.3)
-    plt.tight_layout()
-    fig.savefig(plots_dir / "experiment_result.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+fig, ax = plt.subplots(figsize=(8, 5))
+names = [baseline_name, proposed_name]
+vals = [baseline_score, proposed_score]
+ax.bar(names, vals, color=["#4C72B0", "#DD8452"], alpha=0.9)
+ax.set_ylabel(str(metric_name).upper())
+ax.set_title("小样验证: " + str(baseline_name) + " vs " + str(proposed_name) + " (" + str(metric_name) + ")")
+ax.grid(True, axis="y", alpha=0.3)
+plt.tight_layout()
+fig.savefig(plots_dir / "experiment_result.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
 
 with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
     json.dump(metrics, f, ensure_ascii=False, indent=2)
@@ -171,6 +280,6 @@ def generate_analysis_script(
             return sanitize_analysis_script(script)
     except Exception as exc:
         logger.warning("分析脚本 LLM 生成失败: %s", exc)
-    if use_default_on_failure and has_csv_data:
-        return default_analysis_script()
+    if use_default_on_failure and has_csv_data and experiment_spec:
+        return build_spec_validation_script(experiment_spec)
     return ""

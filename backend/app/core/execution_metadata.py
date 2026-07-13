@@ -59,6 +59,9 @@ def annotate_validation_execution_metadata(
     if sb.get("success") is not None or sb.get("return_code") is not None:
         if sb.get("used_docker") or sb.get("docker_isolated"):
             execution_tier = "real_sandbox_docker"
+        elif sb.get("pilot_fallback") or sb.get("spec_misaligned"):
+            execution_tier = "metadata_only"
+            tier_notes.append("沙箱产出未通过 spec 对齐验证")
         else:
             execution_tier = "real_sandbox"
         tier_notes.append("Python 沙箱执行")

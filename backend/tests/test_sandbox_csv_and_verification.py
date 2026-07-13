@@ -26,8 +26,8 @@ def test_read_tabular_file_semicolon(tmp_path):
     assert "carcinoma" in frame.columns
 
 
-def test_sandbox_executes_default_script_on_semicolon_csv(sandbox_svc, tmp_path, monkeypatch):
-    from app.services.analysis_script_generator import default_analysis_script
+def test_sandbox_executes_spec_script_on_semicolon_csv(sandbox_svc, tmp_path, monkeypatch):
+    from app.services.analysis_script_generator import build_spec_validation_script
 
     run_id = "test-semicolon-csv"
     monkeypatch.setattr(
@@ -36,21 +36,29 @@ def test_sandbox_executes_default_script_on_semicolon_csv(sandbox_svc, tmp_path,
     )
     csv_path = tmp_path / "input.csv"
     csv_path.write_text(
-        "carcinoma;jaundice;score\nabsent;present;1\npresent;absent;0\nabsent;absent;1\npresent;present;0\n",
+        "carcinoma;jaundice;score\nabsent;present;1\npresent;absent;0\nabsent;absent;1\npresent;present;0\n"
+        "absent;present;1\npresent;absent;0\nabsent;absent;1\npresent;present;0\n",
         encoding="utf-8",
     )
+    spec = {
+        "target_column": "carcinoma",
+        "feature_columns": ["jaundice", "score"],
+        "primary_metric": "accuracy",
+        "baselines": ["Baseline", "Proposed"],
+        "task_type": "classification",
+    }
 
     result = sandbox_svc.execute_analysis_script(
         run_id=run_id,
-        analysis_script=default_analysis_script(),
+        analysis_script=build_spec_validation_script(spec),
         csv_data_path=str(csv_path),
     )
 
     assert result["success"] is True, result.get("stderr") or result.get("stdout")
     assert result["output_complete"] is True
     assert len(result.get("plots") or []) >= 1
+    assert result["metrics"].get("validation_mode") == "spec_aligned"
     assert result["metrics"].get("primary_metric") is not None
-    assert "note" not in result["metrics"] or result["metrics"].get("note") != "no metrics emitted"
 
 
 def test_result_verification_accepts_sandbox_output():
@@ -74,9 +82,16 @@ def test_result_verification_accepts_sandbox_output():
                     "sandbox_execution": {
                         "success": True,
                         "output_complete": True,
-                        "metrics": {"primary_metric": 0.82, "f1": 0.75},
+                        "metrics": {
+                            "validation_mode": "spec_aligned",
+                            "primary_metric": 0.82,
+                            "baseline_score": 0.75,
+                            "proposed_score": 0.82,
+                            "accuracy": 0.82,
+                        },
                         "plots": [{"plot_id": "experiment_result"}],
                     },
+                    "spec_alignment": {"aligned": True},
                 },
                 context={},
             )

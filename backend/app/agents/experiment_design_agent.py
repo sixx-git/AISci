@@ -218,7 +218,8 @@ class ExperimentDesignAgent:
             elif data_files:
                 result["project_datasets"] = [{"file_path": fp} for fp in data_files]
             if not result.get("project_datasets") and not result.get("recommended_public_datasets"):
-                result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
+                if not (project_datasets or []):
+                    result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
 
             resolved_datasets = result.get("project_datasets") or project_datasets or []
             spec = normalize_experiment_spec(result.get("experiment_spec") or {})
@@ -228,6 +229,9 @@ class ExperimentDesignAgent:
                 spec = enrich_spec_from_design(merged, result)
             else:
                 spec = enrich_spec_from_design(spec, result)
+                if spec.get("target_column") in ("carcinoma", "jaundice", "fibrosis"):
+                    spec["target_column"] = None
+                    spec["feature_columns"] = []
             result["experiment_spec"] = spec
 
             spec_gaps = validate_spec_against_datasets(spec, resolved_datasets)

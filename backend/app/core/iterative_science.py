@@ -230,7 +230,7 @@ def evaluate_verifiable_spec_against_validation(
 
     sb = sv.get("sandbox_execution") or {}
     if sb.get("success") is not None or sb.get("return_code") is not None:
-        passed = bool(sb.get("success"))
+        passed = bool(sb.get("success")) and not bool(sb.get("pilot_fallback"))
         checks.append({
             "check_id": "sandbox_success",
             "description": "沙箱执行成功",
@@ -239,6 +239,25 @@ def evaluate_verifiable_spec_against_validation(
             "passed": passed,
             "source": "sandbox_execution",
         })
+        if sb.get("pilot_fallback"):
+            checks.append({
+                "check_id": "no_pilot_fallback",
+                "description": "不得使用 pilot 兜底替代假设验证",
+                "expected": "pilot_fallback=False",
+                "actual": "pilot_fallback=True",
+                "passed": False,
+                "source": "sandbox_execution",
+            })
+        spec_align = sv.get("spec_alignment") or {}
+        if spec_align or sb.get("metrics"):
+            checks.append({
+                "check_id": "spec_aligned_validation",
+                "description": "沙箱产出与 experiment_spec 对齐",
+                "expected": "spec_alignment.aligned=True",
+                "actual": str(spec_align.get("aligned")),
+                "passed": spec_align.get("aligned") is True,
+                "source": "spec_alignment",
+            })
         metrics = sb.get("metrics") or {}
         if metrics and spec.get("primary_metric"):
             checks.append({

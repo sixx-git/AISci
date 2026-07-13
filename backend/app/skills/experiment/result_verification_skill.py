@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
+from app.services.experiment_spec_service import is_proxy_validation_metrics
 from app.services.qwen_client import qwen_structured_chat
 from app.skills.base import BaseSkill, SkillResult
 
@@ -46,22 +47,31 @@ class ResultVerificationSkill(BaseSkill):
         modeling = input_data.get("modeling_results") or []
         sandbox = input_data.get("sandbox_execution") or {}
         pilot = input_data.get("pilot_analysis") or {}
+        spec_alignment = input_data.get("spec_alignment") or {}
         has_real_flag = input_data.get("has_real_data") in (1, True, "1", "true")
 
         data_flag = pa.get("data_source_flag", "no_data")
+        sb_metrics = sandbox.get("metrics") if isinstance(sandbox.get("metrics"), dict) else {}
+        is_proxy = (
+            sandbox.get("pilot_fallback")
+            or is_proxy_validation_metrics(sb_metrics)
+            or spec_alignment.get("aligned") is False
+        )
         sandbox_ok = bool(sandbox.get("success")) and bool(
             sandbox.get("output_complete") or sandbox.get("plots") or sandbox.get("metrics")
-        )
-        pilot_ok = bool(pilot.get("success"))
-        sb_metrics = sandbox.get("metrics") if isinstance(sandbox.get("metrics"), dict) else {}
+        ) and not is_proxy
+        pilot_ok = bool(pilot.get("success")) and not pilot.get("pilot_fallback")
         sb_plots = sandbox.get("plots") if isinstance(sandbox.get("plots"), list) else []
-        has_real = (
-            data_flag == "real_data"
-            or bool(modeling)
-            or has_real_flag
-            or sandbox_ok
-            or pilot_ok
-        )
+        if is_proxy:
+            has_real = bool(modeling)
+        else:
+            has_real = (
+                data_flag == "real_data"
+                or bool(modeling)
+                or has_real_flag
+                or sandbox_ok
+                or pilot_ok
+            )
         stats = pa.get("summary_statistics") or {}
         plots = list(pa.get("plots") or [])
         if sb_plots:
@@ -75,6 +85,10 @@ class ResultVerificationSkill(BaseSkill):
             issues.append("无真实数据支撑，结果为模拟或空")
         if data_flag == "simulated":
             issues.append("检测到模拟数据，不可作为最终结论")
+        if is_proxy:
+            issues.append("结果为代理统计或 pilot 兜底，未完成 experiment_spec 对齐的假设验证")
+        if spec_alignment.get("aligned") is False and spec_alignment.get("reason"):
+            issues.append(str(spec_alignment.get("reason")))
 
         metrics_text = (design.get("metrics") or "").lower()
         for key in stats.keys() if isinstance(stats, dict) else []:
@@ -104,6 +118,7 @@ class ResultVerificationSkill(BaseSkill):
                 f"- has_real_data_flag: {has_real_flag}\n"
                 f"- sandbox_success: {sandbox.get('success')}\n"
                 f"- sandbox_output_complete: {sandbox.get('output_complete')}\n"
+                f"- spec_aligned: {spec_alignment.get('aligned')}\n"
                 f"- pilot_success: {pilot_ok}\n"
                 f"- matched_metrics: {matched_metrics}\n\n"
                 f"## 统计摘要\n{str(stats)[:800]}\n\n"
@@ -122,8 +137,8 @@ class ResultVerificationSkill(BaseSkill):
                 prompt_version="result_verification",
             )
 
-            verified = bool(llm.get("verified", False)) and has_real
-            if has_real and (sandbox_ok or pilot_ok) and matched_metrics:
+            verified = bool(llm.get("verified", False)) and has_real and not is_proxy
+            if has_real and sandbox_ok and matched_metrics and spec_alignment.get("aligned") is not False:
                 verified = True
             confidence = float(llm.get("confidence", 0.5 if verified else 0.2))
             llm_issues = list(llm.get("issues") or [])

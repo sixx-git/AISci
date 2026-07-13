@@ -17,6 +17,8 @@ import { RunHistoryPanel } from '@/components/RunHistoryPanel';
 import { HitlGateModal } from '@/components/HitlGateModal';
 import { Button } from '@/components/Button';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
+import { extractValidationDataGuidance, formatValidationBlockedSummary } from '@/lib/validationDataGuidance';
+import { ValidationDataGuidanceCard } from '@/components/ValidationDataGuidanceCard';
 import { getHitlGateReviewTarget } from '@/config/hitlGateReview';
 import {
   buildHitlGateEventKey,
@@ -225,6 +227,14 @@ function summarizeStageData(stageName: string, data: unknown): string {
 
   if (stageName === 'small_validation') {
     const parts: string[] = [];
+    const blockedSummary = formatValidationBlockedSummary(d);
+    if (blockedSummary) {
+      parts.push(blockedSummary);
+      return parts.join(' | ');
+    }
+    if (d.validation_status === 'blocked' || d.validation_blocked === true) {
+      parts.push('数据不匹配，验证已阻塞');
+    }
     if (d.sandbox_execution && typeof d.sandbox_execution === 'object') {
       const sb = d.sandbox_execution as Record<string, unknown>;
       parts.push(sb.success ? '沙箱实测成功' : '沙箱执行失败');
@@ -659,6 +669,18 @@ export function WorkflowPage({
       dataAuthenticity: validationOut.data_authenticity as string | undefined,
       dataAuthenticityLabel: validationOut.data_authenticity_label as string | undefined,
     };
+  }, [nodes]);
+
+  const validationDataGuidance = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data;
+    return extractValidationDataGuidance(validationOut);
+  }, [nodes]);
+
+  const validationBlockedReason = useMemo(() => {
+    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    return typeof validationOut?.validation_blocked_reason === 'string'
+      ? validationOut.validation_blocked_reason
+      : '';
   }, [nodes]);
 
   const verifiableValidation = useMemo(() => {
@@ -1565,6 +1587,15 @@ export function WorkflowPage({
                 runId={effectiveRunId}
                 extraMetadata={runExtraMetadata}
                 federatedPilot={federatedPilot}
+              />
+            </CollapsiblePanel>
+          )}
+
+          {selectedNodeId === 'validation' && validationDataGuidance && (
+            <CollapsiblePanel title="数据不匹配 · 所需数据集" defaultOpen>
+              <ValidationDataGuidanceCard
+                guidance={validationDataGuidance}
+                blockedReason={validationBlockedReason || undefined}
               />
             </CollapsiblePanel>
           )}

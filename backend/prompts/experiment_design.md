@@ -43,19 +43,20 @@
   "expected_results": "详细描述预期结果",
   "limitations": "详细分析局限性",
   "experiment_spec": {
-    "target_column": "carcinoma",
-    "feature_columns": ["age", "jaundice"],
+    "target_column": "",
+    "feature_columns": [],
     "baselines": ["Baseline（对照）", "Proposed（本文方法）"],
     "primary_metric": "accuracy",
     "secondary_metrics": ["f1_score"],
     "split_strategy": "row_half",
     "task_type": "classification",
-    "encoding_notes": "present/absent 需编码为 0/1"
+    "encoding_notes": ""
   }
 }
 
 ## 注意事项
 - 所有描述必须具体、详细、可操作
 - 符合学术论文的写作规范
-- 若已上传数据但**不足以验证假设**，须在 `limitations` 中明确说明，并描述需要补充的数据类型；系统将通过 `DatasetDiscovery` 推荐公开数据集链接
+- **experiment_spec 中的列名必须来自已上传数据的真实列名**；无匹配列时 `target_column` 与 `feature_columns` 留空，不得编造示例列名
+- 若已上传数据但**不足以验证假设**，须在 `limitations` 中明确说明，并描述需要补充的数据类型
 - 突出验证假设的关键环节

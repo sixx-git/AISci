@@ -9,6 +9,9 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import type { AgentNodeData } from '@/types';
 import { extractLiteratureStats } from '@/lib/literatureStats';
+import { extractValidationDataGuidance } from '@/lib/validationDataGuidance';
+import { ValidationDataGuidanceCard } from '@/components/ValidationDataGuidanceCard';
+import { ValidationResultCard, hasValidationResultSummary } from '@/components/ValidationResultCard';
 
 interface AgentDetailPanelProps {
   node: AgentNodeData | null;
@@ -368,11 +371,24 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
 
   const isFailed = node.status === 'failed';
   const showHumanReview = node.status === 'human_review_required' || node.status === 'human_review';
+  const validationGuidance = node.id === 'validation'
+    ? extractValidationDataGuidance(node.output_data)
+    : null;
+  const validationBlockedReason = node.id === 'validation' && node.output_data && typeof node.output_data === 'object'
+    ? String((node.output_data as Record<string, unknown>).validation_blocked_reason || '')
+    : '';
 
   return (
     <div className="space-y-4">
       {node.id === 'literature' && node.output_data && typeof node.output_data === 'object' && (
         <LiteratureStatsCard outputData={node.output_data as Record<string, unknown>} />
+      )}
+
+      {validationGuidance && (
+        <ValidationDataGuidanceCard
+          guidance={validationGuidance}
+          blockedReason={validationBlockedReason || undefined}
+        />
       )}
 
       {/* ────── 智能体头部 ────── */}
@@ -442,7 +458,9 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
           node.status === 'running' ? 'bg-bp-cyan-tint border-bp-cyan/20' :
           'bg-bp-base/70 border-bp-border',
         )}>
-          {hasRealData && node.output_data ? (
+          {node.id === 'validation' && node.output_data && typeof node.output_data === 'object' && hasValidationResultSummary(node.output_data) ? (
+            <ValidationResultCard outputData={node.output_data as Record<string, unknown>} />
+          ) : hasRealData && node.output_data ? (
             <JsonBlock data={node.output_data} />
           ) : (
             <p className={cn(
@@ -455,6 +473,11 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             </p>
           )}
         </div>
+        {node.id === 'validation' && node.output_data && (
+          <CollapsibleSection title="技术细节 JSON" defaultOpen={false}>
+            <JsonBlock data={node.output_data} />
+          </CollapsibleSection>
+        )}
       </Card>
 
       {/* ────── 运行日志（默认折叠） ────── */}

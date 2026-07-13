@@ -538,8 +538,12 @@ def slim_small_validation_output(output: Dict[str, Any]) -> Dict[str, Any]:
         return {}
     out: Dict[str, Any] = {
         "has_real_data": output.get("has_real_data"),
+        "has_uploaded_data": output.get("has_uploaded_data"),
         "hypothesis": _truncate_str(output.get("hypothesis"), 2000),
         "validation_id": output.get("validation_id"),
+        "validation_status": output.get("validation_status"),
+        "validation_blocked": output.get("validation_blocked"),
+        "validation_blocked_reason": _truncate_str(output.get("validation_blocked_reason"), 500),
         "script_source": output.get("script_source"),
         "human_review_required": output.get("human_review_required"),
         "warnings": list(output.get("warnings") or [])[:12],
@@ -548,6 +552,31 @@ def slim_small_validation_output(output: Dict[str, Any]) -> Dict[str, Any]:
         "run_log": output.get("run_log"),
         "analysis_summary": _truncate_str(output.get("analysis_summary"), 2000),
     }
+
+    guidance = output.get("validation_data_guidance")
+    if isinstance(guidance, dict) and guidance:
+        out["validation_data_guidance"] = {
+            "summary": guidance.get("summary"),
+            "adequacy_status": guidance.get("adequacy_status"),
+            "mismatch_reasons": list(guidance.get("mismatch_reasons") or [])[:6],
+            "what_hypothesis_needs": list(guidance.get("what_hypothesis_needs") or [])[:6],
+            "must_upload_count": guidance.get("must_upload_count"),
+            "downloads_available_count": guidance.get("downloads_available_count"),
+            "next_steps": list(guidance.get("next_steps") or [])[:5],
+            "dataset_requirements": [
+                {
+                    "name": r.get("name"),
+                    "description": _truncate_str(r.get("description"), 300),
+                    "upload_requirement": r.get("upload_requirement"),
+                    "upload_requirement_label": r.get("upload_requirement_label"),
+                    "download_url": r.get("download_url"),
+                    "source_platform": r.get("source_platform"),
+                    "required_columns": list(r.get("required_columns") or [])[:8],
+                }
+                for r in (guidance.get("dataset_requirements") or [])[:8]
+                if isinstance(r, dict)
+            ],
+        }
 
     script = output.get("analysis_script")
     if isinstance(script, str):
