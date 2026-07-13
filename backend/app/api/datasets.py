@@ -77,13 +77,18 @@ async def upload_dataset(
             rq = (project.research_question if project else "") or ""
             get_multimodal_service(db).sync_from_dataset(dataset, rq)
 
-        pipeline_resume = None
+        pipeline_resume = {
+            "recommended_stage": "experiment_design",
+            "rerun_mode": "from_stage_onward",
+            "reason": "上传新数据后请重跑实验设计，以刷新 experiment_spec 与 analysis_script",
+            "auto_triggers": ["validation_fail", "data_gap"],
+        }
 
         return {
             "code": 200,
             "data": service.to_response(dataset),
             "pipeline_resume": pipeline_resume,
-            "message": "上传成功，已完成初步分析",
+            "message": "上传成功，已完成初步分析；建议重跑「实验设计」以绑定新数据",
         }
     except Exception as e:
         logger.error(f"创建数据集记录失败: {e}")

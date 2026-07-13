@@ -65,7 +65,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "BaselineModelTraining", "BaselineTraining",
         "ModelEvaluation", "ErrorAnalysis", "SelfCorrection", "ExperimentTracking",
     ],
-    "数据集服务": ["data_juicer_lite"],
+    "数据集服务": ["data_juicer_lite", "DatasetSemanticUnderstanding"],
     "多源数据查找": [
         "DataRequirementUnderstanding", "ScientificDataSearch", "PaperDataLinkExtractor",
         "TextFactsExtraction", "ExternalDatasetSearch",

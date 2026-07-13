@@ -106,6 +106,7 @@ class PipelineService:
         self._skip_to_post_validation: bool = False
         self._last_pilot_results: Dict[str, Any] = {}
         self._teaching_refinement_count: int = 0
+        self._experiment_correction_count: int = 0
         self._federated_campaign_count: int = 0
         self._fed_campaign_discovery_done: set = set()
         self._iteration_snapshots: List[Dict[str, Any]] = []
@@ -663,6 +664,10 @@ class PipelineService:
             ).get("replan_actions") or []
             constraints.extend(actions_to_feedback_constraints(actions))
 
+        sv_replan = sv.get("replan_actions") or []
+        if sv_replan:
+            constraints.extend(actions_to_feedback_constraints(sv_replan))
+
         ed = experiment_design or {}
         sc = ((ed.get("skill_outputs") or {}).get("experiment_sanity_check") or {}).get("data") or {}
         if sc and sc.get("executable") is False:
@@ -838,6 +843,18 @@ class PipelineService:
                 if any(c.get("check_id") == "sandbox_success" for c in checks)
                 else all(c.get("passed") for c in checks[:3]) if checks else None
             )
+            results["small_validation"] = validation_result
+
+        from app.core.iterative_science import build_general_replan_actions
+
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        data_context = self._build_data_context(project_id) if project_id else {}
+        ed_for_replan = results.get("experiment_design") or {}
+        replan_actions = build_general_replan_actions(
+            ed_for_replan, validation_result, data_context
+        )
+        if replan_actions:
+            validation_result["replan_actions"] = replan_actions
             results["small_validation"] = validation_result
 
         ed = results.get("experiment_design") or {}
@@ -1099,6 +1116,241 @@ class PipelineService:
             "final_report_id": final_report_id,
             "snapshot_before": pre_snapshot,
             "snapshot_after": post_snapshot,
+            "version_snapshots": list(self._iteration_snapshots),
+        }
+
+    def _merge_science_iteration_run_options(self, project_id: str) -> None:
+        """将 project.config.science_iteration 合并进 run_options。"""
+        if not project_id:
+            return
+        try:
+            from app.models.project import Project
+            from app.services.science_iteration_service import resolve_science_iteration_config
+            import json
+
+            row = self.db.query(Project).filter(Project.id == project_id).first()
+            pcfg: Dict[str, Any] = {}
+            if row and row.config:
+                pcfg = json.loads(row.config) if isinstance(row.config, str) else dict(row.config or {})
+            sci = resolve_science_iteration_config(pcfg, self._run_options)
+            if sci.enabled and "validation_fail" in (sci.auto_triggers or []):
+                self._run_options["enable_experiment_self_correction"] = True
+                self._run_options["experiment_self_correction_max"] = max(
+                    int(self._run_options.get("experiment_self_correction_max") or 2),
+                    int(sci.max_rounds or 2),
+                )
+        except Exception as exc:
+            logger.warning("[Pipeline] science_iteration 配置合并失败: %s", exc)
+
+    def _try_auto_gap_enrichment(self, project_id: str, results: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """数据缺口时尝试自动补搜/导入外部数据集。"""
+        if not project_id:
+            return None
+        if not self._run_options.get("auto_gap_enrichment_on_data_gap", True):
+            return None
+        if not self._run_options.get("enable_gap_search", False):
+            return None
+        try:
+            from app.services.data_finder_service import get_data_finder_service
+
+            ed = results.get("experiment_design") or {}
+            gaps = ed.get("data_gap") or (ed.get("data_requirements") or {}).get("gaps") or []
+            queries = [str(g)[:120] for g in gaps[:4]]
+            hr = results.get("hypothesis_review") or {}
+            reviews = hr.get("reviews") or []
+            if reviews and isinstance(reviews[0], dict):
+                rq = reviews[0].get("required_data") or reviews[0].get("hypothesis") or ""
+                if rq:
+                    queries.insert(0, str(rq)[:200])
+            enrichment = get_data_finder_service(self.db).run_gap_enrichment_sync(
+                project_id=project_id,
+                refinement_queries=queries,
+                auto_import=bool(self._run_options.get("enable_hf_auto_import", True)),
+                run_options=self._run_options,
+                round_num=self._experiment_correction_count + 1,
+            )
+            if enrichment and not enrichment.get("skipped"):
+                self._record_closed_loop_event(
+                    "data_gap_enrichment",
+                    {
+                        "round": self._experiment_correction_count + 1,
+                        "imported_count": (enrichment.get("import_meta") or {}).get("imported_count"),
+                        "summary": enrichment.get("summary") or "gap enrichment",
+                    },
+                )
+            return enrichment
+        except Exception as exc:
+            logger.warning("[Pipeline] 自动 gap enrichment 失败: %s", exc)
+            return None
+
+    def _run_experiment_self_correction_loop(
+        self,
+        stages: List[PipelineStageLog],
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+        project_mode: str,
+        *,
+        validation_skipped: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """实验设计 ↔ 数据采集 ↔ 沙箱验证 自迭代自纠错环（通用模式）。"""
+        from app.core.iterative_science import (
+            evaluate_general_validation_improvement,
+            needs_experiment_self_correction,
+        )
+
+        if not self._run_options.get("enable_experiment_self_correction", True):
+            return None
+        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
+            return None
+        if self._run_options.get("iteration_mode") == "discovery_auto":
+            return None
+        if self._run_options.get("iteration_mode") == "teaching_auto":
+            return None
+
+        max_rounds = int(self._run_options.get("experiment_self_correction_max", 2))
+        round_records: List[Dict[str, Any]] = []
+
+        while self._experiment_correction_count < max_rounds:
+            needs, reasons, replan_actions = needs_experiment_self_correction(
+                results,
+                correction_count=self._experiment_correction_count,
+                max_rounds=max_rounds,
+                executability_blocked=self._executability_blocked,
+                validation_skipped=validation_skipped and not results.get("small_validation"),
+            )
+            if not needs:
+                break
+
+            ed = results.get("experiment_design") or {}
+            dr = ed.get("data_requirements") or {}
+            uploaded = int(dr.get("uploaded_dataset_count") or 0)
+            if any(a.get("action_id") == "upload_required_data" for a in replan_actions) and uploaded == 0:
+                gap_meta = self._try_auto_gap_enrichment(project_id, results)
+                if gap_meta and (gap_meta.get("import_meta") or {}).get("imported_count", 0) > 0:
+                    logger.info("[SelfCorrection] gap enrichment 已导入数据，继续 replan")
+                else:
+                    results["awaiting_data_upload"] = {
+                        "reason": "缺少与 experiment_spec 匹配的数据",
+                        "gaps": ed.get("data_gap") or dr.get("gaps") or [],
+                        "replan_actions": replan_actions[:6],
+                        "resume_from_stage": "experiment_design",
+                        "next_action": "upload_datasets",
+                    }
+                    self._record_closed_loop_decision(
+                        trigger="data_gap_blocked",
+                        action="await_upload",
+                        reason="数据缺口，暂停自迭代直至上传",
+                        next_stage="experiment_design",
+                        round_num=self._experiment_correction_count,
+                        metadata={"replan_actions": replan_actions[:4]},
+                    )
+                    return {
+                        "rounds": round_records,
+                        "awaiting_data_upload": results["awaiting_data_upload"],
+                        "stopped_reason": "need_data_upload",
+                    }
+
+            self._experiment_correction_count += 1
+            round_num = self._experiment_correction_count
+            sv_before = dict(results.get("small_validation") or {})
+
+            logger.info("[SelfCorrection] R%s: %s", round_num, reasons)
+            pre_snapshot = self._capture_iteration_snapshot(
+                round_num, results, label=f"self_correct_R{round_num}_before"
+            )
+
+            if replan_actions:
+                sv_stub = results.get("small_validation") or {}
+                if isinstance(sv_stub, dict):
+                    sv_stub["replan_actions"] = replan_actions
+                    results["small_validation"] = sv_stub
+
+            self._validation_feedback_constraints = self._build_validation_feedback_constraints(
+                results.get("small_validation"),
+                results.get("experiment_design"),
+            )
+            self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
+
+            self._record_closed_loop_event(
+                "experiment_self_correction",
+                {
+                    "round": round_num,
+                    "reasons": reasons,
+                    "replan_actions": replan_actions[:6],
+                    "quality_trend_entry": {"stage": f"self_correct_r{round_num}", "score": 4.5},
+                },
+            )
+            self._record_closed_loop_decision(
+                trigger="validation_fail",
+                action="replan_experiment_design",
+                reason="; ".join(reasons[:3])[:300],
+                next_stage="experiment_design_replan",
+                round_num=round_num,
+                metadata={"replan_actions": replan_actions[:4]},
+            )
+
+            self._run_stage(stages, 5, results, research_question, project_id,
+                lambda: self._exec_experiment_design(
+                    results.get("hypothesis_review"), project_id, project_mode,
+                ))
+            self._apply_executability_gate(results, project_id, round_num=round_num)
+            self._executability_blocked = False
+
+            self._run_stage(stages, 6, results, research_question, project_id,
+                lambda: self._exec_small_validation(
+                    results.get("experiment_design"),
+                    results.get("hypothesis_review"),
+                    project_id,
+                    project_mode,
+                ))
+            sv_after = results.get("small_validation")
+            if isinstance(sv_after, dict):
+                self._apply_post_validation_updates(results, sv_after)
+
+            improvement = evaluate_general_validation_improvement(sv_before, sv_after or {})
+            post_snapshot = self._capture_iteration_snapshot(
+                round_num, results, label=f"self_correct_R{round_num}_after"
+            )
+            round_records.append({
+                "round": round_num,
+                "reasons": reasons,
+                "improved": improvement.get("improved"),
+                "improvement": improvement,
+                "replan_actions": replan_actions[:6],
+                "snapshot_before": pre_snapshot,
+                "snapshot_after": post_snapshot,
+            })
+
+            validation_skipped = False
+            if improvement.get("improved") and (sv_after or {}).get("verifiable_passed"):
+                break
+            if round_num >= max_rounds:
+                break
+            if not improvement.get("improved") and round_num >= 1:
+                stagnation_limit = int(self._run_options.get("gate_stagnant_rounds", 2))
+                if round_num >= stagnation_limit:
+                    logger.info("[SelfCorrection] 验证未改善，停止自迭代")
+                    break
+
+        if not round_records:
+            return None
+
+        orch = self._get_science_iteration_orchestrator()
+        try:
+            orch.record_milestone(
+                results,
+                "validation_fail",
+                label=f"self_correct_R{self._experiment_correction_count}",
+                actions=[f"rounds={len(round_records)}"],
+            )
+        except Exception:
+            pass
+
+        return {
+            "rounds": round_records,
+            "total_rounds": len(round_records),
+            "final_verifiable_passed": (results.get("small_validation") or {}).get("verifiable_passed"),
             "version_snapshots": list(self._iteration_snapshots),
         }
 
@@ -1702,6 +1954,7 @@ class PipelineService:
         """执行 Pipeline 所有阶段（支持从中间阶段 rerun）。"""
         project_mode = self._get_project_mode(project_id)
         self._run_options = self._get_run_options()
+        self._merge_science_iteration_run_options(project_id)
         try:
             from app.services.feedback_hub_service import get_feedback_hub_service
 
@@ -1940,6 +2193,26 @@ class PipelineService:
                 )
                 if fed_campaign_meta:
                     results["federated_campaign_refinement"] = fed_campaign_meta
+
+            # ── 通用自纠错环：实验设计 → 验证 → 修订（human / general 模式）──
+            if start_idx <= 6 and project_mode != ProjectMode.FEDERATED_LEARNING.value:
+                correction_meta = self._run_experiment_self_correction_loop(
+                    stages,
+                    results,
+                    research_question,
+                    project_id,
+                    project_mode,
+                    validation_skipped=skip_validation_run,
+                )
+                if correction_meta:
+                    results["experiment_self_correction"] = correction_meta
+                    self._run_science_iteration_hooks(
+                        "after_experiment_self_correction",
+                        results,
+                        research_question,
+                        project_id,
+                        project_mode,
+                    )
 
             # ── P2-6: Teaching 轻量自动闭环（仅 teaching_auto 模式）──
             if start_idx <= 6 and self._run_options.get("iteration_mode") == "teaching_auto":
@@ -3102,6 +3375,11 @@ class PipelineService:
         result_dict: Dict[str, Any],
     ) -> Dict[str, Any]:
         """实验设计阶段输出：告知用户需上传何种数据，并摘要已上传数据集。"""
+        from app.services.experiment_spec_service import (
+            slim_experiment_spec_for_storage,
+            validate_spec_against_datasets,
+        )
+
         datasets = data_context.get("datasets") or []
         uploaded = [d for d in datasets if isinstance(d, dict)]
         required_data = (best_review.get("required_data") or hypo_meta.get("required_data") or "").strip()
@@ -3110,6 +3388,10 @@ class PipelineService:
         gaps = result_dict.get("data_gap") or []
         if isinstance(gaps, str):
             gaps = [gaps] if gaps else []
+        spec = result_dict.get("experiment_spec") if isinstance(result_dict.get("experiment_spec"), dict) else {}
+        if spec and uploaded:
+            spec_gaps = validate_spec_against_datasets(spec, uploaded)
+            gaps = list(dict.fromkeys(list(gaps) + spec_gaps))
         recommended = self._normalize_recommended_datasets(
             result_dict.get("recommended_public_datasets") or []
         )
@@ -3123,6 +3405,12 @@ class PipelineService:
                 "methods": result_dict.get("methods") or "",
                 "metrics": metrics,
             })
+        required_columns: List[str] = []
+        if spec.get("target_column"):
+            required_columns.append(str(spec["target_column"]))
+        for col in spec.get("feature_columns") or []:
+            if col and col not in required_columns:
+                required_columns.append(str(col))
         return {
             "upload_status": "ready" if uploaded else "pending_upload",
             "uploaded_dataset_count": len(uploaded),
@@ -3139,10 +3427,13 @@ class PipelineService:
             "required_data_description": required_data,
             "validation_target": validation_target,
             "metrics": metrics,
+            "experiment_spec": slim_experiment_spec_for_storage(spec),
+            "required_columns": required_columns[:24],
+            "has_analysis_script": bool((result_dict.get("analysis_script") or "").strip()),
             "recommended_public_datasets": recommended[:8],
             "gaps": gaps,
             "summary": (
-                f"已上传 {len(uploaded)} 个数据集，实验方案已结合真实数据结构。"
+                f"已上传 {len(uploaded)} 个数据集，实验方案与 analysis_script 已绑定 experiment_spec。"
                 if uploaded
                 else "请先在「数据集」页上传 CSV/表格数据；上传后重跑实验设计以生成可执行方案与小样验证。"
             ),

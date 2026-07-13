@@ -26,6 +26,7 @@ VALID_ITERATION_MODES = {
 DEFAULT_NUM_IDEAS = 3
 DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
+DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
 DEFAULT_FEDERATED_CAMPAIGN_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
 DEFAULT_HITL_GATE_STAGES = (
@@ -208,6 +209,12 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_plot_vlm_critique": opts.get("enable_plot_vlm_critique", False),
         "enable_teaching_auto_refinement": bool(opts.get("enable_teaching_auto_refinement")),
         "teaching_auto_refinement_max": DEFAULT_TEACHING_AUTO_REFINEMENT_MAX,
+        "enable_experiment_self_correction": bool(opts.get("enable_experiment_self_correction", True)),
+        "experiment_self_correction_max": max(
+            1,
+            min(int(opts.get("experiment_self_correction_max", DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX)), 4),
+        ),
+        "auto_gap_enrichment_on_data_gap": bool(opts.get("auto_gap_enrichment_on_data_gap", True)),
         "enable_federated_campaign_loop": bool(opts.get("enable_federated_campaign_loop", True)),
         "federated_campaign_max": fed_max,
         "sandbox_use_docker": bool(opts.get("sandbox_use_docker")),

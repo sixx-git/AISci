@@ -169,6 +169,7 @@ class DocumentSourceType(str, Enum):
     """文献来源类型枚举"""
     UPLOAD = "upload"
     ARXIV = "arxiv"
+    OPENALEX = "openalex"
     GOOGLE_SCHOLAR_IMPORT = "google_scholar_import"
     BIBTEX = "bibtex"
     MANUAL = "manual"

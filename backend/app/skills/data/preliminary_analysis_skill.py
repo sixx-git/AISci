@@ -200,21 +200,9 @@ class PreliminaryAnalysisSkill(BaseSkill):
         df = None
         if ds_path and os.path.isfile(ds_path):
             try:
-                import pandas as pd
-                ext = os.path.splitext(ds_path)[1].lower()
-                if ext in (".xlsx", ".xls"):
-                    df = pd.read_excel(ds_path)
-                elif ext == ".json":
-                    df = pd.read_json(ds_path)
-                elif ext == ".jsonl":
-                    df = pd.read_json(ds_path, lines=True)
-                elif ext == ".txt":
-                    try:
-                        df = pd.read_csv(ds_path, sep=None, engine="python")
-                    except Exception:
-                        df = pd.read_csv(ds_path)
-                else:
-                    df = pd.read_csv(ds_path)
+                from app.services.dataset_service import DatasetService
+
+                df = DatasetService._read_tabular_dataframe(ds_path)
                 logger.info(f"成功读取表格文件: {ds_path}, 形状={df.shape}")
             except Exception as e:
                 logger.warning(f"读取表格文件失败 {ds_path}: {e}")

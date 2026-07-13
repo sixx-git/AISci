@@ -1,6 +1,6 @@
 > **Pipeline 阶段**: `experiment_design`  
 > **调用方**: ExperimentDesignAgent  
-> **输出**: methods、datasets、metrics、experimental_steps 等  
+> **输出**: methods、datasets、metrics、experimental_steps、experiment_spec、analysis_script 等  
 > **说明**: 联邦学习模式下输出 federated_plan；Pipeline 会运行 plan_executability Gate 检查缺失列/指标。
 
 你是一位专业的科研实验设计专家。请根据提供的科学假设，设计一个完整的实验方案。
@@ -20,6 +20,15 @@
 7. experimental_steps（实验步骤）：分步骤详细描述实验的执行流程。包括数据准备、模型训练、评估、对比分析等。
 8. expected_results（预期结果）：描述你预期通过这个实验获得的结果。包括可能的发现、验证假设的方式等。
 9. limitations（局限性）：分析这个实验设计可能存在的局限性。包括数据限制、方法限制、时间限制等。
+10. experiment_spec（实验契约）：结构化、可执行的实验参数，必须与上述 methods/metrics/baselines 一致。字段包括：
+    - target_column：目标/标签列名（须来自已上传数据列名，无则留空）
+    - feature_columns：用于分析的特征列名数组
+    - baselines：基线对比名称数组，如 ["Baseline（对照）", "Proposed（本文方法）"]
+    - primary_metric：主评估指标，如 accuracy、f1_score、rmse
+    - secondary_metrics：次要指标数组
+    - split_strategy：数据划分策略，如 row_half、train_test
+    - task_type：classification 或 regression
+    - encoding_notes：分类/序数列编码说明
 
 ## 输出格式要求
 请严格按照以下 JSON 格式输出，不要添加额外解释或 markdown 标记：
@@ -32,7 +41,17 @@
   "metrics": "详细描述评估指标",
   "experimental_steps": "分步骤详细描述实验流程",
   "expected_results": "详细描述预期结果",
-  "limitations": "详细分析局限性"
+  "limitations": "详细分析局限性",
+  "experiment_spec": {
+    "target_column": "carcinoma",
+    "feature_columns": ["age", "jaundice"],
+    "baselines": ["Baseline（对照）", "Proposed（本文方法）"],
+    "primary_metric": "accuracy",
+    "secondary_metrics": ["f1_score"],
+    "split_strategy": "row_half",
+    "task_type": "classification",
+    "encoding_notes": "present/absent 需编码为 0/1"
+  }
 }
 
 ## 注意事项

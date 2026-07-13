@@ -10,6 +10,11 @@ from app.models.research import Dataset
 from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
+from app.skills.data.dataset_semantic_understanding_skill import (
+    DatasetSemanticUnderstandingSkill,
+    llm_csv_parse_diagnostic,
+    merge_semantic_into_metadata,
+)
 from app.skills.data_finder.file_format_registry import (
     CHEMISTRY_EXTENSIONS,
     is_allowed_upload_filename,
@@ -31,13 +36,6 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff"}
 TIME_SERIES_EXTENSIONS = {".wav", ".npy", ".npz"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac"}
 JSON_EXTENSIONS = {".json", ".jsonl"}
-
-TARGET_COLUMN_KEYWORDS = [
-    "label", "target", "class", "y", "accuracy", "score", "result", "outcome",
-    "行为", "类别", "标签", "准确率", "评分", "目标", "结果", "分类",
-    "diagnosis", "prognosis", "response", "status", "flag",
-    "label_col", "target_col", "outcome_col",
-]
 
 
 def _json_dumps_bounded(obj: Any, max_chars: int = _MAX_JSON_CHARS) -> str:
@@ -139,6 +137,95 @@ class DatasetService:
                 out.write(chunk)
         return file_path, total
 
+    @staticmethod
+    def _populate_result_from_probe(result: Dict[str, Any], probe: Dict[str, Any]) -> None:
+        """将 DuckDB probe 结果写入 analyze_tabular_preview 返回值。"""
+        n_rows = probe.get("n_rows")
+        if n_rows is None and isinstance(probe.get("row_count_est"), int):
+            n_rows = probe["row_count_est"]
+        result.update({
+            "columns": probe.get("columns") or [],
+            "dtypes": probe.get("dtypes") or {},
+            "n_rows": int(n_rows) if isinstance(n_rows, int) else 0,
+            "n_columns": int(probe.get("n_columns") or 0),
+            "missing_count": probe.get("missing_count") or 0,
+            "missing_rate": probe.get("missing_rate") or 0.0,
+            "statistics": probe.get("statistics") or {},
+            "preview": (probe.get("preview") or [])[:_MAX_PREVIEW_ROWS],
+            "_large_file_probe": bool(probe.get("file_size_bytes")),
+            "analysis_tier": probe.get("analysis_tier"),
+            "probe_engine": probe.get("probe_engine"),
+            "row_count_est": probe.get("row_count_est"),
+            "sample_parquet_path": probe.get("sample_parquet_path"),
+        })
+
+    @staticmethod
+    def _guess_csv_separator(file_path: str) -> Optional[str]:
+        """根据首行分隔符密度推断 CSV 分隔符。"""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+                header = fh.readline()
+        except OSError:
+            return None
+        if not header.strip():
+            return None
+        candidates = [(";", header.count(";")), (",", header.count(",")), ("\t", header.count("\t")), ("|", header.count("|"))]
+        best_sep, best_count = max(candidates, key=lambda item: item[1])
+        return best_sep if best_count > 0 else None
+
+    @staticmethod
+    def _read_tabular_dataframe(file_path: str, *, nrows: Optional[int] = None):
+        """尝试多种分隔符读取 CSV/TSV，兼容欧洲分号格式与含逗号文本字段。"""
+        import pandas as pd
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in (".xlsx", ".xls"):
+            return pd.read_excel(file_path, nrows=nrows)
+        if ext == ".json":
+            return pd.read_json(file_path)
+        if ext == ".jsonl":
+            return pd.read_json(file_path, lines=True)
+
+        read_kwargs = {"nrows": nrows} if nrows is not None else {}
+        guessed = DatasetService._guess_csv_separator(file_path)
+        attempts: list[dict] = []
+        if guessed:
+            attempts.append({"sep": guessed})
+        attempts.extend([
+            {},
+            {"sep": ";"},
+            {"sep": "\t"},
+            {"sep": "|"},
+            {"sep": None, "engine": "python"},
+        ])
+        seen = set()
+        ordered_attempts = []
+        for extra in attempts:
+            key = tuple(sorted(extra.items()))
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered_attempts.append(extra)
+
+        last_error: Optional[Exception] = None
+        best_df = None
+        for extra in ordered_attempts:
+            try:
+                df = pd.read_csv(file_path, **read_kwargs, **extra)
+                if len(df.columns) <= 1 and guessed and extra.get("sep") != guessed:
+                    continue
+                if best_df is None or len(df.columns) > len(best_df.columns):
+                    best_df = df
+                if len(df.columns) > 1:
+                    return df
+            except Exception as exc:
+                last_error = exc
+        if best_df is not None:
+            return best_df
+        if last_error:
+            raise last_error
+        raise ValueError(f"无法解析表格文件: {file_path}")
+
     def analyze_tabular_preview(self, file_path: str, n_preview: int = 10) -> Dict[str, Any]:
         result: Dict[str, Any] = {
             "columns": [],
@@ -175,16 +262,16 @@ class DatasetService:
                     })
                     return result
 
-            import pandas as pd
             ext = os.path.splitext(file_path)[1].lower()
-            if ext in (".xlsx", ".xls"):
-                df = pd.read_excel(file_path)
-            elif ext == ".json":
-                df = pd.read_json(file_path)
-            elif ext == ".jsonl":
-                df = pd.read_json(file_path, lines=True)
-            else:
-                df = pd.read_csv(file_path)
+            if ext in (".csv", ".tsv", ".txt") and file_size <= int(settings.LARGE_FILE_THRESHOLD_BYTES):
+                from app.services.data_probe_service import get_data_probe_service
+
+                probe = get_data_probe_service().probe_tabular(file_path)
+                if probe.get("probe_status") == "completed" and (probe.get("columns") or probe.get("n_columns")):
+                    self._populate_result_from_probe(result, probe)
+                    return result
+
+            df = self._read_tabular_dataframe(file_path)
 
             result["columns"] = list(df.columns)
             result["dtypes"] = {c: str(dt) for c, dt in df.dtypes.to_dict().items()}
@@ -194,6 +281,8 @@ class DatasetService:
             missing_cells = int(df.isnull().sum().sum())
             result["missing_count"] = missing_cells
             result["missing_rate"] = round(missing_cells / total_cells, 4) if total_cells > 0 else 0.0
+
+            import pandas as pd
 
             stats = {}
             for col in df.columns:
@@ -218,7 +307,134 @@ class DatasetService:
             )[:_MAX_PREVIEW_ROWS]
         except Exception as e:
             logger.warning(f"分析表格数据失败: {e}")
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in (".csv", ".tsv", ".txt") and os.path.isfile(file_path):
+                try:
+                    from app.services.data_probe_service import get_data_probe_service
+
+                    probe = get_data_probe_service().probe_tabular(file_path)
+                    if probe.get("probe_status") == "completed":
+                        self._populate_result_from_probe(result, probe)
+                except Exception as probe_err:
+                    logger.warning("DuckDB 探查兜底失败: %s", probe_err)
+        if (
+            result.get("n_rows", 0) == 0
+            and os.path.isfile(file_path)
+            and os.path.splitext(file_path)[1].lower() in (".csv", ".tsv", ".txt")
+        ):
+            recovered = self._try_llm_parse_recovery(file_path, n_preview)
+            if recovered and recovered.get("n_rows", 0) > 0:
+                result.update(recovered)
         return result
+
+    def _try_llm_parse_recovery(self, file_path: str, n_preview: int = 10) -> Optional[Dict[str, Any]]:
+        """探查结果为 0 时，用 LLM 诊断分隔符并重试 pandas 读取。"""
+        diagnostic = llm_csv_parse_diagnostic(file_path)
+        if not diagnostic or float(diagnostic.get("confidence") or 0) < 0.3:
+            return None
+        sep = diagnostic.get("separator")
+        if not sep:
+            return None
+        try:
+            import pandas as pd
+
+            read_kwargs: Dict[str, Any] = {"sep": sep}
+            skip_rows = int(diagnostic.get("skip_rows") or 0)
+            if skip_rows > 0:
+                read_kwargs["skiprows"] = skip_rows
+            encoding = diagnostic.get("encoding")
+            if encoding:
+                read_kwargs["encoding"] = encoding
+            if diagnostic.get("has_header") is False:
+                read_kwargs["header"] = None
+
+            df = pd.read_csv(file_path, **read_kwargs)
+            if len(df.columns) <= 1 or len(df) == 0:
+                return None
+
+            result: Dict[str, Any] = {
+                "columns": list(df.columns),
+                "dtypes": {c: str(dt) for c, dt in df.dtypes.to_dict().items()},
+                "n_rows": int(len(df)),
+                "n_columns": int(len(df.columns)),
+                "missing_count": int(df.isnull().sum().sum()),
+                "missing_rate": 0.0,
+                "statistics": {},
+                "preview": json.loads(
+                    df.head(n_preview).to_json(orient="records", force_ascii=False)
+                )[:_MAX_PREVIEW_ROWS],
+                "parse_recovery": "llm_diagnostic",
+                "parsing_notes": diagnostic.get("notes"),
+            }
+            total_cells = result["n_rows"] * max(result["n_columns"], 1)
+            if total_cells > 0:
+                result["missing_rate"] = round(result["missing_count"] / total_cells, 4)
+            return result
+        except Exception as exc:
+            logger.warning("LLM 诊断后重试解析失败: %s", exc)
+            return None
+
+    def _get_project_research_question(self, project_id: str) -> str:
+        try:
+            from app.models.project import Project
+
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            if project and getattr(project, "research_question", None):
+                return str(project.research_question).strip()
+        except Exception:
+            pass
+        return ""
+
+    @staticmethod
+    def _get_project_mode(project_id: str, db: Session) -> str:
+        try:
+            from app.models.project import Project
+            from app.core.project_modes import normalize_project_mode
+
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                return normalize_project_mode(getattr(project, "project_mode", None))
+        except Exception:
+            pass
+        return "general"
+
+    def _run_tabular_semantic_understanding(
+        self,
+        *,
+        project_id: str,
+        filename: str,
+        analysis: Dict[str, Any],
+        existing_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """对 tabular 探查结果运行 LLM 语义理解，失败则规则 fallback。"""
+        columns = analysis.get("columns") or []
+        if not columns:
+            return existing_meta
+
+        async def _run():
+            skill = DatasetSemanticUnderstandingSkill()
+            return await skill.run(
+                input_data={
+                    "filename": filename,
+                    "columns": columns,
+                    "dtypes": analysis.get("dtypes") or {},
+                    "n_rows": analysis.get("n_rows") or 0,
+                    "n_columns": analysis.get("n_columns") or len(columns),
+                    "preview": analysis.get("preview") or [],
+                    "statistics": analysis.get("statistics") or {},
+                    "research_question": self._get_project_research_question(project_id),
+                    "project_mode": self._get_project_mode(project_id, self.db),
+                },
+                context={"stage": "dataset_preprocessing", "project_id": project_id},
+            )
+
+        try:
+            skill_result = asyncio.run(_run())
+            if skill_result.success and skill_result.data:
+                return merge_semantic_into_metadata(existing_meta, skill_result.data)
+        except Exception as exc:
+            logger.warning("数据集语义理解失败: %s", exc)
+        return existing_meta
 
     def _analyze_image_file(self, file_path: str) -> Dict[str, Any]:
         result: Dict[str, Any] = {
@@ -408,19 +624,24 @@ class DatasetService:
                     ds.missing_rate = analysis.get("missing_rate", 0.0)
                     ds.statistics_json = _json_dumps_bounded(analysis.get("statistics", {}))
                     ds.preview_json = _json_dumps_bounded(analysis.get("preview", []))
+                    meta: Dict[str, Any] = {}
                     if analysis.get("_large_file_probe"):
-                        meta = {
+                        meta.update({
                             "analysis_tier": analysis.get("analysis_tier"),
                             "probe_engine": analysis.get("probe_engine"),
                             "file_size_bytes": file_size or os.path.getsize(file_path) if os.path.isfile(file_path) else 0,
                             "row_count_est": analysis.get("row_count_est") or analysis.get("n_rows"),
                             "sample_parquet_path": analysis.get("sample_parquet_path"),
                             "large_file_probe": True,
-                        }
-                        ds.extra_metadata = json.dumps(
-                            {k: v for k, v in meta.items() if v is not None},
-                            ensure_ascii=False,
-                        )
+                        })
+                    meta = self._run_tabular_semantic_understanding(
+                        project_id=project_id,
+                        filename=filename,
+                        analysis=analysis,
+                        existing_meta={k: v for k, v in meta.items() if v is not None},
+                    )
+                    if meta:
+                        ds.extra_metadata = json.dumps(meta, ensure_ascii=False)
                     ds.preprocessing_status = "completed"
                 elif data_type == "image":
                     analysis = self._analyze_image_file(file_path)
@@ -462,55 +683,15 @@ class DatasetService:
 
     @staticmethod
     def _identify_target_candidates(columns: List[str]) -> Dict[str, List[str]]:
-        want_keys_doc: Dict[str, str] = {
-            "binary_classification": "Binary classification target candidates",
-            "multi_classification": "Multiclass classification target candidates",
-            "regression": "Regression target candidates",
-            "generic_metric": "Generic metric / score candidates",
-            "generic_target": "Generic target candidates",
-        }
-        target_candidates: Dict[str, List[str]] = {k: [] for k in want_keys_doc}
-        numeric_candidates: List[str] = []
-        categorical_candidates: List[str] = []
+        """兼容旧调用方；内部委托规则 fallback。"""
+        from app.skills.data.dataset_semantic_understanding_skill import rule_fallback_semantic_schema
 
-        for col in columns:
-            col_lower = col.lower().strip()
-            matches = []
-            for kw in TARGET_COLUMN_KEYWORDS:
-                if kw.lower() in col_lower or col_lower == kw.lower():
-                    matches.append(kw)
-            if not matches:
-                continue
-
-            if any(k in col_lower for k in ("label", "class", "category", "类别", "标签", "分类", "diagnosis")):
-                if "binary" in col_lower:
-                    target_candidates["binary_classification"].append(col)
-                else:
-                    target_candidates["multi_classification"].append(col)
-            elif any(k in col_lower for k in ("accuracy", "score", "result", "outcome", "评分", "准确率", "结果")):
-                target_candidates["regression"].append(col)
-            else:
-                target_candidates["generic_target"].append(col)
-
-        numeric_candidates_dedup = list(dict.fromkeys([
-            c for c in target_candidates["regression"]
-            + target_candidates["binary_classification"]
-            + target_candidates["multi_classification"]
-        ]))
-        categorical_candidates_dedup = list(dict.fromkeys([
-            c for c in target_candidates["binary_classification"]
-            + target_candidates["multi_classification"]
-        ]))
-        generic_metric = list(dict.fromkeys([
-            c for c in target_candidates["regression"]
-            + target_candidates["generic_target"]
-        ]))
-
+        payload = rule_fallback_semantic_schema(columns=[str(c) for c in columns], dtypes={})
         return {
-            "target_candidates": {k: v for k, v in target_candidates.items() if v},
-            "numeric_field_candidates": numeric_candidates_dedup,
-            "categorical_field_candidates": categorical_candidates_dedup,
-            "generic_metric_candidates": generic_metric,
+            "target_candidates": payload.get("target_candidates", {}),
+            "numeric_field_candidates": payload.get("numeric_field_candidates", []),
+            "categorical_field_candidates": payload.get("categorical_field_candidates", []),
+            "generic_metric_candidates": payload.get("generic_metric_candidates", []),
         }
 
     def run_preprocessing(self, dataset_id: str) -> Optional[Dataset]:
@@ -533,14 +714,18 @@ class DatasetService:
                 ds.preview_json = json.dumps(analysis.get("preview", []), ensure_ascii=False)
 
                 columns = analysis.get("columns", [])
-                candidates = self._identify_target_candidates(columns)
                 existing_meta = {}
                 if ds.extra_metadata:
                     try:
                         existing_meta = json.loads(ds.extra_metadata) if isinstance(ds.extra_metadata, str) else ds.extra_metadata
                     except json.JSONDecodeError:
                         pass
-                existing_meta.update(candidates)
+                existing_meta = self._run_tabular_semantic_understanding(
+                    project_id=ds.project_id,
+                    filename=ds.filename,
+                    analysis=analysis,
+                    existing_meta=existing_meta,
+                )
                 ds.extra_metadata = json.dumps(existing_meta, ensure_ascii=False)
 
             elif ds.data_type == "image":
@@ -808,6 +993,16 @@ class DatasetService:
                         ds_entry["quality_score"] = extra.get("quality_report", {}).get("overall_score") if isinstance(extra.get("quality_report"), dict) else None
                         ds_entry["quality_recommendations"] = extra.get("quality_recommendations", [])
                         ds_entry["target_candidates"] = extra.get("target_candidates", {})
+                        if extra.get("semantic_schema"):
+                            ds_entry["semantic_schema"] = extra["semantic_schema"]
+                            ss = extra["semantic_schema"]
+                            if isinstance(ss, dict):
+                                if ss.get("recommended_targets"):
+                                    all_targets.extend(ss["recommended_targets"])
+                                if ss.get("experiment_hints"):
+                                    ds_entry["experiment_hints"] = ss["experiment_hints"]
+                                if ss.get("quality_issues"):
+                                    ds_entry["semantic_quality_issues"] = ss["quality_issues"]
                 except json.JSONDecodeError:
                     pass
 

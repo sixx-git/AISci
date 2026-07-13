@@ -828,3 +828,439 @@ def needs_federated_campaign_refinement(
         reasons.append("uploaded_csv pilot 仍有 high 优先级 replan 待验收")
 
     return bool(reasons), reasons
+
+
+def build_general_replan_actions(
+    experiment_design: Dict[str, Any],
+    small_validation: Optional[Dict[str, Any]] = None,
+    data_context: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """通用模式：从实验设计/验证/数据上下文生成结构化 replan actions。"""
+    actions: List[Dict[str, Any]] = []
+    ed = experiment_design or {}
+    sv = small_validation or {}
+    ctx = data_context or {}
+
+    datasets = ctx.get("datasets") or ed.get("project_datasets") or []
+    uploaded_count = sum(1 for d in datasets if isinstance(d, dict))
+    dr = ed.get("data_requirements") or {}
+    gaps = list(ed.get("data_gap") or dr.get("gaps") or [])
+    spec = ed.get("experiment_spec") if isinstance(ed.get("experiment_spec"), dict) else {}
+
+    if dr.get("upload_status") == "pending_upload" or (not uploaded_count and gaps):
+        actions.append({
+            "action_id": "upload_required_data",
+            "action_type": "collect_data",
+            "parameter": "dataset",
+            "to_value": dr.get("required_data_description") or "与假设匹配的 CSV/表格",
+            "expected_check": "upload_status=ready 且 uploaded_dataset_count>=1",
+            "priority": "critical",
+            "rationale": "缺少真实数据，无法完成沙箱验证",
+            "verifiable": True,
+        })
+    elif gaps:
+        actions.append({
+            "action_id": "align_spec_to_uploaded_data",
+            "action_type": "revise_spec",
+            "parameter": "experiment_spec",
+            "to_value": "仅使用已上传列名",
+            "expected_check": "data_gap 为空且 target_column 存在于 CSV",
+            "priority": "high",
+            "rationale": f"字段缺口: {'; '.join(str(g) for g in gaps[:3])}",
+            "verifiable": True,
+        })
+
+    gate = ed.get("executability_gate") or {}
+    if gate and not gate.get("passed"):
+        missing = gate.get("missing_columns") or gate.get("blockers") or []
+        actions.append({
+            "action_id": "fix_executability_gate",
+            "action_type": "revise_design",
+            "parameter": "methods/metrics",
+            "to_value": "与现有数据列对齐",
+            "expected_check": "executability_gate.passed=True",
+            "priority": "critical",
+            "rationale": "; ".join(str(m) for m in missing[:3]) or "计划相对数据不可执行",
+            "verifiable": True,
+        })
+
+    sb = sv.get("sandbox_execution") or {}
+    if sv:
+        if sb and sb.get("success") is False:
+            err = (sb.get("stderr") or sb.get("stdout") or "")[:180]
+            actions.append({
+                "action_id": "fix_analysis_script",
+                "action_type": "revise_script",
+                "parameter": "analysis_script",
+                "to_value": "遵循 experiment_spec + 沙箱契约",
+                "expected_check": "sandbox_execution.success=True",
+                "priority": "critical",
+                "rationale": f"沙箱失败: {err or 'return_code!=0'}",
+                "verifiable": True,
+            })
+        elif sb.get("sandbox_incomplete") or sb.get("output_complete") is False:
+            actions.append({
+                "action_id": "complete_sandbox_outputs",
+                "action_type": "revise_script",
+                "parameter": "metrics/plots",
+                "to_value": "写出 metrics.json + PLOTS_DIR/*.png",
+                "expected_check": "output_complete=True 且 plots>=1",
+                "priority": "high",
+                "rationale": "沙箱未产出有效 metrics 或实验图",
+                "verifiable": True,
+            })
+
+        if sv.get("verifiable_passed") is False:
+            failed = [
+                c.get("description", c.get("check_id"))
+                for c in (sv.get("verifiable_checks") or [])
+                if c.get("passed") is False
+            ]
+            actions.append({
+                "action_id": "meet_verifiable_spec",
+                "action_type": "adjust_validation",
+                "parameter": spec.get("primary_metric") or "primary_metric",
+                "to_value": "满足 verifiable_hypothesis 判据",
+                "expected_check": "verifiable_passed=True",
+                "priority": "high",
+                "rationale": f"可验证检查未通过: {'; '.join(failed[:3])}",
+                "verifiable": True,
+            })
+
+        if sv.get("pilot_analysis") and sb.get("pilot_fallback"):
+            actions.append({
+                "action_id": "replace_pilot_with_design_script",
+                "action_type": "revise_script",
+                "parameter": "analysis_script",
+                "to_value": "实验设计绑定脚本应直接成功",
+                "expected_check": "sandbox 成功且 pilot_fallback=False",
+                "priority": "medium",
+                "rationale": "当前结果来自 pilot 兜底，设计与执行未对齐",
+                "verifiable": True,
+            })
+
+    dedup: List[Dict[str, Any]] = []
+    seen: set = set()
+    for act in actions:
+        aid = str(act.get("action_id") or "")
+        if aid in seen:
+            continue
+        seen.add(aid)
+        dedup.append(act)
+    return dedup[:8]
+
+
+def needs_experiment_self_correction(
+    results: Dict[str, Any],
+    *,
+    correction_count: int = 0,
+    max_rounds: int = 2,
+    executability_blocked: bool = False,
+    validation_skipped: bool = False,
+) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
+    """判断通用实验设计↔验证自纠错环是否应继续。"""
+    if correction_count >= max_rounds:
+        return False, ["已达 experiment_self_correction 最大轮次"], []
+
+    ed = results.get("experiment_design") or {}
+    sv = results.get("small_validation") or {}
+    ctx_datasets = ed.get("project_datasets") or []
+    dr = ed.get("data_requirements") or {}
+    uploaded = int(dr.get("uploaded_dataset_count") or len(ctx_datasets) or 0)
+
+    actions = build_general_replan_actions(ed, sv if sv else None, {"datasets": ctx_datasets})
+    critical_data = any(
+        a.get("action_id") == "upload_required_data" and a.get("priority") == "critical"
+        for a in actions
+    )
+    if critical_data and uploaded == 0:
+        return False, ["需先上传数据后再自迭代"], actions
+
+    reasons: List[str] = []
+    if executability_blocked or validation_skipped:
+        gate = ed.get("executability_gate") or {}
+        if gate and not gate.get("passed"):
+            reasons.append("实验可执行性 gate 未通过")
+
+    if not sv and (executability_blocked or validation_skipped):
+        if not reasons:
+            reasons.append("验证被跳过，需修订实验设计")
+    elif sv:
+        sb = sv.get("sandbox_execution") or {}
+        if sb and sb.get("success") is False:
+            reasons.append("沙箱执行失败")
+        if sb.get("sandbox_incomplete") or sb.get("output_complete") is False:
+            reasons.append("沙箱产出不完整")
+        if sv.get("verifiable_passed") is False:
+            reasons.append("可验证假设检查未通过")
+        if sb.get("pilot_fallback") and sb.get("success"):
+            reasons.append("结果来自 pilot 兜底，设计与脚本未对齐")
+
+    if ed.get("data_gap") and uploaded > 0:
+        reasons.append("experiment_spec 与已上传字段未完全对齐")
+
+    if not reasons and any(a.get("priority") in ("critical", "high") for a in actions):
+        reasons.append("存在待处理的结构化 replan actions")
+
+    if sv and sv.get("verifiable_passed") is True and (sv.get("sandbox_execution") or {}).get("output_complete"):
+        return False, [], actions
+
+    return bool(reasons), reasons, actions
+
+
+def evaluate_general_validation_improvement(
+    before: Dict[str, Any],
+    after: Dict[str, Any],
+) -> Dict[str, Any]:
+    """对比两轮小样验证/沙箱是否改善。"""
+
+    def _score(sv: Dict[str, Any]) -> float:
+        if not sv:
+            return 0.0
+        sb = sv.get("sandbox_execution") or {}
+        score = 0.0
+        if sb.get("success"):
+            score += 3.0
+        if sb.get("output_complete"):
+            score += 2.0
+        if sv.get("verifiable_passed"):
+            score += 3.0
+        if sb.get("pilot_fallback"):
+            score -= 1.5
+        metrics = sb.get("metrics") or {}
+        if metrics and metrics.get("primary_metric") is not None:
+            score += 1.0
+        plots = sb.get("plots") or (sv.get("artifacts") or {}).get("plots") or []
+        if plots:
+            score += 1.0
+        return score
+
+    b = _score(before)
+    a = _score(after)
+    improved = a > b + 0.25
+    return {
+        "improved": improved,
+        "score_before": round(b, 2),
+        "score_after": round(a, 2),
+        "delta": round(a - b, 2),
+        "summary": f"验证 {'改善' if improved else '未显著改善'}：score {b:.1f}→{a:.1f}",
+    }
+
+
+
+def build_general_replan_actions(
+    experiment_design: Dict[str, Any],
+    small_validation: Optional[Dict[str, Any]] = None,
+    data_context: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """通用模式：从实验设计/验证/数据上下文生成结构化 replan actions。"""
+    actions: List[Dict[str, Any]] = []
+    ed = experiment_design or {}
+    sv = small_validation or {}
+    ctx = data_context or {}
+
+    datasets = ctx.get("datasets") or ed.get("project_datasets") or []
+    uploaded_count = sum(1 for d in datasets if isinstance(d, dict))
+    dr = ed.get("data_requirements") or {}
+    gaps = list(ed.get("data_gap") or dr.get("gaps") or [])
+    spec = ed.get("experiment_spec") if isinstance(ed.get("experiment_spec"), dict) else {}
+
+    if dr.get("upload_status") == "pending_upload" or (not uploaded_count and gaps):
+        actions.append({
+            "action_id": "upload_required_data",
+            "action_type": "collect_data",
+            "parameter": "dataset",
+            "to_value": dr.get("required_data_description") or "与假设匹配的 CSV/表格",
+            "expected_check": "upload_status=ready 且 uploaded_dataset_count>=1",
+            "priority": "critical",
+            "rationale": "缺少真实数据，无法完成沙箱验证",
+            "verifiable": True,
+        })
+    elif gaps:
+        actions.append({
+            "action_id": "align_spec_to_uploaded_data",
+            "action_type": "revise_spec",
+            "parameter": "experiment_spec",
+            "to_value": "仅使用已上传列名",
+            "expected_check": "data_gap 为空且 target_column 存在于 CSV",
+            "priority": "high",
+            "rationale": f"字段缺口: {'; '.join(str(g) for g in gaps[:3])}",
+            "verifiable": True,
+        })
+
+    gate = ed.get("executability_gate") or {}
+    if gate and not gate.get("passed"):
+        missing = gate.get("missing_columns") or gate.get("blockers") or []
+        actions.append({
+            "action_id": "fix_executability_gate",
+            "action_type": "revise_design",
+            "parameter": "methods/metrics",
+            "to_value": "与现有数据列对齐",
+            "expected_check": "executability_gate.passed=True",
+            "priority": "critical",
+            "rationale": "; ".join(str(m) for m in missing[:3]) or "计划相对数据不可执行",
+            "verifiable": True,
+        })
+
+    sb = sv.get("sandbox_execution") or {}
+    if sv:
+        if sb and sb.get("success") is False:
+            err = (sb.get("stderr") or sb.get("stdout") or "")[:180]
+            actions.append({
+                "action_id": "fix_analysis_script",
+                "action_type": "revise_script",
+                "parameter": "analysis_script",
+                "to_value": "遵循 experiment_spec + 沙箱契约",
+                "expected_check": "sandbox_execution.success=True",
+                "priority": "critical",
+                "rationale": f"沙箱失败: {err or 'return_code!=0'}",
+                "verifiable": True,
+            })
+        elif sb.get("sandbox_incomplete") or sb.get("output_complete") is False:
+            actions.append({
+                "action_id": "complete_sandbox_outputs",
+                "action_type": "revise_script",
+                "parameter": "metrics/plots",
+                "to_value": "写出 metrics.json + PLOTS_DIR/*.png",
+                "expected_check": "output_complete=True 且 plots>=1",
+                "priority": "high",
+                "rationale": "沙箱未产出有效 metrics 或实验图",
+                "verifiable": True,
+            })
+
+        if sv.get("verifiable_passed") is False:
+            failed = [
+                c.get("description", c.get("check_id"))
+                for c in (sv.get("verifiable_checks") or [])
+                if c.get("passed") is False
+            ]
+            actions.append({
+                "action_id": "meet_verifiable_spec",
+                "action_type": "adjust_validation",
+                "parameter": spec.get("primary_metric") or "primary_metric",
+                "to_value": "满足 verifiable_hypothesis 判据",
+                "expected_check": "verifiable_passed=True",
+                "priority": "high",
+                "rationale": f"可验证检查未通过: {'; '.join(failed[:3])}",
+                "verifiable": True,
+            })
+
+        if sv.get("pilot_analysis") and sb.get("pilot_fallback"):
+            actions.append({
+                "action_id": "replace_pilot_with_design_script",
+                "action_type": "revise_script",
+                "parameter": "analysis_script",
+                "to_value": "实验设计绑定脚本应直接成功",
+                "expected_check": "sandbox 成功且 pilot_fallback=False",
+                "priority": "medium",
+                "rationale": "当前结果来自 pilot 兜底，设计与执行未对齐",
+                "verifiable": True,
+            })
+
+    dedup: List[Dict[str, Any]] = []
+    seen: set = set()
+    for act in actions:
+        aid = str(act.get("action_id") or "")
+        if aid in seen:
+            continue
+        seen.add(aid)
+        dedup.append(act)
+    return dedup[:8]
+
+
+def needs_experiment_self_correction(
+    results: Dict[str, Any],
+    *,
+    correction_count: int = 0,
+    max_rounds: int = 2,
+    executability_blocked: bool = False,
+    validation_skipped: bool = False,
+) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
+    """判断通用实验设计↔验证自纠错环是否应继续。"""
+    if correction_count >= max_rounds:
+        return False, ["已达 experiment_self_correction 最大轮次"], []
+
+    ed = results.get("experiment_design") or {}
+    sv = results.get("small_validation") or {}
+    ctx_datasets = ed.get("project_datasets") or []
+    dr = ed.get("data_requirements") or {}
+    uploaded = int(dr.get("uploaded_dataset_count") or len(ctx_datasets) or 0)
+
+    actions = build_general_replan_actions(ed, sv if sv else None, {"datasets": ctx_datasets})
+    critical_data = any(
+        a.get("action_id") == "upload_required_data" and a.get("priority") == "critical"
+        for a in actions
+    )
+    if critical_data and uploaded == 0:
+        return False, ["需先上传数据后再自迭代"], actions
+
+    reasons: List[str] = []
+    if executability_blocked or validation_skipped:
+        gate = ed.get("executability_gate") or {}
+        if gate and not gate.get("passed"):
+            reasons.append("实验可执行性 gate 未通过")
+
+    if not sv and (executability_blocked or validation_skipped):
+        if not reasons:
+            reasons.append("验证被跳过，需修订实验设计")
+    elif sv:
+        sb = sv.get("sandbox_execution") or {}
+        if sb and sb.get("success") is False:
+            reasons.append("沙箱执行失败")
+        if sb.get("sandbox_incomplete") or sb.get("output_complete") is False:
+            reasons.append("沙箱产出不完整")
+        if sv.get("verifiable_passed") is False:
+            reasons.append("可验证假设检查未通过")
+        if sb.get("pilot_fallback") and sb.get("success"):
+            reasons.append("结果来自 pilot 兜底，设计与脚本未对齐")
+
+    if ed.get("data_gap") and uploaded > 0:
+        reasons.append("experiment_spec 与已上传字段未完全对齐")
+
+    if not reasons and any(a.get("priority") in ("critical", "high") for a in actions):
+        reasons.append("存在待处理的结构化 replan actions")
+
+    if sv and sv.get("verifiable_passed") is True and (sv.get("sandbox_execution") or {}).get("output_complete"):
+        return False, [], actions
+
+    return bool(reasons), reasons, actions
+
+
+def evaluate_general_validation_improvement(
+    before: Dict[str, Any],
+    after: Dict[str, Any],
+) -> Dict[str, Any]:
+    """对比两轮小样验证/沙箱是否改善。"""
+
+    def _score(sv: Dict[str, Any]) -> float:
+        if not sv:
+            return 0.0
+        sb = sv.get("sandbox_execution") or {}
+        score = 0.0
+        if sb.get("success"):
+            score += 3.0
+        if sb.get("output_complete"):
+            score += 2.0
+        if sv.get("verifiable_passed"):
+            score += 3.0
+        if sb.get("pilot_fallback"):
+            score -= 1.5
+        metrics = sb.get("metrics") or {}
+        if metrics and metrics.get("primary_metric") is not None:
+            score += 1.0
+        plots = sb.get("plots") or (sv.get("artifacts") or {}).get("plots") or []
+        if plots:
+            score += 1.0
+        return score
+
+    b = _score(before)
+    a = _score(after)
+    improved = a > b + 0.25
+    return {
+        "improved": improved,
+        "score_before": round(b, 2),
+        "score_after": round(a, 2),
+        "delta": round(a - b, 2),
+        "summary": f"验证 {'改善' if improved else '未显著改善'}：score {b:.1f}→{a:.1f}",
+    }
+

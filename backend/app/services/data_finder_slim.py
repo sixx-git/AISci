@@ -253,6 +253,9 @@ def slim_data_context(context: Any) -> Dict[str, Any]:
                 "missing_rate": d.get("missing_rate"),
                 "preprocessing_status": d.get("preprocessing_status"),
                 "use_for_hypothesis": d.get("use_for_hypothesis"),
+                "semantic_schema": d.get("semantic_schema") if isinstance(d.get("semantic_schema"), dict) else None,
+                "target_candidates": d.get("target_candidates") if isinstance(d.get("target_candidates"), dict) else None,
+                "experiment_hints": d.get("experiment_hints"),
             }
             for d in datasets[:12]
             if isinstance(d, dict)
@@ -537,6 +540,7 @@ def slim_small_validation_output(output: Dict[str, Any]) -> Dict[str, Any]:
         "has_real_data": output.get("has_real_data"),
         "hypothesis": _truncate_str(output.get("hypothesis"), 2000),
         "validation_id": output.get("validation_id"),
+        "script_source": output.get("script_source"),
         "human_review_required": output.get("human_review_required"),
         "warnings": list(output.get("warnings") or [])[:12],
         "charts": output.get("charts"),
@@ -658,6 +662,17 @@ def slim_stage_output(output: Any, stage_key: str = "") -> Any:
                 else:
                     slim_so[sk] = val
             ed["skill_outputs"] = slim_so
+        from app.services.experiment_spec_service import slim_experiment_spec_for_storage
+
+        if isinstance(ed.get("experiment_spec"), dict):
+            ed["experiment_spec"] = slim_experiment_spec_for_storage(ed["experiment_spec"])
+        script = ed.get("analysis_script")
+        if isinstance(script, str) and len(script) > 4000:
+            ed["analysis_script"] = {
+                "_truncated": True,
+                "length": len(script),
+                "preview": script[:1200] + "…",
+            }
         output = ed
 
     try:

@@ -45,12 +45,15 @@ function mapStatus(status: DocumentInfo['status']): LiteratureItem['parseStatus'
 // ============ DocumentInfo → LiteratureItem ============
 function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
   const year = doc.created_at ? new Date(doc.created_at).getFullYear() : new Date().getFullYear();
+  const source = (doc.source_type || '').toLowerCase();
+  const type: LiteratureItem['type'] =
+    source === 'arxiv' || source === 'openalex' ? '预印本' : inferDocType(doc);
   return {
     id: doc.id,
     title: doc.title || doc.filename.replace(/\.\w+$/, ''),
     authors: doc.authors || '—',
     year,
-    type: inferDocType(doc),
+    type,
     parseStatus: mapStatus(doc.status),
     snippetCount: doc.chunk_count ?? 0,
     factCount: 0,
@@ -79,6 +82,7 @@ const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; 
 const sourceTypeConfig: Record<string, { label: string; className: string }> = {
   upload:                { label: 'PDF上传', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
   arxiv:                 { label: 'arXiv',   className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
+  openalex:              { label: 'OpenAlex', className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
   bibtex:                { label: 'BibTeX',  className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
   google_scholar_import: { label: 'Scholar', className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
   manual:                { label: '手动',   className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
@@ -187,6 +191,7 @@ export function LiteratureLibrary({
   const { statusMsg, showStatus } = useStatusToast();
 
   const stats: LiteratureStats = useMemo(() => computeStats(literature), [literature]);
+  const hasAnyLiterature = literature.length > 0 || importedDocs.length > 0;
 
   // ========== 数据加载 ==========
   const loadDocuments = useCallback(async () => {
@@ -553,7 +558,7 @@ export function LiteratureLibrary({
   }
 
   // ============ 空状态（首次加载且无数据） ============
-  if (!loading && literature.length === 0) {
+  if (!loading && !importedLoading && !hasAnyLiterature) {
     return (
       <div className="max-w-7xl mx-auto">
         <StatusBar msg={statusMsg} />

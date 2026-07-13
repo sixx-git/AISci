@@ -7,6 +7,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
+from app.services.analysis_script_generator import generate_analysis_script
+from app.services.experiment_spec_service import (
+    build_default_spec_from_datasets,
+    enrich_spec_from_design,
+    normalize_experiment_spec,
+    validate_spec_against_datasets,
+)
 from app.skills.experiment.experiment_sanity_check_skill import ExperimentSanityCheckSkill
 from app.skills.experiment.experiment_plan_critic_skill import ExperimentPlanCriticSkill
 from app.skills.data.multimodal_ingest_skill import MultimodalDataIngestSkill
@@ -31,6 +38,8 @@ class ExperimentDesignResult(BaseModel):
     project_datasets: List[Dict[str, Any]] = Field(default_factory=list, description="项目已有数据集")
     recommended_public_datasets: List[Dict[str, Any]] = Field(default_factory=list, description="推荐公开数据集")
     data_gap: List[str] = Field(default_factory=list, description="数据缺口说明")
+    experiment_spec: Dict[str, Any] = Field(default_factory=dict, description="可执行实验契约")
+    analysis_script: str = Field("", description="与方案绑定的分析脚本")
 
     @field_validator(
         "datasets", "baselines", "metrics",
@@ -163,7 +172,17 @@ class ExperimentDesignAgent:
                 "metrics": "详细描述评估指标...",
                 "experimental_steps": "分步骤详细描述实验流程...",
                 "expected_results": "详细描述预期结果...",
-                "limitations": "详细分析局限性..."
+                "limitations": "详细分析局限性...",
+                "experiment_spec": {
+                    "target_column": "目标列名（如 carcinoma）或空字符串",
+                    "feature_columns": ["age", "jaundice"],
+                    "baselines": ["Baseline（对照）", "Proposed（本文方法）"],
+                    "primary_metric": "accuracy",
+                    "secondary_metrics": ["f1_score"],
+                    "split_strategy": "row_half",
+                    "task_type": "classification",
+                    "encoding_notes": "present/absent 等分类列需编码",
+                },
             }
             
             # 调用 LLM
@@ -200,6 +219,36 @@ class ExperimentDesignAgent:
                 result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
             elif result.get("project_datasets"):
                 result["data_gap"] = []
+
+            resolved_datasets = result.get("project_datasets") or project_datasets or []
+            spec = normalize_experiment_spec(result.get("experiment_spec") or {})
+            if resolved_datasets:
+                default_spec = build_default_spec_from_datasets(resolved_datasets, hypothesis)
+                merged = {**default_spec, **{k: v for k, v in spec.items() if _spec_value_present(v)}}
+                spec = enrich_spec_from_design(merged, result)
+            else:
+                spec = enrich_spec_from_design(spec, result)
+            result["experiment_spec"] = spec
+
+            spec_gaps = validate_spec_against_datasets(spec, resolved_datasets)
+            if spec_gaps:
+                existing = result.get("data_gap") or []
+                if isinstance(existing, str):
+                    existing = [existing] if existing else []
+                result["data_gap"] = list(dict.fromkeys(list(existing) + spec_gaps))
+
+            csv_path = self._resolve_primary_csv_path(resolved_datasets, data_files or [])
+            result["analysis_script"] = generate_analysis_script(
+                hypothesis=hypothesis,
+                methods=result.get("methods"),
+                datasets=result.get("datasets"),
+                metrics=result.get("metrics"),
+                baselines=result.get("baselines"),
+                experimental_steps=result.get("experimental_steps"),
+                experiment_spec=spec,
+                has_csv_data=bool(csv_path),
+                csv_data_path=csv_path,
+            )
 
             logger.info("实验设计完成")
 
@@ -347,6 +396,16 @@ class ExperimentDesignAgent:
             return {}
 
     @staticmethod
+    def _resolve_primary_csv_path(
+        project_datasets: List[Dict[str, Any]],
+        data_files: List[str],
+    ) -> Optional[str]:
+        for ds in project_datasets or []:
+            if isinstance(ds, dict) and ds.get("file_path"):
+                return str(ds["file_path"])
+        return data_files[0] if data_files else None
+
+    @staticmethod
     def _format_dataset_schema_prompt(project_datasets: Optional[List[Dict[str, Any]]]) -> str:
         """将 data_context 中的 schema 摘要格式化为实验设计 prompt。"""
         if not project_datasets:
@@ -381,6 +440,18 @@ class ExperimentDesignAgent:
             fp = ds.get("file_path")
             if fp:
                 line += f"\n  路径: {fp}"
+            semantic = ds.get("semantic_schema") if isinstance(ds.get("semantic_schema"), dict) else {}
+            if semantic:
+                roles = semantic.get("column_roles") or {}
+                if roles:
+                    role_parts = [f"{k}→{v}" for k, v in list(roles.items())[:12]]
+                    line += f"\n  列角色(LLM): {', '.join(role_parts)}"
+                targets = semantic.get("recommended_targets") or []
+                if targets:
+                    line += f"\n  推荐目标列: {', '.join(str(t) for t in targets[:5])}"
+                hints = semantic.get("experiment_hints") or ds.get("experiment_hints")
+                if hints:
+                    line += f"\n  实验建议: {str(hints)[:200]}"
             lines.append(line)
         return "\n".join(lines)
 
@@ -429,6 +500,16 @@ class ExperimentDesignAgent:
                 result_dict[field] = f"待补充{field}"
         
         return result_dict
+
+
+def _spec_value_present(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
 
 
 # 全局单例

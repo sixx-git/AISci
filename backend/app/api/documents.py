@@ -18,9 +18,14 @@ from app.schemas.project import (
     ParseDocumentRequest,
     ListResponse
 )
+from app.services.document_serialization import document_to_info
 from app.services.document_parser import ParserBackend
 
 router = APIRouter(tags=["documents"])
+
+
+def _document_to_info(doc) -> DocumentInfo:
+    return document_to_info(doc)
 
 
 @router.post("/upload", response_model=ApiResponse[UploadResponse])
@@ -43,7 +48,7 @@ async def upload_document(
             auto_parse=auto_parse,
         )
         
-        doc_info = DocumentInfo.model_validate(doc)
+        doc_info = _document_to_info(doc)
         chunks_count = len(chunks) if chunks else 0
         
         return success(
@@ -72,7 +77,7 @@ async def parse_document(
         service = DocumentService(db)
         doc, chunks = await run_blocking(service.parse_document, doc_id, backend=backend)
         
-        doc_info = DocumentInfo.model_validate(doc)
+        doc_info = _document_to_info(doc)
         chunks_count = len(chunks) if chunks else 0
         
         return success(
@@ -104,7 +109,7 @@ async def list_documents(
             page_size=page_size
         )
         
-        doc_infos = [DocumentInfo.model_validate(d) for d in docs]
+        doc_infos = [_document_to_info(d) for d in docs]
         
         return success(
             ListResponse(
@@ -128,7 +133,7 @@ async def get_document(doc_id: str, db: Session = Depends(get_db)):
         if not doc:
             return error("文档不存在", code=404)
         
-        return success(DocumentInfo.model_validate(doc))
+        return success(_document_to_info(doc))
     except Exception as e:
         return error(str(e))
 

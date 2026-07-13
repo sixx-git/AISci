@@ -254,9 +254,11 @@ def list_documents(
     
     total_pages = (total + page_size - 1) // page_size
     
+    from app.services.document_serialization import document_to_info
+
     return success_response(
         data=PaginatedResponse(
-            list=[DocumentInfo.model_validate(d) for d in documents],
+            list=[document_to_info(d) for d in documents],
             pagination=PageInfo(
                 page=page,
                 page_size=page_size,
