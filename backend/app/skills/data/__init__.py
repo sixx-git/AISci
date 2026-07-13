@@ -5,6 +5,7 @@ from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
 from app.skills.data.dataset_discovery_skill import DatasetDiscoverySkill
 from app.skills.data.dataset_semantic_understanding_skill import DatasetSemanticUnderstandingSkill
+from app.skills.data.data_adequacy_assessment_skill import DataAdequacyAssessmentSkill
 
 __all__ = [
     "PreliminaryAnalysisSkill",
@@ -13,4 +14,5 @@ __all__ = [
     "DataJuicerLiteSkill",
     "DatasetDiscoverySkill",
     "DatasetSemanticUnderstandingSkill",
+    "DataAdequacyAssessmentSkill",
 ]

@@ -14,7 +14,6 @@ import {
 import { cn } from '@/lib/utils';
 import experimentService from '@/services/experimentService';
 import datasetService from '@/services/datasetService';
-import dataFinderService, { type ExternalCandidateItem } from '@/services/dataFinderService';
 import { pipelineService } from '@/services/pipelineService';
 import humanLoopService from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
@@ -45,6 +44,24 @@ interface RecommendedPublicDataset {
   import_supported?: boolean;
 }
 
+interface DataAdequacyInfo {
+  status?: string;
+  score?: number;
+  source?: string;
+  mismatch_reasons?: string[];
+  what_uploaded_can_do?: string[];
+  what_hypothesis_needs?: string[];
+  assessment_round_id?: string;
+}
+
+interface RequiredDatasetSpec {
+  name?: string;
+  description?: string;
+  modality?: string;
+  required_columns?: string[];
+  search_keywords?: string[];
+}
+
 interface ExperimentDataRequirements {
   upload_status?: string;
   uploaded_dataset_count?: number;
@@ -55,6 +72,8 @@ interface ExperimentDataRequirements {
     n_columns?: number;
     columns?: string[];
   }>;
+  adequacy?: DataAdequacyInfo;
+  required_datasets?: RequiredDatasetSpec[];
   required_data_description?: string;
   validation_target?: string;
   metrics?: string;
@@ -95,17 +114,6 @@ function normalizeRecommendedDatasets(raw: unknown): RecommendedPublicDataset[] 
   return raw.map(normalizeRecommendedDataset).filter((d): d is RecommendedPublicDataset => d != null);
 }
 
-function recommendedFromExternalCandidate(c: ExternalCandidateItem): RecommendedPublicDataset | null {
-  return normalizeRecommendedDataset({
-    dataset_name: c.dataset_name,
-    source_platform: c.source_platform,
-    url: c.url,
-    download_url: c.url,
-    description: c.description,
-    availability: c.availability,
-    import_supported: c.import_supported,
-  });
-}
 
 function enrichDataRequirements(
   requirements: ExperimentDataRequirements,
@@ -213,14 +221,7 @@ async function loadDataRequirementsForProject(
       if (res.code === 200 && res.data) {
         const requirements = extractDataRequirements(res.data);
         if (requirements) {
-          if ((requirements.recommended_public_datasets?.length ?? 0) > 0) {
-            return requirements;
-          }
-          const withFinder = await mergeDataFinderRecommendations(projectId, requirements);
-          if ((withFinder.recommended_public_datasets?.length ?? 0) > 0) {
-            return withFinder;
-          }
-          return requirements;
+          return enrichDataRequirements(requirements, res.data);
         }
       }
     } catch {
@@ -229,29 +230,7 @@ async function loadDataRequirementsForProject(
   }
 
   const fallback = await buildFallbackDataRequirements(projectId);
-  return mergeDataFinderRecommendations(projectId, fallback);
-}
-
-async function mergeDataFinderRecommendations(
-  projectId: string,
-  requirements: ExperimentDataRequirements,
-): Promise<ExperimentDataRequirements> {
-  if ((requirements.recommended_public_datasets?.length ?? 0) > 0) {
-    return requirements;
-  }
-  try {
-    const res = await dataFinderService.getResults(projectId);
-    const candidates = res.code === 200 ? (res.data?.external_candidates ?? []) : [];
-    const recommended = candidates
-      .map(recommendedFromExternalCandidate)
-      .filter((d): d is RecommendedPublicDataset => d != null);
-    if (recommended.length) {
-      return { ...requirements, recommended_public_datasets: recommended };
-    }
-  } catch {
-    /* ignore */
-  }
-  return requirements;
+  return fallback;
 }
 
 interface ExperimentDesignPageProps {
@@ -328,19 +307,30 @@ function DataRequirementsPanel({
 }) {
   const pending = requirements.upload_status === 'pending_upload'
     || (requirements.uploaded_dataset_count ?? 0) === 0;
+  const inadequate = requirements.upload_status === 'inadequate'
+    || requirements.adequacy?.status === 'inadequate';
+  const partial = requirements.upload_status === 'partial'
+    || requirements.adequacy?.status === 'partial';
   const uploaded = requirements.uploaded_datasets ?? [];
   const recommended = requirements.recommended_public_datasets ?? [];
+  const adequacy = requirements.adequacy;
 
   return (
     <Card className={cn(
       'mb-6 border',
-      pending ? 'border-bp-yellow/40 bg-bp-yellow/5' : 'border-bp-green/30 bg-bp-green/5',
+      pending ? 'border-bp-yellow/40 bg-bp-yellow/5'
+        : inadequate ? 'border-danger-400/40 bg-danger-400/5'
+          : partial ? 'border-bp-yellow/30 bg-bp-yellow/5'
+            : 'border-bp-green/30 bg-bp-green/5',
     )}>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
-          <Database className={cn('w-5 h-5 shrink-0', pending ? 'text-bp-yellow' : 'text-bp-green')} />
+          <Database className={cn(
+            'w-5 h-5 shrink-0',
+            pending || partial ? 'text-bp-yellow' : inadequate ? 'text-danger-400' : 'text-bp-green',
+          )} />
           <div>
-            <h3 className="text-sm font-semibold text-bp-text">数据需求与上传状态</h3>
+            <h3 className="text-sm font-semibold text-bp-text">数据需求与充分性</h3>
             <p className="text-xs text-bp-muted mt-0.5">
               {requirements.summary || (pending
                 ? '请先在「数据集」页上传研究数据，再重跑实验设计。'
@@ -350,13 +340,46 @@ function DataRequirementsPanel({
         </div>
         <span className={cn(
           'text-xs px-2 py-1 rounded-full border font-medium',
-          pending
-            ? 'text-bp-yellow border-bp-yellow/40 bg-bp-yellow/10'
-            : 'text-bp-green border-bp-green/30 bg-bp-green/10',
+          pending ? 'text-bp-yellow border-bp-yellow/40 bg-bp-yellow/10'
+            : inadequate ? 'text-danger-400 border-danger-400/40 bg-danger-400/10'
+              : partial ? 'text-bp-yellow border-bp-yellow/30 bg-bp-yellow/10'
+                : 'text-bp-green border-bp-green/30 bg-bp-green/10',
         )}>
-          {pending ? '待上传数据' : `已上传 ${requirements.uploaded_dataset_count ?? uploaded.length} 个数据集`}
+          {pending ? '待上传数据'
+            : inadequate ? '数据与假设不匹配'
+              : partial ? '部分匹配（pilot）'
+                : `已就绪 · ${requirements.uploaded_dataset_count ?? uploaded.length} 个数据集`}
         </span>
       </div>
+
+      {adequacy && (adequacy.mismatch_reasons?.length || adequacy.what_hypothesis_needs?.length) ? (
+        <div className="mt-4 p-3 rounded-lg bg-bp-base/60 border border-bp-border space-y-2">
+          {adequacy.mismatch_reasons && adequacy.mismatch_reasons.length > 0 && (
+            <div>
+              <p className="text-xs text-bp-muted mb-1">不匹配原因</p>
+              <ul className="text-sm text-bp-text space-y-1 list-disc list-inside">
+                {adequacy.mismatch_reasons.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+          {adequacy.what_hypothesis_needs && adequacy.what_hypothesis_needs.length > 0 && (
+            <div>
+              <p className="text-xs text-bp-muted mb-1">假设真正需要</p>
+              <ul className="text-sm text-bp-text space-y-1 list-disc list-inside">
+                {adequacy.what_hypothesis_needs.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+          {adequacy.what_uploaded_can_do && adequacy.what_uploaded_can_do.length > 0 && (
+            <div>
+              <p className="text-xs text-bp-muted mb-1">当前数据可做</p>
+              <ul className="text-sm text-bp-muted space-y-1 list-disc list-inside">
+                {adequacy.what_uploaded_can_do.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {requirements.required_data_description && (
         <div className="mt-4 p-3 rounded-lg bg-bp-base/60 border border-bp-border">
@@ -396,7 +419,7 @@ function DataRequirementsPanel({
       {recommended.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-bp border border-bp-border">
           <p className="text-xs text-bp-muted px-3 pt-3 mb-1">
-            推荐公开数据集（请下载后上传到「数据集」页）
+            本轮实验设计推荐的数据集（请下载后上传到「数据集」页）
           </p>
           <table className="w-full text-xs text-left">
             <thead>

@@ -108,8 +108,23 @@ def assess_plan_executability(
     blockers: List[str] = []
     warnings: List[str] = []
 
+    dr = ed.get("data_requirements") or {}
+    adequacy = dr.get("adequacy") if isinstance(dr.get("adequacy"), dict) else ed.get("data_adequacy") or {}
+    adequacy_status = adequacy.get("status")
+    if adequacy_status == "inadequate":
+        reasons = adequacy.get("mismatch_reasons") or dr.get("gaps") or ed.get("data_gap") or []
+        reason_text = "; ".join(str(r) for r in reasons[:3]) or "已上传数据不足以验证假设"
+        blockers.append(f"数据与假设验证目标不匹配：{reason_text}")
+    elif adequacy_status == "partial":
+        warnings.append("数据仅部分匹配假设，小样验证应视为 exploratory pilot")
+
+    if ed.get("validation_blocked"):
+        blockers.append(
+            str(ed.get("validation_blocked_reason") or "实验设计已标记验证阻塞")
+        )
+
     if not available:
-        blockers.append("未检测到可用 CSV 列（请上传数据集或运行 Data Finder 合并）")
+        blockers.append("未检测到可用 CSV 列（请上传数据集）")
     if missing:
         warnings.append(f"推断所需列未命中: {', '.join(missing[:5])}")
     if sanity_executable is False:

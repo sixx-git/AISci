@@ -187,7 +187,7 @@ export function DataFinderPanel({
           多源科学数据查找与整合
         </h3>
         <p className="text-xs text-bp-muted mb-3">
-          默认按研究问题检索领域公开数据集；论文抽表/建库为高级工具，不参与 Pipeline 自迭代。
+          高级工具：不参与默认工作流。实验设计阶段的推荐数据集请查看「实验设计」页；此处仅供手动论文建库与多源检索。
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
           <input

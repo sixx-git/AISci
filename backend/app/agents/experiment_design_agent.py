@@ -121,7 +121,8 @@ class ExperimentDesignAgent:
                 prompt += f"\n\n{schema_prompt}"
             elif data_files:
                 prompt += (
-                    "\n\n【项目已上传数据集 — 必须基于以下真实文件设计实验，禁止编造或推荐替代公开数据集】\n"
+                    "\n\n【项目已上传数据集 — 须先评估数据是否足以验证假设；"
+                    "若不充分须在 limitations 中明确说明，并描述真正需要补充的数据类型】\n"
                 )
                 for fp in data_files[:12]:
                     prompt += f"- {fp}\n"
@@ -203,6 +204,7 @@ class ExperimentDesignAgent:
                 literature_facts or [],
                 required_data=required_data,
                 project_datasets=project_datasets or [],
+                skip_public_discovery=True,
             )
 
             ds_output = result.get("skill_outputs", {}).get("dataset_discovery", {})
@@ -217,8 +219,6 @@ class ExperimentDesignAgent:
                 result["project_datasets"] = [{"file_path": fp} for fp in data_files]
             if not result.get("project_datasets") and not result.get("recommended_public_datasets"):
                 result["data_gap"] = ["当前项目无可用数据集，且未找到匹配的公开数据集"]
-            elif result.get("project_datasets"):
-                result["data_gap"] = []
 
             resolved_datasets = result.get("project_datasets") or project_datasets or []
             spec = normalize_experiment_spec(result.get("experiment_spec") or {})
@@ -266,6 +266,7 @@ class ExperimentDesignAgent:
         literature_facts: List[Dict[str, Any]],
         required_data: Optional[str] = None,
         project_datasets: Optional[List[Dict[str, Any]]] = None,
+        skip_public_discovery: bool = False,
     ) -> Dict[str, Any]:
         import asyncio
 
@@ -354,11 +355,12 @@ class ExperimentDesignAgent:
 
             try:
                 discovery_skill = DatasetDiscoverySkill()
-                if data_files:
+                skip_discovery = skip_public_discovery
+                if skip_discovery:
                     outputs["dataset_discovery"] = {
                         "success": True,
                         "skipped": True,
-                        "reason": "项目已上传数据集，跳过公开数据集推荐",
+                        "reason": "本轮由 Pipeline 统一触发公开数据集检索",
                         "data": {"datasets": []},
                     }
                 else:
@@ -411,7 +413,7 @@ class ExperimentDesignAgent:
         if not project_datasets:
             return ""
         lines = [
-            "【项目已上传数据集 — 必须基于以下真实数据结构设计实验，禁止编造或推荐替代公开数据集】",
+            "【项目已上传数据集 — 须评估是否足以验证假设；不充分时说明缺口与所需数据类型】",
             "说明：以下为 schema 摘要（列名/类型/规模），非全量数据；小样验证阶段将使用完整文件。",
         ]
         for ds in project_datasets[:12]:

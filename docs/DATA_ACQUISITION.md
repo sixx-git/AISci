@@ -1,33 +1,28 @@
-# 多源数据采集（Data Acquisition）运维手册
+# 多源数据采集 — 高级工具运维手册（非 Pipeline 默认阶段）
 
-面向 AISci **Pipeline 第 3 阶段**与 **Data Finder** 面板。
+面向 **Data Finder 高级工具面板** 与手动 API，**不属于**默认 8 阶段 Pipeline。
 
-## 1. 设计原则（2026 简化）
+## 1. 设计原则（2026）
 
-**Pipeline 永久只做一件事**：根据研究问题检索**相关领域公开数据集**。
+**默认 Pipeline**：上传数据集 → 实验设计（含数据充分性评估）→ 小样验证。
 
-论文抽表抽图、对齐合并、Gap 补搜、Release Gate **已退出 Pipeline 自迭代**，仅作为独立高级工具保留，供后续功能开发调用。
+| 能力 | 默认 Pipeline | 独立高级工具 |
+|------|---------------|-------------|
+| 上传数据集 + 充分性评估 | ✅ | — |
+| 缺口时 DatasetDiscovery 推荐 URL | ✅ 实验设计阶段 | — |
+| 领域数据集检索 / 论文建库 | ❌ | `POST /data-finder/*` |
+| Gap 多轮补搜 | ❌（`enable_gap_search` 默认关） | `POST /gap-enrich` |
 
-| 能力 | Pipeline | 独立工具 |
-|------|----------|----------|
-| 领域数据集检索 | ✅ 默认 | `POST /acquire`、`POST /search` |
-| 论文抽表/图表 VLM | ❌ | `POST /build-library`、分步 API |
-| Gap 多轮补搜 | ❌ | `POST /gap-enrich`（建库后可选） |
-| Release Gate | ❌ | 仅 `build-library` 输出 |
-
-## 2. Pipeline 默认流程
+## 2. 默认 Pipeline 数据流
 
 ```
-研究问题 + DataSpec 提示
-        ↓
-  DataRequirementUnderstanding（LLM）
-        ↓
-  ExternalDatasetSearch + registry（HF / Zenodo / Figshare / Kaggle / GEO …）
-        ↓
-  external_candidates[] + data_spec.json
+用户上传 CSV
+    → 引擎探查 + DatasetSemanticUnderstanding
+    → 实验设计 Agent
+    → DataAdequacyAssessment（假设 ↔ 数据是否匹配）
+    → 不充分时 DatasetDiscovery 返回推荐数据集 URL
+    → 可执行性 Gate → 小样验证（仅 adequacy≠inadequate）
 ```
-
-典型耗时：**数十秒～2 分钟**。
 
 ## 3. 独立论文建库（高级工具）
 

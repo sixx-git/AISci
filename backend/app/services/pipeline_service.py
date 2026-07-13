@@ -2824,67 +2824,6 @@ class PipelineService:
                 results["literature_mining"] = lm
         return ctx
 
-    def _exec_data_acquisition(
-        self,
-        project_id: str,
-        research_question: str,
-        results: Dict[str, Any],
-        project_mode: str,
-        refinement_queries: Optional[List[str]] = None,
-        selected_hypothesis: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        from app.services.data_finder_service import get_data_finder_service
-
-        hg = results.get("hypothesis_generation", {})
-        hypotheses = hg.get("hypotheses", []) if hg else []
-        if not selected_hypothesis and hypotheses:
-            tree = hg.get("hypothesis_tree") or {}
-            sel_idx = tree.get("selected_hypothesis_index", 0)
-            if 0 <= sel_idx < len(hypotheses):
-                selected_hypothesis = hypotheses[sel_idx].get("hypothesis", "")
-            else:
-                selected_hypothesis = hypotheses[0].get("hypothesis", "")
-        if not selected_hypothesis:
-            ideation = results.get("ideation_novelty") or {}
-            angles = ideation.get("suggested_angles") or []
-            if angles:
-                selected_hypothesis = str(angles[0])[:200]
-
-        service = get_data_finder_service(self.db)
-        merged_refinement = list(refinement_queries or [])
-        for c in getattr(self, "_human_feedback_constraints", []) or []:
-            if c and c not in merged_refinement:
-                merged_refinement.append(c)
-        search_query = research_question
-        if merged_refinement:
-            search_query = f"{research_question} {' '.join(str(q) for q in merged_refinement[:6])}"[:800]
-
-        final = service.run_data_acquisition_sync(
-            project_id=project_id,
-            research_question=search_query,
-            selected_hypothesis=selected_hypothesis or "",
-            project_mode=project_mode,
-        )
-
-        from app.services.data_finder_slim import slim_data_acquisition_output, slim_data_finder_payload
-
-        slim_final = slim_data_finder_payload(final)
-        output = {
-            "data_acquisition": final.get("data_acquisition", {}),
-            "search": slim_final,
-            "extract": slim_final,
-            "paper_link_extractions": final.get("paper_extractions", [])[:20],
-            "refinement_queries": refinement_queries or [],
-        }
-        slim_output = slim_data_acquisition_output(output)
-        results["data_acquisition"] = slim_output
-        results["data_finder"] = slim_output
-        logger.info(
-            "[DataAcquisition] 完成 dataset_discovery: "
-            f"candidates={len(final.get('external_candidates', []))}"
-        )
-        return slim_output
-
     def _exec_knowledge_gap(
         self,
         literature_mining: Optional[Dict],
@@ -3257,9 +3196,6 @@ class PipelineService:
         for ds in data_context.get("datasets") or []:
             if isinstance(ds, dict) and ds.get("file_path"):
                 data_files.append(str(ds["file_path"]))
-        merged_csv = data_context.get("data_finder_merged_csv")
-        if merged_csv and merged_csv not in data_files:
-            data_files.insert(0, str(merged_csv))
         lit_mining = self._stage_results.get("literature_mining", {})
 
         if project_mode == ProjectMode.FEDERATED_LEARNING.value:
@@ -3323,7 +3259,11 @@ class PipelineService:
                     for d in project_datasets
                     if isinstance(d, dict)
                 )
-            result_dict["data_gap"] = []
+            result_dict["data_gap"] = list(dict.fromkeys(
+                (result_dict.get("data_gap") or [])
+                if isinstance(result_dict.get("data_gap"), list)
+                else ([result_dict["data_gap"]] if result_dict.get("data_gap") else [])
+            ))
             src_lines = []
             for d in project_datasets:
                 if not isinstance(d, dict):
@@ -3351,6 +3291,13 @@ class PipelineService:
         )
         result_dict["verifiable_hypothesis"] = spec
         result_dict["hypothesis"] = best_review.get("hypothesis", "") or ""
+        self._assess_and_merge_data_adequacy(
+            result_dict,
+            best_review=best_review if isinstance(best_review, dict) else {},
+            hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
+            project_datasets=project_datasets,
+            project_mode=project_mode,
+        )
         result_dict["data_requirements"] = self._build_data_requirements(
             best_review=best_review if isinstance(best_review, dict) else {},
             hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
@@ -3366,6 +3313,59 @@ class PipelineService:
             self._stage_results["hypothesis_generation"] = refreshed
         return result_dict
     
+    def _assess_and_merge_data_adequacy(
+        self,
+        result_dict: Dict[str, Any],
+        *,
+        best_review: Dict[str, Any],
+        hypo_meta: Dict[str, Any],
+        project_datasets: List[Dict[str, Any]],
+        project_mode: str,
+    ) -> Dict[str, Any]:
+        """运行 DataAdequacyAssessmentSkill 并合并缺口到实验设计。"""
+        import asyncio
+        from app.skills.data.data_adequacy_assessment_skill import (
+            DataAdequacyAssessmentSkill,
+            merge_adequacy_into_experiment_design,
+        )
+
+        uploaded = [d for d in project_datasets if isinstance(d, dict)]
+
+        async def _run():
+            skill = DataAdequacyAssessmentSkill()
+            return await skill.run(
+                input_data={
+                    "hypothesis": result_dict.get("hypothesis") or best_review.get("hypothesis") or "",
+                    "required_data": best_review.get("required_data") or hypo_meta.get("required_data") or "",
+                    "validation_target": hypo_meta.get("validation_target") or "",
+                    "methods": result_dict.get("methods") or "",
+                    "metrics": result_dict.get("metrics") or "",
+                    "uploaded_datasets": uploaded,
+                    "project_mode": project_mode,
+                },
+                context={"stage": "experiment_design", "project_id": getattr(self.db_pipeline_run, "project_id", "")},
+            )
+
+        try:
+            skill_result = asyncio.run(_run())
+            adequacy = skill_result.data if skill_result.success and skill_result.data else {}
+        except Exception as exc:
+            logger.warning("[Pipeline] 数据充分性评估失败: %s", exc)
+            from app.skills.data.data_adequacy_assessment_skill import rule_fallback_adequacy
+            adequacy = rule_fallback_adequacy(
+                hypothesis=result_dict.get("hypothesis") or best_review.get("hypothesis") or "",
+                required_data=best_review.get("required_data") or "",
+                validation_target=hypo_meta.get("validation_target") or "",
+                uploaded_datasets=uploaded,
+            )
+
+        merge_adequacy_into_experiment_design(
+            result_dict,
+            adequacy,
+            round_id=self.run_id,
+        )
+        return adequacy
+
     def _build_data_requirements(
         self,
         *,
@@ -3395,16 +3395,52 @@ class PipelineService:
         recommended = self._normalize_recommended_datasets(
             result_dict.get("recommended_public_datasets") or []
         )
-        if not recommended and not uploaded:
+        adequacy = result_dict.get("data_adequacy") if isinstance(result_dict.get("data_adequacy"), dict) else {}
+        need_discovery = (
+            adequacy.get("status") in ("inadequate", "partial")
+            or not uploaded
+            or bool(gaps)
+        )
+        if need_discovery and not recommended:
+            search_query = (
+                adequacy.get("recommended_search_query")
+                or required_data
+                or best_review.get("hypothesis")
+                or ""
+            )
+            rd_list = adequacy.get("required_datasets") or []
+            keywords: List[str] = []
+            for rd in rd_list:
+                if isinstance(rd, dict):
+                    keywords.extend(rd.get("search_keywords") or [])
             recommended = self._fetch_external_dataset_recommendations({
                 "hypothesis": best_review.get("hypothesis") or "",
                 "required_data": required_data,
+                "research_question": search_query,
                 "datasets": result_dict.get("datasets") or "",
                 "source_data": result_dict.get("source_data") or "",
                 "target_data": result_dict.get("target_data") or "",
                 "methods": result_dict.get("methods") or "",
                 "metrics": metrics,
+                "keywords": keywords[:10],
             })
+            for item in recommended:
+                item["source"] = "dataset_discovery"
+                item["round_id"] = self.run_id
+            if recommended:
+                result_dict["recommended_public_datasets"] = recommended
+
+        from app.skills.data.data_adequacy_assessment_skill import (
+            resolve_next_action,
+            resolve_upload_status,
+        )
+
+        upload_status = resolve_upload_status(adequacy, len(uploaded))
+        next_action = resolve_next_action(adequacy, len(uploaded))
+        if upload_status == "ready" and gaps:
+            upload_status = "partial"
+            if next_action == "proceed_validation":
+                next_action = "revise_hypothesis_or_add_data"
         required_columns: List[str] = []
         if spec.get("target_column"):
             required_columns.append(str(spec["target_column"]))
@@ -3412,7 +3448,17 @@ class PipelineService:
             if col and col not in required_columns:
                 required_columns.append(str(col))
         return {
-            "upload_status": "ready" if uploaded else "pending_upload",
+            "upload_status": upload_status,
+            "adequacy": {
+                "status": adequacy.get("status"),
+                "score": adequacy.get("score"),
+                "source": adequacy.get("source"),
+                "mismatch_reasons": adequacy.get("mismatch_reasons") or [],
+                "what_uploaded_can_do": adequacy.get("what_uploaded_can_do") or [],
+                "what_hypothesis_needs": adequacy.get("what_hypothesis_needs") or [],
+                "assessment_round_id": adequacy.get("assessment_round_id") or self.run_id,
+            },
+            "required_datasets": adequacy.get("required_datasets") or [],
             "uploaded_dataset_count": len(uploaded),
             "uploaded_datasets": [
                 {
@@ -3432,13 +3478,31 @@ class PipelineService:
             "has_analysis_script": bool((result_dict.get("analysis_script") or "").strip()),
             "recommended_public_datasets": recommended[:8],
             "gaps": gaps,
-            "summary": (
-                f"已上传 {len(uploaded)} 个数据集，实验方案与 analysis_script 已绑定 experiment_spec。"
-                if uploaded
-                else "请先在「数据集」页上传 CSV/表格数据；上传后重跑实验设计以生成可执行方案与小样验证。"
-            ),
-            "next_action": "upload_datasets" if not uploaded else "review_experiment_plan",
+            "summary": self._build_data_requirements_summary(uploaded, adequacy, gaps),
+            "next_action": next_action,
         }
+
+    @staticmethod
+    def _build_data_requirements_summary(
+        uploaded: List[Dict[str, Any]],
+        adequacy: Dict[str, Any],
+        gaps: List[str],
+    ) -> str:
+        status = adequacy.get("status")
+        if not uploaded:
+            return "请先在「数据集」页上传 CSV/表格数据；上传后重跑实验设计以生成可执行方案与小样验证。"
+        if status == "inadequate":
+            reasons = adequacy.get("mismatch_reasons") or gaps[:2]
+            hint = reasons[0] if reasons else "已上传数据与假设验证目标不匹配"
+            return f"已上传 {len(uploaded)} 个数据集，但数据不充分：{hint}。请下载推荐数据集或调整假设后重跑实验设计。"
+        if status == "partial":
+            return (
+                f"已上传 {len(uploaded)} 个数据集，数据部分匹配假设，可进行探索性 pilot；"
+                "完整验证建议补充推荐数据集。"
+            )
+        if gaps:
+            return f"已上传 {len(uploaded)} 个数据集，仍有字段缺口：{'; '.join(str(g) for g in gaps[:2])}"
+        return f"已上传 {len(uploaded)} 个数据集，数据与实验方案已对齐，可进入小样验证。"
 
     @staticmethod
     def _normalize_recommended_datasets(items: Any) -> List[Dict[str, Any]]:
@@ -3523,7 +3587,6 @@ class PipelineService:
         if project_id:
             from app.services.modeling_service import ModelingService
             from app.services.dataset_service import DatasetService
-            from app.services.data_finder_service import get_data_finder_service
 
             modeling_results = ModelingService(self.db).load_project_modeling_results(project_id)
             if not multimodal_datasets:
@@ -3555,17 +3618,6 @@ class PipelineService:
                             "extra_metadata": ds.extra_metadata,
                         }
                     )
-                df_results = get_data_finder_service(self.db).load_results(project_id) or {}
-                merged = df_results.get("merged") if isinstance(df_results.get("merged"), dict) else {}
-                merged_path = merged.get("cleaned_csv_path") or merged.get("merged_csv_path")
-                if merged_path and os.path.exists(merged_path):
-                    multimodal_datasets.insert(0, {
-                        "dataset_id": "data_finder_merged",
-                        "filename": os.path.basename(merged_path),
-                        "file_path": merged_path,
-                        "data_type": "tabular",
-                        "source": "data_finder",
-                    })
 
         csv_data_path = None
         for ds in multimodal_datasets:

@@ -183,20 +183,7 @@ def main() -> int:
         "app.agents.literature_mining_agent.search_vector_store",
         return_value=MOCK_SEARCH_RESULTS,
     )
-    data_acq_patcher = patch.object(
-        PipelineService,
-        "_exec_data_acquisition",
-        return_value={
-            "data_acquisition": {"steps": ["mock"], "stats": {"release_gate_passed": True}},
-            "search": {},
-            "extract": {},
-            "paper_link_extractions": [],
-            "refinement_queries": [],
-            "gap_enrichment": {},
-        },
-    )
     vector_patcher.start()
-    data_acq_patcher.start()
     use_mock(preset_responses=PRESET_RESPONSES)
 
     print("=" * 60)
@@ -274,7 +261,6 @@ def main() -> int:
         traceback.print_exc()
         return 1
     finally:
-        data_acq_patcher.stop()
         vector_patcher.stop()
         restore_real_client()
         db.close()
