@@ -303,9 +303,12 @@ class HypothesisGenerationAgent:
             page = fact.get("page_number", "")
 
             modality = fact.get("modality") or fact.get("source_type", "")
+            chunk_id = str(fact.get("source_chunk_id") or fact.get("chunk_id") or "")
             lines = [f"### Fact {idx} (ID: {fid})"]
             if modality:
                 lines.append(f"模态: {modality}")
+            if str(fid).startswith("paper_fact_") or chunk_id.startswith("paper_"):
+                lines.append("⚠ 证据级别: 摘要级代理事实（非全文 chunk）")
             lines.append(f"陈述: {content}")
             if source:
                 lines.append(f"来源: {source}")
@@ -326,12 +329,13 @@ class HypothesisGenerationAgent:
 
         formatted = []
         for idx, gap in enumerate(gaps, 1):
+            gap_id = gap.get("gap_id") or f"gap_{idx:03d}"
             desc = gap.get("description", gap.get("gap", str(gap)))
             value = gap.get("potential_value", "")
             if value:
-                formatted.append(f"{idx}. {desc}\n   研究价值：{value}")
+                formatted.append(f"{idx}. [{gap_id}] {desc}\n   研究价值：{value}")
             else:
-                formatted.append(f"{idx}. {desc}")
+                formatted.append(f"{idx}. [{gap_id}] {desc}")
 
         return "\n".join(formatted)
 

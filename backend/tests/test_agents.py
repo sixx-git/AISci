@@ -131,21 +131,30 @@ class TestKnowledgeGapAgent:
         assert agent is not None
 
     @patch('app.agents.knowledge_gap_agent.qwen_structured_chat')
-    def test_identify_gaps(self, mock_qwen):
+    def test_analyze_gaps(self, mock_qwen):
         """测试识别知识缺口"""
         mock_qwen.return_value = {
+            "known_facts": [],
             "knowledge_gaps": [
                 {
-                    "description": "缺口描述1",
-                    "significance": "重要性1",
-                    "research_opportunity": "研究机会1"
+                    "gap_id": "gap_001",
+                    "description": "尚未解决的新挑战：缺口描述1",
+                    "basis": ["fact_001"],
+                    "potential_value": "研究价值1",
                 }
             ],
-            "priority_areas": ["优先领域1"]
+            "contradictions": [],
+            "possible_connections": [],
+            "research_opportunities": [],
         }
         
         agent = KnowledgeGapAgent()
-        response = agent.identify_gaps("研究问题", [])
+        response = agent.analyze(
+            facts=[],
+            uncertain_points=[],
+            research_question="测试研究问题",
+            main_contradiction="主要矛盾",
+        )
         
         assert response is not None
         assert len(response.knowledge_gaps) >= 1

@@ -25,7 +25,7 @@ class TestLiteratureImportStats(unittest.TestCase):
         db.query.return_value.filter.return_value.first.return_value = doc
 
         rec = {
-            "discovery_mode": "llm_recommend_v1",
+            "discovery_mode": "llm_recommend_web_v3",
             "papers": [
                 {
                     "title": "Verified Paper",

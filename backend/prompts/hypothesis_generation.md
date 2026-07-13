@@ -61,6 +61,18 @@
 ### 9. dataset_field_refs 引用真实字段
 dataset_field_refs 中的字段必须存在于数据上下文的"可用字段"或"数据集详情"中。如果没有真实字段可用，dataset_field_refs 必须为 []。
 
+### 10. 证据链规则（必做）
+1. 每条假设的 `rationale` 必须引用 ≥1 个 knowledge_gaps 的 **gap_id**（格式：`gap_001`）
+2. `supporting_fact_ids` 中的事实必须**直接支撑**假设中的核心机制：
+   - 不可用「GAN 综述」支撑「动态加权聚合」
+   - 不可用「XAI manifesto」支撑具体检测任务，除非 fact 明确讨论该交叉点
+3. 证据分级：
+   - fact 标注为「摘要级代理事实」→ `evidence_level` 最高 **medium**
+   - 有真实 chunk 引用（非 paper_N 伪 chunk）→ 可标 high/medium
+   - 无 `supporting_fact_ids` → 必须 **low**
+4. 每条假设应对应问题理解中的一个研究方向，在 `question_alignment` 中写明
+5. 禁止为「凑创新点」引入原题未提及的方向（如单独的 XAI 框架，除非 gaps 明确支持）
+
 ## 输入信息
 研究问题：
 {{research_question}}
@@ -114,7 +126,10 @@ dataset_field_refs 中的字段必须存在于数据上下文的"可用字段"�
 
 ## 质量检查清单（生成假设后必须自查）
 - [ ] 每条 hypothesis 是否直接回答了研究问题？（检查 question_alignment 字段）
+- [ ] rationale 是否引用了至少一个 gap_id？
 - [ ] supporting_fact_ids 是否全部存在于"可用 Fact ID 列表"中？
+- [ ] supporting_fact_ids 是否与假设机制直接相关（非泛综述事实硬套）？
+- [ ] 摘要级 fact 的 evidence_level 是否 ≤ medium？
 - [ ] dataset_field_refs 是否全部来源于数据上下文的真实字段？如果没有则应为 []
 - [ ] 如果没有引用任何事实/数据/关联证据，evidence_level 是否设为 "low"？
 - [ ] validation_target 是否是具体的可观测指标（非空泛表述）？

@@ -609,6 +609,7 @@ class LiteratureMiningAgent:
                     "page_number": 1,
                     "quote_text": "从 chunk 原文中引用的原句",
                     "relevance_score": 0.85,
+                    "challenge_dimension": "分布偏移",
                 }
             ],
             "evidence": [

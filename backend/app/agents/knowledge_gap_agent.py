@@ -77,7 +77,11 @@ class KnowledgeGapAgent:
     def analyze(
         self,
         facts: List[ScienceFact],
-        uncertain_points: List[str]
+        uncertain_points: List[str],
+        *,
+        research_question: str = "",
+        main_contradiction: str = "",
+        expected_output_summary: str = "",
     ) -> KnowledgeGapResponse:
         """
         分析知识缺口
@@ -85,18 +89,25 @@ class KnowledgeGapAgent:
         Args:
             facts: 科学事实列表
             uncertain_points: 不确定的点列表
+            research_question: 用户研究问题（缺口锚点）
+            main_contradiction: 问题理解中的主要矛盾
+            expected_output_summary: 问题理解中的期望输出摘要
             
         Returns:
             KnowledgeGapResponse: 分析结果
         """
         try:
-            # 格式化输入
             formatted_facts = self._format_facts(facts)
             formatted_uncertain = self._format_uncertain(uncertain_points)
             
-            # 调用 Qwen 分析
             logger.info(f"开始分析知识缺口，共 {len(facts)} 个事实")
-            result = self._analyze_knowledge_gaps(formatted_facts, formatted_uncertain)
+            result = self._analyze_knowledge_gaps(
+                formatted_facts,
+                formatted_uncertain,
+                research_question=(research_question or "").strip(),
+                main_contradiction=(main_contradiction or "").strip(),
+                expected_output_summary=(expected_output_summary or "").strip(),
+            )
             
             # 验证并标准化结果
             response = self._validate_and_normalize(result, facts)
@@ -130,12 +141,17 @@ class KnowledgeGapAgent:
                 source_title = fact.get("source_paper_title", fact.get("source", ""))
                 fact_id = fact.get("fact_id", fact.get("id", ""))
                 content = fact.get("content", fact.get("fact", str(fact)))
+                chunk_id = str(fact.get("source_chunk_id") or fact.get("chunk_id") or "")
             else:
                 source_title = getattr(fact, "source_paper_title", "")
                 fact_id = getattr(fact, "fact_id", "")
                 content = getattr(fact, "content", str(fact))
+                chunk_id = str(getattr(fact, "source_chunk_id", "") or "")
             source_info = f" (来源: {source_title})" if source_title else ""
-            fact_text = f"[{fact_id}] {content}{source_info}"
+            quality = ""
+            if str(fact_id).startswith("paper_fact_") or chunk_id.startswith("paper_"):
+                quality = " [摘要级代理事实，非全文 chunk]"
+            fact_text = f"[{fact_id}] {content}{source_info}{quality}"
             facts_text.append(fact_text)
         
         return "\n\n".join(facts_text)
@@ -158,26 +174,23 @@ class KnowledgeGapAgent:
     def _analyze_knowledge_gaps(
         self,
         formatted_facts: str,
-        formatted_uncertain: str
+        formatted_uncertain: str,
+        *,
+        research_question: str = "",
+        main_contradiction: str = "",
+        expected_output_summary: str = "",
     ) -> dict:
-        """
-        调用 Qwen 分析知识缺口
-
-        Args:
-            formatted_facts: 格式化的事实
-            formatted_uncertain: 格式化的不确定点
-
-        Returns:
-            LLM 返回的字典
-        """
+        """调用 Qwen 分析知识缺口。"""
         prompt_loader = get_prompt_loader()
         
-        # 构建 Prompt
         prompt = prompt_loader.render_template(
             "knowledge_gap",
             {
                 "facts_list": formatted_facts,
-                "uncertain_list": formatted_uncertain
+                "uncertain_list": formatted_uncertain,
+                "research_question": research_question or "（未提供）",
+                "main_contradiction": main_contradiction or "（未提供）",
+                "expected_output_summary": expected_output_summary or "（未提供）",
             }
         )
 

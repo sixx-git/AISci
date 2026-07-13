@@ -5,6 +5,7 @@
 | 文件 | Pipeline 阶段 | 调用 Agent | 主要输出 |
 |------|---------------|------------|----------|
 | [problem_understanding.md](./problem_understanding.md) | `problem_understanding` | ProblemUnderstandingAgent | 问题陈述、领域、关键词、边界、科学逻辑（矛盾/对象拆解） |
+| [literature_recommendation.md](./literature_recommendation.md) | `literature_mining`（发现子阶段） | LiteratureRecommendationService | 子主题、推荐论文、search_queries |
 | [literature_mining.md](./literature_mining.md) | `literature_mining` | LiteratureMiningAgent | facts、citation_map、uncertain_points |
 | [knowledge_gap.md](./knowledge_gap.md) | `knowledge_gap` | KnowledgeGapAgent | knowledge_gaps、contradictions、研究机会 |
 | [hypothesis_generation.md](./hypothesis_generation.md) | `hypothesis_generation` | HypothesisGenerationAgent | 候选假设 + supporting_fact_ids + 数据字段引用 |

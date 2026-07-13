@@ -51,7 +51,7 @@ class TestPipelineService:
             agent = Mock()
             mock_response = Mock()
             mock_response.model_dump = Mock(return_value={"knowledge_gaps": []})
-            agent.identify_gaps = Mock(return_value=mock_response)
+            agent.analyze = Mock(return_value=mock_response)
             mock.return_value = agent
             mocks['gap'] = mock
 
@@ -162,7 +162,7 @@ class TestPipelineStages:
             agent.analyze = Mock(return_value=mock_response)
             mock.return_value = agent
             
-            result = service._run_problem_understanding("测试问题")
+            result = service._exec_problem_understanding("测试问题", "project-id")
             
             agent.analyze.assert_called()
             assert result is not None
@@ -178,10 +178,7 @@ class TestPipelineStages:
             agent.mine = Mock(return_value=mock_response)
             mock.return_value = agent
             
-            # Mock 获取文档
-            service._get_project_documents = Mock(return_value=[])
-            
-            result = service._run_literature_mining("project_id", "问题")
+            result = service._exec_literature_mining("project_id", "问题", {})
             
             agent.mine.assert_called()
             assert result is not None
@@ -197,7 +194,11 @@ class TestPipelineStages:
             agent.generate = Mock(return_value=mock_response)
             mock.return_value = agent
             
-            result = service._run_hypothesis_generation({"problem": "test"}, [], [])
+            result = service._exec_hypothesis_generation(
+                {"problem_statement": "test", "constraints": []},
+                {"facts": []},
+                {"knowledge_gaps": []},
+            )
             
             agent.generate.assert_called()
             assert result is not None
@@ -206,14 +207,15 @@ class TestPipelineStages:
         """测试报告生成阶段"""
         service = PipelineService(db_session)
         
-        with patch('app.services.pipeline_service.get_report_generation_agent') as mock:
+        with patch('app.services.pipeline_service.get_report_generation_agent') as mock, \
+             patch.object(PipelineService, '_apply_plot_quality_loop', side_effect=lambda d, **_: d):
             agent = Mock()
             mock_response = Mock()
             mock_response.model_dump = Mock(return_value={"paper_title": "测试"})
-            agent.generate = Mock(return_value=mock_response)
+            agent.generate_report = Mock(return_value=mock_response)
             mock.return_value = agent
             
-            result = service._run_report_generation({}, [], [], {}, {}, {})
+            result = service._exec_report_generation({})
             
-            agent.generate.assert_called()
+            agent.generate_report.assert_called()
             assert result is not None

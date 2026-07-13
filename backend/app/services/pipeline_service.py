@@ -962,7 +962,11 @@ class PipelineService:
 
         self._run_stage(
             stages, 2, results, research_question, project_id,
-            lambda: self._exec_knowledge_gap(lm, project_id),
+            lambda: self._exec_knowledge_gap(
+                lm,
+                project_id,
+                results.get("problem_understanding"),
+            ),
         )
 
         ideation = {}
@@ -2068,6 +2072,7 @@ class PipelineService:
                     lambda: self._exec_knowledge_gap(
                         results.get("literature_mining"),
                         project_id,
+                        results.get("problem_understanding"),
                     ))
             
             # ── 阶段 4: HypothesisGenerationAgent ──
@@ -2839,12 +2844,29 @@ class PipelineService:
         self,
         literature_mining: Optional[Dict],
         project_id: str = "",
+        problem_understanding: Optional[Dict] = None,
     ) -> dict:
         agent = get_knowledge_gap_agent()
         lm = self._enrich_literature_mining(literature_mining)
         facts = lm.get("facts", [])
         uncertain_points = lm.get("uncertain_points", [])
-        result = agent.analyze(facts=facts, uncertain_points=uncertain_points)
+        pu = problem_understanding if isinstance(problem_understanding, dict) else {}
+        rq = resolve_research_question_from_pu(
+            pu,
+            fallback=self.db_pipeline_run.research_question if self.db_pipeline_run else "",
+        )
+        expected = pu.get("expected_output") or []
+        if isinstance(expected, list):
+            expected_summary = "; ".join(str(x) for x in expected if x)[:500]
+        else:
+            expected_summary = str(expected)[:500] if expected else ""
+        result = agent.analyze(
+            facts=facts,
+            uncertain_points=uncertain_points,
+            research_question=rq,
+            main_contradiction=str(pu.get("main_contradiction") or "")[:500],
+            expected_output_summary=expected_summary,
+        )
         return self._safe_model_dump(result)
     
     def _exec_hypothesis_generation(
