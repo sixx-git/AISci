@@ -285,13 +285,18 @@ def list_project_hypotheses(
     """
     hypo_service = HypothesisService(db)
 
-    # 1. 尝试从 Hypothesis 表读取
+    # 1. 尝试从 Hypothesis 表读取；若为空则从 Pipeline 物化
     hypotheses = hypo_service.get_hypotheses_by_project(project_id)
+    if not hypotheses:
+        hypotheses = hypo_service.materialize_from_latest_pipeline(project_id)
 
     if hypotheses:
+        responses = [hypo_service.to_response(h) for h in hypotheses]
+        from app.services.pipeline_output_service import enrich_hypothesis_responses_with_reviews
+        responses = enrich_hypothesis_responses_with_reviews(db, project_id, responses)
         return success_response(
-            data=[HypothesisResponse.model_validate(h) for h in hypotheses],
-            message=f"获取假设列表成功，共 {len(hypotheses)} 条"
+            data=responses,
+            message=f"获取假设列表成功，共 {len(responses)} 条"
         )
 
     # 2. Fallback: 从最近一次 PipelineRun 的阶段输出中解析

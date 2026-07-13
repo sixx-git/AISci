@@ -1,17 +1,37 @@
-import type { BackendHypothesis, BackendEvidence } from '@/services/hypothesisService';
+import type { BackendHypothesis, BackendReviewScores } from '@/services/hypothesisService';
 import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
+function scoreTo100(value?: number | null): number | undefined {
+  if (value == null || Number.isNaN(value)) return undefined;
+  if (value <= 10) return Math.round(value * 10);
+  return Math.round(value);
+}
+
+function mapReviewScores(rs?: BackendReviewScores | null) {
+  if (!rs) return {};
+  return {
+    novelty: scoreTo100(rs.novelty),
+    verifiability: scoreTo100(rs.testability),
+    dataAvailability: scoreTo100(rs.data_availability),
+    overallScore: scoreTo100(rs.overall_score),
+  };
+}
+
 export function mapBackendHypothesisToDetailed(h: BackendHypothesis): DetailedHypothesis {
+  const fromReview = mapReviewScores(h.review_scores);
+  const fallbackOverall = Math.round((h.confidence || 0.5) * 100);
+
   return {
     id: h.id,
     title: h.hypothesis || '未命名假设',
     content: h.hypothesis || '',
     reasoning: h.rationale || '',
     evidenceCount: (h.supporting_fact_ids || []).length + (h.data_evidence_ids || []).length,
-    novelty: 80,
-    verifiability: h.testability === 'high' ? 88 : h.testability === 'low' ? 55 : 75,
-    dataAvailability: h.required_data === 'high' ? 85 : h.required_data === 'low' ? 55 : 70,
-    overallScore: Math.round((h.confidence || 0.5) * 100),
+    novelty: fromReview.novelty ?? 0,
+    verifiability: fromReview.verifiability ?? 0,
+    dataAvailability: fromReview.dataAvailability ?? 0,
+    overallScore: fromReview.overallScore ?? fallbackOverall,
+    hasReviewScores: Boolean(h.review_scores),
     riskWarning: h.risk || '',
     isPrimary: h.priority === 1,
     status: (h.status === 'testing' || h.status === 'accepted' || h.status === 'confirmed')

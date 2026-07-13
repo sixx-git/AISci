@@ -3124,60 +3124,14 @@ class PipelineService:
         review_result: Dict[str, Any],
     ) -> None:
         """将集成评审结果回写至 DB 假设记录。"""
-        from app.services.hypothesis_service import HypothesisService
-
-        hypo_svc = HypothesisService(self.db)
-        db_hypos = hypo_svc.get_hypotheses_by_project(project_id, limit=50)
-        if not db_hypos:
-            return
-
-        reviews = review_result.get("reviews") or []
-        ensemble = (review_result.get("skill_outputs") or {}).get("ensemble_review") or {}
-        primary_idx = review_result.get("primary_index")
-        if primary_idx is None:
-            primary_idx = ensemble.get("target_hypothesis_index", 0)
         try:
-            primary_idx = int(primary_idx)
-        except (TypeError, ValueError):
-            primary_idx = 0
-
-        decision = ensemble.get("decision") or review_result.get("ensemble_decision")
-        overall = ensemble.get("overall") or review_result.get("ensemble_overall")
-
-        hg_hypos = hypothesis_generation.get("hypotheses") or []
-        for i, review in enumerate(reviews):
-            review_text = (review.get("hypothesis") or "").strip()
-            db_hypo = None
-            if i < len(db_hypos):
-                db_hypo = db_hypos[i]
-            if review_text:
-                for h in db_hypos:
-                    if h.hypothesis.strip() == review_text or review_text in h.hypothesis:
-                        db_hypo = h
-                        break
-            if not db_hypo and i < len(hg_hypos):
-                hypo_text = (hg_hypos[i].get("hypothesis") or "").strip()
-                for h in db_hypos:
-                    if h.hypothesis.strip() == hypo_text:
-                        db_hypo = h
-                        break
-            if not db_hypo:
-                continue
-
-            score = review.get("overall_score")
-            if score is None and i == primary_idx:
-                score = overall
-            confidence = float(score or 5.0) / 10.0
-            status = db_hypo.status or "draft"
-            if i == primary_idx:
-                if decision == "Accept":
-                    status = "accepted"
-                elif decision == "Reject":
-                    status = "rejected"
-            hypo_svc.update_hypothesis(db_hypo.id, {"confidence": confidence, "status": status})
-
-        if 0 <= primary_idx < len(db_hypos):
-            hypo_svc.set_primary_hypothesis(project_id, db_hypos[primary_idx].id)
+            HypothesisService(self.db).apply_review_scores_to_hypotheses(
+                project_id,
+                hypothesis_generation,
+                review_result,
+            )
+        except Exception as exc:
+            logger.warning(f"回写假设评审分数失败: {exc}")
     
     def _exec_experiment_design(
         self,
@@ -3917,98 +3871,12 @@ class PipelineService:
     
     def _save_hypotheses(self, project_id: str, research_question: str, results: Dict[str, Any]):
         """保存假设和证据链到数据库"""
-        hg = results.get("hypothesis_generation", {})
-        lm = results.get("literature_mining", {})
-        if not hg or not hg.get("hypotheses"):
-            return
-
-        alignment_data = hg.get("alignment", {})
-        alignments = alignment_data.get("alignments", []) if alignment_data else []
-
-        # 为每条假设附上对齐结果
-        hypotheses_with_alignment = []
-        for i, h in enumerate(hg["hypotheses"]):
-            h = dict(h)
-            if i < len(alignments):
-                a = alignments[i]
-                h["alignment_score"] = a.get("alignment_score")
-                h["off_topic"] = a.get("off_topic")
-                h["off_topic_reason"] = a.get("off_topic_reason")
-                h["matched_keywords"] = a.get("matched_keywords")
-                h["missing_keywords"] = a.get("missing_keywords")
-            hypotheses_with_alignment.append(h)
-
-        hypo_service = HypothesisService(self.db)
-        created_hypos = hypo_service.create_hypotheses_batch(
-            project_id=project_id,
-            research_question=research_question,
-            hypotheses_list=hypotheses_with_alignment
+        HypothesisService(self.db).persist_hypotheses_from_pipeline_results(
+            project_id,
+            research_question,
+            results,
+            apply_reviews=False,
         )
-
-        from app.services.evidence_reasoning_service import get_evidence_reasoning_service
-        er_service = get_evidence_reasoning_service()
-
-        # ── 为每条假设创建证据链：优先 evidence_chain，其次 supporting_fact_ids ──
-        all_facts = lm.get("facts", [])
-        for idx, db_hypo in enumerate(created_hypos):
-            hypo_data = hypotheses_with_alignment[idx] if idx < len(hypotheses_with_alignment) else {}
-            chain = hypo_data.get("evidence_chain")
-            if chain:
-                er_service.save_evidence_chain(project_id, db_hypo.id, chain)
-                final_text = chain.get("final_version") or hypo_data.get("hypothesis")
-                if final_text and final_text != db_hypo.hypothesis:
-                    hypo_service.update_hypothesis(db_hypo.id, {"hypothesis": final_text, "rationale": db_hypo.rationale})
-
-                evidence_items = (chain.get("supporting_evidence") or []) + (chain.get("counter_evidence") or [])
-                facts_for_db = []
-                for ev in evidence_items:
-                    facts_for_db.append(
-                        {
-                            "fact_text": ev.get("claim") or ev.get("quote_or_summary", ""),
-                            "quote_text": ev.get("quote_or_summary", ""),
-                            "source_paper_title": ev.get("source_title", ""),
-                            "document_id": ev.get("paper_id") or ev.get("document_id"),
-                            "relevance_score": ev.get("relevance_score", 0.5),
-                            "extra_metadata": json.dumps(
-                                {
-                                    "stance": ev.get("stance"),
-                                    "stance_reason": ev.get("stance_reason"),
-                                    "reliability_score": ev.get("reliability_score"),
-                                    "evidence_id": ev.get("evidence_id"),
-                                },
-                                ensure_ascii=False,
-                            ),
-                        }
-                    )
-                if facts_for_db:
-                    hypo_service.create_evidence_batch(
-                        project_id=project_id,
-                        hypothesis_id=db_hypo.id,
-                        facts=facts_for_db,
-                    )
-                continue
-
-            raw_ids = db_hypo.supporting_fact_ids
-            try:
-                target_ids = json.loads(raw_ids) if raw_ids else []
-            except (json.JSONDecodeError, TypeError):
-                target_ids = []
-            if not isinstance(target_ids, list):
-                target_ids = []
-
-            if target_ids:
-                # 只保留与 supporting_fact_ids 匹配的事实
-                matched_facts = [f for f in all_facts if f.get("fact_id") in target_ids]
-            else:
-                # 没有 supporting_fact_ids: 不创建证据链
-                matched_facts = []
-
-            if matched_facts:
-                hypo_service.create_evidence_batch(
-                    project_id=project_id,
-                    hypothesis_id=db_hypo.id,
-                    facts=matched_facts,
-                )
     
     @staticmethod
     def _safe_model_dump(obj) -> dict:

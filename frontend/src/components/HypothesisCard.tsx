@@ -94,8 +94,14 @@ export function HypothesisCard({
         </div>
         <div className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg shrink-0', oc.bg)}>
           <CheckCircle2 className={cn('w-4 h-4', oc.text)} />
-          <span className={cn('text-lg font-bold font-mono', oc.text)}>{hypothesis.overallScore}</span>
-          <span className="text-xs text-bp-muted">/100</span>
+          {hypothesis.hasReviewScores || hypothesis.overallScore > 0 ? (
+            <>
+              <span className={cn('text-lg font-bold font-mono', oc.text)}>{hypothesis.overallScore}</span>
+              <span className="text-xs text-bp-muted">/100</span>
+            </>
+          ) : (
+            <span className="text-xs text-bp-muted">待评审</span>
+          )}
         </div>
       </div>
 

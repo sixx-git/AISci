@@ -72,6 +72,33 @@ def create_tables():
     migrate_pipeline_runs_table()
     migrate_pipeline_stage_executions_table()
     migrate_multimodal_assets_table()
+    migrate_hypotheses_table()
+
+
+def migrate_hypotheses_table():
+    """SQLite 兼容迁移：为 hypotheses 表补加 review_scores_json。"""
+    if engine is None:
+        init_db()
+
+    import sqlite3
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(hypotheses)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if "review_scores_json" not in existing_columns:
+            try:
+                cursor.execute(
+                    "ALTER TABLE hypotheses ADD COLUMN review_scores_json TEXT"
+                )
+                print("    迁移: 列 hypotheses.review_scores_json 已添加")
+            except sqlite3.OperationalError as e:
+                print(f"    迁移警告: 添加 hypotheses.review_scores_json 失败: {e}")
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 
 def migrate_multimodal_assets_table():

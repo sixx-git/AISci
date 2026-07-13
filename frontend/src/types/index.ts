@@ -871,6 +871,7 @@ export interface DetailedHypothesis {
   verifiability: number;
   dataAvailability: number;
   overallScore: number;
+  hasReviewScores?: boolean;
   riskWarning: string;
   isPrimary: boolean;
   status: 'draft' | 'evaluated' | 'confirmed';

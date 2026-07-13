@@ -1,6 +1,15 @@
 import api from '@/lib/api';
 import type { ApiResponse, EvidenceChain } from '@/types';
 
+export interface BackendReviewScores {
+  novelty?: number;
+  testability?: number;
+  data_availability?: number;
+  scientific_value?: number;
+  cost_risk?: number;
+  overall_score?: number;
+}
+
 export interface BackendHypothesis {
   id: string;
   project_id: string;
@@ -31,6 +40,7 @@ export interface BackendHypothesis {
   expected_measurable_effect?: string;
   domain_conflict_keywords?: string[];
   is_primary?: boolean;
+  review_scores?: BackendReviewScores;
 }
 
 export interface BackendEvidence {

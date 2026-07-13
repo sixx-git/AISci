@@ -246,10 +246,15 @@ async def get_project_hypotheses(
             limit=limit,
             offset=offset
         )
-        
+        if not hypotheses:
+            hypotheses = hypothesis_service.materialize_from_latest_pipeline(project_id)
+        from app.services.pipeline_output_service import enrich_hypothesis_responses_with_reviews
+        responses = [hypothesis_service.to_response(h) for h in hypotheses]
+        responses = enrich_hypothesis_responses_with_reviews(db, project_id, responses)
+
         return success(
-            hypotheses,
-            message=f"获取假设列表成功，共 {len(hypotheses)} 条"
+            responses,
+            message=f"获取假设列表成功，共 {len(responses)} 条"
         )
     except Exception as e:
         return error(str(e))
@@ -272,8 +277,17 @@ async def get_hypothesis_evidence(
     - document_id / chunk_id: 溯源信息
     """
     try:
+        from app.services._utils.pipeline_queries import get_literature_mining_output
+
         hypothesis_service = HypothesisService(db)
+        hypo = hypothesis_service.get_hypothesis_by_id(hypothesis_id)
+        if not hypo:
+            return error("假设不存在", code=404)
+
         evidences = hypothesis_service.get_evidence_by_hypothesis(hypothesis_id)
+        if not evidences:
+            literature_mining = get_literature_mining_output(db, hypo.project_id) or {}
+            evidences = hypothesis_service.backfill_evidence_from_literature(hypo, literature_mining)
         
         return success(
             evidences,
@@ -299,6 +313,12 @@ async def get_hypothesis_evidence_chain(
 
         er_service = get_evidence_reasoning_service()
         chain = er_service.load_evidence_chain(hypo.project_id, hypothesis_id)
+        if not chain:
+            from app.services._utils.pipeline_queries import get_literature_mining_output
+
+            literature_mining = get_literature_mining_output(db, hypo.project_id) or {}
+            hypo_service.backfill_evidence_from_literature(hypo, literature_mining)
+            chain = er_service.load_evidence_chain(hypo.project_id, hypothesis_id)
         if not chain:
             return success(None, message="暂无结构化证据链，请先运行 Pipeline 或迭代修正")
 

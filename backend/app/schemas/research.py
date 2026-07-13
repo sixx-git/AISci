@@ -25,24 +25,6 @@ class ResearchResponse(BaseModel):
     execution_time: Optional[float] = Field(None, description="执行时间（秒）")
 
 
-class EvidenceResponse(BaseModel):
-    """证据链响应"""
-    id: str
-    project_id: str
-    hypothesis_id: str
-    document_id: Optional[str] = None
-    chunk_id: Optional[str] = None
-    fact_text: str
-    quote_text: Optional[str] = None
-    page_number: Optional[int] = None
-    relevance_score: float
-    source_title: Optional[str] = None
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
 class HypothesisCreate(BaseModel):
     """创建假设"""
     project_id: str = Field(..., description="项目ID")
@@ -88,11 +70,40 @@ class HypothesisCreate(BaseModel):
         return v
 
 
+class HypothesisReviewScores(BaseModel):
+    """假设评审维度分数（0-10）"""
+    novelty: Optional[float] = Field(None, description="创新性")
+    testability: Optional[float] = Field(None, description="可测试性")
+    data_availability: Optional[float] = Field(None, description="数据可得性")
+    scientific_value: Optional[float] = Field(None, description="科学价值")
+    cost_risk: Optional[float] = Field(None, description="成本风险")
+    overall_score: Optional[float] = Field(None, description="综合得分 0-10")
+
+
+class EvidenceResponse(BaseModel):
+    """证据链响应"""
+    id: str
+    project_id: str
+    hypothesis_id: str
+    document_id: Optional[str] = None
+    chunk_id: Optional[str] = None
+    fact_text: str
+    quote_text: Optional[str] = None
+    page_number: Optional[int] = None
+    relevance_score: float
+    source_title: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class HypothesisResponse(HypothesisCreate):
     """假设响应"""
     id: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    review_scores: Optional[HypothesisReviewScores] = Field(None, description="评审维度分数")
     
     class Config:
         from_attributes = True

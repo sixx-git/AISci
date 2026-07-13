@@ -137,6 +137,7 @@ class Hypothesis(BaseModel):
     data_evidence_ids = Column(Text, nullable=True, default=None, comment="引用的数据证据 ID（JSON 数组）")
     validation_target = Column(Text, nullable=True, default=None, comment="验证目标指标，如 Accuracy/F1/AUC")
     expected_measurable_effect = Column(Text, nullable=True, default=None, comment="预期的可量化效果")
+    review_scores_json = Column(Text, nullable=True, default=None, comment="假设评审维度分数（JSON）")
     
     # 关系
     project = relationship("Project", back_populates="hypotheses")
