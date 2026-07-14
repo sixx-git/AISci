@@ -229,8 +229,6 @@ def run_mock_pipeline_test() -> Dict[str, Any]:
         get_knowledge_gap_agent,
         get_hypothesis_generation_agent,
         get_hypothesis_review_agent,
-        get_experiment_design_agent,
-        get_small_validation_agent,
         get_report_generation_agent,
     )
     from app.services.qwen_client import clear_call_logs, get_call_logs
@@ -333,40 +331,36 @@ def run_mock_pipeline_test() -> Dict[str, Any]:
             "count": len(review_result.reviews)
         }
 
-        # 6. Experiment Design
-        logger.info("[6/8] 测试 ExperimentDesignAgent...")
-        exp_agent = get_experiment_design_agent()
+        # 6–7. 迭代实验（旧 ExperimentDesign/SmallValidation Agent 已移除）
         top_hypo = hypo_result.hypotheses[0]
-        exp_result = exp_agent.design_experiment(
-            hypothesis=top_hypo.hypothesis,
-            rationale=top_hypo.rationale,
-            novelty=top_hypo.novelty,
-            testability=top_hypo.testability,
-            required_data=top_hypo.required_data,
-            possible_method=top_hypo.possible_method,
-            risk=top_hypo.risk
-        )
-        test_results["experiment_design"] = {
+        logger.info("[6/7] 使用合成 iterative_experiment 兼容字段...")
+        exp_result = {
+            "hypothesis": top_hypo.hypothesis,
+            "methods": top_hypo.possible_method or "mock methods",
+            "datasets": top_hypo.required_data or "",
+            "source_data": "",
+            "target_data": "",
+            "baselines": "baseline",
+            "metrics": "accuracy",
+            "experimental_steps": "mock steps",
+            "expected_results": "mock expected",
+            "limitations": "mock only",
+            "_provider": "iterative_experiment_mock",
+        }
+        val_result = {
+            "hypothesis": top_hypo.hypothesis,
+            "validation_status": "completed",
+            "has_real_data": 0,
+            "results": {"result_type_summary": "simulated_only"},
+            "_provider": "iterative_experiment_mock",
+        }
+        test_results["iterative_experiment"] = {
             "status": "OK",
-            "fields": list(exp_result.keys())
+            "fields": ["experiment_design", "small_validation"],
         }
 
-        # 7. Small Validation
-        logger.info("[7/8] 测试 SmallValidationAgent...")
-        val_agent = get_small_validation_agent()
-        val_result = val_agent.generate_validation(
-            hypothesis=top_hypo.hypothesis,
-            methods=exp_result.get("methods", ""),
-            datasets=exp_result.get("datasets", ""),
-            metrics=exp_result.get("metrics", "")
-        )
-        test_results["small_validation"] = {
-            "status": "OK",
-            "fields": list(val_result.keys())
-        }
-
-        # 8. Report Generation
-        logger.info("[8/8] 测试 ReportGenerationAgent...")
+        # 7. Report Generation
+        logger.info("[7/7] 测试 ReportGenerationAgent...")
         report_agent = get_report_generation_agent()
         report_result = report_agent.generate_report(
             project_info={"title": "Mock 测试项目"},

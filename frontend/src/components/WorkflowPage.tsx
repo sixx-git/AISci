@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, ClipboardCheck, FileText, RefreshCw, Database, ArrowRight } from 'lucide-react';
+import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, FileText, RefreshCw, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
@@ -59,8 +59,10 @@ const STAGE_TO_NODE_ID: Record<string, string> = {
   knowledge_gap: 'gaps',
   hypothesis_generation: 'hypothesis',
   hypothesis_review: 'evaluation',
+  iterative_experiment: 'experiment',
+  // 历史 run 兼容：旧实验设计/小样验证映射到同一节点
   experiment_design: 'experiment',
-  small_validation: 'validation',
+  small_validation: 'experiment',
   report_generation: 'report',
   // 历史 run 兼容：旧数据采集阶段仍高亮同一节点
   data_acquisition: 'gaps',
@@ -73,8 +75,8 @@ const NODE_ID_TO_STAGE: Record<string, string> = {
   gaps: 'knowledge_gap',
   hypothesis: 'hypothesis_generation',
   evaluation: 'hypothesis_review',
-  experiment: 'experiment_design',
-  validation: 'small_validation',
+  experiment: 'iterative_experiment',
+  validation: 'iterative_experiment',
   report: 'report_generation',
 };
 
@@ -189,6 +191,15 @@ function summarizeStageData(stageName: string, data: unknown): string {
       if (ensemble.decision) parts.push(String(ensemble.decision));
     }
     if (d.ensemble_overall != null) parts.push(`综合 ${Number(d.ensemble_overall).toFixed(1)}`);
+    return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
+  }
+
+  if (stageName === 'iterative_experiment') {
+    const parts: string[] = [];
+    if (d.status) parts.push(String(d.status));
+    const experiments = d.experiments;
+    if (Array.isArray(experiments)) parts.push(`${experiments.length} 个实验`);
+    if (typeof d.warning === 'string' && d.warning) parts.push(d.warning.slice(0, 80));
     return parts.join(' | ') || JSON.stringify(data).slice(0, 200);
   }
 
@@ -337,18 +348,11 @@ const BASE_AGENT_NODES: AgentNodeData[] = [
     model: '', promptVersion: '', icon: ShieldCheck,
   },
   {
-    id: 'experiment', name: '实验设计智能体',
-    shortDesc: '分析已上传数据并规划可验证实验方案',
+    id: 'experiment', name: '迭代实验',
+    shortDesc: '数据绑定、脚本设计、smoke/full 迭代与反馈重设计',
     status: 'pending', duration: null,
     inputSummary: '', outputSummary: '', logs: [],
     model: '', promptVersion: '', icon: FlaskConical,
-  },
-  {
-    id: 'validation', name: '小样验证智能体',
-    shortDesc: '在受限数据集上执行快速验证实验',
-    status: 'pending', duration: null,
-    inputSummary: '', outputSummary: '', logs: [],
-    model: '', promptVersion: '', icon: ClipboardCheck,
   },
   {
     id: 'report', name: '报告生成智能体',
@@ -467,7 +471,8 @@ const NODE_ORDER = BASE_AGENT_NODES.map((n) => n.id);
 const RESUME_PHASE_TO_NODE: Record<string, string> = {
   after_hypothesis_generation: 'evaluation',
   after_hypothesis_review: 'experiment',
-  after_experiment_design: 'validation',
+  after_iterative_experiment: 'report',
+  after_experiment_design: 'report',
   after_small_validation: 'report',
 };
 
@@ -647,21 +652,41 @@ export function WorkflowPage({
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
   const selectedNodeId = selectedNode?.id ?? null;
 
-  const experimentDesignOutput = useMemo(() => {
+  const experimentNodeOutput = useMemo(() => {
     return nodes.find((n) => n.id === 'experiment')?.output_data as Record<string, unknown> | undefined;
   }, [nodes]);
 
+  /** 兼容：iterative_experiment 嵌套 / 历史顶层 small_validation */
+  const validationOutFromExperiment = useMemo(() => {
+    const out = experimentNodeOutput;
+    if (!out) return undefined;
+    const nested = out.small_validation;
+    if (nested && typeof nested === 'object') return nested as Record<string, unknown>;
+    if (out.validation_status != null || out.sandbox_execution != null) return out;
+    return undefined;
+  }, [experimentNodeOutput]);
+
+  const experimentDesignOutput = useMemo(() => {
+    const out = experimentNodeOutput;
+    if (!out) return undefined;
+    const nested = out.experiment_design;
+    if (nested && typeof nested === 'object') return nested as Record<string, unknown>;
+    return out;
+  }, [experimentNodeOutput]);
+
   const plotQualityData = useMemo((): PlotQualityData | null => {
-    for (const nodeId of ['validation', 'report'] as const) {
+    for (const nodeId of ['experiment', 'report'] as const) {
       const out = nodes.find((n) => n.id === nodeId)?.output_data as Record<string, unknown> | undefined;
       const pq = out?.plot_quality as PlotQualityData | undefined;
       if (pq?.critique) return pq;
+      const nested = (out?.small_validation as Record<string, unknown> | undefined)?.plot_quality as PlotQualityData | undefined;
+      if (nested?.critique) return nested;
     }
     return null;
   }, [nodes]);
 
   const validationExecutionMeta = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    const validationOut = validationOutFromExperiment;
     if (!validationOut) return null;
     return {
       executionTier: validationOut.execution_tier as string | undefined,
@@ -669,22 +694,25 @@ export function WorkflowPage({
       dataAuthenticity: validationOut.data_authenticity as string | undefined,
       dataAuthenticityLabel: validationOut.data_authenticity_label as string | undefined,
     };
-  }, [nodes]);
+  }, [validationOutFromExperiment]);
 
   const validationDataGuidance = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data;
-    return extractValidationDataGuidance(validationOut);
-  }, [nodes]);
+    return extractValidationDataGuidance(validationOutFromExperiment ?? experimentNodeOutput);
+  }, [validationOutFromExperiment, experimentNodeOutput]);
 
   const validationBlockedReason = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
-    return typeof validationOut?.validation_blocked_reason === 'string'
-      ? validationOut.validation_blocked_reason
-      : '';
-  }, [nodes]);
+    const validationOut = validationOutFromExperiment ?? experimentNodeOutput;
+    if (typeof validationOut?.validation_blocked_reason === 'string') {
+      return validationOut.validation_blocked_reason;
+    }
+    if (validationOut?.status === 'blocked_need_data' && typeof validationOut.warning === 'string') {
+      return validationOut.warning;
+    }
+    return '';
+  }, [validationOutFromExperiment, experimentNodeOutput]);
 
   const verifiableValidation = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
+    const validationOut = validationOutFromExperiment;
     if (validationOut) {
       const checks = validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined;
       const spec = validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
@@ -710,12 +738,11 @@ export function WorkflowPage({
       };
     }
     return null;
-  }, [nodes, experimentDesignOutput]);
+  }, [validationOutFromExperiment, experimentDesignOutput]);
 
   const validationPendingPreview = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data;
     const experimentStatus = nodes.find((n) => n.id === 'experiment')?.status;
-    if (validationOut || experimentStatus !== 'completed' || !experimentDesignOutput) return null;
+    if (validationOutFromExperiment || experimentStatus !== 'completed' || !experimentDesignOutput) return null;
     return {
       verifiable_hypothesis: experimentDesignOutput.verifiable_hypothesis,
       expected_results: experimentDesignOutput.expected_results,
@@ -723,12 +750,7 @@ export function WorkflowPage({
       metrics: experimentDesignOutput.metrics,
       hypothesis: experimentDesignOutput.hypothesis,
     };
-  }, [nodes, experimentDesignOutput]);
-
-  const federatedPilot = useMemo(() => {
-    const validationOut = nodes.find((n) => n.id === 'validation')?.output_data as Record<string, unknown> | undefined;
-    return (validationOut?.federated_pilot as Record<string, unknown> | undefined) ?? null;
-  }, [nodes]);
+  }, [nodes, experimentDesignOutput, validationOutFromExperiment]);
 
   const openHitlGateModal = useCallback(async (runId: string) => {
     setHitlGateRunId(runId);
@@ -1295,7 +1317,7 @@ export function WorkflowPage({
   const showIterationHistory = Boolean(
     effectiveRunId
     && selectedNodeId
-    && ['report', 'validation', 'hypothesis', 'evaluation'].includes(selectedNodeId),
+    && ['report', 'experiment', 'hypothesis', 'evaluation'].includes(selectedNodeId),
   );
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
@@ -1569,7 +1591,7 @@ export function WorkflowPage({
         <div className="lg:col-span-2 space-y-4">
           <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
-          {selectedNodeId === 'validation' && validationPendingPreview && (
+          {selectedNodeId === 'experiment' && validationPendingPreview && (
             <Card title="待验证方案" subtitle="实验设计已完成，小样验证尚未产出结果时将显示此处预览">
               <div className="p-3 rounded-bp border bg-bp-cyan/5 border-bp-cyan/20 space-y-2 text-sm text-bp-text">
                 {typeof validationPendingPreview.hypothesis === 'string' && validationPendingPreview.hypothesis && (
@@ -1590,12 +1612,11 @@ export function WorkflowPage({
               <IterationHistoryPanel
                 runId={effectiveRunId}
                 extraMetadata={runExtraMetadata}
-                federatedPilot={federatedPilot}
               />
             </CollapsiblePanel>
           )}
 
-          {selectedNodeId === 'validation' && validationDataGuidance && (
+          {selectedNodeId === 'experiment' && validationDataGuidance && (
             <CollapsiblePanel title="数据不匹配 · 所需数据集" defaultOpen>
               <ValidationDataGuidanceCard
                 guidance={validationDataGuidance}
@@ -1604,13 +1625,13 @@ export function WorkflowPage({
             </CollapsiblePanel>
           )}
 
-          {selectedNodeId === 'validation' && validationExecutionMeta && (
+          {selectedNodeId === 'experiment' && validationExecutionMeta && (
             <CollapsiblePanel title="执行层级" defaultOpen={false}>
               <ExecutionTierBadge {...validationExecutionMeta} />
             </CollapsiblePanel>
           )}
 
-          {selectedNodeId === 'validation' && verifiableValidation && (
+          {selectedNodeId === 'experiment' && verifiableValidation && (
             <CollapsiblePanel
               title={verifiableValidation.isPreview ? '可验证性检查（实验设计预览）' : '可验证性检查'}
               defaultOpen={false}
@@ -1623,7 +1644,7 @@ export function WorkflowPage({
             </CollapsiblePanel>
           )}
 
-          {plotQualityData && selectedNodeId && (selectedNodeId === 'validation' || selectedNodeId === 'report') && (
+          {plotQualityData && selectedNodeId && (selectedNodeId === 'experiment' || selectedNodeId === 'report') && (
             <CollapsiblePanel title="小样验证图表质量检查" defaultOpen={false}>
               <PlotCritiquePanel plotQuality={plotQualityData} />
             </CollapsiblePanel>

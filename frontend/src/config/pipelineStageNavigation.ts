@@ -5,10 +5,11 @@ export const PIPELINE_STAGE_TAB: Record<string, string> = {
   knowledge_gap: 'workflow',
   hypothesis_generation: 'hypotheses',
   hypothesis_review: 'hypotheses',
-  experiment_design: 'experiments',
-  small_validation: 'experiments',
+  iterative_experiment: 'experiments',
+  experiment_design: 'experiments', // legacy
+  small_validation: 'experiments', // legacy
   report_generation: 'reports',
-  data_acquisition: 'datasets',
+  data_acquisition: 'experiments',
 };
 
 export function getPipelineStageTab(stageId: string): string | undefined {

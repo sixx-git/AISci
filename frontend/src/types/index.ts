@@ -15,7 +15,7 @@ export interface ApiResponse<T = unknown> {
 
 // ==================== 项目 ====================
 
-export type ProjectMode = 'general' | 'federated_learning';
+export type ProjectMode = 'general';
 
 export interface Project {
   id: string;
@@ -747,8 +747,6 @@ export interface PipelineRunOptions {
   force_sandbox?: boolean;
   enable_plot_vlm_critique?: boolean;
   enable_teaching_auto_refinement?: boolean;
-  enable_federated_campaign_loop?: boolean;
-  federated_campaign_max?: number;
   sandbox_use_docker?: boolean;
   enable_pro_con_adversarial?: boolean;
   adversarial_mode?: AdversarialMode;
@@ -799,6 +797,7 @@ export interface PipelineRunResult {
   knowledge_gap?: Record<string, unknown>;
   hypothesis_generation?: Record<string, unknown>;
   hypothesis_review?: Record<string, unknown>;
+  iterative_experiment?: Record<string, unknown>;
   experiment_design?: Record<string, unknown>;
   small_validation?: Record<string, unknown>;
   report_generation?: Record<string, unknown>;
@@ -895,50 +894,7 @@ export interface DetailedHypothesis {
   verifiable_spec?: VerifiableSpec | null;
 }
 
-/** 后端返回的数据集记录 */
-export interface BackendDataset {
-  id: string;
-  project_id: string;
-  filename: string;
-  file_path: string;
-  file_size?: number;
-  data_type: 'tabular' | 'image' | 'time_series' | 'json' | 'pdf' | 'unknown';
-  source_type: 'upload' | 'history' | 'public';
-  n_rows?: number;
-  n_columns?: number;
-  columns_json?: string;
-  dtypes_json?: string;
-  missing_count?: number;
-  missing_rate?: number;
-  statistics_json?: string;
-  preview_json?: string;
-  preprocessing_status: 'pending' | 'processing' | 'completed' | 'failed';
-  use_for_hypothesis: boolean;
-  extra_metadata?: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-/** 前端展示用的数据集摘要 */
-export interface DatasetSummary {
-  id: string;
-  filename: string;
-  dataType: string;
-  nRows?: number;
-  nColumns?: number;
-  columns?: string[];
-  dtypes?: Record<string, string>;
-  missingCount?: number;
-  missingRate?: number;
-  statistics?: Record<string, unknown>;
-  preview?: Record<string, unknown>[];
-  preprocessingStatus: string;
-  useForHypothesis: boolean;
-  fileSize?: number;
-  createdAt: string;
-}
-
-// ==================== 实验设计 ====================
+// ==================== 实验设计（历史类型，报告/旧 run 兼容） ====================
 
 export interface ExperimentDesign {
   id: string;

@@ -328,40 +328,6 @@
           }
         ]
       }
-    },
-    {
-      "id": "pack_d",
-      "label": "联邦学习 Scientist",
-      "description": "仅联邦学习项目：VFL/横向联邦、对齐、通信与隐私约束",
-      "reference": null,
-      "recommended_pipeline_mode": "teaching",
-      "requires_federated": true,
-      "stages": {
-        "hypothesis_generation": [
-          {
-            "id": "fl_vfl_claim",
-            "label": "联邦/VFL 主张",
-            "file": "pack_d/hypothesis_generation/fl_vfl_claim.md",
-            "description": "你是一位 **联邦学习 / 垂直联邦（VFL）** 假设专家。假设须涉及多方数据、对齐、通信或隐私约束，并引用可用 fact 与字段。"
-          }
-        ],
-        "experiment_design": [
-          {
-            "id": "federated_plan",
-            "label": "联邦实验计划",
-            "file": "pack_d/experiment_design/federated_plan.md",
-            "description": "你是一位 **联邦实验** 设计师。须描述参与方、对齐键、通信轮次、隐私机制与 global vs local 指标；输出可与 federated_plan 结构衔接。"
-          }
-        ],
-        "small_validation": [
-          {
-            "id": "fl_pilot",
-            "label": "联邦 Pilot",
-            "file": "pack_d/small_validation/fl_pilot.md",
-            "description": "你是一位 **联邦 pilot** 验证者。优先评估 alignment_success_rate、通信成本、隐私预算消耗；脚本可模拟多方切片。"
-          }
-        ]
-      }
     }
   ]
 }

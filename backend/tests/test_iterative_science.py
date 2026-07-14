@@ -1,5 +1,4 @@
 """可验证假设、结构化 replan 与 Campaign 迭代测试"""
-import asyncio
 import unittest
 
 from app.core.iterative_science import (
@@ -9,9 +8,10 @@ from app.core.iterative_science import (
     build_structured_replan_actions,
     build_verifiable_hypothesis_spec,
     check_vfl_alignment_gate,
+    compute_pareto_frontier,
+    evaluate_pilot_improvement,
 )
 from app.services.latex_export_service import build_latex_document, get_latex_template_dir
-from app.skills.federated_experiment.federated_replanning_skill import FederatedReplanningSkill
 
 
 VFL_PREVIEW = [
@@ -79,26 +79,9 @@ class TestIterativeScience(unittest.TestCase):
         self.assertIn("\\section{实验设计}", latex)
         self.assertNotIn("\\section{Campaign", latex)
         self.assertIn("\\subsection{可验证科学假设表述}", latex)
-        self.assertIn("\\subsection{下一轮结构化 Replan Actions}", latex)
-
-    def test_replanning_skill_returns_actions(self):
-        skill = FederatedReplanningSkill()
-        res = asyncio.run(
-            skill.run(
-                {
-                    "pilot_result": {"execution_mode": "gate_blocked", "alignment_gate": {"passed": False}},
-                    "fl_setting": "vertical_fl",
-                    "fl_context": {"fl_setting": "vertical_fl"},
-                },
-                {},
-            )
-        )
-        self.assertGreater(len(res.data.get("replan_actions", [])), 0)
-        self.assertTrue(res.data.get("has_critical_actions"))
+        self.assertIn("Replan Actions", latex)
 
     def test_pareto_frontier(self):
-        from app.core.iterative_science import compute_pareto_frontier, evaluate_pilot_improvement, needs_federated_campaign_refinement
-
         comp = [
             {"method": "A", "global_accuracy": 0.9, "communication_cost_mb": 200},
             {"method": "B", "global_accuracy": 0.85, "communication_cost_mb": 100},
@@ -106,11 +89,6 @@ class TestIterativeScience(unittest.TestCase):
         ]
         pf = compute_pareto_frontier(comp)
         self.assertGreaterEqual(len(pf["frontier"]), 1)
-
-        needs, reasons = needs_federated_campaign_refinement(
-            {"federated_pilot": {"execution_mode": "simulation", "replan_actions": []}}
-        )
-        self.assertTrue(needs)
 
         imp = evaluate_pilot_improvement(
             {"execution_mode": "skipped", "metric_comparison": []},

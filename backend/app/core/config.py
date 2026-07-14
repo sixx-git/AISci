@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     
     # Mock LLM 模式：无需真实 QWEN_API_KEY 即可跑通 Pipeline
     USE_MOCK_LLM: bool = False
+
+    # 迭代实验：默认启用 shaxiang 引擎（失败自动回退服务端 mock）
+    AISCI_USE_SHAXIANG: bool = True
     
     # 向量存储配置（主路径：Zvec 嵌入式向量库，按 project_id 分 Collection）
     # Chat 专用 Zvec Collection（与会话级临时文档 RAG 相关）

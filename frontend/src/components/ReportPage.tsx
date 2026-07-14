@@ -378,12 +378,8 @@ export function ReportPage({
         <h1 className="text-3xl font-bold text-bp-text mb-1">研究报告</h1>
         <div className="flex flex-wrap items-center gap-2 mb-1">
           <p className="text-bp-muted text-sm">自动生成符合挑战杯 XH-202619 规范的科学假设与研究计划</p>
-          <span className={`text-xs px-2 py-0.5 rounded border ${
-            projectMode === 'federated_learning'
-              ? 'border-bp-cyan/30 bg-bp-cyan-tint text-bp-cyan'
-              : 'border-bp-border bg-bp-panel text-bp-muted'
-          }`}>
-            {projectMode === 'federated_learning' ? '联邦学习报告' : '通用报告'}
+          <span className="text-xs px-2 py-0.5 rounded border border-bp-border bg-bp-panel text-bp-muted">
+            通用报告
           </span>
         </div>
 

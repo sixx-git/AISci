@@ -4,9 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.iteration_control import evaluate_discovery_continuation
-from app.core.iterative_science import evaluate_discovery_federated_acceptance
 from app.core.pipeline_modes import ENSEMBLE_ACCEPT_SCORE
-from app.core.project_modes import ProjectMode
 
 
 def check_discovery_stagnation(
@@ -36,20 +34,9 @@ def check_discovery_acceptance(
     decision = ensemble.get("decision") or hr.get("ensemble_decision")
     overall = ensemble.get("overall") or hr.get("ensemble_overall")
 
-    fed_accept = evaluate_discovery_federated_acceptance(hr, small_validation or {})
-
-    if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-        if fed_accept.get("accepted"):
-            return True, {
-                "status": "accepted",
-                "overall": overall,
-                "federated_acceptance": fed_accept,
-            }
-        return False, {"federated_acceptance": fed_accept, "decision": decision, "overall": overall}
-
     if decision == "Accept" or (
         overall is not None and float(overall) >= ENSEMBLE_ACCEPT_SCORE
     ):
         return True, {"status": "accepted", "overall": overall, "decision": decision}
 
-    return False, {"decision": decision, "overall": overall, "federated_acceptance": fed_accept}
+    return False, {"decision": decision, "overall": overall}

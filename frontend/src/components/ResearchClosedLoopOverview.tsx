@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Orbit, Play, Lightbulb, BookOpen, Database, GitBranch,
+  Orbit, Play, Lightbulb, BookOpen, GitBranch,
   ChevronRight, FileText, FlaskConical,
 } from 'lucide-react';
 import { Card } from '@/components/Card';
@@ -35,9 +35,8 @@ const PIPELINE_STAGES = [
   { key: 'knowledge_gap', label: 'P2 知识缺口', tab: 'workflow' },
   { key: 'hypothesis_generation', label: 'P3 假设生成', tab: 'hypotheses' },
   { key: 'hypothesis_review', label: 'P4 假设评估', tab: 'hypotheses' },
-  { key: 'experiment_design', label: 'P5 实验设计', tab: 'experiments' },
-  { key: 'small_validation', label: 'P6 小样验证', tab: 'experiments' },
-  { key: 'report_generation', label: 'P7 报告生成', tab: 'reports' },
+  { key: 'iterative_experiment', label: 'P5 迭代实验', tab: 'experiments' },
+  { key: 'report_generation', label: 'P6 报告生成', tab: 'reports' },
 ] as const;
 
 const MACRO_FLOW_STEPS = [
@@ -45,7 +44,7 @@ const MACRO_FLOW_STEPS = [
   { key: 'literature_mining', label: '知识整合', tab: 'literature' },
   { key: 'hypothesis_generation', label: '假设生成', tab: 'hypotheses' },
   { key: 'hypothesis_review', label: '证据梳理', tab: 'hypotheses' },
-  { key: 'experiment_design', label: '研究计划', tab: 'experiments' },
+  { key: 'iterative_experiment', label: '迭代实验', tab: 'experiments' },
   { key: 'report_generation', label: '反馈修正', tab: 'workflow' },
 ] as const;
 
@@ -159,14 +158,6 @@ export function ResearchClosedLoopOverview({
     return aux?.reran ? aux : null;
   }, [extra]);
 
-  const federatedPilot = useMemo(() => {
-    const sv = runDetail?.small_validation as Record<string, unknown> | undefined;
-    if (sv?.federated_pilot) return sv.federated_pilot as Record<string, unknown>;
-    const stage = runDetail?.stages?.find((s) => s.stage === 'small_validation');
-    const out = stage?.output_data as Record<string, unknown> | undefined;
-    return (out?.federated_pilot as Record<string, unknown> | undefined) ?? null;
-  }, [runDetail]);
-
   const iterationMode =
     (extra?.run_options?.iteration_mode as string | undefined)
     || (extra?.iteration_mode as string | undefined)
@@ -178,15 +169,21 @@ export function ResearchClosedLoopOverview({
   };
 
   const verifiableValidation = useMemo(() => {
-    const validationOut = runDetail?.small_validation as Record<string, unknown> | undefined;
+    const ie = runDetail?.iterative_experiment as Record<string, unknown> | undefined;
+    const fromIe = ie?.small_validation as Record<string, unknown> | undefined;
+    const validationOut = (fromIe || runDetail?.small_validation) as Record<string, unknown> | undefined;
     if (!validationOut) {
-      const stage = runDetail?.stages?.find((s) => s.stage === 'small_validation');
+      const stage = runDetail?.stages?.find(
+        (s) => s.stage === 'iterative_experiment' || s.stage === 'small_validation',
+      );
       const out = stage?.output_data as Record<string, unknown> | undefined;
-      if (!out) return null;
+      const nested = out?.small_validation as Record<string, unknown> | undefined;
+      const payload = nested || out;
+      if (!payload) return null;
       return {
-        checks: out.verifiable_checks as import('@/types').VerifiableCheck[] | undefined,
-        passed: out.verifiable_passed as boolean | null | undefined,
-        spec: out.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined,
+        checks: payload.verifiable_checks as import('@/types').VerifiableCheck[] | undefined,
+        passed: payload.verifiable_passed as boolean | null | undefined,
+        spec: payload.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined,
       };
     }
     return {
@@ -367,8 +364,7 @@ export function ResearchClosedLoopOverview({
             )}
             <div className="flex flex-wrap gap-2 pt-1">
               <QuickLink icon={BookOpen} label="文献库" onClick={() => navigateToProjectTab(navigate, projectId, 'literature')} />
-              <QuickLink icon={Database} label="数据集" onClick={() => navigateToProjectTab(navigate, projectId, 'datasets')} />
-              <QuickLink icon={FlaskConical} label="实验设计" onClick={() => navigateToProjectTab(navigate, projectId, 'experiments')} />
+              <QuickLink icon={FlaskConical} label="迭代实验" onClick={() => navigateToProjectTab(navigate, projectId, 'experiments')} />
               <QuickLink icon={FileText} label="研究报告" onClick={() => navigateToProjectTab(navigate, projectId, 'reports')} />
             </div>
           </div>
@@ -398,7 +394,6 @@ export function ResearchClosedLoopOverview({
           <IterationHistoryPanel
             runId={selectedRunId}
             extraMetadata={extra}
-            federatedPilot={federatedPilot}
           />
         </CollapsiblePanel>
       )}

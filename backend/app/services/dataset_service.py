@@ -1039,21 +1039,6 @@ class DatasetService:
             pass
 
         context["project_mode"] = project_mode
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            from app.services.federated_experiment_service import get_federated_experiment_service
-
-            fl_service = get_federated_experiment_service(self.db)
-            context["fl_context"] = fl_service.build_fl_context_from_data_context(context)
-            fl_ctx = context["fl_context"] or {}
-            if fl_ctx.get("fl_setting") == "vertical_fl":
-                context["warnings"].append(
-                    "已识别为 vertical_fl：检测到 party_id/entity_id/feature_owner/label_owner 等 VFL 字段"
-                )
-            elif not fl_ctx.get("detected_fields"):
-                context["warnings"].append(
-                    "联邦学习模式：请上传含 party_id/entity_id/feature_owner/label_owner 或 "
-                    "method/global_accuracy 等字段的 CSV"
-                )
 
         try:
             from app.services.data_finder_service import get_data_finder_service

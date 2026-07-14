@@ -23,7 +23,6 @@ CATEGORY_LABELS: Dict[str, str] = {
     "report": "报告",
     "modeling": "建模",
     "data_finder": "数据查找",
-    "federated_experiment": "联邦实验",
     "multimodal": "多模态",
     "evidence_reasoning": "证据推理",
     "chinese_writing": "中文写作",
@@ -74,11 +73,6 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "SupplementaryFetch", "SupplementaryExtraction",
         "DataProvenance", "DatasetSchemaAlignment", "DatasetMerge", "EntityResolution",
         "TabularFileExtraction", "ChemStructureExtraction", "StructuredFileExtraction",
-    ],
-    "联邦实验服务": [
-        "FederatedDataSchema", "FederatedExperimentPlan", "PrivacyMechanismSuggestion",
-        "FederatedSimulationExecutor", "FederatedResultAnalysis", "FederatedReplanning",
-        "FederatedScenarioRecognition", "FederatedBaselineSelection", "FederatedRuntimeExecutor",
     ],
     "多模态服务": [
         "QwenVlImageUnderstanding", "AudioTranscription", "MultimodalEvidenceBuilder",

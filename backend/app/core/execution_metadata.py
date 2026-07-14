@@ -83,9 +83,9 @@ def annotate_validation_execution_metadata(
         elif mode == "simulation":
             data_authenticity = "synthetic_fallback"
 
-    if not fp and not sb and project_mode == "federated_learning":
+    if not fp and not sb:
         execution_tier = "skipped"
-        tier_notes.append("未产生联邦 pilot 结果")
+        tier_notes.append("未产生验证执行结果")
 
     sv["execution_tier"] = execution_tier
     sv["execution_tier_label"] = EXECUTION_TIER_LABELS.get(execution_tier, execution_tier)

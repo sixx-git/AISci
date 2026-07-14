@@ -25,8 +25,9 @@ const STAGE_CN: Record<string, string> = {
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
-  experiment_design: '实验设计',
-  small_validation: '小样验证',
+  iterative_experiment: '迭代实验',
+  experiment_design: '实验设计(旧)',
+  small_validation: '小样验证(旧)',
   report_generation: '报告生成',
 };
 

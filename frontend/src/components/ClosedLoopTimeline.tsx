@@ -24,7 +24,7 @@ const EVENT_LABELS: Record<string, string> = {
   discovery_literature_refresh: '文献刷新回退',
   teaching_auto_refinement: 'Teaching 自动闭环',
   quality_acceptance: '质量验收',
-  federated_campaign: '联邦 Campaign Pilot',
+  federated_campaign: '历史 Campaign（已退役）',
   hitl_gate_pause: 'HITL Gate 暂停',
   data_gap_loop: 'Gap 数据补搜',
   evidence_reasoning_loop: '证据链迭代',

@@ -130,7 +130,7 @@ export function PromptPresetBar({
       <div className="flex items-center gap-2 text-xs font-medium text-bp-text">
         <LayoutTemplate className="w-4 h-4 text-bp-purple" />
         范式模板库
-        <span className="text-bp-muted font-normal">（AISci v1 / v2 / 默认{selectedPack?.requires_federated ? '' : '；联邦包仅联邦项目可见'}）</span>
+        <span className="text-bp-muted font-normal">（AISci v1 / v2 / 默认）</span>
       </div>
 
       {presetLocked ? (

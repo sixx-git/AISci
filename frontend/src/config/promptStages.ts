@@ -1,4 +1,4 @@
-/** 与 backend STAGE_TEMPLATE_MAP / prompts/*.md 一致的 8 个 Pipeline 阶段 */
+/** 与 backend STAGE_TEMPLATE_MAP / prompts/*.md 一致的 Pipeline 阶段 */
 export interface PromptStageItem {
   key: string;
   label: string;
@@ -40,16 +40,10 @@ export const PIPELINE_PROMPT_STAGES: PromptStageItem[] = [
     description: '五维评分、优劣分析与修改建议',
   },
   {
-    key: 'experiment_design',
-    label: '实验设计',
-    agent: 'ExperimentDesignAgent',
-    description: '基线、指标、步骤与数据需求',
-  },
-  {
-    key: 'small_validation',
-    label: '小样验证',
-    agent: 'SmallValidationAgent',
-    description: '小样验证方案与沙箱执行',
+    key: 'iterative_experiment',
+    label: '迭代实验',
+    agent: 'IterativeExperiment',
+    description: '数据绑定、脚本设计、smoke/full 迭代与反馈重设计',
   },
   {
     key: 'report_generation',

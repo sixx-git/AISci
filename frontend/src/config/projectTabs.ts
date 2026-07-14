@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, HelpCircle, BookOpen, Database,
+  LayoutDashboard, HelpCircle, BookOpen,
   GitBranch, Lightbulb, FlaskConical, FileText, ScrollText, SlidersHorizontal,
 } from 'lucide-react';
 
@@ -10,17 +10,21 @@ export interface ProjectTabItem {
   icon: LucideIcon;
 }
 
-/** 一级 Tab：科研主链（8 个，含概览） */
+/** 一级 Tab：科研主链（含概览；数据绑定仅在「迭代实验」内） */
 export const PRIMARY_PROJECT_TABS: ProjectTabItem[] = [
   { id: 'overview', label: '项目概览', icon: LayoutDashboard },
   { id: 'questions', label: '研究问题', icon: HelpCircle },
   { id: 'literature', label: '文献库', icon: BookOpen },
-  { id: 'datasets', label: '数据集', icon: Database },
   { id: 'workflow', label: '智能体工作流', icon: GitBranch },
   { id: 'hypotheses', label: '候选假设', icon: Lightbulb },
-  { id: 'experiments', label: '实验设计', icon: FlaskConical },
+  { id: 'experiments', label: '迭代实验', icon: FlaskConical },
   { id: 'reports', label: '研究报告', icon: FileText },
 ];
+
+/** 旧 Tab → 新 Tab（深链兼容） */
+export const LEGACY_PROJECT_TAB_REDIRECTS: Record<string, string> = {
+  datasets: 'experiments',
+};
 
 /** 高级 Tab：不显示在顶栏，保留 URL 深链 */
 export const ADVANCED_PROJECT_TABS: ProjectTabItem[] = [

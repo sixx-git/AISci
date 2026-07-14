@@ -363,8 +363,8 @@ export function HypothesisCard({
         <Button variant="secondary" size="sm" icon={<FlaskConical className="w-3.5 h-3.5" />}
           disabled={!canEnterExperiment}
           onClick={canEnterExperiment ? () => onEnterExperiment?.(hypothesis.id) : undefined}
-          title={!canEnterExperiment ? '偏题假设无法进入实验设计' : '进入实验设计'}>
-          进入实验设计
+          title={!canEnterExperiment ? '偏题假设无法进入迭代实验' : '进入迭代实验'}>
+          进入迭代实验
         </Button>
         <button
           onClick={() => setExpanded(!expanded)}

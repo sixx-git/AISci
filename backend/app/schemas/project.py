@@ -20,7 +20,6 @@ class ProjectStatus(str, Enum):
 class ProjectMode(str, Enum):
     """项目运行模式"""
     GENERAL = "general"
-    FEDERATED_LEARNING = "federated_learning"
 
 
 class DataSpecHints(BaseModel):
@@ -74,7 +73,7 @@ class ProjectCreate(BaseModel):
     expected_output: Optional[str] = Field(None, description="期望输出")
     project_mode: Optional[ProjectMode] = Field(
         default=ProjectMode.GENERAL,
-        description="项目模式: general / federated_learning",
+        description="项目模式: general",
     )
 
 

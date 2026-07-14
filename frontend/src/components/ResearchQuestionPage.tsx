@@ -219,40 +219,14 @@ function InputField({ field, value, onChange }: InputFieldProps) {
 // ============ 主组件 ============
 interface ResearchQuestionPageProps {
   projectId: string;
-  projectMode?: string;
   onSaved?: () => void;
   /** Pipeline 运行中轮询后端，自动回填空字段 */
   pollWhileRunning?: boolean;
   revalidateKey?: number;
 }
 
-const FL_FORM_TEMPLATE: ResearchQuestionForm = {
-  researchDomain: '联邦学习 / 分布式机器学习',
-  researchQuestion:
-    '在非独立同分布（Non-IID）数据和异构客户端模型结构条件下，如何通过知识蒸馏或个性化联邦机制提升联邦学习系统的模型精度、收敛速度和通信效率？',
-  researchGoal:
-    '在 Non-IID 与异构客户端条件下，设计并验证知识蒸馏、个性化联邦或 VFL 机制，提升全局/本地精度、收敛速度与通信效率。',
-  background:
-    '联邦学习在 Non-IID 客户端、异构模型与通信约束下常出现 client drift、收敛慢与通信开销高。',
-  constraints: 'Non-IID 划分、通信带宽、privacy_budget、客户端参与率',
-  expectedOutput: '联邦 baseline 对比报告、通信-精度权衡分析、隐私机制建议',
-};
-
-const VFL_FORM_TEMPLATE: ResearchQuestionForm = {
-  researchDomain: '垂直联邦学习 / 隐私计算 / 多方协同建模',
-  researchQuestion:
-    '在垂直联邦学习场景中，如何在样本对齐和隐私保护约束下，利用多方异构特征提升大模型微调任务的预测性能与通信效率？',
-  researchGoal:
-    '设计 PSI/样本对齐、Secure Aggregation、差分隐私与 Split Learning 实验，对比 VFL baselines 并形成闭环迭代计划。',
-  background:
-    '特征分布在不同参与方，标签方与特征方分离；需在 entity_id 对齐与 privacy_budget 约束下纵向融合特征。',
-  constraints: '样本 ID 对齐、特征方/标签方不可 Raw 共享、privacy_budget、通信轮次、对齐成功率',
-  expectedOutput: 'VFL baseline 对比、通信-精度-隐私权衡、下一轮 replan 建议',
-};
-
 export function ResearchQuestionPage({
   projectId,
-  projectMode,
   onSaved,
   pollWhileRunning = false,
   revalidateKey = 0,
@@ -434,31 +408,6 @@ export function ResearchQuestionPage({
       {/* ========== 左侧：表单 ========== */}
       <div className="lg:col-span-2 space-y-5">
         <Card title="研究问题定义" subtitle="填写以下信息，AI 将基于这些内容展开研究">
-          {projectMode === 'federated_learning' && (
-            <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint">
-              <p className="text-xs text-bp-cyan mb-2">
-                当前为<strong className="text-bp-text">联邦学习科研模式</strong>，提供横向联邦与<strong className="text-bp-purple">垂直联邦（VFL）</strong>模板。
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  onClick={() => setForm({ ...FL_FORM_TEMPLATE })}
-                >
-                  横向联邦模板
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  onClick={() => setForm({ ...VFL_FORM_TEMPLATE })}
-                >
-                  垂直联邦（VFL）模板
-                </Button>
-              </div>
-            </div>
-          )}
           {/* 状态提示 */}
           {renderStatusBar()}
 

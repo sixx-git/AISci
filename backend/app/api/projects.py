@@ -22,12 +22,10 @@ from app.schemas.project import (
     UploadResponse,
     DocumentInfo
 )
-from app.schemas.research import HypothesisResponse, ExperimentDesignDBResponse
+from app.schemas.research import HypothesisResponse
 from app.services.project_service import ProjectService, DocumentService
 from app.services.hypothesis_service import HypothesisService
-from app.services.experiment_service import ExperimentDesignService
 from app.services.pipeline_output_service import (
-    parse_experiment_design_from_pipeline,
     parse_hypotheses_from_pipeline,
 )
 
@@ -342,39 +340,3 @@ def set_primary_hypothesis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"设置主假设失败: {str(e)}")
 
-
-# ============= 实验设计查询 API =============
-
-@router.get("/{project_id}/experiment-designs", response_model=ResponseModel[List[ExperimentDesignDBResponse]])
-def list_project_experiment_designs(
-    project_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    获取项目的实验设计列表
-
-    优先从 ExperimentDesign 表读取；若无数据则从最近一次 PipelineRun 的
-    experiment_design 阶段 output_data 中解析。
-    """
-    experiment_service = ExperimentDesignService(db)
-
-    designs = experiment_service.get_experiment_designs_by_project(project_id)
-
-    if designs:
-        return success_response(
-            data=[ExperimentDesignDBResponse.model_validate(d) for d in designs],
-            message=f"获取实验设计列表成功，共 {len(designs)} 条"
-        )
-
-    pipeline_designs = parse_experiment_design_from_pipeline(db, project_id)
-
-    if pipeline_designs:
-        return success_response(
-            data=pipeline_designs,
-            message=f"从 Pipeline 运行结果解析实验设计成功，共 {len(pipeline_designs)} 条"
-        )
-
-    return success_response(
-        data=[],
-        message="暂无实验设计数据，请先运行 Pipeline 或生成实验设计"
-    )

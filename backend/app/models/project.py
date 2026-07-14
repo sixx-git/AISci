@@ -24,9 +24,8 @@ class ProjectStatus(str, Enum):
 
 
 class ProjectMode(str, Enum):
-    """项目运行模式"""
+    """项目运行模式（历史 DB 值 federated_learning 由 normalize 回落 general）"""
     GENERAL = "general"
-    FEDERATED_LEARNING = "federated_learning"
 
 
 class Project(Base):

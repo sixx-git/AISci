@@ -270,8 +270,6 @@ def build_coverage_report(
             )
         else:
             gaps.append("未命中可自动导入的外部开放数据候选（HF/Zenodo 等）")
-    if project_mode == "federated_learning" and not hits.get("fl_schema"):
-        gaps.append("联邦标准字段未对齐，请检查 CSV 列名或上传 FL benchmark 表")
     for g in data_spec_coverage.get("gaps") or []:
         if g not in gaps:
             gaps.append(g)

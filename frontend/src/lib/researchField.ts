@@ -51,9 +51,5 @@ export function resolveResearchField(
     if (domain) return domain;
   }
 
-  if (project?.project_mode === 'federated_learning') {
-    return '联邦学习';
-  }
-
   return '未填写';
 }

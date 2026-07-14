@@ -25,8 +25,9 @@ class PipelineStage(str, Enum):
     KNOWLEDGE_GAP = "knowledge_gap"
     HYPOTHESIS_GENERATION = "hypothesis_generation"
     HYPOTHESIS_REVIEW = "hypothesis_review"
-    EXPERIMENT_DESIGN = "experiment_design"
-    SMALL_VALIDATION = "small_validation"
+    EXPERIMENT_DESIGN = "experiment_design"  # legacy
+    SMALL_VALIDATION = "small_validation"  # legacy
+    ITERATIVE_EXPERIMENT = "iterative_experiment"
     REPORT_GENERATION = "report_generation"
 
 
@@ -142,8 +143,9 @@ class PipelineRunResult(BaseModel):
     knowledge_gap: Optional[Dict[str, Any]] = None
     hypothesis_generation: Optional[Dict[str, Any]] = None
     hypothesis_review: Optional[Dict[str, Any]] = None
-    experiment_design: Optional[Dict[str, Any]] = None
-    small_validation: Optional[Dict[str, Any]] = None
+    iterative_experiment: Optional[Dict[str, Any]] = None
+    experiment_design: Optional[Dict[str, Any]] = None  # legacy / 合成兼容
+    small_validation: Optional[Dict[str, Any]] = None  # legacy / 合成兼容
     report_generation: Optional[Dict[str, Any]] = None
     final_report: Optional[Dict[str, Any]] = None
     final_report_id: Optional[str] = Field(None, description="生成的报告 ID")
@@ -161,4 +163,4 @@ class LoopDryRunRequest(BaseModel):
     round_num: int = Field(default=2, ge=1, le=5, description="Discovery 轮次")
     hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="可选：模拟 Accept 判断")
     small_validation: Optional[Dict[str, Any]] = Field(default=None)
-    project_mode: str = Field(default="standard", description="standard | federated_learning")
+    project_mode: str = Field(default="standard", description="standard | general")

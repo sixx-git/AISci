@@ -23,8 +23,6 @@ from app.agents.literature_mining_agent import get_literature_mining_agent
 from app.agents.knowledge_gap_agent import get_knowledge_gap_agent
 from app.agents.hypothesis_generation_agent import get_hypothesis_generation_agent
 from app.agents.hypothesis_review_agent import get_hypothesis_review_agent
-from app.agents.experiment_design_agent import get_experiment_design_agent
-from app.agents.small_validation_agent import get_small_validation_agent
 from app.agents.report_generation_agent import get_report_generation_agent
 
 from app.models.pipeline import (
@@ -76,11 +74,9 @@ STAGE_DEFS: List[Dict[str, Any]] = [
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_GENERATION, "label": "假设生成"},
     {"idx": 4, "key": "hypothesis_review", "stage_enum": PipelineStage.HYPOTHESIS_REVIEW,
      "db_stage_enum": DB_PipelineStage.HYPOTHESIS_REVIEW, "label": "假设评估"},
-    {"idx": 5, "key": "experiment_design", "stage_enum": PipelineStage.EXPERIMENT_DESIGN,
-     "db_stage_enum": DB_PipelineStage.EXPERIMENT_DESIGN, "label": "实验设计"},
-    {"idx": 6, "key": "small_validation", "stage_enum": PipelineStage.SMALL_VALIDATION,
-     "db_stage_enum": DB_PipelineStage.SMALL_VALIDATION, "label": "小样验证"},
-    {"idx": 7, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
+    {"idx": 5, "key": "iterative_experiment", "stage_enum": PipelineStage.ITERATIVE_EXPERIMENT,
+     "db_stage_enum": DB_PipelineStage.ITERATIVE_EXPERIMENT, "label": "迭代实验"},
+    {"idx": 6, "key": "report_generation", "stage_enum": PipelineStage.REPORT_GENERATION,
      "db_stage_enum": DB_PipelineStage.REPORT_GENERATION, "label": "报告生成"},
 ]
 
@@ -815,27 +811,6 @@ class PipelineService:
             if fb and fb not in constraints:
                 constraints.append(fb)
 
-        fp = sv.get("federated_pilot") or {}
-        if fp:
-            mode = fp.get("execution_mode", "")
-            gate = fp.get("alignment_gate") or {}
-            if gate and not gate.get("skipped") and not gate.get("passed"):
-                constraints.append(
-                    f"VFL 对齐 gate 未通过: {gate.get('reason', '')}；"
-                    "下一轮须先满足 alignment_success_rate 阈值再设计训练实验。"
-                )
-            if fp.get("best_method"):
-                constraints.append(
-                    f"联邦 pilot 最佳方法={fp.get('best_method')}（mode={mode}）；"
-                    "实验设计须围绕该结果做对照/ablation。"
-                )
-            from app.core.iterative_science import actions_to_feedback_constraints
-
-            actions = fp.get("replan_actions") or (
-                (fp.get("skill_outputs") or {}).get("federated_replanning") or {}
-            ).get("replan_actions") or []
-            constraints.extend(actions_to_feedback_constraints(actions))
-
         sv_replan = sv.get("replan_actions") or []
         if sv_replan:
             constraints.extend(actions_to_feedback_constraints(sv_replan))
@@ -1035,27 +1010,6 @@ class PipelineService:
         )
         self._last_pilot_results = self._build_pilot_results_payload(validation_result)
 
-        sv = validation_result or {}
-        fp = sv.get("federated_pilot") or {}
-        if fp:
-            gate = fp.get("alignment_gate") or {}
-            self._record_closed_loop_event(
-                "federated_campaign",
-                {
-                    "execution_mode": fp.get("execution_mode"),
-                    "best_method": fp.get("best_method"),
-                    "gate_passed": gate.get("passed") if gate else None,
-                    "replan_actions": (fp.get("replan_actions") or [])[:4],
-                    "summary": fp.get("analysis", {}).get("summary") or fp.get("result_source", ""),
-                    "quality_trend_entry": {
-                        "stage": "federated_pilot",
-                        "score": 8.5 if fp.get("execution_mode") == "uploaded_csv"
-                        else (5.0 if fp.get("execution_mode") == "gate_blocked" else 6.5),
-                        "label": "联邦 Pilot",
-                    },
-                },
-            )
-
         hg = results.get("hypothesis_generation") or {}
         tree = hg.get("hypothesis_tree")
         hypotheses = hg.get("hypotheses") or []
@@ -1188,33 +1142,8 @@ class PipelineService:
         }
 
     def _needs_teaching_auto_refinement(self, results: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """P2-6: 判断 Teaching 模式是否需从实验设计自动重跑。"""
-        sv = results.get("small_validation") or {}
-        ed = results.get("experiment_design") or {}
-        reasons: List[str] = []
-
-        sb = sv.get("sandbox_execution") or {}
-        if sb and not sb.get("success"):
-            reasons.append("沙箱验证失败")
-
-        sc = ((ed.get("skill_outputs") or {}).get("experiment_sanity_check") or {}).get("data") or {}
-        if sc and sc.get("executable") is False:
-            reasons.append("实验 sanity check 未通过")
-
-        gate = ed.get("executability_gate") or {}
-        if gate and not gate.get("passed"):
-            reasons.append(
-                f"实验可执行性 Gate 未通过 (score={gate.get('score')})"
-            )
-
-        if sv.get("human_review_required"):
-            reasons.append("验证阶段标记需人工复核")
-
-        pq = sv.get("plot_quality") or {}
-        if pq.get("needs_human_review"):
-            reasons.append("图表质量未达标")
-
-        return bool(reasons), reasons
+        """已淘汰：teaching_auto 依赖旧实验设计/小样验证阶段。"""
+        return False, []
 
     def _run_teaching_auto_refinement(
         self,
@@ -1224,79 +1153,8 @@ class PipelineService:
         project_id: str,
         project_mode: str,
     ) -> Optional[Dict[str, Any]]:
-        """P2-6: Teaching 轻量自动闭环 — 验证/sanity 失败时重跑实验设计→验证→报告。"""
-        if self._run_options.get("iteration_mode") != "teaching_auto":
-            return None
-        if self._run_options.get("pipeline_mode") != PipelineMode.TEACHING.value:
-            return None
-        if not self._run_options.get("enable_teaching_auto_refinement", True):
-            return None
-        max_rounds = int(self._run_options.get("teaching_auto_refinement_max", 1))
-        if self._teaching_refinement_count >= max_rounds:
-            return None
-
-        needs, reasons = self._needs_teaching_auto_refinement(results)
-        if not needs:
-            return None
-
-        self._teaching_refinement_count += 1
-        round_num = self._teaching_refinement_count
-        logger.info(f"[Teaching] 自动闭环 R{round_num}: {reasons}")
-
-        pre_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_before")
-        self._validation_feedback_constraints = self._build_validation_feedback_constraints(
-            results.get("small_validation"),
-            results.get("experiment_design"),
-        )
-        self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
-
-        self._record_closed_loop_event(
-            "teaching_auto_refinement",
-            {
-                "round": round_num,
-                "reasons": reasons,
-                "quality_trend_entry": {"stage": f"teaching_refine_r{round_num}", "score": 5.0},
-            },
-        )
-
-        self._run_stage(stages, 5, results, research_question, project_id,
-            lambda: self._exec_experiment_design(
-                results.get("hypothesis_review"), project_id, project_mode,
-            ))
-        self._apply_executability_gate(results, project_id, round_num=round_num)
-        if not (
-            self._executability_blocked
-            and self._run_options.get("enable_executability_gate", True)
-        ):
-            self._run_stage(stages, 6, results, research_question, project_id,
-                lambda: self._exec_small_validation(
-                    results.get("experiment_design"),
-                    results.get("hypothesis_review"),
-                    project_id,
-                    project_mode,
-                ))
-        sv_result = results.get("small_validation")
-        if isinstance(sv_result, dict):
-            self._apply_post_validation_updates(results, sv_result)
-        self._executability_blocked = False
-
-        def _exec_report():
-            return self._exec_report_generation(results, self._build_pipeline_run_info(), project_mode)
-
-        self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
-        final_report_id = self._persist_pipeline_report(project_id, results)
-        post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"teaching_R{round_num}_after")
-
-        return {
-            "round": round_num,
-            "reasons": reasons,
-            "reran": True,
-            "report_ran": True,
-            "final_report_id": final_report_id,
-            "snapshot_before": pre_snapshot,
-            "snapshot_after": post_snapshot,
-            "version_snapshots": list(self._iteration_snapshots),
-        }
+        """已淘汰：主路径不再运行 teaching 自动精化。"""
+        return None
 
     def _merge_science_iteration_run_options(self, project_id: str) -> None:
         """将 project.config.science_iteration 合并进 run_options。"""
@@ -1362,290 +1220,13 @@ class PipelineService:
             logger.warning("[Pipeline] 自动 gap enrichment 失败: %s", exc)
             return None
 
-    def _run_experiment_self_correction_loop(
-        self,
-        stages: List[PipelineStageLog],
-        results: Dict[str, Any],
-        research_question: str,
-        project_id: str,
-        project_mode: str,
-        *,
-        validation_skipped: bool = False,
-    ) -> Optional[Dict[str, Any]]:
-        """实验设计 ↔ 数据采集 ↔ 沙箱验证 自迭代自纠错环（通用模式）。"""
-        from app.core.iterative_science import (
-            evaluate_general_validation_improvement,
-            needs_experiment_self_correction,
-        )
+    def _run_experiment_self_correction_loop(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """已淘汰：自我纠正改由 iterative_experiment / shaxiang 脚本修补承担。"""
+        return None
 
-        if not self._run_options.get("enable_experiment_self_correction", True):
-            return None
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            return None
-        if self._run_options.get("iteration_mode") == "discovery_auto":
-            return None
-        if self._run_options.get("iteration_mode") == "teaching_auto":
-            return None
-
-        max_rounds = int(self._run_options.get("experiment_self_correction_max", 2))
-        round_records: List[Dict[str, Any]] = []
-
-        while self._experiment_correction_count < max_rounds:
-            needs, reasons, replan_actions = needs_experiment_self_correction(
-                results,
-                correction_count=self._experiment_correction_count,
-                max_rounds=max_rounds,
-                executability_blocked=self._executability_blocked,
-                validation_skipped=validation_skipped and not results.get("small_validation"),
-            )
-            if not needs:
-                break
-
-            ed = results.get("experiment_design") or {}
-            dr = ed.get("data_requirements") or {}
-            uploaded = int(dr.get("uploaded_dataset_count") or 0)
-            if any(a.get("action_id") == "upload_required_data" for a in replan_actions) and uploaded == 0:
-                gap_meta = self._try_auto_gap_enrichment(project_id, results)
-                if gap_meta and (gap_meta.get("import_meta") or {}).get("imported_count", 0) > 0:
-                    logger.info("[SelfCorrection] gap enrichment 已导入数据，继续 replan")
-                else:
-                    results["awaiting_data_upload"] = {
-                        "reason": "缺少与 experiment_spec 匹配的数据",
-                        "gaps": ed.get("data_gap") or dr.get("gaps") or [],
-                        "replan_actions": replan_actions[:6],
-                        "resume_from_stage": "experiment_design",
-                        "next_action": "upload_datasets",
-                    }
-                    self._record_closed_loop_decision(
-                        trigger="data_gap_blocked",
-                        action="await_upload",
-                        reason="数据缺口，暂停自迭代直至上传",
-                        next_stage="experiment_design",
-                        round_num=self._experiment_correction_count,
-                        metadata={"replan_actions": replan_actions[:4]},
-                    )
-                    return {
-                        "rounds": round_records,
-                        "awaiting_data_upload": results["awaiting_data_upload"],
-                        "stopped_reason": "need_data_upload",
-                    }
-
-            self._experiment_correction_count += 1
-            round_num = self._experiment_correction_count
-            sv_before = dict(results.get("small_validation") or {})
-
-            logger.info("[SelfCorrection] R%s: %s", round_num, reasons)
-            pre_snapshot = self._capture_iteration_snapshot(
-                round_num, results, label=f"self_correct_R{round_num}_before"
-            )
-
-            if replan_actions:
-                sv_stub = results.get("small_validation") or {}
-                if isinstance(sv_stub, dict):
-                    sv_stub["replan_actions"] = replan_actions
-                    results["small_validation"] = sv_stub
-
-            self._validation_feedback_constraints = self._build_validation_feedback_constraints(
-                results.get("small_validation"),
-                results.get("experiment_design"),
-            )
-            self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
-
-            self._record_closed_loop_event(
-                "experiment_self_correction",
-                {
-                    "round": round_num,
-                    "reasons": reasons,
-                    "replan_actions": replan_actions[:6],
-                    "quality_trend_entry": {"stage": f"self_correct_r{round_num}", "score": 4.5},
-                },
-            )
-            self._record_closed_loop_decision(
-                trigger="validation_fail",
-                action="replan_experiment_design",
-                reason="; ".join(reasons[:3])[:300],
-                next_stage="experiment_design_replan",
-                round_num=round_num,
-                metadata={"replan_actions": replan_actions[:4]},
-            )
-
-            self._run_stage(stages, 5, results, research_question, project_id,
-                lambda: self._exec_experiment_design(
-                    results.get("hypothesis_review"), project_id, project_mode,
-                ))
-            self._apply_executability_gate(results, project_id, round_num=round_num)
-            self._executability_blocked = False
-
-            self._run_stage(stages, 6, results, research_question, project_id,
-                lambda: self._exec_small_validation(
-                    results.get("experiment_design"),
-                    results.get("hypothesis_review"),
-                    project_id,
-                    project_mode,
-                ))
-            sv_after = results.get("small_validation")
-            if isinstance(sv_after, dict):
-                self._apply_post_validation_updates(results, sv_after)
-
-            improvement = evaluate_general_validation_improvement(sv_before, sv_after or {})
-            post_snapshot = self._capture_iteration_snapshot(
-                round_num, results, label=f"self_correct_R{round_num}_after"
-            )
-            round_records.append({
-                "round": round_num,
-                "reasons": reasons,
-                "improved": improvement.get("improved"),
-                "improvement": improvement,
-                "replan_actions": replan_actions[:6],
-                "snapshot_before": pre_snapshot,
-                "snapshot_after": post_snapshot,
-            })
-
-            validation_skipped = False
-            if improvement.get("improved") and (sv_after or {}).get("verifiable_passed"):
-                break
-            if round_num >= max_rounds:
-                break
-            if not improvement.get("improved") and round_num >= 1:
-                stagnation_limit = int(self._run_options.get("gate_stagnant_rounds", 2))
-                if round_num >= stagnation_limit:
-                    logger.info("[SelfCorrection] 验证未改善，停止自迭代")
-                    break
-
-        if not round_records:
-            return None
-
-        orch = self._get_science_iteration_orchestrator()
-        try:
-            orch.record_milestone(
-                results,
-                "validation_fail",
-                label=f"self_correct_R{self._experiment_correction_count}",
-                actions=[f"rounds={len(round_records)}"],
-            )
-        except Exception:
-            pass
-
-        return {
-            "rounds": round_records,
-            "total_rounds": len(round_records),
-            "final_verifiable_passed": (results.get("small_validation") or {}).get("verifiable_passed"),
-            "version_snapshots": list(self._iteration_snapshots),
-        }
-
-    def _run_federated_campaign_refinement(
-        self,
-        stages: List[PipelineStageLog],
-        results: Dict[str, Any],
-        research_question: str,
-        project_id: str,
-        project_mode: str,
-        discovery_round: int = 0,
-    ) -> Optional[Dict[str, Any]]:
-        """联邦 Campaign 自动第二轮：pilot 反馈 → 修订实验设计 → 重跑 pilot。"""
-        if project_mode != ProjectMode.FEDERATED_LEARNING.value:
-            return None
-        if not self._run_options.get("enable_federated_campaign_loop", True):
-            return None
-
-        if discovery_round:
-            dedup_key = f"discovery_r{discovery_round}"
-            if dedup_key in self._fed_campaign_discovery_done:
-                return None
-        else:
-            max_rounds = int(self._run_options.get("federated_campaign_max", 2))
-            if self._federated_campaign_count >= max_rounds - 1:
-                return None
-
-        from app.core.iterative_science import (
-            evaluate_pilot_improvement,
-            needs_federated_campaign_refinement,
-        )
-
-        sv = results.get("small_validation") or {}
-        needs, reasons = needs_federated_campaign_refinement(sv)
-        if not needs:
-            return None
-
-        if discovery_round:
-            self._fed_campaign_discovery_done.add(f"discovery_r{discovery_round}")
-            round_num = discovery_round
-        else:
-            self._federated_campaign_count += 1
-            round_num = self._federated_campaign_count + 1
-
-        pilot_before = dict(sv.get("federated_pilot") or {})
-
-        logger.info(f"[Federated Campaign] 自动 R{round_num}: {reasons}")
-
-        pre_snapshot = self._capture_iteration_snapshot(
-            round_num, results, label=f"FL_Campaign_R{round_num}_before"
-        )
-        self._validation_feedback_constraints = self._build_validation_feedback_constraints(
-            sv, results.get("experiment_design")
-        )
-        self._last_pilot_results = self._build_pilot_results_payload(sv)
-
-        self._record_closed_loop_event(
-            "federated_campaign_refine",
-            {
-                "round": round_num,
-                "reasons": reasons,
-                "pilot_mode_before": pilot_before.get("execution_mode"),
-                "quality_trend_entry": {"stage": f"federated_r{round_num}", "score": 5.5},
-            },
-        )
-
-        self._run_stage(stages, 5, results, research_question, project_id,
-            lambda: self._exec_experiment_design(
-                results.get("hypothesis_review"), project_id, project_mode,
-            ))
-        self._run_stage(stages, 6, results, research_question, project_id,
-            lambda: self._exec_small_validation(
-                results.get("experiment_design"),
-                results.get("hypothesis_review"),
-                project_id,
-                project_mode,
-            ))
-        sv_after = results.get("small_validation")
-        if isinstance(sv_after, dict):
-            self._apply_post_validation_updates(results, sv_after)
-
-        pilot_after = (sv_after or {}).get("federated_pilot") or {}
-        improvement = evaluate_pilot_improvement(pilot_before, pilot_after)
-        post_snapshot = self._capture_iteration_snapshot(
-            round_num, results, label=f"FL_Campaign_R{round_num}_after"
-        )
-
-        self._record_closed_loop_event(
-            "federated_campaign",
-            {
-                "round": round_num,
-                "execution_mode": pilot_after.get("execution_mode"),
-                "best_method": pilot_after.get("best_method"),
-                "gate_passed": (pilot_after.get("alignment_gate") or {}).get("passed"),
-                "replan_actions": (pilot_after.get("replan_actions") or [])[:4],
-                "summary": improvement.get("summary"),
-                "improved": improvement.get("improved"),
-                "quality_trend_entry": {
-                    "stage": f"federated_pilot_r{round_num}",
-                    "score": 8.0 if improvement.get("improved") else 5.5,
-                    "label": f"FL R{round_num}",
-                },
-            },
-        )
-
-        return {
-            "round": round_num,
-            "reasons": reasons,
-            "reran": True,
-            "improvement": improvement,
-            "snapshot_before": pre_snapshot,
-            "snapshot_after": post_snapshot,
-            "pilot_before_mode": pilot_before.get("execution_mode"),
-            "pilot_after_mode": pilot_after.get("execution_mode"),
-            "version_snapshots": list(self._iteration_snapshots),
-        }
+    def _run_federated_campaign_refinement(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """已淘汰：联邦 Campaign 环依赖旧小样验证，第一期已排除。"""
+        return None
 
     def _run_discovery_loop(
         self,
@@ -1718,13 +1299,10 @@ class PipelineService:
             ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
             decision = ensemble.get("decision") or hr.get("ensemble_decision")
             overall = ensemble.get("overall") or hr.get("ensemble_overall")
-            fed_accept = accept_meta.get("federated_acceptance") or {}
 
             weaknesses = list(ensemble.get("weaknesses") or [])[:4]
             suggestions = list(ensemble.get("revision_suggestions") or [])[:4]
             self._discovery_refinement = weaknesses + suggestions
-            if project_mode == ProjectMode.FEDERATED_LEARNING.value and fed_accept.get("blockers"):
-                self._discovery_refinement.extend(fed_accept["blockers"][:3])
             pre_snapshot = self._capture_iteration_snapshot(round_num - 1, results, label=f"R{round_num - 1}_before_refine")
             df_before = None
             try:
@@ -1807,55 +1385,34 @@ class PipelineService:
             self._run_stage(stages, 4, results, research_question, project_id,
                 lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
             self._run_stage(stages, 5, results, research_question, project_id,
-                lambda: self._exec_experiment_design(
+                lambda: self._exec_iterative_experiment(
                     results.get("hypothesis_review"), project_id, project_mode,
                 ))
-            self._apply_executability_gate(results, project_id, round_num=round_num)
-            skip_validation = self._executability_blocked and self._run_options.get(
-                "enable_executability_gate", True
-            )
-            if not skip_validation:
-                self._run_stage(stages, 6, results, research_question, project_id,
-                    lambda: self._exec_small_validation(
-                        results.get("experiment_design"),
-                        results.get("hypothesis_review"),
-                        project_id,
-                        project_mode,
-                    ))
-            sv_result = results.get("small_validation")
-            if isinstance(sv_result, dict):
-                self._apply_post_validation_updates(results, sv_result)
-            elif skip_validation:
+            ie = results.get("iterative_experiment") or {}
+            if isinstance(ie, dict):
+                if ie.get("experiment_design"):
+                    results["experiment_design"] = ie["experiment_design"]
+                if ie.get("small_validation"):
+                    results["small_validation"] = ie["small_validation"]
+                    self._apply_post_validation_updates(results, ie["small_validation"])
+            if ie.get("status") in {"blocked_need_data", "blocked_need_hypothesis"}:
                 self._record_closed_loop_decision(
-                    trigger="executability_blocked",
-                    action="skip_validation",
-                    reason="可执行性 Gate 未通过，跳过本轮沙箱验证",
-                    next_stage="report_generation",
+                    trigger="iterative_experiment_blocked",
+                    action="skip_report",
+                    reason=ie.get("warning") or "迭代实验未完成，跳过本轮报告",
+                    next_stage="human_review",
                     round_num=round_num,
                 )
-
-            if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-                fed_ref = self._run_federated_campaign_refinement(
-                    stages,
-                    results,
-                    research_question,
-                    project_id,
-                    project_mode,
-                    discovery_round=round_num,
-                )
-                if fed_ref:
-                    history[-1]["federated_campaign"] = fed_ref
-                    fed_accept = evaluate_discovery_federated_acceptance(
-                        results.get("hypothesis_review") or {}, results.get("small_validation") or {}
-                    )
-                    history[-1]["federated_acceptance"] = fed_accept
+                history[-1]["status"] = "blocked"
+                history[-1]["iterative_experiment_status"] = ie.get("status")
+                continue
 
             def _exec_report():
                 return self._exec_report_generation(
                     results, self._build_pipeline_run_info(), project_mode,
                 )
 
-            self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+            self._run_stage(stages, 6, results, research_question, project_id, _exec_report)
             final_report_id = self._persist_pipeline_report(project_id, results)
             post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
             history[-1]["snapshot_after"] = post_snapshot
@@ -1941,11 +1498,14 @@ class PipelineService:
         return result
 
     def _resume_phase_to_start_idx(self, resume_phase: str) -> int:
+        # 与 STAGE_DEFS 下标对齐（0..6）；超出 len 表示后续不再执行
         mapping = {
             "after_hypothesis_generation": 4,
             "after_hypothesis_review": 5,
+            "after_iterative_experiment": 6,
+            # legacy 别名 → 报告阶段
             "after_experiment_design": 6,
-            "after_small_validation": 7,
+            "after_small_validation": 6,
             "after_data_acquisition": 2,
             "after_report_generation": 7,
         }
@@ -2169,7 +1729,11 @@ class PipelineService:
                 results.update(cp_results)
             resume_phase = cp.get("resume_phase") or ""
             start_idx = max(start_idx, self._resume_phase_to_start_idx(resume_phase))
-            if resume_phase == "after_small_validation":
+            if resume_phase in {
+                "after_small_validation",
+                "after_experiment_design",
+                "after_iterative_experiment",
+            }:
                 self._skip_to_post_validation = True
             elif resume_phase == "after_report_generation":
                 self._finalize_report_after_gate = True
@@ -2324,103 +1888,54 @@ class PipelineService:
                 self._ensure_counterfactual_preview(results, research_question)
                 self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
-            # ── 阶段 6: ExperimentDesignAgent ──
+            # ── 阶段 6: 迭代实验（替换原实验设计 + 小样验证）──
+            teaching_report_ran = False
             if start_idx <= 5:
                 self._ensure_counterfactual_preview(results, research_question)
                 self._run_stage(stages, 5, results, research_question, project_id,
-                    lambda: self._exec_experiment_design(
+                    lambda: self._exec_iterative_experiment(
                         results.get("hypothesis_review"),
                         project_id,
                         project_mode,
                     ))
-                self._apply_executability_gate(results, project_id)
-                self._maybe_pause_for_hitl_gate("experiment_design", results)
-            
-            # ── 阶段 7: SmallValidationAgent ──
-            teaching_report_ran = False
-            skip_validation_run = getattr(self, "_skip_to_post_validation", False)
-            if self._executability_blocked and self._run_options.get("enable_executability_gate", True):
-                skip_validation_run = True
-            if start_idx <= 6 and not skip_validation_run:
-                self._run_stage(stages, 6, results, research_question, project_id,
-                    lambda: self._exec_small_validation(
-                        results.get("experiment_design"),
-                        results.get("hypothesis_review"),
-                        project_id,
-                        project_mode,
-                    ))
-                sv_first = results.get("small_validation")
-                if isinstance(sv_first, dict):
-                    self._apply_post_validation_updates(results, sv_first)
-                self._run_science_iteration_hooks(
-                    "after_small_validation", results, research_question, project_id, project_mode,
-                )
-                if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-                    self._capture_iteration_snapshot(1, results, label="FL_Campaign_R1")
-                if self._run_options.get("pipeline_mode") == PipelineMode.TEACHING.value:
-                    self._capture_iteration_snapshot(0, results, label="teaching_R0_initial")
-                self._maybe_pause_for_hitl_gate("small_validation", results)
-            elif skip_validation_run:
-                sv_first = results.get("small_validation")
-                if isinstance(sv_first, dict):
-                    self._apply_post_validation_updates(results, sv_first)
-                self._skip_to_post_validation = False
+                ie = results.get("iterative_experiment") or {}
+                # 兼容报告/旧闭环：附带合成 experiment_design / small_validation
+                if isinstance(ie, dict):
+                    if ie.get("experiment_design"):
+                        results["experiment_design"] = ie["experiment_design"]
+                    if ie.get("small_validation"):
+                        results["small_validation"] = ie["small_validation"]
+                        self._apply_post_validation_updates(results, ie["small_validation"])
+                self._maybe_pause_for_hitl_gate("iterative_experiment", results)
 
-            # ── 联邦 Campaign 自动第二轮（实验设计→pilot 迭代）──
-            if start_idx <= 6 and project_mode == ProjectMode.FEDERATED_LEARNING.value:
-                fed_campaign_meta = self._run_federated_campaign_refinement(
-                    stages, results, research_question, project_id, project_mode
-                )
-                if fed_campaign_meta:
-                    results["federated_campaign_refinement"] = fed_campaign_meta
+            # 旧实验自纠错 / 联邦 Campaign 已移除：自我纠正由 shaxiang 脚本修补承担
 
-            # ── 通用自纠错环：实验设计 → 验证 → 修订（human / general 模式）──
-            if start_idx <= 6 and project_mode != ProjectMode.FEDERATED_LEARNING.value:
-                correction_meta = self._run_experiment_self_correction_loop(
-                    stages,
-                    results,
-                    research_question,
-                    project_id,
-                    project_mode,
-                    validation_skipped=skip_validation_run,
-                )
-                if correction_meta:
-                    results["experiment_self_correction"] = correction_meta
-                    self._run_science_iteration_hooks(
-                        "after_experiment_self_correction",
-                        results,
-                        research_question,
-                        project_id,
-                        project_mode,
-                    )
+            # ── Teaching 轻量自动闭环：暂跳过（依赖旧 experiment_design 重跑）──
 
-            # ── P2-6: Teaching 轻量自动闭环（仅 teaching_auto 模式）──
-            if start_idx <= 6 and self._run_options.get("iteration_mode") == "teaching_auto":
-                teaching_meta = self._run_teaching_auto_refinement(
-                    stages, results, research_question, project_id, project_mode
-                )
-                if teaching_meta:
-                    results["teaching_auto_refinement"] = teaching_meta
-                    if teaching_meta.get("final_report_id"):
-                        final_report_id = teaching_meta["final_report_id"]
-                        teaching_report_ran = True
-                    self._run_science_iteration_hooks(
-                        "after_teaching_refinement", results, research_question, project_id, project_mode,
-                    )
-            
-            # ── 阶段 9: ReportGenerationAgent ──
+            # ── 阶段 7: ReportGenerationAgent ──
+            ie_status = (results.get("iterative_experiment") or {}).get("status")
+            block_report = ie_status in {
+                "blocked_need_data",
+                "blocked_need_hypothesis",
+            }
             if getattr(self, "_finalize_report_after_gate", False):
                 self._finalize_report_after_gate = False
                 final_report_id = self._persist_pipeline_report(project_id, results)
-            elif start_idx <= 7 and not teaching_report_ran:
+            elif start_idx <= 6 and not teaching_report_ran and not block_report:
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
                         results, pipeline_run_info, project_mode
                     )
-                self._run_stage(stages, 7, results, research_question, project_id, _exec_report)
+                self._run_stage(stages, 6, results, research_question, project_id, _exec_report)
                 final_report_id = self._persist_pipeline_report(project_id, results)
                 self._maybe_pause_for_hitl_gate("report_generation", results)
+            elif block_report:
+                results["report_generation"] = {
+                    "status": "skipped",
+                    "warning": (results.get("iterative_experiment") or {}).get("warning")
+                    or "迭代实验未完成，已跳过报告生成",
+                }
 
             # ── P5: Discovery 开放循环（仅 discovery_auto 模式）──
             if (
@@ -3327,32 +2842,15 @@ class PipelineService:
         except Exception as exc:
             logger.warning(f"回写假设评审分数失败: {exc}")
     
-    def _exec_experiment_design(
+    def _exec_iterative_experiment(
         self,
         hypothesis_review: Optional[Dict],
         project_id: str = "",
         project_mode: str = "general",
-    ):
-        agent = get_experiment_design_agent()
+    ) -> Dict[str, Any]:
+        """单一阶段：迭代实验（替换原实验设计 + 小样验证）。"""
         hr = hypothesis_review or {}
-        reviews = hr.get("reviews", [])
-        if not reviews:
-            pid = project_id or (self.db_pipeline_run.project_id if self.db_pipeline_run else "")
-            hg = self._hydrate_hypothesis_generation(
-                self._stage_results.get("hypothesis_generation"),
-                pid,
-            )
-            if hg.get("hypotheses"):
-                return {
-                    "error": "missing_hypothesis_reviews",
-                    "summary": "假设评审结果为空，无法生成实验设计。请重新运行「假设评估」阶段。",
-                    "hypothesis_count": len(hg.get("hypotheses") or []),
-                }
-            return {
-                "error": "missing_hypothesis_reviews",
-                "summary": "未找到候选假设或评审结果，无法生成实验设计。",
-            }
-
+        reviews = hr.get("reviews") or []
         primary_idx = hr.get("primary_index")
         if primary_idx is None:
             ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
@@ -3361,534 +2859,30 @@ class PipelineService:
             primary_idx = int(primary_idx)
         except (TypeError, ValueError):
             primary_idx = 0
-        primary_idx = min(max(0, primary_idx), len(reviews) - 1)
-        best_review = reviews[primary_idx]
-        if project_id:
-            from app.services.dataset_service import DatasetService
-            from app.services.data_finder_slim import slim_data_context
+        hypothesis_text = ""
+        if reviews:
+            primary_idx = min(max(0, primary_idx), len(reviews) - 1)
+            hypothesis_text = (reviews[primary_idx] or {}).get("hypothesis") or ""
 
-            full_data_context = DatasetService(self.db).get_project_data_context(project_id)
-            data_context = slim_data_context(full_data_context)
-            project_datasets = full_data_context.get("datasets") or []
-        else:
-            data_context = {}
-            project_datasets = []
-        data_files: List[str] = []
-        for ds in data_context.get("datasets") or []:
-            if isinstance(ds, dict) and ds.get("file_path"):
-                data_files.append(str(ds["file_path"]))
-        lit_mining = self._stage_results.get("literature_mining", {})
+        from app.services.iterative_experiment_service import get_iterative_experiment_service
 
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            from app.services.federated_experiment_service import get_federated_experiment_service
-            import asyncio
+        out = get_iterative_experiment_service().build_pipeline_stage_output(
+            project_id, hypothesis_text
+        )
+        # 无数据阻断时，标记 executability，防止盲目出报告伪成功
+        if out.get("status") == "blocked_need_data":
+            self._executability_blocked = True
+        return out
 
-            fl_context = data_context.get("fl_context") or {}
-            fl_service = get_federated_experiment_service(self.db)
-            plan = asyncio.run(
-                fl_service.build_experiment_plan(
-                    hypothesis=best_review.get("hypothesis", ""),
-                    fl_context=fl_context,
-                )
-            )
-            if self._validation_feedback_constraints or self._federated_campaign_count > 0:
-                sv = self._stage_results.get("small_validation") or {}
-                fp = sv.get("federated_pilot") or {}
-                plan = fl_service.apply_campaign_feedback(
-                    plan,
-                    validation_feedback=self._validation_feedback_constraints,
-                    replan_actions=fp.get("replan_actions"),
-                    campaign_round=self._federated_campaign_count + 2,
-                )
-            return fl_service.build_experiment_design_result(
-                hypothesis=best_review.get("hypothesis", ""),
-                fl_context=fl_context,
-                plan=plan,
-            )
-
-        from app.skills.counterfactual.counterfactual_preview_skill import (
-            build_counterfactual_feedback_constraints,
+    def _exec_experiment_design(self, *args, **kwargs):
+        raise RuntimeError(
+            "experiment_design 阶段已移除，请使用 iterative_experiment / 迭代实验 API"
         )
 
-        cf_feedback = build_counterfactual_feedback_constraints(
-            self._stage_results.get("counterfactual_preview"),
+    def _exec_small_validation(self, *args, **kwargs):
+        raise RuntimeError(
+            "small_validation 阶段已移除，请使用 iterative_experiment / 迭代实验 API"
         )
-        result = agent.design_experiment(
-            hypothesis=best_review.get("hypothesis", ""),
-            rationale=best_review.get("rationale"),
-            novelty=str(best_review.get("novelty", "")),
-            testability=str(best_review.get("testability", "")),
-            required_data=best_review.get("required_data"),
-            possible_method=best_review.get("possible_method"),
-            risk=str(best_review.get("risk", "")),
-            data_files=data_files,
-            project_datasets=project_datasets,
-            literature_facts=lit_mining.get("facts", []),
-            project_mode=project_mode,
-            validation_feedback=list(cf_feedback or [])
-            + list(self._validation_feedback_constraints or [])
-            + list(self._human_feedback_constraints or []),
-            pilot_results=self._last_pilot_results or None,
-        )
-        result_dict = result if isinstance(result, dict) else self._safe_model_dump(result)
-        if project_datasets:
-            result_dict["project_datasets"] = project_datasets
-            if not (result_dict.get("datasets") or "").strip():
-                result_dict["datasets"] = "\n".join(
-                    f"- {d.get('filename', 'dataset')} "
-                    f"({d.get('data_type', 'unknown')}, {d.get('n_rows', '?')} 行 × {d.get('n_columns', '?')} 列)"
-                    for d in project_datasets
-                    if isinstance(d, dict)
-                )
-            result_dict["data_gap"] = list(dict.fromkeys(
-                (result_dict.get("data_gap") or [])
-                if isinstance(result_dict.get("data_gap"), list)
-                else ([result_dict["data_gap"]] if result_dict.get("data_gap") else [])
-            ))
-            src_lines = []
-            for d in project_datasets:
-                if not isinstance(d, dict):
-                    continue
-                cols = d.get("columns") or []
-                col_preview = ", ".join(str(c) for c in cols[:12])
-                src_lines.append(
-                    f"{d.get('filename', 'dataset')}: {col_preview or '无列信息'}"
-                )
-            if src_lines and not (result_dict.get("source_data") or "").strip():
-                result_dict["source_data"] = "\n".join(src_lines)
-        hg = self._stage_results.get("hypothesis_generation") or {}
-        hypotheses = hg.get("hypotheses") or []
-        hypo_meta = hypotheses[primary_idx] if hypotheses and primary_idx < len(hypotheses) else {}
-        from app.core.iterative_science import (
-            attach_verifiable_specs_to_hypotheses,
-            build_verifiable_hypothesis_spec_for_mode,
-        )
-
-        spec = build_verifiable_hypothesis_spec_for_mode(
-            best_review.get("hypothesis", ""),
-            project_mode=project_mode,
-            hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
-            experiment_design=result_dict,
-        )
-        result_dict["verifiable_hypothesis"] = spec
-        result_dict["hypothesis"] = best_review.get("hypothesis", "") or ""
-        self._assess_and_merge_data_adequacy(
-            result_dict,
-            best_review=best_review if isinstance(best_review, dict) else {},
-            hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
-            project_datasets=project_datasets,
-            project_mode=project_mode,
-        )
-        result_dict["data_requirements"] = self._build_data_requirements(
-            best_review=best_review if isinstance(best_review, dict) else {},
-            hypo_meta=hypo_meta if isinstance(hypo_meta, dict) else {},
-            data_context=data_context,
-            result_dict=result_dict,
-        )
-        if hg.get("hypotheses"):
-            refreshed = attach_verifiable_specs_to_hypotheses(
-                hg,
-                project_mode=project_mode,
-                experiment_design=result_dict,
-            )
-            self._stage_results["hypothesis_generation"] = refreshed
-        return result_dict
-    
-    def _assess_and_merge_data_adequacy(
-        self,
-        result_dict: Dict[str, Any],
-        *,
-        best_review: Dict[str, Any],
-        hypo_meta: Dict[str, Any],
-        project_datasets: List[Dict[str, Any]],
-        project_mode: str,
-    ) -> Dict[str, Any]:
-        """运行 DataAdequacyAssessmentSkill 并合并缺口到实验设计。"""
-        import asyncio
-        from app.skills.data.data_adequacy_assessment_skill import (
-            DataAdequacyAssessmentSkill,
-            merge_adequacy_into_experiment_design,
-        )
-
-        uploaded = [d for d in project_datasets if isinstance(d, dict)]
-
-        async def _run():
-            skill = DataAdequacyAssessmentSkill()
-            return await skill.run(
-                input_data={
-                    "hypothesis": result_dict.get("hypothesis") or best_review.get("hypothesis") or "",
-                    "required_data": best_review.get("required_data") or hypo_meta.get("required_data") or "",
-                    "validation_target": hypo_meta.get("validation_target") or "",
-                    "methods": result_dict.get("methods") or "",
-                    "metrics": result_dict.get("metrics") or "",
-                    "uploaded_datasets": uploaded,
-                    "project_mode": project_mode,
-                },
-                context={"stage": "experiment_design", "project_id": getattr(self.db_pipeline_run, "project_id", "")},
-            )
-
-        try:
-            skill_result = asyncio.run(_run())
-            adequacy = skill_result.data if skill_result.success and skill_result.data else {}
-        except Exception as exc:
-            logger.warning("[Pipeline] 数据充分性评估失败: %s", exc)
-            from app.skills.data.data_adequacy_assessment_skill import rule_fallback_adequacy
-            adequacy = rule_fallback_adequacy(
-                hypothesis=result_dict.get("hypothesis") or best_review.get("hypothesis") or "",
-                required_data=best_review.get("required_data") or "",
-                validation_target=hypo_meta.get("validation_target") or "",
-                uploaded_datasets=uploaded,
-            )
-
-        merge_adequacy_into_experiment_design(
-            result_dict,
-            adequacy,
-            round_id=self.run_id,
-        )
-        return adequacy
-
-    def _build_data_requirements(
-        self,
-        *,
-        best_review: Dict[str, Any],
-        hypo_meta: Dict[str, Any],
-        data_context: Dict[str, Any],
-        result_dict: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """实验设计阶段输出：告知用户需上传何种数据，并摘要已上传数据集。"""
-        from app.services.experiment_spec_service import (
-            slim_experiment_spec_for_storage,
-            validate_spec_against_datasets,
-        )
-
-        datasets = data_context.get("datasets") or []
-        uploaded = [d for d in datasets if isinstance(d, dict)]
-        required_data = (best_review.get("required_data") or hypo_meta.get("required_data") or "").strip()
-        validation_target = (hypo_meta.get("validation_target") or "").strip()
-        metrics = (result_dict.get("metrics") or "").strip()
-        gaps = result_dict.get("data_gap") or []
-        if isinstance(gaps, str):
-            gaps = [gaps] if gaps else []
-        spec = result_dict.get("experiment_spec") if isinstance(result_dict.get("experiment_spec"), dict) else {}
-        if spec and uploaded:
-            spec_gaps = validate_spec_against_datasets(spec, uploaded)
-            gaps = list(dict.fromkeys(list(gaps) + spec_gaps))
-        recommended = self._normalize_recommended_datasets(
-            result_dict.get("recommended_public_datasets") or []
-        )
-        adequacy = result_dict.get("data_adequacy") if isinstance(result_dict.get("data_adequacy"), dict) else {}
-        need_discovery = (
-            adequacy.get("status") in ("inadequate", "partial")
-            or not uploaded
-            or bool(gaps)
-        )
-        if need_discovery and not recommended:
-            search_query = (
-                adequacy.get("recommended_search_query")
-                or required_data
-                or best_review.get("hypothesis")
-                or ""
-            )
-            rd_list = adequacy.get("required_datasets") or []
-            keywords: List[str] = []
-            for rd in rd_list:
-                if isinstance(rd, dict):
-                    keywords.extend(rd.get("search_keywords") or [])
-            recommended = self._fetch_external_dataset_recommendations({
-                "hypothesis": best_review.get("hypothesis") or "",
-                "required_data": required_data,
-                "research_question": search_query,
-                "datasets": result_dict.get("datasets") or "",
-                "source_data": result_dict.get("source_data") or "",
-                "target_data": result_dict.get("target_data") or "",
-                "methods": result_dict.get("methods") or "",
-                "metrics": metrics,
-                "keywords": keywords[:10],
-            })
-            for item in recommended:
-                item["source"] = "dataset_discovery"
-                item["round_id"] = self.run_id
-            if recommended:
-                result_dict["recommended_public_datasets"] = recommended
-
-        from app.skills.data.data_adequacy_assessment_skill import (
-            resolve_next_action,
-            resolve_upload_status,
-        )
-
-        upload_status = resolve_upload_status(adequacy, len(uploaded))
-        next_action = resolve_next_action(adequacy, len(uploaded))
-        if upload_status == "ready" and gaps:
-            upload_status = "partial"
-            if next_action == "proceed_validation":
-                next_action = "revise_hypothesis_or_add_data"
-        required_columns: List[str] = []
-        if spec.get("target_column"):
-            required_columns.append(str(spec["target_column"]))
-        for col in spec.get("feature_columns") or []:
-            if col and col not in required_columns:
-                required_columns.append(str(col))
-        return {
-            "upload_status": upload_status,
-            "adequacy": {
-                "status": adequacy.get("status"),
-                "score": adequacy.get("score"),
-                "source": adequacy.get("source"),
-                "mismatch_reasons": adequacy.get("mismatch_reasons") or [],
-                "what_uploaded_can_do": adequacy.get("what_uploaded_can_do") or [],
-                "what_hypothesis_needs": adequacy.get("what_hypothesis_needs") or [],
-                "assessment_round_id": adequacy.get("assessment_round_id") or self.run_id,
-            },
-            "required_datasets": adequacy.get("required_datasets") or [],
-            "uploaded_dataset_count": len(uploaded),
-            "uploaded_datasets": [
-                {
-                    "filename": d.get("filename"),
-                    "data_type": d.get("data_type"),
-                    "n_rows": d.get("n_rows"),
-                    "n_columns": d.get("n_columns"),
-                    "columns": list(d.get("columns") or [])[:30],
-                }
-                for d in uploaded[:8]
-            ],
-            "required_data_description": required_data,
-            "validation_target": validation_target,
-            "metrics": metrics,
-            "experiment_spec": slim_experiment_spec_for_storage(spec),
-            "required_columns": required_columns[:24],
-            "has_analysis_script": bool((result_dict.get("analysis_script") or "").strip()),
-            "recommended_public_datasets": recommended[:8],
-            "gaps": gaps,
-            "summary": self._build_data_requirements_summary(uploaded, adequacy, gaps),
-            "next_action": next_action,
-        }
-
-    @staticmethod
-    def _build_data_requirements_summary(
-        uploaded: List[Dict[str, Any]],
-        adequacy: Dict[str, Any],
-        gaps: List[str],
-    ) -> str:
-        status = adequacy.get("status")
-        if not uploaded:
-            return "请先在「数据集」页上传 CSV/表格数据；上传后重跑实验设计以生成可执行方案与小样验证。"
-        if status == "inadequate":
-            reasons = adequacy.get("mismatch_reasons") or gaps[:2]
-            hint = reasons[0] if reasons else "已上传数据与假设验证目标不匹配"
-            return f"已上传 {len(uploaded)} 个数据集，但数据不充分：{hint}。请下载推荐数据集或调整假设后重跑实验设计。"
-        if status == "partial":
-            return (
-                f"已上传 {len(uploaded)} 个数据集，数据部分匹配假设，可进行探索性 pilot；"
-                "完整验证建议补充推荐数据集。"
-            )
-        if gaps:
-            return f"已上传 {len(uploaded)} 个数据集，仍有字段缺口：{'; '.join(str(g) for g in gaps[:2])}"
-        return f"已上传 {len(uploaded)} 个数据集，数据与实验方案已对齐，可进入小样验证。"
-
-    @staticmethod
-    def _normalize_recommended_datasets(items: Any) -> List[Dict[str, Any]]:
-        """统一公开数据集推荐结构，并附带 download_url。"""
-        if not isinstance(items, list):
-            return []
-        normalized: List[Dict[str, Any]] = []
-        for item in items:
-            if isinstance(item, str) and item.strip():
-                normalized.append({
-                    "dataset_name": item.strip(),
-                    "source_platform": "",
-                    "url": "",
-                    "download_url": "",
-                    "description": "",
-                })
-                continue
-            if not isinstance(item, dict):
-                continue
-            url = str(
-                item.get("download_url")
-                or item.get("url")
-                or item.get("source_url")
-                or item.get("landing_page_url")
-                or ""
-            ).strip()
-            normalized.append({
-                "dataset_name": item.get("dataset_name") or item.get("name") or "未命名数据集",
-                "source_platform": item.get("source_platform") or item.get("source") or "",
-                "url": url,
-                "download_url": url,
-                "description": item.get("description") or "",
-                "license": item.get("license") or "",
-                "task_type": item.get("task_type") or "",
-                "modalities": item.get("modalities") if isinstance(item.get("modalities"), list) else [],
-                "availability": item.get("availability") or "catalog_only",
-                "import_supported": bool(item.get("import_supported", False)),
-            })
-        return normalized
-
-    def _fetch_external_dataset_recommendations(self, query_input: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """按实验设计需求动态检索开放数据集（live API，无预定义列表）。"""
-        if not isinstance(query_input, dict):
-            return []
-        try:
-            import asyncio
-            from app.skills.data.dataset_discovery_skill import DatasetDiscoverySkill
-
-            skill = DatasetDiscoverySkill()
-            result = asyncio.run(skill.run(
-                input_data={**query_input, "max_results": 10},
-                context={"stage": "experiment_design"},
-            ))
-            data = result.data if isinstance(result.data, dict) else {}
-            return self._normalize_recommended_datasets(data.get("datasets") or [])
-        except Exception as exc:
-            logger.warning("[Pipeline] 外部数据集推荐检索失败: %s", exc)
-            return []
-
-    def _exec_small_validation(
-        self,
-        experiment_design: Optional[Dict],
-        hypothesis_review: Optional[Dict] = None,
-        project_id: str = "",
-        project_mode: str = "general",
-    ):
-        agent = get_small_validation_agent()
-        ed = experiment_design or {}
-        hr = hypothesis_review or {}
-        reviews = hr.get("reviews") or []
-        primary_review = reviews[0] if reviews and isinstance(reviews[0], dict) else {}
-        hypothesis = ed.get("hypothesis") or primary_review.get("hypothesis", "")
-
-        multimodal_datasets: List[Dict[str, Any]] = []
-        ed_skill_outputs = ed.get("skill_outputs") or {}
-        ingest_output = ed_skill_outputs.get("multimodal_data_ingest") or {}
-        ingest_data = ingest_output.get("data") if isinstance(ingest_output, dict) else None
-        if isinstance(ingest_data, dict):
-            multimodal_datasets = list(ingest_data.get("datasets") or [])
-
-        modeling_results = []
-        if project_id:
-            from app.services.modeling_service import ModelingService
-            from app.services.dataset_service import DatasetService
-
-            modeling_results = ModelingService(self.db).load_project_modeling_results(project_id)
-            if not multimodal_datasets:
-                ds_service = DatasetService(self.db)
-                for ds in ds_service.get_project_datasets(project_id):
-                    if ds.data_type != "tabular":
-                        continue
-                    meta = {}
-                    if ds.extra_metadata:
-                        try:
-                            meta = json.loads(ds.extra_metadata)
-                        except (TypeError, ValueError):
-                            meta = {}
-                    multimodal_datasets.append(
-                        {
-                            "dataset_id": ds.id,
-                            "filename": ds.filename,
-                            "file_path": ds.file_path,
-                            "data_type": ds.data_type,
-                            "n_rows": ds.n_rows,
-                            "n_columns": ds.n_columns,
-                            "columns": json.loads(ds.columns_json) if ds.columns_json else [],
-                            "dtypes": json.loads(ds.dtypes_json) if ds.dtypes_json else {},
-                            "statistics": json.loads(ds.statistics_json) if ds.statistics_json else {},
-                            "preview": json.loads(ds.preview_json) if ds.preview_json else [],
-                            "file_size": ds.file_size,
-                            "analysis_tier": meta.get("analysis_tier"),
-                            "sample_parquet_path": meta.get("sample_parquet_path"),
-                            "extra_metadata": ds.extra_metadata,
-                        }
-                    )
-
-        csv_data_path = None
-        for ds in multimodal_datasets:
-            fp = ds.get("file_path")
-            if fp and os.path.exists(fp) and ds.get("data_type", "tabular") == "tabular":
-                csv_data_path = fp
-                break
-
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            from app.services.federated_experiment_service import get_federated_experiment_service
-            import asyncio
-
-            data_context = self._build_data_context(project_id) if project_id else {}
-            fl_context = data_context.get("fl_context") or ed.get("fl_context") or {}
-            fl_service = get_federated_experiment_service(self.db)
-            federated_plan = ed.get("federated_plan") or {}
-            pilot = asyncio.run(
-                fl_service.run_pilot_validation(
-                    datasets=multimodal_datasets,
-                    fl_context=fl_context,
-                    experiment_plan=federated_plan,
-                )
-            )
-            return {
-                "hypothesis": hypothesis,
-                "project_mode": project_mode,
-                "federated_pilot": pilot,
-                "results": {
-                    "actual_results": pilot if pilot.get("execution_mode") == "uploaded_csv" else [],
-                    "simulated_results": pilot if pilot.get("execution_mode") == "simulation" else [],
-                    "expected_results": pilot.get("next_round_suggestions", []),
-                    "result_source": pilot.get("result_source", pilot.get("execution_mode")),
-                    "gate_blocked": pilot.get("execution_mode") == "gate_blocked",
-                },
-                "skill_outputs": pilot.get("skill_outputs", {}),
-                "analysis_summary": pilot.get("analysis", {}).get("summary", ""),
-                "replan_actions": pilot.get("replan_actions", []),
-                "verifiable_checks": [
-                    a.get("expected_check") for a in (pilot.get("replan_actions") or []) if a.get("expected_check")
-                ],
-            }
-
-        result = agent.generate_validation(
-            hypothesis=hypothesis,
-            methods=ed.get("methods", ""),
-            datasets=ed.get("datasets", ""),
-            metrics=ed.get("metrics", ""),
-            csv_data_path=csv_data_path,
-            experiment_design=ed,
-            multimodal_datasets=multimodal_datasets,
-            modeling_results=modeling_results,
-            project_mode=project_mode,
-            run_id=self.run_id,
-            project_id=project_id,
-            sandbox_use_docker=bool(self._run_options.get("sandbox_use_docker")),
-        )
-        if isinstance(result, dict) and result.get("sandbox_execution"):
-            self._record_closed_loop_event(
-                "sandbox_validation",
-                {
-                    "round": 3,
-                    "success": result["sandbox_execution"].get("success"),
-                    "metrics": result["sandbox_execution"].get("metrics"),
-                    "experiment_id": result["sandbox_execution"].get("experiment_id"),
-                    "quality_trend_entry": {
-                        "stage": "sandbox",
-                        "score": 8.0 if result["sandbox_execution"].get("success") else 3.0,
-                    },
-                },
-            )
-
-        if self._run_options.get("force_sandbox"):
-            sb = (result or {}).get("sandbox_execution") or {}
-            if not sb.get("success"):
-                result["human_review_required"] = True
-                result.setdefault("warnings", []).append(
-                    "Discovery 模式要求沙箱实测成功；当前执行未通过，需人工介入或补充数据。"
-                )
-
-        if isinstance(result, dict):
-            data_rows = []
-            for ds in multimodal_datasets:
-                data_rows.extend((ds.get("preview") or ds.get("sample_data") or [])[:100])
-            result = self._apply_plot_quality_loop(
-                result,
-                hypothesis=hypothesis,
-                data_rows=data_rows or None,
-            )
-
-        return result if isinstance(result, dict) else self._safe_model_dump(result)
 
     def _mark_stage_human_review(self, stage_idx: int, reason: str) -> None:
         """将阶段标记为需人工复核。"""
@@ -3966,21 +2960,6 @@ class PipelineService:
             project_mode=project_mode,
         )
         result_dict = self._safe_model_dump(result)
-
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            from app.services.federated_experiment_service import get_federated_experiment_service
-
-            fl_service = get_federated_experiment_service(self.db)
-            chapters = result_dict.get("chapters", {})
-            if isinstance(chapters, dict):
-                result_dict["chapters"] = fl_service.enrich_report_sections(
-                    chapters,
-                    data_context.get("fl_context") or ed.get("fl_context") or {},
-                    ed,
-                    sv.get("federated_pilot") or {},
-                    iteration_snapshots=self._iteration_snapshots,
-                )
-                result_dict["report_mode"] = ProjectMode.FEDERATED_LEARNING.value
 
         hypothesis = ed.get("hypothesis") or ""
         reviews = hr.get("reviews") or []

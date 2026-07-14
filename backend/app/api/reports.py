@@ -256,7 +256,7 @@ async def browse_reports(
     page_size: int = Query(10, ge=1, le=50, description="每页数量"),
     project_mode: Optional[str] = Query(
         None,
-        description="项目模式: general | federated_learning",
+        description="项目模式: general",
     ),
     date_from: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),

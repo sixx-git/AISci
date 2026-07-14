@@ -6,7 +6,6 @@ import { LoopDependencyGraph } from '@/components/LoopDependencyGraph';
 import { IterationRoundPanel } from '@/components/IterationRoundPanel';
 import { EvidenceDiffPanel } from '@/components/EvidenceDiffPanel';
 import { VersionComparePanel } from '@/components/VersionComparePanel';
-import { FederatedCampaignPanel } from '@/components/FederatedCampaignPanel';
 import {
   DiscoveryHistorySection,
   QualityAcceptanceSection,
@@ -30,7 +29,6 @@ type HistoryTab = 'milestones' | 'timeline' | 'versions' | 'topology';
 export interface IterationHistoryPanelProps {
   runId?: string | null;
   extraMetadata?: PipelineRunExtraMetadata | null;
-  federatedPilot?: Record<string, unknown> | null;
   className?: string;
 }
 
@@ -52,7 +50,6 @@ function SectionTitle({ icon: Icon, children }: { icon: typeof History; children
 export function IterationHistoryPanel({
   runId,
   extraMetadata,
-  federatedPilot,
   className,
 }: IterationHistoryPanelProps) {
   const [activeTab, setActiveTab] = useState<HistoryTab>('milestones');
@@ -134,26 +131,13 @@ export function IterationHistoryPanel({
 
   const hasTopology = hasTimeline;
 
-  const federatedCampaignRefinement = useMemo(() => {
-    const fromAux = extraMetadata?.auxiliary_results?.federated_campaign_refinement as Record<string, unknown> | undefined;
-    if (fromAux && Object.keys(fromAux).length > 0) return fromAux;
-    const fromHistory = discoveryLoopData?.history?.find((h) => h.federated_campaign)?.federated_campaign;
-    return fromHistory ?? null;
-  }, [extraMetadata, discoveryLoopData]);
-
-  const hasFederated =
-    Boolean(federatedPilot && Object.keys(federatedPilot).length > 0)
-    || Boolean(events?.some((e) => e.type === 'federated_campaign'))
-    || Boolean(discoveryLoopData?.history?.some((h) => h.federated_campaign || h.federated_acceptance))
-    || Boolean(federatedCampaignRefinement);
-
-  const hasAnyData = hasMilestones || hasTimeline || hasVersions || hasTopology || hasFederated;
+  const hasAnyData = hasMilestones || hasTimeline || hasVersions || hasTopology;
 
   const tabs: Array<{ id: HistoryTab; label: string; icon: typeof History; show: boolean }> = [
     { id: 'milestones', label: '里程碑', icon: Layers, show: true },
     { id: 'timeline', label: '时间线', icon: TrendingUp, show: hasTimeline },
     { id: 'versions', label: '版本对比', icon: GitBranch, show: hasVersions },
-    { id: 'topology', label: '拓扑', icon: Network, show: hasTopology || hasFederated },
+    { id: 'topology', label: '拓扑', icon: Network, show: hasTopology },
   ];
 
   const visibleTabs = tabs.filter((t) => t.show);
@@ -261,17 +245,6 @@ export function IterationHistoryPanel({
               <div>
                 <SectionTitle icon={Network}>跨环依赖拓扑</SectionTitle>
                 <LoopDependencyGraph events={events} decisions={decisions} />
-              </div>
-            )}
-            {hasFederated && (
-              <div>
-                <SectionTitle icon={Network}>联邦 Campaign</SectionTitle>
-                <FederatedCampaignPanel
-                  federatedPilot={federatedPilot}
-                  events={events}
-                  snapshots={versionSnapshots}
-                  campaignRefinement={federatedCampaignRefinement}
-                />
               </div>
             )}
           </div>

@@ -11,12 +11,12 @@ import { PromptConsole } from '@/components/PromptConsole';
 const NODE_ID_TO_STAGE: Record<string, string> = {
   problem: 'problem_understanding',
   literature: 'literature_mining',
-  data: 'experiment_design',
+  data: 'iterative_experiment',
   gaps: 'knowledge_gap',
   hypothesis: 'hypothesis_generation',
   evaluation: 'hypothesis_review',
-  experiment: 'experiment_design',
-  validation: 'small_validation',
+  experiment: 'iterative_experiment',
+  validation: 'iterative_experiment',
   report: 'report_generation',
 };
 
@@ -26,8 +26,7 @@ const STAGE_RERUN_OPTIONS: { key: string; label: string }[] = [
   { key: 'knowledge_gap', label: '知识缺口' },
   { key: 'hypothesis_generation', label: '假设生成' },
   { key: 'hypothesis_review', label: '假设评审' },
-  { key: 'experiment_design', label: '实验设计' },
-  { key: 'small_validation', label: '小样验证' },
+  { key: 'iterative_experiment', label: '迭代实验' },
   { key: 'report_generation', label: '报告生成' },
 ];
 
@@ -163,7 +162,10 @@ export function StageHumanLoopPanel({
 
   const mentorTarget = useMemo(() => {
     if (stage.includes('hypothesis')) return 'hypothesis' as const;
-    if (stage.includes('experiment') || stage.includes('validation')) return 'experiment_design' as const;
+    if (stage.includes('experiment') || stage.includes('validation') || stage.includes('iterative')) {
+      // mentor API 仍沿用 experiment_design target_type
+      return 'experiment_design' as const;
+    }
     if (stage.includes('report')) return 'report' as const;
     return 'hypothesis' as const;
   }, [stage]);

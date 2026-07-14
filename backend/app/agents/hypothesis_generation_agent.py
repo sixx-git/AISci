@@ -192,11 +192,6 @@ class HypothesisGenerationAgent:
                 f"[Ideation] 请生成 {num_ideas} 条互不重复、可独立验证的候选假设（research directions）。"
             )
             formatted_constraints = self._format_constraints(constraint_list)
-            if project_mode == "federated_learning":
-                formatted_constraints += (
-                    "\n[联邦学习模式] 假设应围绕 Non-IID、FedAvg/FedProx/SCAFFOLD、"
-                    "FedMD/FedDF、SplitNN/VFL、client drift、communication cost、privacy budget 展开。"
-                )
             formatted_data_context = self._format_data_context(
                 data_context, multimodal_datasets, data_linking_evidence, multimodal_evidence
             )

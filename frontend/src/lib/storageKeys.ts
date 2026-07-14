@@ -15,3 +15,8 @@ export function activeRunKey(projectId: string): string {
 export function activeRunStatusKey(projectId: string): string {
   return `aisci_active_run_status_${projectId}`;
 }
+
+/** 迭代实验（shaxiang 对齐）按项目隔离的 localStorage mock */
+export function iterativeExperimentsKey(projectId: string): string {
+  return `aisci_iterative_experiments_${projectId}`;
+}

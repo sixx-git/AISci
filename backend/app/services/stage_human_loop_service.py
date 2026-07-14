@@ -24,8 +24,7 @@ STAGE_KEY_ORDER = [
     "knowledge_gap",
     "hypothesis_generation",
     "hypothesis_review",
-    "experiment_design",
-    "small_validation",
+    "iterative_experiment",
     "report_generation",
 ]
 
@@ -35,8 +34,9 @@ STAGE_LABELS_ZH = {
     "knowledge_gap": "知识缺口",
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
-    "experiment_design": "实验设计",
-    "small_validation": "小样验证",
+    "iterative_experiment": "迭代实验",
+    "experiment_design": "实验设计(旧)",
+    "small_validation": "小样验证(旧)",
     "report_generation": "报告生成",
 }
 
@@ -275,6 +275,15 @@ class StageHumanLoopService:
                 verdict = output.get("verdict") or output.get("recommendation")
                 if score is not None or verdict:
                     summaries.append(f"{label}: 评分={score}，结论={verdict}")
+            elif key == "iterative_experiment":
+                status = output.get("status") or ""
+                n_exp = len(output.get("experiments") or [])
+                warn = (output.get("warning") or "")[:160]
+                if status or n_exp:
+                    summaries.append(
+                        f"{label}: status={status or 'ok'}，实验数={n_exp}"
+                        + (f"；{warn}" if warn else "")
+                    )
             elif key == "experiment_design":
                 plan = (output.get("experiment_plan") or output.get("summary") or "")[:200]
                 if plan:
@@ -487,8 +496,10 @@ class StageHumanLoopService:
 
         next_stage_map = {
             "hypothesis_generation": "hypothesis_review",
-            "hypothesis_review": "experiment_design",
-            "experiment_design": "small_validation",
+            "hypothesis_review": "iterative_experiment",
+            "iterative_experiment": "report_generation",
+            # legacy 兼容
+            "experiment_design": "report_generation",
             "small_validation": "report_generation",
         }
         run.current_stage = next_stage_map.get(stage, stage)

@@ -20,7 +20,6 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 const MODE_OPTIONS = [
   { value: '', label: '全部类型' },
   { value: 'general', label: '通用科学问题' },
-  { value: 'federated_learning', label: '联邦学习问题' },
 ] as const;
 
 const TIME_PRESETS = [
@@ -32,7 +31,6 @@ const TIME_PRESETS = [
 
 const MODE_LABEL: Record<string, string> = {
   general: '通用科学问题',
-  federated_learning: '联邦学习问题',
 };
 
 function resolveDateRange(
@@ -434,9 +432,7 @@ export function Reports() {
                         <span
                           className={cn(
                             'bp-chip text-xs',
-                            entry.project_mode === 'federated_learning'
-                              ? 'bp-chip-cyan'
-                              : 'text-bp-muted border border-bp-border',
+                            'text-bp-muted border border-bp-border',
                           )}
                         >
                           {MODE_LABEL[entry.project_mode] ?? '通用科学问题'}

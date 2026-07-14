@@ -4,7 +4,7 @@ import {
   HelpCircle,
   BookOpen, Lightbulb, FlaskConical,
   FileText, TrendingUp, Play,
-  AlertTriangle, CheckCircle2, Database,
+  AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -13,10 +13,9 @@ import { ResearchQuestionPage } from '@/components/ResearchQuestionPage';
 import { LiteratureLibrary } from '@/components/LiteratureLibrary';
 import { WorkflowPage } from '@/components/WorkflowPage';
 import { HypothesesPage } from '@/components/HypothesesPage';
-import { ExperimentDesignPage } from '@/components/ExperimentDesignPage';
+import { IterativeExperimentPage } from '@/components/iterative-experiment/IterativeExperimentPage';
 import { ReportPage } from '@/components/ReportPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
-import { DatasetPage } from '@/components/DatasetPage';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
 import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
 import { PromptManagementPage } from '@/components/PromptManagementPage';
@@ -27,7 +26,7 @@ import {
   resolveProjectDisplayStatus,
 } from '@/lib/projectStatus';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
-import { VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { LEGACY_PROJECT_TAB_REDIRECTS, VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
 import { AdvancedTabNotice } from '@/components/workspace/AdvancedTabNotice';
 import { researchQuestionKey } from '@/lib/storageKeys';
 import { resolveResearchField } from '@/lib/researchField';
@@ -62,8 +61,9 @@ const STAGE_CN_MAP: Record<string, string> = {
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
-  experiment_design: '实验设计',
-  small_validation: '小样验证',
+  iterative_experiment: '迭代实验',
+  experiment_design: '实验设计(旧)',
+  small_validation: '小样验证(旧)',
   report_generation: '报告生成',
 };
 
@@ -138,7 +138,6 @@ function QuestionsTab({
   return (
     <ResearchQuestionPage
       projectId={projectId}
-      projectMode={projectMode}
       onSaved={onSaved}
       pollWhileRunning={pollWhileRunning}
       revalidateKey={revalidateKey}
@@ -192,7 +191,7 @@ function HypothesesTab({ projectId, revalidateKey, latestRunId }: {
   return <HypothesesPage projectId={projectId} compact revalidateKey={revalidateKey} latestRunId={latestRunId} />;
 }
 
-function ExperimentsTab({ projectId, projectMode, revalidateKey, latestRunId, hypothesisId }: {
+function ExperimentsTab({ projectId, projectMode, hypothesisId }: {
   projectId: string;
   projectMode?: string;
   revalidateKey: number;
@@ -200,13 +199,10 @@ function ExperimentsTab({ projectId, projectMode, revalidateKey, latestRunId, hy
   hypothesisId: string | null;
 }) {
   return (
-    <ExperimentDesignPage
+    <IterativeExperimentPage
       projectId={projectId}
       projectMode={projectMode}
-      compact
-      revalidateKey={revalidateKey}
-      latestRunId={latestRunId}
-      selectedHypothesisId={hypothesisId}
+      hypothesisId={hypothesisId}
     />
   );
 }
@@ -243,11 +239,23 @@ export function ProjectWorkspace() {
   const navigate = useNavigate();
   const id = projectId ?? '1';
 
-  // 从 URL 读取 tab，非法值回退 overview
+  // 从 URL 读取 tab；旧 datasets 深链重定向到迭代实验
   const activeTab = useMemo(() => {
     const tabFromUrl = searchParams.get('tab');
-    return tabFromUrl && VALID_PROJECT_TAB_IDS.has(tabFromUrl) ? tabFromUrl : 'overview';
+    if (!tabFromUrl) return 'overview';
+    const redirected = LEGACY_PROJECT_TAB_REDIRECTS[tabFromUrl] || tabFromUrl;
+    return VALID_PROJECT_TAB_IDS.has(redirected) ? redirected : 'overview';
   }, [searchParams]);
+
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (!tabFromUrl) return;
+    const redirected = LEGACY_PROJECT_TAB_REDIRECTS[tabFromUrl];
+    if (!redirected || redirected === tabFromUrl) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', redirected);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // 切换 tab → 更新 URL searchParams
   const handleTabChange = (tabId: string) => {
@@ -379,11 +387,12 @@ export function ProjectWorkspace() {
   useEffect(() => {
     const runId = latestRun?.run_id;
     if (!runId) return;
-    const expStage = latestRunStages.find(
-      (s) => (s.stage ?? '').toLowerCase() === 'experiment_design',
-    );
+    const expStage = latestRunStages.find((s) => {
+      const key = (s.stage ?? '').toLowerCase();
+      return key === 'iterative_experiment' || key === 'experiment_design';
+    });
     if (expStage?.status !== 'completed') return;
-    const syncKey = `${runId}:experiment_design`;
+    const syncKey = `${runId}:${(expStage.stage ?? 'iterative_experiment').toLowerCase()}`;
     if (experimentDesignSyncedRef.current === syncKey) return;
     experimentDesignSyncedRef.current = syncKey;
     setRevalidateKey((k) => k + 1);
@@ -430,10 +439,7 @@ export function ProjectWorkspace() {
 
   // --- 研究领域 ---
   const resolvedProjectMode = project?.project_mode || 'general';
-  const projectModeLabel =
-    resolvedProjectMode === 'federated_learning'
-      ? 'Federated Learning Scientist'
-      : 'General AISci';
+  const projectModeLabel = 'General AISci';
 
   const resolvedResearchField = useMemo(
     () => resolveResearchField(project, id, latestRunStages),
@@ -488,8 +494,7 @@ export function ProjectWorkspace() {
       { id: 'knowledge_gap', label: '知识缺口', icon: AlertTriangle },
       { id: 'hypothesis_generation', label: '假设生成', icon: Lightbulb },
       { id: 'hypothesis_review', label: '假设评估', icon: CheckCircle2 },
-      { id: 'experiment_design', label: '实验设计', icon: FlaskConical },
-      { id: 'small_validation', label: '小样验证', icon: TrendingUp },
+      { id: 'iterative_experiment', label: '迭代实验', icon: FlaskConical },
       { id: 'report_generation', label: '报告生成', icon: FileText },
     ],
     [],
@@ -578,8 +583,6 @@ export function ProjectWorkspace() {
         );
       case 'literature':
         return <LiteratureTab projectId={id} />;
-      case 'datasets':
-        return <DatasetPage projectId={id} projectMode={resolvedProjectMode} researchQuestion={resolvedResearchQuestion} />;
       case 'workflow':
         return (
           <WorkflowTab

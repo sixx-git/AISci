@@ -18,8 +18,7 @@ STAGE_TEMPLATE_MAP = {
     PipelineStage.KNOWLEDGE_GAP: "knowledge_gap",
     PipelineStage.HYPOTHESIS_GENERATION: "hypothesis_generation",
     PipelineStage.HYPOTHESIS_REVIEW: "hypothesis_review",
-    PipelineStage.EXPERIMENT_DESIGN: "experiment_design",
-    PipelineStage.SMALL_VALIDATION: "small_validation",
+    PipelineStage.ITERATIVE_EXPERIMENT: "iterative_experiment",
     PipelineStage.REPORT_GENERATION: "report_generation",
 }
 

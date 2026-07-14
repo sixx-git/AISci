@@ -173,13 +173,8 @@ def build_verifiable_hypothesis_spec_for_mode(
     fl_context: Optional[Dict[str, Any]] = None,
     experiment_design: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """按项目模式构建 verifiable spec（联邦 / 通用）。"""
-    if project_mode == "federated_learning":
-        return build_verifiable_hypothesis_spec(
-            hypothesis,
-            plan or experiment_design or {},
-            fl_context or (experiment_design or {}).get("fl_context") or {},
-        )
+    """按项目模式构建 verifiable spec（仅通用模式）。"""
+    _ = (project_mode, plan, fl_context)
     return build_general_verifiable_hypothesis_spec(
         hypothesis, hypo_meta, experiment_design
     )
@@ -195,7 +190,6 @@ def attach_verifiable_specs_to_hypotheses(
     """为每条假设附加 verifiable_spec，并写入 primary_verifiable_spec。"""
     hg = dict(hypothesis_generation or {})
     hypotheses = list(hg.get("hypotheses") or [])
-    plan = (experiment_design or {}).get("federated_plan") or {}
     updated: List[Dict[str, Any]] = []
 
     for hypo in hypotheses:
@@ -204,8 +198,6 @@ def attach_verifiable_specs_to_hypotheses(
             h.get("hypothesis", ""),
             project_mode=project_mode,
             hypo_meta=h,
-            plan=plan,
-            fl_context=fl_context,
             experiment_design=experiment_design,
         )
         h["verifiable_spec"] = spec
@@ -267,52 +259,6 @@ def evaluate_verifiable_spec_against_validation(
                 "actual": str(list(metrics.keys())[:5]),
                 "passed": bool(metrics),
                 "source": "sandbox_execution",
-            })
-
-    fp = sv.get("federated_pilot") or {}
-    if fp:
-        gate = fp.get("alignment_gate") or {}
-        if gate and not gate.get("skipped"):
-            checks.append({
-                "check_id": "vfl_alignment_gate",
-                "description": "VFL 对齐 gate",
-                "expected": "passed=True",
-                "actual": str(gate.get("passed")),
-                "passed": bool(gate.get("passed")),
-                "source": "federated_pilot",
-            })
-        mode = fp.get("execution_mode", "")
-        checks.append({
-            "check_id": "federated_pilot_ran",
-            "description": "联邦 pilot 已执行",
-            "expected": "mode 非 skipped/gate_blocked",
-            "actual": mode,
-            "passed": mode not in ("skipped", "gate_blocked", ""),
-            "source": "federated_pilot",
-        })
-        comp = fp.get("metric_comparison") or []
-        if comp and spec.get("primary_metric"):
-            best = max(
-                comp,
-                key=lambda r: float(
-                    r.get("global_accuracy")
-                    or r.get("prediction_accuracy")
-                    or r.get("accuracy")
-                    or 0
-                ),
-            )
-            acc = (
-                best.get("global_accuracy")
-                or best.get("prediction_accuracy")
-                or best.get("accuracy")
-            )
-            checks.append({
-                "check_id": "federated_primary_metric",
-                "description": f"联邦 {spec.get('primary_metric')} 有观测值",
-                "expected": "best_method accuracy 可读取",
-                "actual": f"{best.get('method')}={acc}",
-                "passed": acc is not None,
-                "source": "federated_pilot",
             })
 
     evidence_level = spec.get("evidence_level")

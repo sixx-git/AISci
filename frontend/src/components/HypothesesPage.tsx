@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Lightbulb, AlertTriangle,
   GitBranch, ChevronDown, ChevronUp,
-  Star, Database, Target, ShieldAlert, FileText, BookOpen,
+  Star, Database, Target, ShieldAlert, BookOpen, FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -285,10 +285,6 @@ export function HypothesesPage({
     navigateToProjectTab(navigate, _projectId, 'workflow');
   }, [_projectId, navigate]);
 
-  const handleGoDatasets = useCallback(() => {
-    navigateToProjectTab(navigate, _projectId, 'datasets');
-  }, [_projectId, navigate]);
-
   const handleGoLiterature = useCallback(() => {
     navigateToProjectTab(navigate, _projectId, 'literature');
   }, [_projectId, navigate]);
@@ -341,7 +337,7 @@ export function HypothesesPage({
         <div>
           <h1 className="text-3xl font-bold text-bp-text mb-2">候选假设</h1>
           <p className="text-bp-muted">
-            选择一个主假设作为研究方向，查看证据链，进入实验设计
+            选择一个主假设作为研究方向，查看证据链，进入迭代实验
           </p>
         </div>
         <Button
@@ -434,8 +430,13 @@ export function HypothesesPage({
                     建议补充文献/数据后重新运行假设生成。
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />} onClick={handleGoDatasets}>
-                      前往数据集
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<FlaskConical className="w-3.5 h-3.5" />}
+                      onClick={() => navigateToProjectTab(navigate, _projectId, 'experiments')}
+                    >
+                      前往迭代实验
                     </Button>
                     <Button variant="secondary" size="sm" icon={<BookOpen className="w-3.5 h-3.5" />} onClick={handleGoLiterature}>
                       前往文献库
@@ -473,7 +474,7 @@ export function HypothesesPage({
               {primaryHypothesis && (
                 <div>
                   <div className="text-xs text-bp-yellow/80 mb-1.5 flex items-center gap-1">
-                    <Star className="w-3 h-3" /> 当前主假设 — 实验设计的入口
+                    <Star className="w-3 h-3" /> 当前主假设 — 迭代实验的入口
                   </div>
                   <HypothesisCard
                     hypothesis={primaryHypothesis}
@@ -589,8 +590,13 @@ export function HypothesesPage({
                   <Button variant="secondary" size="sm" icon={<BookOpen className="w-3.5 h-3.5" />} onClick={handleGoLiterature}>
                     文献库
                   </Button>
-                  <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />} onClick={handleGoDatasets}>
-                    数据集
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<FlaskConical className="w-3.5 h-3.5" />}
+                    onClick={() => navigateToProjectTab(navigate, _projectId, 'experiments')}
+                  >
+                    迭代实验
                   </Button>
                 </div>
               </Card>

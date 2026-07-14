@@ -67,7 +67,6 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
 
   const selectedMeta = PIPELINE_PROMPT_STAGES.find((s) => s.key === selectedStage);
   const overrideCount = Object.values(overrideMap).filter(Boolean).length;
-  const isFederated = projectMode === 'federated_learning';
 
   return (
     <div className="space-y-4">
@@ -86,9 +85,6 @@ export function PromptManagementPage({ projectId, projectMode = 'general' }: Pro
             <span>
               已自定义 <span className="text-bp-yellow">{overrideCount}</span> / {PIPELINE_PROMPT_STAGES.length}
             </span>
-          )}
-          {isFederated && (
-            <span className="text-bp-purple">联邦项目：已显示 Pack D 联邦特色模板</span>
           )}
         </div>
       </Card>

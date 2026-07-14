@@ -30,8 +30,9 @@ class PipelineStage(str, Enum):
     KNOWLEDGE_GAP = "knowledge_gap"
     HYPOTHESIS_GENERATION = "hypothesis_generation"
     HYPOTHESIS_REVIEW = "hypothesis_review"
-    EXPERIMENT_DESIGN = "experiment_design"
-    SMALL_VALIDATION = "small_validation"
+    EXPERIMENT_DESIGN = "experiment_design"  # legacy
+    SMALL_VALIDATION = "small_validation"  # legacy
+    ITERATIVE_EXPERIMENT = "iterative_experiment"
     REPORT_GENERATION = "report_generation"
 
 

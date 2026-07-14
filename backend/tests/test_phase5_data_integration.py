@@ -1,7 +1,7 @@
 """Phase 5 — 文献发现 / 连接器矩阵 / 复核 re-merge / 来源可用性"""
 import asyncio
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.services.data_finder_coverage import build_coverage_report, build_source_availability
 from app.services.data_sources.base import normalize_legacy_candidate
@@ -103,42 +103,6 @@ class TestExternalSkillScope(unittest.TestCase):
         self.assertIn("openalex", res.data.get("live_apis", []))
         self.assertIn("registry_sources", res.data)
         self.assertNotIn("huggingface", res.data.get("live_apis", []))
-
-
-class TestFigureReviewRemerge(unittest.TestCase):
-    def test_confirm_triggers_align_merge(self):
-        from app.services.figure_review_service import FigureReviewService
-
-        mock_df = MagicMock()
-        mock_df.load_results.return_value = {
-            "figures": [{
-                "figure_id": "fig1",
-                "extracted_series_preview": [{"x": "1", "y": "2"}],
-                "extraction_method": "rule",
-            }],
-            "extracted_tables": [],
-            "provenance": [],
-        }
-        mock_df._project_dir.return_value = "/tmp/test"
-
-        async def _align(_pid):
-            return {"alignments": [{}]}
-
-        async def _merge(_pid):
-            return {"merged": {"row_count": 3, "merged_csv_path": "/tmp/m.csv"}, "figures": []}
-
-        mock_df.run_align_schema = _align
-        mock_df.run_merge = _merge
-
-        svc = FigureReviewService(MagicMock())
-        svc._df = mock_df
-
-        with patch("app.core.figure_extraction.write_figure_series_csv"):
-            out = svc.review_figure("proj1", "fig1", action="confirm")
-
-        self.assertEqual(out["review_status"], "confirmed")
-        self.assertIn("remerge", out)
-        self.assertEqual(out["remerge"]["merged_rows"], 3)
 
 
 if __name__ == "__main__":

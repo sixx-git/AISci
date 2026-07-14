@@ -160,19 +160,4 @@ class DataRequirementUnderstandingSkill(BaseSkill):
         spec["domain_keywords"] = domain_keywords[:20]
         spec["dataset_keywords"] = dataset_keywords[:15]
 
-        if project_mode == ProjectMode.FEDERATED_LEARNING.value:
-            fl_extra = [
-                "FedAvg", "FedProx", "SCAFFOLD", "Non-IID", "communication cost",
-                "client drift", "global accuracy", "federated benchmark",
-            ]
-            spec["domain_keywords"] = list(dict.fromkeys(spec["domain_keywords"] + [normalize_col(x) for x in fl_extra]))
-            spec["dataset_keywords"] = list(dict.fromkeys(spec["dataset_keywords"] + ["federated", "non_iid", "client"]))
-            spec["target_variables"] = list(dict.fromkeys(spec["target_variables"] + [
-                "global_accuracy", "f1_score", "communication_cost_mb", "client_drift",
-            ]))[:12]
-            spec["entities_of_interest"] = list(dict.fromkeys(
-                spec["entities_of_interest"] + ["client_id", "party_id", "entity_id"],
-            ))[:10]
-            spec["preferred_sources"].append("papers_with_code")
-
         return spec

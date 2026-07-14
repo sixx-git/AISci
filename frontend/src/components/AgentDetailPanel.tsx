@@ -371,11 +371,21 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
 
   const isFailed = node.status === 'failed';
   const showHumanReview = node.status === 'human_review_required' || node.status === 'human_review';
-  const validationGuidance = node.id === 'validation'
-    ? extractValidationDataGuidance(node.output_data)
+  const experimentPayload = node.id === 'experiment' && node.output_data && typeof node.output_data === 'object'
+    ? (node.output_data as Record<string, unknown>)
     : null;
-  const validationBlockedReason = node.id === 'validation' && node.output_data && typeof node.output_data === 'object'
-    ? String((node.output_data as Record<string, unknown>).validation_blocked_reason || '')
+  const validationPayload = experimentPayload
+    ? ((experimentPayload.small_validation as Record<string, unknown> | undefined) || experimentPayload)
+    : null;
+  const validationGuidance = validationPayload
+    ? extractValidationDataGuidance(validationPayload)
+    : null;
+  const validationBlockedReason = validationPayload
+    ? String(
+        validationPayload.validation_blocked_reason
+        || (experimentPayload?.status === 'blocked_need_data' ? experimentPayload.warning : '')
+        || '',
+      )
     : '';
 
   return (
@@ -433,7 +443,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
         {showHumanReview && (
           <div className="p-3 bg-bp-yellow/10 border border-bp-yellow/30 rounded-bp flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-bp-yellow shrink-0 mt-0.5" />
-            <p className="text-xs text-bp-yellow">实验设计已生成数据需求，请前往「数据集」页上传 CSV/表格后重跑实验设计与小样验证。</p>
+            <p className="text-xs text-bp-yellow">迭代实验缺少可用数据，请前往「迭代实验」页绑定数据集后继续（缺数据不可跑脚本/报告）。</p>
           </div>
         )}
       </Card>
@@ -458,8 +468,8 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
           node.status === 'running' ? 'bg-bp-cyan-tint border-bp-cyan/20' :
           'bg-bp-base/70 border-bp-border',
         )}>
-          {node.id === 'validation' && node.output_data && typeof node.output_data === 'object' && hasValidationResultSummary(node.output_data) ? (
-            <ValidationResultCard outputData={node.output_data as Record<string, unknown>} />
+          {validationPayload && hasValidationResultSummary(validationPayload) ? (
+            <ValidationResultCard outputData={validationPayload} />
           ) : hasRealData && node.output_data ? (
             <JsonBlock data={node.output_data} />
           ) : (
@@ -473,7 +483,7 @@ export function AgentDetailPanel({ node, onRerun }: AgentDetailPanelProps) {
             </p>
           )}
         </div>
-        {node.id === 'validation' && node.output_data && (
+        {node.id === 'experiment' && node.output_data && (
           <CollapsibleSection title="技术细节 JSON" defaultOpen={false}>
             <JsonBlock data={node.output_data} />
           </CollapsibleSection>

@@ -223,7 +223,7 @@ export interface ReportBrowseItem {
   id: string;
   project_id: string;
   project_name: string;
-  project_mode: 'general' | 'federated_learning' | string;
+  project_mode: 'general' | string;
   research_question?: string | null;
   title: string;
   paper_title: string;

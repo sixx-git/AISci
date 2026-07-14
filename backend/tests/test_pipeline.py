@@ -71,21 +71,14 @@ class TestPipelineService:
             mock.return_value = agent
             mocks['review'] = mock
 
-        with patch('app.services.pipeline_service.get_experiment_design_agent') as mock:
-            agent = Mock()
-            mock_response = Mock()
-            mock_response.model_dump = Mock(return_value={"experiment_title": "测试实验"})
-            agent.design = Mock(return_value=mock_response)
-            mock.return_value = agent
-            mocks['experiment'] = mock
-
-        with patch('app.services.pipeline_service.get_small_validation_agent') as mock:
-            agent = Mock()
-            mock_response = Mock()
-            mock_response.model_dump = Mock(return_value={"validation_summary": "测试验证"})
-            agent.validate = Mock(return_value=mock_response)
-            mock.return_value = agent
-            mocks['validation'] = mock
+        with patch('app.services.pipeline_service.PipelineService._exec_iterative_experiment') as mock:
+            mock.return_value = {
+                "status": "completed",
+                "experiments": [],
+                "experiment_design": {"hypothesis": "测试", "_provider": "mock"},
+                "small_validation": {"validation_status": "completed", "_provider": "mock"},
+            }
+            mocks['iterative_experiment'] = mock
 
         with patch('app.services.pipeline_service.get_report_generation_agent') as mock:
             agent = Mock()

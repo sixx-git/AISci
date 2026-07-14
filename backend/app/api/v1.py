@@ -1,9 +1,28 @@
 from fastapi import APIRouter
-from app.api import research, chat, documents, projects, vector_search, agents, reports, pipeline, literature, diagnose, datasets, data_finder, prompts, human_loop, multimodal, feedback, llm_config, skills, science_iteration
+from app.api import (
+    research,
+    chat,
+    documents,
+    projects,
+    vector_search,
+    agents,
+    reports,
+    pipeline,
+    literature,
+    diagnose,
+    prompts,
+    human_loop,
+    feedback,
+    llm_config,
+    skills,
+    science_iteration,
+    iterative_experiments,
+)
 
 router = APIRouter()
 
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
+router.include_router(iterative_experiments.router, tags=["iterative-experiments"])
 router.include_router(research.router, prefix="/research", tags=["research"])
 router.include_router(chat.router, prefix="/chat", tags=["chat"])
 router.include_router(documents.router, prefix="/documents", tags=["documents"])
@@ -13,9 +32,8 @@ router.include_router(reports.router, prefix="/reports", tags=["reports"])
 router.include_router(pipeline.router, prefix="/pipeline", tags=["pipeline"])
 router.include_router(literature.router, prefix="/literature", tags=["literature"])
 router.include_router(diagnose.router, prefix="/diagnose", tags=["diagnose"])
-router.include_router(datasets.router, prefix="/datasets", tags=["datasets"])
-router.include_router(multimodal.router, prefix="/multimodal", tags=["multimodal"])
-router.include_router(data_finder.router, prefix="/data-finder", tags=["data-finder"])
+# 已淘汰 HTTP 面（服务层仍可能被 pipeline 内部调用）：
+# datasets / multimodal / data_finder
 router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 router.include_router(human_loop.router, prefix="/human-loop", tags=["human-loop"])
 router.include_router(feedback.router, prefix="/feedback", tags=["feedback-hub"])

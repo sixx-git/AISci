@@ -27,13 +27,11 @@ DEFAULT_NUM_IDEAS = 3
 DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
-DEFAULT_FEDERATED_CAMPAIGN_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
 DEFAULT_HITL_GATE_STAGES = (
     "hypothesis_generation",
     "hypothesis_review",
-    "experiment_design",
-    "small_validation",
+    "iterative_experiment",
     "report_generation",
 )
 DEFAULT_GATE_STAGNANT_ROUNDS = 2
@@ -50,8 +48,9 @@ VALID_ADVERSARIAL_MODES = ("single_group", "multi_group", "off")
 HITL_GATE_STAGE_LABELS = {
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
-    "experiment_design": "实验设计",
-    "small_validation": "小样验证",
+    "iterative_experiment": "迭代实验",
+    "experiment_design": "实验设计(旧)",
+    "small_validation": "小样验证(旧)",
     "report_generation": "报告生成",
 }
 
@@ -138,12 +137,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     except (TypeError, ValueError):
         max_rounds = DEFAULT_DISCOVERY_MAX_ROUNDS
 
-    try:
-        fed_max = int(opts.get("federated_campaign_max", DEFAULT_FEDERATED_CAMPAIGN_MAX))
-        fed_max = max(1, min(fed_max, 3))
-    except (TypeError, ValueError):
-        fed_max = DEFAULT_FEDERATED_CAMPAIGN_MAX
-
     enable_hitl_gate = bool(opts.get("enable_hitl_gate"))
     gate_stages = opts.get("hitl_gate_stages")
     if not gate_stages:
@@ -215,8 +208,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
             min(int(opts.get("experiment_self_correction_max", DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX)), 4),
         ),
         "auto_gap_enrichment_on_data_gap": bool(opts.get("auto_gap_enrichment_on_data_gap", True)),
-        "enable_federated_campaign_loop": bool(opts.get("enable_federated_campaign_loop", True)),
-        "federated_campaign_max": fed_max,
         "sandbox_use_docker": bool(opts.get("sandbox_use_docker")),
         "enable_hitl_gate": enable_hitl_gate,
         "hitl_gate_stages": list(gate_stages),

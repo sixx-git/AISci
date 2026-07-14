@@ -43,14 +43,6 @@ from app.agents.hypothesis_review_agent import (
     HypothesisReview,
     get_hypothesis_review_agent
 )
-from app.agents.experiment_design_agent import (
-    ExperimentDesignAgent,
-    get_experiment_design_agent
-)
-from app.agents.small_validation_agent import (
-    SmallValidationAgent,
-    get_small_validation_agent
-)
 from app.agents.report_generation_agent import (
     ReportGenerationAgent,
     get_report_generation_agent
@@ -89,10 +81,6 @@ __all__ = [
     'HypothesisScores',
     'HypothesisReview',
     'get_hypothesis_review_agent',
-    'ExperimentDesignAgent',
-    'get_experiment_design_agent',
-    'SmallValidationAgent',
-    'get_small_validation_agent',
     'ReportGenerationAgent',
     'get_report_generation_agent',
 ]

@@ -32,10 +32,9 @@ class PromptPresetService:
 
     def get_catalog(self, *, project_mode: str = "general") -> Dict[str, Any]:
         manifest = self._load_manifest()
-        is_federated = project_mode == "federated_learning"
         packs: List[Dict[str, Any]] = []
         for pack in manifest.get("packs", []):
-            if pack.get("requires_federated") and not is_federated:
+            if pack.get("requires_federated"):
                 continue
             packs.append({
                 "id": pack["id"],
