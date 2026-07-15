@@ -1,0 +1,892 @@
+{
+  "task_id": "literature_review_auto_v3",
+  "task_type": "literature_review",
+  "subject": "",
+  "document_heavy": false,
+  "query": "How can a literature review systematically categorize and analyze the current landscape of backdoor attack strategies and defense mechanisms in federated learning, considering the challenges posed by data heterogeneity, stealthiness, and the utility-security trade-off, to identify future research directions?",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "S1_highlighted.pdf",
+      "relative_path": "S1_highlighted.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 34 pages"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "source_notes.md",
+      "relative_path": "source_notes.md",
+      "file_type": "md",
+      "description": "Text file, 14091 characters"
+    }
+  ],
+  "rubrics": {
+    "total_score": 94,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 25,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.definition.does_the_report_precisely_define_a_backdoor_atta",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report precisely define a backdoor attack in the context of federated learning by stating that it embeds hidden behaviors triggered by specific inputs while preserving normal performance on other inputs?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "The attack causes misclassification only on inputs containing a trigger",
+              "The model performs normally on non-triggered inputs",
+              "The trigger is a pattern or feature that activates the malicious behavior"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.definition.does_the_report_recognize_that_the_decentralized",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report recognize that the decentralized nature of federated learning introduces trustworthiness verification challenges, making the system vulnerable to malicious updates?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "The aggregation server cannot directly inspect participants' data",
+              "Malicious participants can submit poisoned updates",
+              "The server must rely on anomaly detection or robust aggregation"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.classification.does_the_report_classify_backdoor_attack_strateg",
+            "competency_category": "classification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report classify backdoor attack strategies into at least two major categories based on the point of injection: data poisoning (corrupting training data) and model poisoning (directly altering model updates)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Data poisoning involves modifying local training data",
+              "Model poisoning involves altering the model update gradient or parameters",
+              "Both aim to embed a backdoor trigger"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.classification.does_the_report_categorize_defense_mechanisms_ac",
+            "competency_category": "classification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report categorize defense mechanisms according to the phase of the federated learning process where they are applied: pre-aggregation, in-aggregation, and post-aggregation?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Pre-aggregation defenses filter malicious updates before aggregation",
+              "In-aggregation defenses use robust aggregation operators",
+              "Post-aggregation defenses repair the model after training"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.methodology.does_the_report_pinpoint_that_the_success_of_bac",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report pinpoint that the success of backdoor attacks depends on the proportion of poisoned data or malicious clients (poisoning ratio)?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Higher poisoning ratio generally increases attack success rate",
+              "Poisoning ratio is defined as fraction of corrupted data or malicious participants",
+              "The effect may depend on the aggregation rule"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_that_attackers_can_ampl",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe that attackers can amplify the influence of a poisoned update by scaling its parameters to override the benign contributions, a strategy known as model replacement?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "The scaling factor makes the malicious update dominant",
+              "It exploits simple averaging aggregation",
+              "The goal is to replace the global model with the backdoored model"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.limitation.does_the_report_identify_that_many_defense_mecha",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report identify that many defense mechanisms involve a trade-off between security and model utility, i.e., they may degrade main task accuracy?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Excessive pruning or noise injection can reduce accuracy",
+              "Defenses like differential privacy add noise that degrades performance",
+              "There is no defense that achieves both perfect security and perfect utility"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.limitation.does_the_report_identify_that_non_uniform_data_d",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report identify that non-uniform data distribution across clients (non-IID) complicates the detection of malicious updates because benign variations may resemble anomalies?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Benign updates in non-IID settings can form multiple clusters",
+              "Clustering-based defenses may misclassify honest updates as malicious",
+              "Non-IID makes it harder to distinguish legitimate local features from backdoor features"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.comparison.does_the_report_distinguish_backdoor_attacks_fro",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report distinguish backdoor attacks from label-flipping attacks by noting that backdoor attacks only affect specific triggered inputs while label-flipping corrupts an entire class?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Backdoor attack misclassifies only inputs containing a trigger",
+              "Label-flipping attack changes labels for all examples of a class",
+              "Backdoor is more stealthy as it preserves normal behavior on most inputs"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "information_acquisition.classification.does_the_report_categorize_triggers_into_digital",
+            "competency_category": "classification",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report categorize triggers into digital triggers (e.g., fixed patterns) and semantic triggers (e.g., natural features)?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Digital triggers are artificial patterns added to inputs",
+              "Semantic triggers are inherent features of objects",
+              "Both cause misclassification when present"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "information_acquisition.definition.does_the_report_precisely_define_the_concept_of",
+            "competency_category": "definition",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report precisely define the concept of a backdoor trigger as a specific input pattern (digital or semantic) that, when present, causes the model to misbehave?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Trigger can be a fixed pattern",
+              "Trigger can be a natural object feature",
+              "Trigger presence causes misclassification to a target label"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "information_acquisition.limitation.does_the_report_identify_that_defenses_based_on",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report identify that defenses based on robust aggregation (e.g., Krum, Median) can be circumvented by adaptive attackers who constrain their updates to lie within the benign distribution?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Robust aggregators assume outliers are malicious",
+              "Attackers can stay within statistical bounds",
+              "Adaptive attackers can observe defenses and adjust"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 63,
+        "items": [
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_why_decentralized_learni",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze why decentralized learning systems inherently face challenges in verifying the trustworthiness of participating clients, and explain how this enables backdoor insertion?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "explains the inherent trust verification challenge in decentralized systems",
+              "connects this challenge to the feasibility of backdoor insertion"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_two_fundamental_mech",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the two fundamental mechanisms of backdoor insertion—data poisoning versus model poisoning—and evaluate which method offers greater stealthiness in the context of distributed training?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "compares data poisoning and model poisoning mechanisms",
+              "evaluates stealthiness of each in distributed training context"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_effectiveness_of_ap",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report evaluate the effectiveness of applying defenses at different stages—before aggregation, during aggregation, or after training—and argue which stage provides the strongest protection against adaptive adversaries?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "evaluates effectiveness of defenses at different stages",
+              "argues which stage is most robust against adaptive adversaries"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_causal_relationship",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the causal relationship between non-uniform data distribution across participants and the difficulty of detecting malicious updates, explaining why legitimate variations can be mistaken for anomalies?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes how non-IID data complicates anomaly detection",
+              "explains why benign updates may resemble malicious ones"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.quantification.does_the_report_derive_the_conditions_under_whic",
+            "competency_category": "quantification",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report derive the conditions under which an attacker can successfully perform a model replacement attack by amplifying the malicious update, and analyze the dependency on the aggregation rule?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "derives conditions for model replacement (e.g., scaling factor, aggregation rule)",
+              "analyzes dependency on the aggregation algorithm"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_stealthiness_of_dist",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the stealthiness of distributed backdoor attacks (where the trigger is split across clients) versus single-client attacks, and argue why the former is harder to detect?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "compares stealthiness of distributed vs single-client attacks",
+              "argues reasons for detectability differences"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_root_cause_of_backdo",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the root cause of backdoor persistence challenges—specifically why malicious behavior may be overwritten by subsequent benign updates—and evaluate strategies to improve durability?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes why backdoors can be erased over rounds",
+              "evaluates strategies for improving backdoor durability"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.principle explanation.does_the_report_explain_the_scientific_logic_beh",
+            "competency_category": "principle explanation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain the scientific logic behind pruning-based defenses, specifically how removing neurons that are only activated by trigger patterns can eliminate backdoor behavior without significantly degrading main task performance?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "explains the logic of identifying dormant/backdoor neurons",
+              "explains why removal may have limited impact on main task"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.assessment.does_the_report_assess_the_feasibility_of_trigge",
+            "competency_category": "assessment",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report assess the feasibility of trigger inversion techniques as a defense, analyzing the conditions under which the reconstructed trigger is accurate and the computational cost?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "assesses conditions for accurate trigger inversion",
+              "analyzes computational cost of inversion"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_applicability_of_kno",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the applicability of knowledge distillation versus pruning as post-training defenses, evaluating which method is more suitable when only a small clean dataset is available?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "compares distillation and pruning as post-training defenses",
+              "evaluates suitability under limited clean data"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_why_personalized_federat",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain why personalized federated learning creates a fundamental ambiguity between legitimate client-specific features (due to non-IID data) and malicious backdoor features, and why this ambiguity challenges defense mechanisms?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "explains the ambiguity between legitimate and malicious features in PFL",
+              "explains why this challenges defense mechanisms"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_limitation_of_server",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the limitation of server-side defenses that rely on a clean proxy dataset, explaining why such datasets are often impractical in real-world privacy-preserving federated learning?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes the impracticality of clean proxy datasets",
+              "explains privacy constraints in real-world FL"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_threat_model_of_back",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the threat model of backdoor attacks in horizontal federated learning versus vertical federated learning, evaluating how the difference in data partition affects attack surface and trigger design?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "compares attack surfaces in horizontal vs vertical FL",
+              "evaluates how data partition influences trigger design"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.assessment.does_the_report_evaluate_the_feasibility_of_usin",
+            "competency_category": "assessment",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the feasibility of using Shapley value-based methods for identifying malicious clients, analyzing the computational overhead and the impact of non-IID data on contribution estimation?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "evaluates feasibility of Shapley value methods",
+              "analyzes computational overhead and sensitivity to non-IID data"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.quantification.does_the_report_derive_the_relationship_between",
+            "competency_category": "quantification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report derive the relationship between the poisoning ratio (proportion of malicious clients or poisoned data) and attack success rate, and analyze how this relationship depends on the aggregation rule?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "derives relationship between poisoning ratio and attack success",
+              "analyzes dependency on aggregation rule"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_defenses_based_on_ass",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report argue that defenses based on assumptions about attacker behavior (e.g., attack-driven defenses) are inherently limited, and justify this by explaining how adaptive adversaries can exploit these assumptions?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "argues that attack-driven defenses are limited",
+              "justifies by explaining adaptive adversary circumvention"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.assessment.does_the_report_analyze_the_trade_off_between_co",
+            "competency_category": "assessment",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the trade-off between communication/computation efficiency and security in defense mechanisms, evaluating which defenses are suitable for resource-constrained edge devices?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes trade-off between efficiency and security",
+              "evaluates suitability for resource-constrained devices"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_scalability_limitat",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the scalability limitations of certified robustness defenses (e.g., those providing formal guarantees), analyzing why these methods often have loose bounds and fail to scale to large models?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "evaluates scalability limitations of certified defenses",
+              "analyzes why bounds are loose and scaling is challenging"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_fundamental_conflict",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the fundamental conflict between privacy-preserving aggregation (e.g., homomorphic encryption) and the ability to audit individual updates for backdoors, and explain why this conflict creates a security gap?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes conflict between privacy and auditability",
+              "explains why this creates a security gap"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.assessment.does_the_report_evaluate_the_conditions_under_wh",
+            "competency_category": "assessment",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the conditions under which adversarial training can be applied as a defense in federated learning, analyzing the computational overhead and the need for generating adversarial examples on resource-limited clients?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "evaluates conditions for feasibility of adversarial training in FL",
+              "analyzes computational overhead on clients"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_role_of_trigger_type",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report analyze the role of trigger types (digital vs semantic) in attack effectiveness and stealthiness, explaining why semantic triggers may be more difficult to detect?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes how trigger type affects attack effectiveness",
+              "explains why semantic triggers pose detection challenges"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_vulnerability_profil",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the vulnerability profiles of different aggregation rules (e.g., FedAvg, Krum, Median, Trimmed Mean) under combined scenarios of data heterogeneity and malicious attacks, evaluating which rule is most robust?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "compares vulnerability profiles of multiple aggregation rules",
+              "evaluates robustness under combined non-IID and attack scenarios"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_no_single_defense_mec",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report argue that no single defense mechanism is sufficient, and justify this by analyzing the complementary strengths and weaknesses of defenses at different stages (pre-aggregation, in-aggregation, post-aggregation)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "argues that no single defense is sufficient",
+              "justifies by analyzing complementary strengths/weaknesses across stages"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.assessment.does_the_report_evaluate_the_potential_of_using",
+            "competency_category": "assessment",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the potential of using Neural Architecture Search to design models that are inherently more resistant to trigger activation, analyzing the feasibility and computational cost of such an approach?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "evaluates potential of NAS for resistance",
+              "analyzes feasibility and computational cost"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_multi_round_nature_o",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report analyze the multi-round nature of some backdoor attacks, explaining why persistent poisoning over multiple rounds may be necessary for backdoor durability and how defenses can be designed to counter such temporal attacks?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "analyzes need for persistent poisoning for durability",
+              "explains how defenses can counter multi-round attacks"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.quantification.does_the_report_derive_or_demonstrate_how_the_ef",
+            "competency_category": "quantification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report derive or demonstrate how the effectiveness of clustering-based defenses degrades as the number of benign clusters increases due to data heterogeneity, and evaluate the practical implications?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "derives or demonstrates degradation with more clusters",
+              "evaluates practical implications for defense robustness"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 6,
+        "items": [
+          {
+            "rubric_id": "R39",
+            "rubric_key": "report_synthesis.structure.does_the_report_include_a_clearly_defined_introd",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a clearly defined introduction, categorized body sections (e.g., attacks and defenses), and a conclusion that synthesizes findings and future directions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "report_synthesis.structure.does_the_report_demonstrate_a_hierarchical_categ",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report demonstrate a hierarchical categorization of backdoor attacks and defense mechanisms, such as grouping attacks by data poisoning vs. model poisoning and defenses by aggregation stage?",
+            "source_ids": [],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "report_synthesis.structure.does_the_report_trace_the_chronological_evolutio",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report trace the chronological evolution of backdoor attacks and defenses in federated learning, identifying key milestones or trends?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_identify_at_least_three_specific",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report identify at least three specific, concrete future research directions beyond generic suggestions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_diagrams_charts_or_other",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include diagrams, charts, or other visual aids (e.g., taxonomy diagrams, attack-defense flowcharts) to illustrate the categorization and relationships?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "report_synthesis.structure.does_the_report_demonstrate_awareness_of_recent",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report demonstrate awareness of recent developments (e.g., from 2023 onward) in the field, such as adaptive attacks or defenses for large language models?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "3.0-litreview-ocr",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "ocr_enabled": true,
+    "ocr_checklist_items": 38,
+    "ocr_naked_explain_remaining": 1,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 12,
+        "max_score": 25,
+        "role_distribution": {
+          "Critical": 2,
+          "Mandatory": 7,
+          "Standard": 3
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.5
+      },
+      "scientific_reasoning": {
+        "item_count": 26,
+        "max_score": 63,
+        "role_distribution": {
+          "Critical": 8,
+          "Mandatory": 13,
+          "Standard": 5
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.11538461538461539
+      },
+      "report_synthesis": {
+        "item_count": 6,
+        "max_score": 6,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 0,
+          "Standard": 6
+        },
+        "source_linked_ratio": 0.8333333333333334,
+        "multi_source_ratio": 0.8333333333333334
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

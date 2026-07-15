@@ -1,0 +1,386 @@
+{
+    "task_id": "LR_FL_BACKDOOR_001",
+    "task_type": "literature_review",
+    "subject": "information_security",
+    "document_heavy": false,
+    "query": "To address the security risks of hidden backdoor attacks injected by malicious clients in distributed machine learning, investigate defense mechanisms against persistent and adaptive backdoor attacks in Federated Learning (FL). In realistic scenarios, attackers may invalidate the global model under specific triggers by poisoning data or directly tampering with model parameters, while traditional aggregation algorithms significantly decline in effectiveness under Non-IID (Non-Independent and Identically Distributed) and high-stealth attacks. Please review relevant research from 2017¨C2025 and form a structured long-form review report around the following questions: 1. How does current mainstream research model adaptive backdoor attacks that are invisible to the central server and can bypass statistical anomaly detection? 2. Which defense techniques have proven effective? 3. What is the core bottleneck in eliminating backdoors without sacrificing benign data accuracy? 4. In practical industrial-grade federated systems, how should a collaborative defense mechanism of dynamic backdoor detection and manual auditing be constructed?",
+    "input_files": [],
+    "rubrics": {
+        "total_score": 103,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 24,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report accurately define Backdoor Attacks in FL as malicious functionality triggered by specific inputs while remaining stealthy on main tasks?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report distinguish between Data Poisoning and Model Poisoning as the two primary attack vectors?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report mention the impact of the poisoning ratio on attack success rates?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how Non-IID data distributions in FL provide a natural cover for malicious updates?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report list at least three common benchmark datasets used in attack evaluations (e.g., MNIST, CIFAR-10, TinyImageNet)?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the 'Model Replacement' strategy where malicious updates are scaled to override the global model?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention Distributed Backdoor Attacks (DBA) and the decomposition of triggers?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify 'stealthiness' as a core objective for attackers to bypass statistical anomaly detection?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report note that attack targets can be either the global model or specific personalized branches?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report mention that adaptive attackers can adjust strategies based on the server's defense mechanisms?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R11",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention different trigger types such as static pixel blocks, natural patterns, or semantic triggers?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report clarify the 'Persistence' challenge of backdoors?",
+                        "source_ids": [ "S1" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 69,
+                "items": [
+                    {
+                        "rubric_id": "R13",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze why norm-based robust aggregators (e.g., Krum, Median) fail against high-dimensional projection-based adaptive attacks?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain that Differential Privacy (DP) defenses work by adding noise to smooth out anomalous gradient features?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze the relationship between 'dormant neurons' and backdoors in the context of Pruning-based defenses?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the scientific reasons why model pruning may lead to a decrease in main task accuracy (utility loss)?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report discuss the computational overhead limitations of Adversarial Training (AT) in FL scenarios?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain the scientific logic of Trigger Inversion in identifying backdoored labels through reverse-engineering?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how Knowledge Distillation can be used to purify a poisoned global model?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report discuss the challenge of distinguishing 'personalized features' from 'backdoor noise' in Personalized FL (PFL)?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report address the scarcity of clean validation datasets at the server side for defense verification?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze the role of weight scaling in evading L2-norm-based detection?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the effectiveness of Feature Squeezing in suppressing high-frequency trigger signals?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate the false-positive risks of Clustering-based defenses in highly heterogeneous Non-IID environments?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report discuss the scientific necessity of dynamically adjusting defense thresholds in adaptive defense systems?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report explain the non-linear relationship between the number of participating clients and attack success rates?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report demonstrate the mechanistic similarities between Model Watermarking and Backdoor Attacks?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain the mathematical formulation of 'Constraint-and-scale' methods used to make gradients appear benign?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the advantages and disadvantages of training-phase defenses versus post-training defenses?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report explain why FedAvg is the most vulnerable aggregation method in adversarial environments?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R31",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze how Shapley Value-based defenses quantify the malicious contribution of clients?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report discuss the defense difficulty when Homomorphic Encryption (HE) prevents direct model auditing?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate energy consumption bottlenecks when running complex detection algorithms on edge devices?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention the potential of using Neural Architecture Search (NAS) to find robust sub-structures for defense?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess the transferability of adversarial example detectors to backdoor defense?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report discuss the differences in attack surfaces between Vertical FL (VFL) and Horizontal FL (HFL)?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the statistical logic of 'clustering before aggregation' in filtering niche malicious updates?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report differentiate defense strategies for long-term persistent attacks versus single-shot attacks?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the fine-grained differences between Label-flipping attacks and trigger-based backdoor attacks?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze the scalability bottlenecks of Certified Robustness methods in real-world FL systems?",
+                        "source_ids": [ "S1" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 10,
+                "items": [
+                    {
+                        "rubric_id": "R41",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report include a summary table of key papers and defense types from 2017 to 2025?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R42",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report structure include: Abstract, Introduction, Attack Models, Defense Technologies, and Future Directions?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R43",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report explicitly identify new backdoor risks in the context of Large Language Models (LLMs) after 2023?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R44",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Is the report logically sound, progressing from attack mechanisms to corresponding defense strategies?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R45",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a hierarchical taxonomy map of the reviewed defense mechanisms?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R46",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss the balance between FL security and system efficiency?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R47",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the literature review include recent academic trends from 2024 or 2025?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R48",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the 'Future Directions' section propose at least three specific and high-depth research entry points?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R49",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a comparative analysis of defense performance under varying degrees of Non-IID data?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R50",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the conclusion reiterate the consensus that no single defense solves all backdoor attack scenarios?",
+                        "source_ids": [ "S1" ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+

@@ -1,0 +1,384 @@
+{
+    "task_id": "claim_verification_001",
+    "task_type": "claim_verification",
+    "subject": "artificial_intelligence",
+    "document_heavy": false,
+    "query": "In a Non-IID federated learning environment, does existing research support the claim that 'adaptive differential privacy aggregation technology can achieve complete defense against adaptive backdoor attacks'? Based on literature from 2018 to 2025, evaluate the sufficiency of evidence for this claim and produce a structured claim verification report. The report should include: (1) claim deconstruction (identifying verifiable sub-propositions of 'complete defense'), (2) evidence table (supporting/refuting/neutral evidence), (3) logical verification (analyzing the conflict between Non-IID and complete defense), (4) verdict (supported/refuted/insufficient evidence, with justification), and (5) evidence gap (if insufficient, specify what evidence is missing).",
+    "input_files": [],
+    "rubrics": {
+        "total_score": 120,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 31,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explicitly define that differential privacy (DP) in federated learning is typically implemented by adding random noise to local gradients?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report mention that adaptive backdoor attacks adjust poisoning behavior according to the server's defense strategy?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the definition of Non-IID data, i.e., that sample distributions differ across clients?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report cite the description of norm clipping as a defense mechanism from source S3?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report identify the time range of this verification as 2018¨C2025?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report mention the trade-off between privacy budget and defense effectiveness in differential privacy?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report point out that in adaptive attacks, the adversary can obtain global model information?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report distinguish between data poisoning and model poisoning?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention the necessity of combining Byzantine-robustness with differential privacy?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report state that 'complete defense' in security research typically means attack success rate (ASR) drops to baseline level?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R11",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report identify that differential privacy noise may cover small malicious perturbations?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report cite EMNIST or CIFAR-10 as main experimental benchmark datasets?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R13",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain that in DP-FL the server typically cannot see plaintext gradients?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention the impact of attack frequency on defense difficulty?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report point out the stealthiness of backdoor tasks when main task accuracy remains unchanged?",
+                        "source_ids": [ "S3" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 75,
+                "items": [
+                    {
+                        "rubric_id": "R16",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report scientifically refute the claim of 'complete defense' and state that DP-FL is not inherently robust?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze why Non-IID characteristics reduce the ability of traditional filtering algorithms to detect backdoors?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain the statistical similarity between DP noise and backdoor perturbations, making them difficult to distinguish?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the role of client momentum in exposing malicious perturbations?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report point out that 'weak differential privacy' can mitigate attacks but cannot completely eliminate advanced adaptive attacks?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze how attackers design evasion strategies when they know the DP parameters?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report argue that excessive noise to achieve 'complete defense' would significantly degrade model utility?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report derive the boundary impact of the fraction of adversaries on the validity of the claim?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze that in personalized federated learning, backdoor noise might be mistaken as personalized data distribution?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the key role of norm clipping as a preprocessing step for DP defense against backdoors?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report identify that adaptive attacks exploit uncertainty in gradient statistics to penetrate?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report point out that under Non-IID, the gradient distribution of benign clients inherently has high variance?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss the dilemma that combining homomorphic encryption with DP makes model auditing impossible?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze the mathematical connection between certified robustness and differential privacy?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive that single-round defenses are difficult to identify backdoors injected slowly over multiple rounds?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R31",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the vulnerability differences between FedAvg and robust aggregators under DP?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how DP noise is diluted through the central aggregator?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report point out that adaptive backdoors can use privacy noise as a shield for their parameter perturbations?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss that defense difficulty increases when the main task is more complex?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report argue that 'complete defense' is a strong assumption and the literature more often mentions 'mitigation'?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss that in cross-silo FL, DP effectiveness may decrease due to fewer participants?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the possibility of collusion among malicious clients across different rounds?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report derive that as privacy budget ¦Å approaches 0, defense capability increases but model may lose convergence?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain that adaptive attackers can bypass median-based robust aggregation?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report conclude that there is currently no evidence supporting complete defense?",
+                        "source_ids": [ "S1" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 14,
+                "items": [
+                    {
+                        "rubric_id": "R41",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report include a structured evidence table clearly categorizing supporting, refuting, and neutral evidence?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R42",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Is the verdict clearly stated as 'refuted' or 'insufficient evidence', with justification?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R43",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report explicitly point out the over-absolutization of the term 'complete defense' in the claim?",
+                        "source_ids": [ "S3" ]
+                    },
+                    {
+                        "rubric_id": "R44",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report indicate future research directions, such as joint optimization of privacy and robustness?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R45",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss the limitations of introducing manual auditing in industrial FL systems due to DP protection?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R46",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report use professional academic language (e.g., convergence bounds, norm constraints, privacy budget)?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R47",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report specifically emphasize the latest research progress (e.g., AAAI-24) when citing S1?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R48",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report logically articulate that Non-IID is a core source of backdoor stealthiness?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R49",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report mention a new attack method from S1 as a counterexample to the original claim?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R50",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a final confidence score?",
+                        "source_ids": []
+                    }
+                ]
+            }
+        ]
+    }
+}

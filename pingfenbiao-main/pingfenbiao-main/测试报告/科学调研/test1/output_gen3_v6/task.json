@@ -1,0 +1,602 @@
+{
+  "task_id": "literature_review_auto_v3",
+  "task_type": "literature_review",
+  "subject": "",
+  "document_heavy": false,
+  "query": "To address the security risks of hidden backdoor attacks injected by malicious clients in distributed machine learning, investigate defense mechanisms against persistent and adaptive backdoor attacks in Federated Learning (FL). In realistic scenarios, attackers may invalidate the global model under specific triggers by poisoning data or directly tampering with model parameters, while traditional aggregation algorithms significantly decline in effectiveness under Non-IID (Non-Independent and Identically Distributed) and high-stealth attacks. Please review relevant research from 2017-2025 and form a structured long-form review report around the following questions: 1. How does current mainstream research model adaptive backdoor attacks that are invisible to the central server and can bypass statistical anomaly detection? 2. Which defense techniques have proven effective? 3. What is the core bottleneck in eliminating backdoors without sacrificing benign data accuracy? 4. In practical industrial-grade federated systems, how should a collaborative defense mechanism of dynamic backdoor detection and manual auditing be constructed?",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "S1_highlighted.pdf",
+      "relative_path": "S1_highlighted.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 34 pages"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "source_notes.md",
+      "relative_path": "source_notes.md",
+      "file_type": "md",
+      "description": "Text file, 14091 characters"
+    }
+  ],
+  "rubrics": {
+    "total_score": 96,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 21,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.definition.does_the_report_precisely_define_a_backdoor_atta",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report precisely define a backdoor attack in federated learning as the injection of a hidden trigger-dependent behavior into the global model while preserving normal performance on clean inputs?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.definition.does_the_report_define_an_adaptive_backdoor_atta",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report define an adaptive backdoor attack as one in which the adversary monitors the server's defense mechanism and adjusts its poisoning strategy to remain undetected?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.methodology.does_the_report_classify_backdoor_attacks_into_d",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report classify backdoor attacks into data poisoning and model poisoning, and explain how each type corrupts the learning process?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_at_least_two_different",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe at least two different taxonomies of defense stages from the literature, such as pre-aggregation/in-aggregation/post-aggregation and proactive/reactive categories?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.methodology.does_the_report_explain_the_principle_of_robust",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the principle of robust aggregation methods (e.g., Krum, Trimmed Mean) and identify their vulnerability to adaptive attacks?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.methodology.does_the_report_explain_how_differential_privacy",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain how differential privacy-based defenses add calibrated noise to limit the influence of any single client, and describe the trade-off with model accuracy?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.comparison.does_the_report_differentiate_backdoor_attacks_f",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report differentiate backdoor attacks from label-flipping attacks by noting that backdoors only affect triggered inputs while label-flipping corrupts entire classes?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.methodology.does_the_report_explain_the_mechanism_of_the_mod",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the mechanism of the model replacement attack, where the adversary amplifies the poisoned update to dominate the aggregation?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.limitation.does_the_report_identify_the_inherent_trade_off",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report identify the inherent trade-off between security and utility, where aggressive defense measures can degrade the main task accuracy?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "information_acquisition.methodology.does_the_report_explain_how_distributed_backdoor",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report explain how distributed backdoor attacks split the trigger across multiple malicious clients to evade detection?",
+            "source_ids": [
+              "S2"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 66,
+        "items": [
+          {
+            "rubric_id": "R11",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_trade_off_between_t",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report evaluate the trade-off between the added noise in differential privacy-based defenses and the resulting degradation in primary task accuracy, and analyze how this trade-off limits practical deployment?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_scientific_logic_beh",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain the scientific logic behind why attackers can bypass robust aggregation methods such as Krum or Median by constraining their update norm within the range of benign updates, and argue why this is a fundamental limitation of statistical defenses?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_vulnerability_profil",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the vulnerability profiles of data poisoning versus model poisoning attacks, evaluating which approach is more difficult to detect in the context of non-IID data distributions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_current_defenses_are",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report argue that current defenses are predominantly attack-driven and reactive, and justify this claim by analyzing the logical dependency between known attack patterns and the design of corresponding countermeasures?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_scalability_limitatio",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the scalability limitations of Shapley value-based contribution evaluation methods when applied to large-scale federated systems with many clients, and explain why computational overhead becomes prohibitive?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_the_effectiveness_of_tr",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report evaluate the effectiveness of trigger inversion methods in reconstructing backdoor triggers, and analyze the conditions under which these methods fail (e.g., when the trigger is semantic or distributed across multiple clients)?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_core_bottleneck_in_e",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the core bottleneck in eliminating backdoors: the difficulty of distinguishing between benign updates that deviate due to non-IID data and malicious updates that carry a backdoor, and explain why this is a fundamental problem?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_logic_behind_using_k",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the logic behind using knowledge distillation to cleanse a potentially poisoned model, and analyze why the availability of a small clean dataset is critical for the success of this approach?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_effectiveness_of_pre",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the effectiveness of pre-aggregation, in-aggregation, and post-aggregation defense strategies, and evaluate which stage offers the best trade-off between security and performance?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_feasibility_of_using",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the feasibility of using feature squeezing (e.g., reducing color depth, applying smoothing) as a defense against backdoor triggers, and analyze why this method may degrade model accuracy on clean inputs?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_no_single_defense_mec",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report argue that no single defense mechanism can provide universal protection against all backdoor attacks, and justify this by analyzing the fundamental trade-offs between competing defense objectives (e.g., accuracy vs. security, privacy vs. auditability)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_assumption_that_a_c",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the assumption that a clean proxy dataset is available for server-side validation, and explain why this assumption is often unrealistic in privacy-preserving federated learning?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_why_clustering_based_def",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain why clustering-based defenses can misclassify benign updates as malicious in highly non-IID scenarios, and analyze the root cause in terms of the natural diversity of benign updates?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_durability_challenge",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the durability challenge for backdoor attacks: the risk that the injected backdoor may be overwritten by benign updates in subsequent rounds, and explain the trade-off between attack persistence and stealthiness?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_effectiveness_of_co",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the effectiveness of cosine similarity-based filtering of updates, and analyze why this method may fail when malicious updates are directionally aligned with the majority of benign updates?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_explain_the_scientific_logic_beh",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain the scientific logic behind why adaptive attackers can monitor the server's defense strategy and adjust their poisoning behavior to remain undetected, and argue that this necessitates dynamic defense mechanisms?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_trade_off_between_the",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the trade-off between the computational overhead of adversarial training on resource-constrained clients and the security benefit, and explain why this approach may be impractical for edge devices?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_suitability_of_diffe",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report compare the suitability of different defense methods (e.g., robust aggregation, pruning, differential privacy) for industrial-grade federated systems that require high main task accuracy, and evaluate which methods are most compatible with such requirements?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_argument_that_futur",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the argument that future defenses should be adaptive and dynamically adjust their detection thresholds, and analyze the challenges in designing such adaptive mechanisms without prior knowledge of attack patterns?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_fundamental_reason_w",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the fundamental reason why simple averaging aggregation (FedAvg) is highly vulnerable to a single malicious update with a large norm, and analyze how the aggregation function amplifies the influence of outliers?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_goals_and_mechanisms",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report compare the goals and mechanisms of backdoor attacks versus model watermarking for intellectual property protection, and evaluate the ethical implications of using similar techniques for opposite purposes?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_conditions_under_wh",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the conditions under which certified robustness methods provide meaningful guarantees, and explain why their loose bounds and limited scalability make them impractical for large-scale deep neural networks?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_a_collaborative_defen",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report argue that a collaborative defense combining dynamic backdoor detection with manual auditing is necessary for industrial systems, and justify this by analyzing the limitations of fully automated defenses against adaptive adversaries?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_logic_behind_using_m",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the logic behind using model pruning to remove backdoor neurons, and analyze why this approach may be less effective when the backdoor is distributed across many neurons or when the model is overparameterized?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_robustness_of_differ",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report compare the robustness of different aggregation methods (e.g., Krum, Trimmed Mean, FoolsGold) against adaptive attacks that craft updates to appear statistically similar to benign ones, and evaluate which method is most resilient?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_the_feasibility_of_using",
+            "competency_category": "synthesis",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the feasibility of using automated neural architecture search to design models that are inherently resistant to backdoor triggers, and analyze the potential trade-offs between architectural complexity and security?",
+            "source_ids": [
+              "S2"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 9,
+        "items": [
+          {
+            "rubric_id": "R37",
+            "rubric_key": "report_synthesis.structure.does_the_report_include_a_clearly_delineated_str",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a clearly delineated structure with sections such as introduction, methodology overview, comparative analysis, challenges, and future directions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "report_synthesis.visualization.does_the_report_provide_a_hierarchical_classific",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report provide a hierarchical classification or taxonomy of the reviewed methods (e.g., as a table or classification diagram)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "report_synthesis.structure.does_the_report_trace_the_chronological_evolutio",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report trace the chronological evolution of backdoor attacks and defenses in federated learning, highlighting key milestones?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_identify_at_least_three_concrete",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report identify at least three concrete future research directions that go beyond generic suggestions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "report_synthesis.structure.does_the_report_assess_the_trade_offs_between_se",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the trade-offs between security and utility (e.g., accuracy loss due to defense mechanisms) across different methods?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_a_visual_taxonomy_diagra",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a visual taxonomy diagram (e.g., hierarchical chart) that categorizes defense methods by their stage of application or approach?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "report_synthesis.integrity.does_the_report_demonstrate_awareness_of_the_lat",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report demonstrate awareness of the latest research trends (2024-2025) in federated learning backdoor security?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "report_synthesis.structure.does_the_report_conclude_with_a_synthesis_of_key",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report conclude with a synthesis of key findings, open problems, and unresolved debates in the field?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R45",
+            "rubric_key": "report_synthesis.language.does_the_report_maintain_a_logical_progression_f",
+            "competency_category": "language",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report maintain a logical progression from problem characterization to method taxonomy to critical research gaps?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "3.0-litreview",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 10,
+        "max_score": 21,
+        "role_distribution": {
+          "Critical": 2,
+          "Mandatory": 5,
+          "Standard": 3
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.4
+      },
+      "scientific_reasoning": {
+        "item_count": 26,
+        "max_score": 66,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 10,
+          "Standard": 6
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.23076923076923078
+      },
+      "report_synthesis": {
+        "item_count": 9,
+        "max_score": 9,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 0,
+          "Standard": 9
+        },
+        "source_linked_ratio": 0.8888888888888888,
+        "multi_source_ratio": 0.8888888888888888
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

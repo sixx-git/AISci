@@ -1,0 +1,276 @@
+{
+    "model_name": "OpenAI Deep Research",
+    "report_file": "self_check/report.md",
+    "raw_score": 75,
+    "total_score": 120,
+    "score_percentage": 62.5,
+    "dimension_scores": [
+        {
+            "dimension_id": "information_acquisition",
+            "score": 24,
+            "max_score": 31
+        },
+        {
+            "dimension_id": "scientific_reasoning",
+            "score": 40,
+            "max_score": 75
+        },
+        {
+            "dimension_id": "report_synthesis",
+            "score": 11,
+            "max_score": 14
+        }
+    ],
+    "items": [
+        {
+            "rubric_id": "R1",
+            "score": 0,
+            "reason": "The report mentions DP but does not explicitly state that it adds random noise to local gradients."
+        },
+        {
+            "rubric_id": "R2",
+            "score": 4,
+            "reason": "Correctly identifies adaptive backdoor attacks adjust poisoning based on server defense."
+        },
+        {
+            "rubric_id": "R3",
+            "score": 2,
+            "reason": "Defines Non-IID data as client distribution differences."
+        },
+        {
+            "rubric_id": "R4",
+            "score": 2,
+            "reason": "Cites norm clipping as defense from S3."
+        },
+        {
+            "rubric_id": "R5",
+            "score": 1,
+            "reason": "Recognizes time range 2018-2025."
+        },
+        {
+            "rubric_id": "R6",
+            "score": 2,
+            "reason": "Mentions trade-off between privacy budget and defense."
+        },
+        {
+            "rubric_id": "R7",
+            "score": 4,
+            "reason": "States adversary can know global model in adaptive attacks."
+        },
+        {
+            "rubric_id": "R8",
+            "score": 0,
+            "reason": "Does not distinguish data poisoning from model poisoning."
+        },
+        {
+            "rubric_id": "R9",
+            "score": 0,
+            "reason": "No mention of Byzantine-robustness combined with DP."
+        },
+        {
+            "rubric_id": "R10",
+            "score": 2,
+            "reason": "Explains 'complete defense' as ASR to baseline."
+        },
+        {
+            "rubric_id": "R11",
+            "score": 4,
+            "reason": "Identifies DP noise can cover small malicious perturbations."
+        },
+        {
+            "rubric_id": "R12",
+            "score": 1,
+            "reason": "Cites EMNIST or CIFAR-10 as benchmarks."
+        },
+        {
+            "rubric_id": "R13",
+            "score": 0,
+            "reason": "Does not explain server cannot see plaintext gradients in DP-FL."
+        },
+        {
+            "rubric_id": "R14",
+            "score": 0,
+            "reason": "No mention of attack frequency impact."
+        },
+        {
+            "rubric_id": "R15",
+            "score": 2,
+            "reason": "Points out stealthiness when main task accuracy unchanged."
+        },
+        {
+            "rubric_id": "R16",
+            "score": 4,
+            "reason": "Refutes 'complete defense' and notes DP-FL not inherently robust."
+        },
+        {
+            "rubric_id": "R17",
+            "score": 4,
+            "reason": "Analyzes Non-IID reduces filtering ability."
+        },
+        {
+            "rubric_id": "R18",
+            "score": 4,
+            "reason": "Explains statistical similarity between DP noise and backdoor perturbations."
+        },
+        {
+            "rubric_id": "R19",
+            "score": 0,
+            "reason": "No derivation of client momentum role."
+        },
+        {
+            "rubric_id": "R20",
+            "score": 0,
+            "reason": "Does not distinguish weak DP from strong DP."
+        },
+        {
+            "rubric_id": "R21",
+            "score": 4,
+            "reason": "Analyzes attacker knowing DP parameters to design evasion."
+        },
+        {
+            "rubric_id": "R22",
+            "score": 2,
+            "reason": "Argues excessive noise for complete defense hurts utility."
+        },
+        {
+            "rubric_id": "R23",
+            "score": 0,
+            "reason": "Does not derive boundary impact of adversary fraction."
+        },
+        {
+            "rubric_id": "R24",
+            "score": 0,
+            "reason": "No analysis of personalization vs backdoor noise."
+        },
+        {
+            "rubric_id": "R25",
+            "score": 0,
+            "reason": "Does not explain norm clipping as key preprocessing step."
+        },
+        {
+            "rubric_id": "R26",
+            "score": 4,
+            "reason": "Identifies adaptive attacks exploit gradient uncertainty."
+        },
+        {
+            "rubric_id": "R27",
+            "score": 2,
+            "reason": "Points out Non-IID causes high variance in benign gradients."
+        },
+        {
+            "rubric_id": "R28",
+            "score": 0,
+            "reason": "No discussion of homomorphic encryption with DP."
+        },
+        {
+            "rubric_id": "R29",
+            "score": 0,
+            "reason": "No analysis of connection with certified robustness."
+        },
+        {
+            "rubric_id": "R30",
+            "score": 4,
+            "reason": "Derives single-round defense cannot catch slow backdoor injection."
+        },
+        {
+            "rubric_id": "R31",
+            "score": 0,
+            "reason": "No comparison of FedAvg vs robust aggregators under DP."
+        },
+        {
+            "rubric_id": "R32",
+            "score": 0,
+            "reason": "No explanation of DP noise dilution through aggregator."
+        },
+        {
+            "rubric_id": "R33",
+            "score": 4,
+            "reason": "Points out adaptive backdoors use DP noise as shield."
+        },
+        {
+            "rubric_id": "R34",
+            "score": 0,
+            "reason": "No discussion of task complexity impact on defense."
+        },
+        {
+            "rubric_id": "R35",
+            "score": 4,
+            "reason": "Argues 'complete defense' is strong assumption, literature says 'mitigation'."
+        },
+        {
+            "rubric_id": "R36",
+            "score": 0,
+            "reason": "No discussion of cross-silo FL impact on DP."
+        },
+        {
+            "rubric_id": "R37",
+            "score": 0,
+            "reason": "No analysis of collusion among malicious clients."
+        },
+        {
+            "rubric_id": "R38",
+            "score": 0,
+            "reason": "Does not derive convergence loss as ¦Å¡ú0."
+        },
+        {
+            "rubric_id": "R39",
+            "score": 0,
+            "reason": "No explanation of bypassing median-based aggregation."
+        },
+        {
+            "rubric_id": "R40",
+            "score": 4,
+            "reason": "Concludes no evidence supports complete defense."
+        },
+        {
+            "rubric_id": "R41",
+            "score": 2,
+            "reason": "Includes structured evidence table."
+        },
+        {
+            "rubric_id": "R42",
+            "score": 2,
+            "reason": "Verdict clearly stated with justification."
+        },
+        {
+            "rubric_id": "R43",
+            "score": 1,
+            "reason": "Points out over-absolutization of 'complete defense'."
+        },
+        {
+            "rubric_id": "R44",
+            "score": 1,
+            "reason": "Indicates future directions like joint optimization."
+        },
+        {
+            "rubric_id": "R45",
+            "score": 0,
+            "reason": "No discussion of manual auditing limitations due to DP."
+        },
+        {
+            "rubric_id": "R46",
+            "score": 2,
+            "reason": "Uses professional academic language."
+        },
+        {
+            "rubric_id": "R47",
+            "score": 0,
+            "reason": "Does not emphasize AAAI-24 recency when citing S1."
+        },
+        {
+            "rubric_id": "R48",
+            "score": 2,
+            "reason": "Logically articulates Non-IID as core source of stealthiness."
+        },
+        {
+            "rubric_id": "R49",
+            "score": 0,
+            "reason": "No mention of new attack method from S1 as counterexample."
+        },
+        {
+            "rubric_id": "R50",
+            "score": 1,
+            "reason": "Provides final confidence score."
+        }
+    ]
+}

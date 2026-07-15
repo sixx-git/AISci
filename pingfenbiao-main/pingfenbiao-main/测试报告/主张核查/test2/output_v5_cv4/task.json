@@ -1,0 +1,563 @@
+{
+    "task_id": "claim_verification_auto_v5",
+    "task_type": "claim_verification",
+    "subject": "",
+    "document_heavy": true,
+    "query": "Evaluate the claim that parameter-efficient fine-tuning methods, such as low-rank adaptation and direct preference optimization, can match or exceed the performance of full fine-tuning or reinforcement learning from human feedback for aligning large language models with human preferences, while significantly reducing computational cost and complexity.",
+    "input_files": [
+        {
+            "file_id": "S1",
+            "file_name": "2106.09685v2.pdf",
+            "relative_path": "2106.09685v2.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 26 pages"
+        },
+        {
+            "file_id": "S2",
+            "file_name": "2110.08207v3.pdf",
+            "relative_path": "2110.08207v3.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 216 pages"
+        },
+        {
+            "file_id": "S3",
+            "file_name": "2203.02155v1.pdf",
+            "relative_path": "2203.02155v1.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 68 pages"
+        },
+        {
+            "file_id": "S4",
+            "file_name": "2305.14314v1.pdf",
+            "relative_path": "2305.14314v1.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 26 pages"
+        },
+        {
+            "file_id": "S5",
+            "file_name": "2305.18290v3.pdf",
+            "relative_path": "2305.18290v3.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 27 pages"
+        }
+    ],
+    "rubrics": {
+        "total_score": 93,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 9,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "rubric_key": "information_acquisition.definition.does_the_report_define_parameter_efficient_fine",
+                        "competency_category": "definition",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report define parameter-efficient fine-tuning as a method that updates only a small subset of model parameters while keeping most weights frozen?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "rubric_key": "information_acquisition.definition.does_the_report_define_alignment_of_language_mod",
+                        "competency_category": "definition",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report define alignment of language models with human preferences in terms of training models to be helpful, honest, and harmless?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "rubric_key": "information_acquisition.limitation.does_the_report_point_out_that_the_quality_of_tr",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report point out that the quality of training data is more important than the quantity for instruction fine-tuning performance?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 69,
+                "items": [
+                    {
+                        "rubric_id": "R4",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_claim_that",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the claim that parameter-efficient adaptation methods can match the performance of complete model training is supported by evidence from both comparative performance and computational cost?",
+                        "source_ids": [
+                            "S1",
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_assumption_that_redu",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report analyze the assumption that reducing the number of trainable parameters does not inherently limit the model's ability to capture complex task-specific dependencies?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_conditions_under_whic",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the conditions under which a direct preference-based learning approach can achieve comparable or better alignment than an iterative reward-based training method?",
+                        "source_ids": [
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_reconcile_the_claim_of_parameter",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report reconcile the claim of parameter efficiency with the observation that data quality outweighs dataset size in instruction-based fine-tuning?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_argue_that_the_claim_of_reduced",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report argue that the claim of reduced computational cost is overstated because it ignores the memory overhead of quantization or other components?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_evaluate_whether_the_elimination",
+                        "competency_category": "comparison",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the elimination of explicit reward modeling in a preference-based learning approach fundamentally changes the trade-off between alignment quality and simplicity?",
+                        "source_ids": [
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_conclude_that_the_evidence_for_p",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report conclude that the evidence for parameter-efficient methods matching complete model training is limited to specific model scales or tasks?",
+                        "source_ids": [
+                            "S1",
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R11",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_computational_savings",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the computational savings from the perspective of not only parameter count but also training time and memory requirements?",
+                        "source_ids": [
+                            "S1",
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_inference_latency_im",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the inference latency implications of the parameter-efficient adaptation method versus other parameter-efficient approaches?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R13",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_mechanism_by_which_t",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the mechanism by which the adaptation method constrains weight updates to be of low dimension?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_role_of_the_initial",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the role of the initial scaling factor in the adaptation method?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_the_claim_that_the_pref",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate the claim that the preference-based learning approach directly optimizes the policy without requiring a separate reward model?",
+                        "source_ids": [
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_performance_of_the_p",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the performance of the preference-based learning approach to the iterative reward-based method on tasks involving sentiment control?",
+                        "source_ids": [
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_limitation_that_the",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the limitation that the iterative reward-based method requires training multiple models and sampling, increasing complexity?",
+                        "source_ids": [
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_role_of_data_qualit",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate the role of data quality in the effectiveness of instruction-based fine-tuning methods?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_memory_requirements",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the memory requirements of the parameter-efficient approach with those of complete model training for large models?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_how_the_quantization_tec",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how the quantization technique preserves performance while reducing memory usage?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_trade_off_between_re",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the trade-off between reducing memory and potential loss of precision?",
+                        "source_ids": [
+                            "S4"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_generalization_of_th",
+                        "competency_category": "mechanism",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze the generalization of the alignment method to instructions outside the training distribution?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_truthfulness_improve",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report compare the truthfulness improvements of the aligned model versus the baseline?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_the_impact_of_the_multi",
+                        "competency_category": "mechanism",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the impact of the multitask training approach on zero-shot generalization?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_relationship_between",
+                        "competency_category": "mechanism",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze the relationship between the number of task examples per instruction and model performance?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_evaluate_the_claim_that_the_meth",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the claim that the method reduces undesirable outputs compared to the baseline?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_central_cla",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the central claim or thesis remains valid under the boundary conditions and assumptions discussed in the reviewed literature?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_reconcile_conflicting_evidence_a",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report reconcile conflicting evidence across sources regarding the main claim or conclusion?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_empirical_e",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the empirical evidence supports generalizing the main claim beyond the specific experimental settings studied?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_limitations_and_scope_con",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess limitations and scope conditions under which the main claim may not hold?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 15,
+                "items": [
+                    {
+                        "rubric_id": "R31",
+                        "rubric_key": "report_synthesis.structure.does_the_report_include_a_structured_evidence_ta",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report include a structured evidence table that clearly categorizes evidence as supporting, refuting, or neutral with respect to the claim?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "rubric_key": "report_synthesis.structure.does_the_report_provide_a_clear_verdict_statemen",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report provide a clear verdict statement that directly addresses the overall claim?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "rubric_key": "report_synthesis.citation.does_the_report_accurately_attribute_findings_to",
+                        "competency_category": "citation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report accurately attribute findings to the correct sources, without conflating results from different studies?",
+                        "source_ids": [
+                            "S1",
+                            "S2",
+                            "S3",
+                            "S4",
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "rubric_key": "report_synthesis.recommendation.does_the_report_identify_meaningful_research_gap",
+                        "competency_category": "recommendation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify meaningful research gaps or future directions for parameter-efficient fine-tuning methods?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "rubric_key": "report_synthesis.structure.does_the_report_provide_a_final_confidence_score",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a final confidence score or uncertainty quantification for the verdict?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_discuss_the_limitations_of_the_e",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report discuss the limitations of the experimental settings in the reviewed studies (e.g., model sizes, training data, evaluation benchmarks) for generalizing to real-world deployment?",
+                        "source_ids": [
+                            "S1",
+                            "S2",
+                            "S3",
+                            "S4",
+                            "S5"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "rubric_key": "report_synthesis.structure.does_the_report_map_each_piece_of_evidence_to_sp",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report map each piece of evidence to specific sub-propositions of the claim?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "rubric_key": "report_synthesis.structure.does_the_report_evaluate_the_logical_self_consis",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the logical self-consistency of the evidence presented across different sources?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_use_precise_hedging_language_and",
+                        "competency_category": "integrity",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report use precise hedging language and avoid unsupported superlatives (e.g., 'proven', 'guaranteed') when discussing research findings?",
+                        "source_ids": []
+                    }
+                ]
+            }
+        ]
+    },
+    "generation_meta": {
+        "version": "5.1-cv",
+        "rubric_key_enabled": true,
+        "capability_coverage_enabled": true,
+        "dimension_stats": {
+            "information_acquisition": {
+                "item_count": 3,
+                "max_score": 9,
+                "role_distribution": {
+                    "Critical": 2,
+                    "Mandatory": 0,
+                    "Standard": 1
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "scientific_reasoning": {
+                "item_count": 27,
+                "max_score": 69,
+                "role_distribution": {
+                    "Critical": 10,
+                    "Mandatory": 12,
+                    "Standard": 5
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.1111111111111111
+            },
+            "report_synthesis": {
+                "item_count": 9,
+                "max_score": 15,
+                "role_distribution": {
+                    "Critical": 0,
+                    "Mandatory": 6,
+                    "Standard": 3
+                },
+                "source_linked_ratio": 0.4444444444444444,
+                "multi_source_ratio": 0.2222222222222222
+            }
+        },
+        "generation_model": "deepseek-v4-flash",
+        "extraction_model": "deepseek-v4-flash",
+        "query_style": "claim",
+        "query_warnings": []
+    },
+    "calibration": {
+        "version": "2.0",
+        "issues_found": 11,
+        "issues": [
+            "information_acquisition: Critical 项过多 (2/3=67%, 目标 15%-35%)",
+            "information_acquisition: Mandatory 项过少 (0/3=0%, 目标 40%-60%)",
+            "information_acquisition: Standard 项过多 (1/3=33%, 目标 10%-30%)",
+            "scientific_reasoning: Critical 项过多 (10/27=37%, 目标 15%-35%)",
+            "report_synthesis: Critical 项过少 (0/9=0%, 目标 15%-35%)",
+            "report_synthesis: Mandatory 项过多 (6/9=67%, 目标 40%-60%)",
+            "report_synthesis: Standard 项过多 (3/9=33%, 目标 10%-30%)",
+            "report_synthesis: 过多评分项带有 source_ids (4/9), 综合维度应主要评估报告结构而非内容",
+            "information_acquisition: 分值占比 10% 不在合理范围 (20%-30%) for claim_verification",
+            "scientific_reasoning: 分值占比 74% 不在合理范围 (55%-70%) for claim_verification",
+            "information_acquisition: 条目数过少 (3, 目标 12-16)"
+        ],
+        "fixes_applied": [],
+        "task_type": "claim_verification"
+    }
+}

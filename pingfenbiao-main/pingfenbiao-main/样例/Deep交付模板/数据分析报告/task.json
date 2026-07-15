@@ -1,0 +1,441 @@
+﻿{
+    "task_id": "data_analysis_001",
+    "task_type": "data_analysis",
+    "subject": "computer_science",
+    "document_heavy": false,
+    "query": "You are given a training log file from federated learning experiments: fl_training_metrics.csv. Based on the provided input files, write a data analysis report covering: data quality inspection and cleaning, convergence round identification (fluctuation of Global_Accuracy over 10 consecutive rounds < 0.2%), algorithm effectiveness comparison (FedAvg vs FedProx), quantification of Non-IID impact on performance, quantitative analysis of Client Drift (based on Weight_Divergence), and sensitivity analysis. Experimental design parameters, convergence criteria, and algorithm configuration are detailed in experiment_metadata.md. Variable definitions, missing value encodings, physical constraints, and derived metric calculation methods are detailed in datadict.md.",
+    "input_files": [
+        {
+            "file_id": "F1",
+            "file_name": "fl_training_metrics.csv",
+            "relative_path": "files/fl_training_metrics.csv",
+            "file_type": "csv",
+            "description": "Main training log data including Round, Alpha, Algorithm, Global_Loss, Global_Accuracy, Weight_Divergence, Client_Variance."
+        },
+        {
+            "file_id": "F2",
+            "file_name": "experiment_metadata.md",
+            "relative_path": "files/experiment_metadata.md",
+            "file_type": "md",
+            "description": "Experimental design parameters, convergence criteria (continuous 10-round fluctuation < 0.2%), algorithm configurations for FedAvg and FedProx, hyperparameters (μ=0.01, C=0.1, E=5, learning rate=0.01), and model architecture (5-Layer CNN)."
+        },
+        {
+            "file_id": "F3",
+            "file_name": "datadict.md",
+            "relative_path": "files/datadict.md",
+            "file_type": "md",
+            "description": "Variable definitions, units, valid ranges, missing value encodings, physical constraints, and derived metric calculation methods. Defines Alpha meaning (α→0 extreme Non-IID, α→∞ IID), Round range [1,100], Global_Accuracy range [0,100], and Client_Variance interpretation."
+        }
+    ],
+    "rubrics": {
+        "total_score": 102,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 20,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report correctly identify the experimental dataset as CIFAR-10 and state that it contains 10 classes?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report list all 7 raw fields (Round, Alpha, Algorithm, Global_Loss, Global_Accuracy, Weight_Divergence, Client_Variance) along with their physical meanings?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report state, according to datadict.md, that a smaller Alpha parameter indicates higher data heterogeneity (Non-IID)?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report explicitly identify the two core algorithms compared in the experiment as FedAvg and FedProx?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify that the proximal term coefficient μ used in FedProx is 0.01?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report cite S2 to state that one of the core challenges of federated learning is the 'statistical challenge'?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report mention that IID sampling is crucial to ensure that the stochastic gradient is an unbiased estimate of the full gradient?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report point out that one of the root causes of accuracy loss under Non-IID scenarios is weight divergence?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report cite S1 to mention that FedHybrid integrates the strengths of FedAvg, FedProx, and FedScaffold?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report state that the data collection spans 100 communication rounds?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R11",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify that the fraction of randomly sampled clients per round (C) is 0.1?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report indicate that the number of local training epochs E is set to 5?",
+                        "source_ids": [ "S_meta" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 68,
+                "items": [
+                    {
+                        "rubric_id": "R13",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Convergence analysis: Does the report identify the convergence round for Alpha=10 (FedAvg) according to the definition (fluctuation <0.2% over 10 consecutive rounds) based on CSV data?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Convergence analysis: Does the report point out that under extreme heterogeneity (Alpha=0.1), FedAvg fails to reach a steady state within 100 rounds?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Heterogeneity impact: Does the report quantify the final accuracy loss from Alpha=0.1 compared to Alpha=10.0 (e.g., from ~90% down to ~45%)?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Heterogeneity impact: Does the report demonstrate through data that Weight_Divergence monotonically increases as Alpha decreases?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Algorithm comparison: Does the report show through data that at Alpha=0.5, FedProx achieves higher final accuracy than FedAvg?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Algorithm comparison: Does the report use Weight_Divergence data to prove that FedProx's proximal term indeed suppresses drift?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Theoretical connection: Does the report cite S2 to demonstrate that weight divergence can be quantified by Earth Mover's Distance (EMD)?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Theoretical connection: Does the report point out that S2 experimentally observed accuracy reduction up to ~55% for highly skewed Non-IID data?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Error analysis: Does the report identify that Client_Variance is significantly higher under high heterogeneity (Alpha=0.1) than under IID scenarios?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Model configuration: Does the report infer the parameter sensitivity of the 5-layer CNN when handling complex Non-IID data?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Strategy evaluation: Does the report combine S2's conclusion to propose that sharing 5% of global data can improve accuracy by ~30%?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Algorithm evolution: Does the report cite S1's conclusion that FedHybrid achieves 93.52% accuracy on CIFAR-10?",
+                        "source_ids": [ "S1" ]
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Drift suppression: Does the report analyze whether FedProx's advantage over FedAvg remains significant under mild heterogeneity (Alpha=5.0), noting that the gap may narrow?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Convergence speed: Does the report quantify that FedProx requires fewer rounds than FedAvg to reach 80% accuracy for a specific Alpha?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Loss function analysis: Does the report observe that the decreasing trend of Global_Loss is highly consistent with the increasing trend of Global_Accuracy across all experimental groups?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Weight stability: Does the report point out whether Weight_Divergence reaches a relatively stable plateau during the convergence phase?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Physical constraints: Does the report verify that all Global_Accuracy data fall within the [0,100]% range?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Data integrity: Does the report indicate whether missing values exist in the data (e.g., skipped rounds in the Alpha=0.1 group)?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R31",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "SGD dynamics: Does the report cite S2 to mention that weight divergence is affected by learning rate, synchronization steps, and gradients?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Algorithm advantage summary: Does the report conclude that FedProx mitigates Drift by limiting local update magnitude via the μ term?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Extreme case: Does the report discuss the very poor performance under the 1-class per client scenario (as in S2)?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Formula citation: Does the report correctly write the local optimization objective function for FedProx, including the proximal term (μ/2)||W - W_global||²?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "EMD explanation: Does the report explain that EMD here represents the distance between the client distribution and the population distribution?",
+                        "source_ids": [ "S2" ]
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Convergence robustness: Does the report indicate that FedProx exhibits better robustness than FedAvg under heterogeneous environments?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Variance analysis: Does the report explain that increased Client_Variance is due to inconsistent update directions among clients?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Performance upper bound: Does the report state that accuracy under Alpha=10.0 (near IID) serves as the performance upper bound (benchmark) for all experimental groups?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Learning rate setting: Does the report point out that the constant learning rate of 0.01 may be one reason for difficulty in convergence under high heterogeneity?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Data distribution quantification: Does the report indicate that at Alpha=0.1, most clients have only 1-2 dominant classes?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R41",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Alpha=0.5 challenge: Does the report correspondingly indicate that significant accuracy loss is expected at Alpha=0.5?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R42",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Batch size impact: Does the report mention the potential impact of Batch Size = 32 on the accuracy of local stochastic gradient estimates?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R43",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Optimizer choice: Does the report indicate that the SGD optimizer with momentum 0.9 is used?",
+                        "source_ids": [ "S_meta" ]
+                    },
+                    {
+                        "rubric_id": "R44",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Federated mode: Does the report identify this as a typical synchronous federated learning framework (involving distribution, local training, upload, and aggregation steps)?",
+                        "source_ids": [ "S_dict" ]
+                    },
+                    {
+                        "rubric_id": "R45",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Accuracy bound: Does the report cite S2's experimental results showing that MNIST accuracy drops by about 11% under Non-IID?",
+                        "source_ids": [ "S2" ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 14,
+                "items": [
+                    {
+                        "rubric_id": "R46",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Visualization: Does the report include at least one line chart showing Global_Accuracy over rounds with comparisons across different Alpha values?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R47",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Visualization: Does the report include a trend chart of Weight_Divergence clearly标注 the differences between FedAvg and FedProx?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R48",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Data traceability: Can all key numerical values mentioned in the report (e.g., highest accuracy) be traced to corresponding records in the original CSV file?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R49",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Logical coherence: Is the report organized in the logical structure: experimental setup → data exploration → performance comparison → theoretical explanation → conclusion?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R50",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Professional terminology: Does the report correctly use professional terms such as Non-IID, Client Drift, Weight Divergence, and Proximal Term?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R51",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Sensitivity analysis: Does the report discuss how sensitive the final model generalization performance is to changes in the Alpha parameter?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R52",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Conclusion rigor: Does the report clearly state that despite improvements, FedProx still faces significant challenges under the extreme Alpha=0.1 scenario?",
+                        "source_ids": [ "S_data" ]
+                    },
+                    {
+                        "rubric_id": "R53",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Reference citation: Does the report properly cite [S1] or [S2] when discussing theoretical foundations?",
+                        "source_ids": [ "S1", "S2" ]
+                    },
+                    {
+                        "rubric_id": "R54",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Executive summary: Does the report provide an executive summary at the beginning containing core data findings (e.g., average accuracy improvement percentages)?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R55",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Future suggestions: Does the report, based on S1, mention further引入 control variates as an optimization direction?",
+                        "source_ids": [ "S1" ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,1094 @@
+{
+  "task_id": "data_analysis_auto_v1",
+  "task_type": "data_analysis",
+  "subject": "",
+  "document_heavy": false,
+  "query": "Analyze how varying degrees of data heterogeneity affect the performance and convergence of different federated learning aggregation strategies, using a simulated dataset with controlled non-IID partitions. The goal is to quantify the trade-offs in accuracy, convergence speed, and stability across algorithms, and to identify which strategies are most robust to extreme data skew.",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "S1_highlighted.pdf",
+      "relative_path": "S1_highlighted.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 9 pages"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "S2_highlighted.pdf",
+      "relative_path": "S2_highlighted.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 12 pages"
+    },
+    {
+      "file_id": "S3",
+      "file_name": "source_notes.md",
+      "relative_path": "source_notes.md",
+      "file_type": "md",
+      "description": "Text file, 13065 characters"
+    }
+  ],
+  "rubrics": {
+    "total_score": 117,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 22,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.definition.does_the_report_identify_the_dataset_characteris",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report identify the dataset characteristics, including the number of classes and the type of data?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Identifies the number of classes in the dataset",
+              "Describes the data type (e.g., image, text, tabular)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_total_number_of_client",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report state the total number of clients and the number of clients sampled per communication round?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "States the total number of clients in the simulation",
+              "States the number of clients sampled per round"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_local_training_hype",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe the local training hyperparameters, such as the number of local epochs and batch size?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Specifies the number of local epochs per client",
+              "Specifies the batch size used for local training"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.methodology.does_the_report_indicate_how_the_degree_of_data",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report indicate how the degree of data heterogeneity is controlled (e.g., via a parameter that adjusts the distribution of labels across clients)?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Describes the method used to create heterogeneous data partitions",
+              "States the parameter that controls the heterogeneity level (e.g., a concentration parameter)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.definition.does_the_report_identify_the_primary_evaluation",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report identify the primary evaluation metric and its valid range?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Identifies the metric used to evaluate model performance",
+              "States the valid range of the metric (e.g., 0 to 1 or 0 to 100%)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.definition.does_the_report_define_a_measure_of_convergence",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report define a measure of convergence speed, such as the number of rounds required to reach a certain percentage of final accuracy?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Defines the metric for convergence speed",
+              "States the threshold used to determine convergence (e.g., 90% of the best accuracy)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_how_stability_of_perfor",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe how stability of performance is measured (e.g., variance or standard deviation across multiple runs)?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Identifies the metric used to quantify stability",
+              "Specifies that multiple independent runs are conducted"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.evidence.does_the_report_examine_the_dataset_for_class_im",
+            "competency_category": "evidence",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report examine the dataset for class imbalance or distribution skew?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Checks for class imbalance in the data distribution",
+              "Describes the skewness of the partition across clients"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_any_data_preprocessing",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report describe any data preprocessing steps applied (e.g., normalization, resizing)?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "States the normalization method applied",
+              "States any resizing operations applied to the data"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "information_acquisition.methodology.does_the_report_specify_the_model_architecture_u",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report specify the model architecture used for the experiments?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Identifies the type of model (e.g., convolutional neural network)",
+              "Describes the number of layers or key architectural details"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_optimizer_used_and_its",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report state the optimizer used and its parameters (e.g., learning rate, momentum)?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "States the optimizer used (e.g., stochastic gradient descent)",
+              "States the learning rate",
+              "States any additional parameters (e.g., momentum)"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "information_acquisition.comparison.does_the_report_differentiate_between_the_aggreg",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report differentiate between the aggregation strategies being compared and their key algorithmic differences?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Lists the aggregation strategies compared",
+              "Describes the key difference between them (e.g., use of a proximal term to limit local updates)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 78,
+        "items": [
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_quantify_the_conv",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report quantify the convergence point using a criterion such as the first round where accuracy fluctuation remains below a specified threshold over consecutive rounds?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "convergence criterion defined",
+              "threshold specified",
+              "computed from data"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.comparison.trend_analysis_does_the_report_compare_the_conve",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report compare the convergence speed across different aggregation strategies by measuring the number of rounds required to reach a fixed percentage of the final accuracy?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "percentage threshold defined",
+              "rounds computed for each strategy",
+              "comparison made"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_analyze_why_some",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report analyze why some aggregation strategies fail to converge within the maximum number of rounds under high heterogeneity?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "identifies non-convergent strategies",
+              "explains mechanism (e.g., weight divergence, client drift)",
+              "refers to data evidence"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.limitation.trend_analysis_does_the_report_demonstrate_that",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report demonstrate that the convergence trajectory of at least one strategy becomes more oscillatory as heterogeneity increases?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "quantifies oscillation (e.g., variance of accuracy per round)",
+              "shows trend across heterogeneity levels"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.comparison.trend_analysis_does_the_report_verify_that_the_c",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Trend analysis: Does the report verify that the convergence speed of the aggregation strategies is monotonic with respect to the heterogeneity level?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_quantify_the_deg",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report quantify the degradation in final accuracy as the heterogeneity level increases, using a consistent metric (e.g., percentage drop per unit of heterogeneity)?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "defines heterogeneity metric",
+              "computes accuracy change",
+              "expresses as rate"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_trace_the_causal",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report trace the causal chain from increased data heterogeneity to increased weight divergence, and then to accuracy loss?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "shows relationship between heterogeneity and weight divergence",
+              "shows relationship between weight divergence and accuracy",
+              "uses data to support causal chain"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_explain_why_the",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report explain why the number of local epochs affects the sensitivity to heterogeneity?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "discusses effect of local epochs on client drift",
+              "uses data to compare different epoch settings"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.limitation.factor_analysis_does_the_report_demonstrate_that",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Factor analysis: Does the report demonstrate that the number of participating clients per round influences the impact of heterogeneity on convergence?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.synthesis.factor_analysis_does_the_report_quantify_the_var",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report quantify the variance in client updates as a function of heterogeneity and link it to overall model stability?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "computes client update variance",
+              "plots against heterogeneity",
+              "discusses impact on stability"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_compare_the_fi",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report compare the final accuracy of the compared aggregation strategies under the most extreme heterogeneity condition using a consistent evaluation protocol?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "specifies extreme condition",
+              "reports accuracy for each strategy",
+              "consistent test set or cross-validation"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.mechanism.method_comparison_does_the_report_infer_why_one",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report infer why one aggregation strategy outperforms another under high heterogeneity, based on analysis of client drift or weight divergence?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "identifies winning strategy",
+              "provides mechanism explanation (e.g., proximal term, control variates)",
+              "supports with data"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.synthesis.method_comparison_does_the_report_evaluate_the_t",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report evaluate the trade-offs between accuracy and convergence speed across different strategies, quantifying the trade-off ratio?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "computes both accuracy and rounds to convergence",
+              "defines trade-off metric",
+              "compares across strategies"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_demonstrate_th",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report demonstrate that the relative ranking of strategies by final accuracy is consistent across multiple heterogeneity levels?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "lists rankings for each level",
+              "checks consistency",
+              "identifies deviations"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_contrast_the_p",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Method comparison: Does the report contrast the performance of strategies that use a proximal term versus those that do not, in terms of stability under extreme heterogeneity?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.limitation.statistical_rigor_does_the_report_apply_a_statis",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Statistical rigor: Does the report apply a statistical test (e.g., t-test, Mann-Whitney) to determine whether the difference in final accuracy between the best and worst strategy under extreme heterogeneity is statistically significant?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "chooses appropriate test",
+              "reports p-value or confidence interval",
+              "states significance conclusion"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.limitation.statistical_rigor_does_the_report_report_confide",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report report confidence intervals for the accuracy estimates across multiple runs?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "computes mean and standard deviation",
+              "derives confidence interval",
+              "interprets interval width"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.synthesis.statistical_rigor_does_the_report_verify_that_th",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report verify that the observed differences in convergence speed are not due to random variation by using repeated runs and statistical comparison?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "multiple independent runs",
+              "statistical test applied",
+              "results discussed"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_decompos",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Error/Variance analysis: Does the report decompose the total error in final accuracy into components (e.g., bias due to heterogeneity, variance due to client sampling) and quantify each component?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "defines error components",
+              "computes proportion of each",
+              "uses data to support decomposition"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.limitation.error_variance_analysis_does_the_report_analyze",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report analyze the variance in accuracy across independent runs as a function of heterogeneity and identify the heterogeneity level where variance spikes?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "computes variance per heterogeneity level",
+              "identifies spike",
+              "discusses implications"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_trace_th",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report trace the observed variance in accuracy to the variance in client data distributions?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "measures client distribution variance",
+              "correlates with accuracy variance",
+              "provides causal explanation"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_derive_t",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Error/Variance analysis: Does the report derive the contribution of the number of local epochs to the variance of model updates?",
+            "source_ids": [
+              "S2"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.limitation.sensitivity_analysis_does_the_report_identify_a",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Sensitivity analysis: Does the report identify a tipping point in heterogeneity beyond which the accuracy of at least one strategy drops sharply?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "plots accuracy vs heterogeneity",
+              "identifies breakpoint",
+              "quantifies drop magnitude"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.comparison.sensitivity_analysis_does_the_report_determine_t",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report determine the robustness of each aggregation strategy to changes in the number of local epochs?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "varies local epochs",
+              "reports accuracy change",
+              "ranks strategies by robustness"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.limitation.sensitivity_analysis_does_the_report_quantify_ho",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Sensitivity analysis: Does the report quantify how the learning rate affects the stability of convergence under high heterogeneity?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_verify_t",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report verify that all accuracy values reported fall within the valid range (0% to 100%) and flag any outliers?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "checks minimum and maximum",
+              "identifies out-of-range values",
+              "treats or explains outliers"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_check_fo",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report check for missing values in the simulation output and describe how they are handled?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_connect_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report connect the observed accuracy degradation under extreme heterogeneity to the theoretical concept of weight divergence, using the Earth Mover's Distance between client and population distributions?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "defines weight divergence",
+              "computes or estimates EMD",
+              "shows correlation with accuracy"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_verify_the",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report verify the theoretical prediction that the bound on weight divergence increases with the number of local epochs and learning rate, using empirical data?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "states theoretical bound",
+              "varies epochs or learning rate",
+              "checks if empirical divergence follows bound"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_explain_th",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report explain the mechanism by which a proximal term in the local objective reduces client drift and improves convergence under heterogeneity?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "describes proximal term",
+              "shows empirical reduction in drift",
+              "links to accuracy improvement"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "scientific_reasoning.limitation.theoretical_grounding_does_the_report_evaluate_t",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report evaluate the performance of aggregation strategies under the extreme case of each client having data from only one class and compare to the theoretical expectation?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "simulates extreme non-IID",
+              "reports accuracy",
+              "discusses consistency with theory"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "scientific_reasoning.synthesis.theoretical_grounding_does_the_report_derive_the",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report derive the relationship between the heterogeneity parameter and the expected number of classes per client, and use this to explain the impact of heterogeneity on convergence?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "derives expected classes per client",
+              "compares to empirical",
+              "links to convergence speed"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 17,
+        "items": [
+          {
+            "rubric_id": "R45",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_line_charts_or_trend_plo",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include line charts or trend plots that display the trajectory of the primary accuracy metric over training rounds for the compared methods?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R46",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_comparison_bar_charts_or",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include comparison bar charts or tables that clearly display the final performance differences across different heterogeneity levels for the aggregation strategies?",
+            "source_ids": [
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R47",
+            "rubric_key": "report_synthesis.integrity.does_the_report_ensure_that_every_key_numerical",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report ensure that every key numerical claim in the conclusions can be traced back to specific data points, figures, or tables in the analysis section?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R48",
+            "rubric_key": "report_synthesis.integrity.does_the_report_explicitly_state_the_conditions",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explicitly state the conditions under which its conclusions hold (e.g., range of heterogeneity parameters, number of clients, local epochs) and avoid over-generalization beyond the experimental setup?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R49",
+            "rubric_key": "report_synthesis.integrity.does_the_report_falsely_claim_convergence_when_t",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report falsely claim convergence when the training loss or accuracy metric has not actually stabilized?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R50",
+            "rubric_key": "report_synthesis.integrity.does_the_report_attribute_performance_difference",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report attribute performance differences between aggregation strategies to methodological design when they could be explained by different hyperparameter settings (e.g., learning rate, proximal term strength)?",
+            "source_ids": [],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R51",
+            "rubric_key": "report_synthesis.visualization.does_the_report_are_all_figures_and_tables_clear",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report are all figures and tables clearly labeled with descriptive titles, axis labels with units, and legends identifying the different methods?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R52",
+            "rubric_key": "report_synthesis.structure.does_the_report_follow_a_logical_structure_exper",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report follow a logical structure: experimental setup, data exploration, performance comparison, theoretical explanation, and conclusions?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R53",
+            "rubric_key": "report_synthesis.language.does_the_report_use_correct_and_consistent_domai",
+            "competency_category": "language",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report use correct and consistent domain terminology (e.g., 'heterogeneity', 'convergence', 'aggregation strategy') throughout?",
+            "source_ids": [],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R54",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_discuss_the_sensitivity_of_the_r",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report discuss the sensitivity of the results to key hyperparameters (e.g., number of local epochs, learning rate, or proximal term strength) and identify the most influential parameters?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R55",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_discuss_the_computational_cost_e",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report discuss the computational cost (e.g., communication rounds, local computation) of the compared methods in addition to accuracy?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "da-v1-ocr",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "ocr_enabled": true,
+    "ocr_checklist_items": 38,
+    "ocr_naked_explain_remaining": 1,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 12,
+        "max_score": 22,
+        "role_distribution": {
+          "Critical": 1,
+          "Mandatory": 7,
+          "Standard": 4
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.08333333333333333
+      },
+      "scientific_reasoning": {
+        "item_count": 32,
+        "max_score": 78,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 16,
+          "Standard": 6
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.46875
+      },
+      "report_synthesis": {
+        "item_count": 11,
+        "max_score": 17,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 6,
+          "Standard": 5
+        },
+        "source_linked_ratio": 0.8181818181818182,
+        "multi_source_ratio": 0.6363636363636364
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+*.egg-info/
+
+
+# 临时对比报告
+rubric_comparison_report.json
+评分表对比分析报告.md
+评分表质量对比分析报告.md
+
+# rubric-auto-gen-2/3 本地仓库
+rubric-auto-gen-2/.git/
+rubric-auto-gen-3/.git/
+
+# Web 临时任务目录
+web/_jobs/

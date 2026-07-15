@@ -1,0 +1,612 @@
+{
+  "task_id": "literature_review_auto_v3",
+  "task_type": "literature_review",
+  "subject": "",
+  "document_heavy": false,
+  "query": "What are the recent advances in parameter-efficient fine-tuning methods for large language models, and what are the key trade-offs between different approaches?",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "DoRA.pdf",
+      "relative_path": "DoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 23 pages"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "LoRA.pdf",
+      "relative_path": "LoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 26 pages"
+    },
+    {
+      "file_id": "S3",
+      "file_name": "PEFT_Survey.pdf",
+      "relative_path": "PEFT_Survey.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 57 pages"
+    }
+  ],
+  "rubrics": {
+    "total_score": 100,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 17,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.definition.does_the_report_define_parameter_efficient_fine",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report define parameter-efficient fine-tuning as a set of methods that update only a small subset of model parameters while keeping the majority frozen?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.definition.does_the_report_precisely_define_low_rank_adapta",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report precisely define low-rank adaptation as a method that represents weight updates as a product of low-rank matrices, and classify it as a reparameterization-based approach?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.classification.does_the_report_classify_parameter_efficient_fin",
+            "competency_category": "classification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report classify parameter-efficient fine-tuning methods into at least three categories based on the mechanism of parameter reduction?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.comparison.does_the_report_distinguish_between_addition_bas",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report distinguish between addition-based methods (which add new modules) and reparameterization-based methods (which use low-rank representations)?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.comparison.does_the_report_distinguish_between_low_rank_met",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report distinguish between low-rank methods and adapter layers by noting that adapter layers introduce inference latency due to sequential processing, while low-rank updates can be merged?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.comparison.does_the_report_distinguish_between_standard_low",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report distinguish between standard low-rank updates and methods that decouple magnitude and direction in terms of their ability to capture nuanced weight changes?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.methodology.does_the_report_explain_that_training_a_model_wi",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report explain that training a model with parameter-efficient methods still requires 12-20 times the GPU memory of the model weights due to gradients and optimizer states?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.limitation.does_the_report_identify_the_limitations_of_low",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report identify the limitations of low-rank methods, including an inability to independently adjust magnitude and direction and a tendency to underperform under resource constraints?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 77,
+        "items": [
+          {
+            "rubric_id": "R9",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_mechanism_by_which_l",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the mechanism by which low-rank decomposition reduces the number of trainable parameters while preserving the model's capacity to learn task-specific updates?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_scientific_logic_beh",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explain the scientific logic behind why low-rank updates can be merged with frozen weights without introducing additional inference latency?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_inference_latency_of",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the inference latency of addition-based methods with low-rank methods, and evaluate the conditions under which latency differences become significant?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_fundamental_limitati",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the fundamental limitation of low-rank methods that prevents independent adjustment of magnitude and direction of weight updates, and explain why this limitation affects the ability to mimic full fine-tuning?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_evaluate_the_trade_off_between_t",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the trade-off between the rank of low-rank updates and the resulting model performance, analyzing how the choice of rank affects both efficiency and accuracy?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_relationship_between",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report derive the relationship between the rank of low-rank updates and the expressiveness of the fine-tuned model, demonstrating how rank affects the ability to recover full fine-tuning performance?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_analyze_why_tuning_only_layer_no",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze why tuning only layer normalization parameters can be surprisingly effective compared to other parameter-efficient methods, and evaluate the conditions under which this approach is most beneficial?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_scalability_limitat",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the scalability limitations of addition-based methods, specifically analyzing how the memory footprint of gradients and optimizer states grows with the number of trainable parameters?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_performance_of_low_r",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report compare the performance of low-rank methods with full fine-tuning in resource-constrained settings, and analyze whether the performance gap widens under limited hyperparameter tuning and few training epochs?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_causal_chain_by_whic",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain the causal chain by which decoupling magnitude and direction updates allows a parameter-efficient method to closely approximate the learning capacity of full fine-tuning, while maintaining efficiency?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_practical_challenges",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report assess the practical challenges of selection-based methods, specifically analyzing the engineering difficulties of sparse training and the impact on training efficiency?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_optimization_difficu",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the optimization difficulty of prefix-tuning methods, explaining why their performance changes non-monotonically with the number of trainable parameters?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_memory_efficiency_of",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report compare the memory efficiency of addition-based, selection-based, and reparameterization-based methods, evaluating which category offers the best trade-off between memory savings and performance?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_claim_that_low_rank",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the claim that low-rank methods can match or exceed full fine-tuning performance, analyzing the evidence from multiple studies and the conditions under which this claim holds?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_discrepancy_between",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the discrepancy between reported and actual trainable parameter counts in some parameter-efficient methods, and explain how this discrepancy can lead to unforeseen computational costs?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_the_scientific_logic_beh",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report explain the scientific logic behind the initialization strategy of setting one low-rank matrix to zero, and analyze how this ensures the update starts from the pre-trained weights?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_expressiveness_of_ad",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the expressiveness of addition-based, prefix-based, and low-rank methods, analyzing how each method’s architectural modifications affect its ability to generalize beyond the pre-trained task?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_conditions_under_whi",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report analyze the conditions under which low-rank methods fail to recover the expressiveness of full fine-tuning, specifically evaluating the role of rank and the number of layers to which updates are applied?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_the_impact_of_the_scali",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the impact of the scaling factor used in low-rank methods on training dynamics, analyzing how it affects the magnitude of updates and convergence behavior?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_performance_of_diffe",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the performance of different parameter-efficient fine-tuning methods across multiple model sizes, and analyze whether the relative ranking of methods changes with model scale?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_root_cause_of_the_in",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the root cause of the inference latency problem in adapter layers, specifically explaining why sequential processing of adapter layers introduces additional compute compared to merged low-rank updates?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_trade_offs_between",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report evaluate the trade-offs between computational efficiency and performance in low-rank methods, and argue whether there is a universal best choice for all scenarios?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_explain_why_certain_parameter_ef",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain why certain parameter-efficient fine-tuning methods that outperform a strong baseline in well-tuned settings may struggle under resource constraints, and analyze the factors that contribute to this discrepancy?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_interplay_between_th",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report analyze the interplay between the number of trainable parameters and the effective sequence length in prefix-tuning, explaining how increasing trainable parameters can reduce usable context?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_training_throughput",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report compare the training throughput of low-rank methods with full fine-tuning, and evaluate whether the reduction in trainable parameters translates to proportional gains in training speed?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_the_effectiveness_of_lo",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report evaluate the effectiveness of low-rank methods on very large models, analyzing whether the extreme reduction in trainable parameters still maintains competitive performance?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_analyze_the_conditions_under_whi",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the conditions under which full fine-tuning is still preferred over parameter-efficient methods, considering factors such as required performance, available resources, and task complexity?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_explain_the_theoretical_limitati",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report explain the theoretical limitations of parameter-efficient methods, analyzing why there is a fundamental performance gap between these methods and full fine-tuning in certain scenarios?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_architectural_flexib",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report compare the architectural flexibility of addition-based and reparameterization-based methods, evaluating which category allows easier integration into existing model architectures?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_claim_that_low_rank",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report evaluate the claim that low-rank methods can be seen as a generalization of full fine-tuning, and analyze the conditions under which this perspective holds?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_the_impact_of_the_rank_o",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report analyze the impact of the rank of low-rank updates on storage efficiency, demonstrating how the number of additional parameters grows with the rank and how this affects the practicality of deployment?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 6,
+        "items": [
+          {
+            "rubric_id": "R40",
+            "rubric_key": "report_synthesis.structure.does_the_report_include_a_structured_abstract_th",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a structured abstract that accurately summarizes the scope and conclusions of the literature review?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_identify_specific_open_research",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report identify specific open research problems or unresolved challenges in parameter-efficient fine-tuning, such as the performance gap between efficient methods and full fine-tuning?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_propose_at_least_three_concrete",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report propose at least three concrete future research directions, building on the identified gaps and limitations?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "report_synthesis.structure.does_the_report_evaluate_the_key_trade_offs_betw",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report evaluate the key trade-offs between different fine-tuning approaches, such as accuracy versus parameter efficiency or inference latency?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_a_visual_representation",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a visual representation (e.g., taxonomy diagram, timeline, or architecture diagram) to aid understanding of the reviewed methods?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R45",
+            "rubric_key": "report_synthesis.structure.does_the_report_conclude_with_a_synthesis_that_r",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report conclude with a synthesis that reiterates the main findings, highlights unresolved debates, and suggests directions for future work?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "3.0-litreview",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 8,
+        "max_score": 17,
+        "role_distribution": {
+          "Critical": 2,
+          "Mandatory": 3,
+          "Standard": 3
+        },
+        "source_linked_ratio": 0.875,
+        "multi_source_ratio": 0.375
+      },
+      "scientific_reasoning": {
+        "item_count": 31,
+        "max_score": 77,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 16,
+          "Standard": 5
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.41935483870967744
+      },
+      "report_synthesis": {
+        "item_count": 6,
+        "max_score": 6,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 0,
+          "Standard": 6
+        },
+        "source_linked_ratio": 0.6666666666666666,
+        "multi_source_ratio": 0.6666666666666666
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

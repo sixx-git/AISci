@@ -1,0 +1,773 @@
+{
+  "task_id": "data_analysis_auto_v1",
+  "task_type": "data_analysis",
+  "subject": "",
+  "document_heavy": false,
+  "query": "You are given a training log file from federated learning experiments: fl_training_metrics.csv. Based on the provided input files, write a data analysis report covering: data quality inspection and cleaning, convergence round identification (fluctuation of Global_Accuracy over 10 consecutive rounds < 0.2%), algorithm effectiveness comparison (FedAvg vs FedProx), quantification of Non-IID impact on performance, quantitative analysis of Client Drift (based on Weight_Divergence), and sensitivity analysis. Experimental design parameters, convergence criteria, and algorithm configuration are detailed in experiment_metadata.md. Variable definitions, missing value encodings, physical constraints, and derived metric calculation methods are detailed in datadict.md.",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "datadict.md",
+      "relative_path": "datadict.md",
+      "file_type": "md",
+      "description": "Text file, 2031 characters"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "experiment_metadata.md",
+      "relative_path": "experiment_metadata.md",
+      "file_type": "md",
+      "description": "Text file, 2023 characters"
+    },
+    {
+      "file_id": "S3",
+      "file_name": "fl_training_metrics.csv",
+      "relative_path": "fl_training_metrics.csv",
+      "file_type": "csv",
+      "description": "CSV with 7 columns and 1000 rows"
+    }
+  ],
+  "rubrics": {
+    "total_score": 118,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 21,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.evidence.does_the_report_verify_the_presence_of_missing_o",
+            "competency_category": "evidence",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report verify the presence of missing or invalid values (e.g., negative encodings) in the training metrics?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.definition.does_the_report_describe_the_key_hyperparameters",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe the key hyperparameters of the federated learning setup (e.g., number of clients, client sampling rate, local training epochs, batch size)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.methodology.does_the_report_classify_the_degree_of_non_iid_d",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report classify the degree of non-IID data distribution using a concentration parameter (e.g., alpha) and explain its impact on client heterogeneity?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.definition.does_the_report_identify_the_primary_evaluation",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report identify the primary evaluation metric for model performance (e.g., global accuracy on a validation/test set) and state its valid range (e.g., percentage between 0 and 100)?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_convergence_criterion",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report state the convergence criterion used (e.g., fluctuation of accuracy over a fixed number of consecutive rounds below a threshold)?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.comparison.does_the_report_differentiate_between_the_aggreg",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report differentiate between the aggregation algorithms (e.g., FedAvg and FedProx) and their theoretical robustness under non-IID data distributions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_metric_used_to_quan",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe the metric used to quantify client drift (e.g., weight divergence as L2 norm of local-global model differences) and its expected trend over training rounds?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.methodology.does_the_report_identify_the_parameters_subjecte",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report identify the parameters subjected to sensitivity analysis (e.g., learning rate, local epochs) and the range of values tested?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_statistical_methods_us",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report state the statistical methods used to compare results between algorithms or data distributions (e.g., t-test, confidence intervals)?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "information_acquisition.evidence.does_the_report_check_for_anomalous_data_points",
+            "competency_category": "evidence",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report check for anomalous data points in the training log (e.g., missing values) and describe the handling method (e.g., interpolation, removal)?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "information_acquisition.definition.does_the_report_indicate_the_total_number_of_com",
+            "competency_category": "definition",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report indicate the total number of communication rounds conducted in the experiment?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 78,
+        "items": [
+          {
+            "rubric_id": "R12",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_identify_the_conv",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report identify the convergence round by quantifying the fluctuation of the global metric below a threshold over consecutive rounds?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.synthesis.trend_analysis_does_the_report_derive_the_rate_o",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report derive the rate of convergence by comparing the slope of the accuracy curve across different configurations?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.limitation.trend_analysis_does_the_report_analyze_why_certa",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report analyze why certain configurations fail to stabilize within the maximum number of rounds, using the theoretical relationship between non-IID degree and convergence speed?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.comparison.trend_analysis_does_the_report_demonstrate_that",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report demonstrate that the convergence speed differs between algorithms by plotting the accuracy trajectories over rounds?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_explain_why_the_g",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report explain why the global metric exhibits local fluctuations despite an overall increasing trend?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_quantify_the_per",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report quantify the performance degradation as the non-IID parameter decreases, using a relative difference metric?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_trace_the_causal",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report trace the causal chain from lower alpha values to higher data heterogeneity, leading to increased client drift and lower final accuracy?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_demonstrate_that",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report demonstrate that the variance among client updates increases with non-IID degree, using quantitative evidence from the data?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.limitation.factor_analysis_does_the_report_explain_why_a_hi",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Factor analysis: Does the report explain why a higher degree of data heterogeneity leads to greater performance variance across experimental runs?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_compare_the_ro",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report compare the robustness of the two algorithms under extreme non-IID conditions using a consistent final accuracy metric?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_demonstrate_th",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report demonstrate that the more robust algorithm achieves lower weight divergence in high-heterogeneity scenarios, as expected from theory?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.mechanism.method_comparison_does_the_report_infer_the_adva",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report infer the advantage of one algorithm by examining its mechanism (e.g., proximal term) and linking it to observed performance differences?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_contrast_the_c",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report contrast the convergence patterns of the two algorithms by analyzing the fluctuation of the global metric over the training rounds?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.limitation.method_comparison_does_the_report_evaluate_the_t",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Method comparison: Does the report evaluate the trade-off between communication efficiency and accuracy by comparing the convergence rounds of the two algorithms?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.verification.statistical_rigor_does_the_report_verify_the_rep",
+            "competency_category": "verification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report verify the reproducibility of the convergence round by checking consistency across multiple random seeds or experimental replicates?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.verification.statistical_rigor_does_the_report_quantify_the_c",
+            "competency_category": "verification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report quantify the confidence interval for the final accuracy under each configuration to assess the reliability of the results?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.mechanism.statistical_rigor_does_the_report_explain_why_th",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Statistical rigor: Does the report explain why the negative correlation between loss and accuracy is expected given the theoretical relationship?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_trace_th",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report trace the observed variance in final accuracy to the variance in client updates or weight divergence metrics?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_quantify",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Error/Variance analysis: Does the report quantify the magnitude of client drift by computing the steady-state value of weight divergence and comparing it across configurations?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.limitation.error_variance_analysis_does_the_report_detect_o",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Error/Variance analysis: Does the report detect outlier rounds where the accuracy or loss violates the expected monotonicity constraint, and explain potential causes?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.limitation.error_variance_analysis_does_the_report_explain",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Error/Variance analysis: Does the report explain why missing values in early rounds affect the reliability of convergence detection?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.limitation.sensitivity_analysis_does_the_report_assess_the",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Sensitivity analysis: Does the report assess the sensitivity of final accuracy to a key hyperparameter by varying it within a reasonable range and measuring the change in performance?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.comparison.sensitivity_analysis_does_the_report_compare_the",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report compare the sensitivity of convergence round to the non-IID degree between the two algorithms?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.verification.sensitivity_analysis_does_the_report_determine_t",
+            "competency_category": "verification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report determine the robustness of the convergence criterion to the choice of window size or fluctuation threshold by testing alternative values?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.mechanism.sensitivity_analysis_does_the_report_quantify_ho",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Sensitivity analysis: Does the report quantify how changes in the proximal term magnitude affect the weight divergence in the more robust algorithm?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.verification.data_quality_validation_does_the_report_verify_t",
+            "competency_category": "verification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report verify that all accuracy values fall within the physically valid range and flag any out-of-range entries?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.verification.data_quality_validation_does_the_report_validate",
+            "competency_category": "verification",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Data quality validation: Does the report validate the imputation of missing values by confirming that the imputed values do not artificially reduce the fluctuation metric?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "scientific_reasoning.verification.data_quality_validation_does_the_report_confirm",
+            "competency_category": "verification",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report confirm that the weight divergence metric is always non-negative as per its definition as an L2 norm?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "scientific_reasoning.verification.data_quality_validation_does_the_report_check_fo",
+            "competency_category": "verification",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report check for consistency between the recorded algorithm names and the expected experimental design?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_explain_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report explain the mechanism by which the proximal term in the more robust algorithm reduces weight divergence under non-IID conditions?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "scientific_reasoning.verification.theoretical_grounding_does_the_report_verify_tha",
+            "competency_category": "verification",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report verify that the observed monotonic increase in weight divergence aligns with the theoretical expectation of client drift accumulation?",
+            "source_ids": [
+              "S1",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_derive_the",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report derive the expected relationship between non-IID degree and the steady-state weight divergence from first principles or known results?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_connect_th",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report connect the observed slow convergence under extreme non-IID conditions to the theoretical framework of client drift and update variance?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 19,
+        "items": [
+          {
+            "rubric_id": "R45",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_line_charts_or_trend_plo",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include line charts or trend plots showing the trajectory of key performance metrics over training rounds?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R46",
+            "rubric_key": "report_synthesis.visualization.does_the_report_provide_bar_charts_or_comparison",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report provide bar charts or comparison tables that clearly display the final performance differences between the compared aggregation algorithms?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R47",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_scatter_plots_or_other_v",
+            "competency_category": "visualization",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include scatter plots or other visualizations that illustrate the relationship between data heterogeneity and client drift?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R48",
+            "rubric_key": "report_synthesis.integrity.does_the_report_ensure_that_every_key_numerical",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report ensure that every key numerical claim in the conclusions can be traced back to specific data points or figures in the analysis section?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R49",
+            "rubric_key": "report_synthesis.structure.does_the_report_explicitly_state_the_conditions",
+            "competency_category": "structure",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report explicitly state the conditions under which its conclusions hold (e.g., specific range of heterogeneity, learning rate, or number of rounds)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R50",
+            "rubric_key": "report_synthesis.structure.does_the_report_follow_a_logical_progression_fro",
+            "competency_category": "structure",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report follow a logical progression from experimental setup to data exploration to performance comparison and then to conclusions?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R51",
+            "rubric_key": "report_synthesis.language.does_the_report_use_correct_and_consistent_domai",
+            "competency_category": "language",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report use correct and consistent domain terminology (e.g., 'convergence', 'client drift', 'non-IID degree') throughout?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R52",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_discuss_the_sensitivity_of_resul",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report discuss the sensitivity of results to hyperparameter choices and identify the most influential parameters?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R53",
+            "rubric_key": "report_synthesis.structure.does_the_report_derive_the_theoretical_convergen",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report derive the theoretical convergence rate and compare it with the empirical convergence observed in the data?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R54",
+            "rubric_key": "report_synthesis.integrity.does_the_report_falsely_claim_convergence_when_t",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report falsely claim convergence when the training loss or accuracy has not actually stabilized?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R55",
+            "rubric_key": "report_synthesis.integrity.does_the_report_attribute_performance_difference",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report attribute performance differences to method design when they are actually caused by different hyperparameter settings?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R56",
+            "rubric_key": "report_synthesis.integrity.does_the_report_report_results_as_significant_wi",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report report results as significant without performing any statistical test?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "da-v1",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 11,
+        "max_score": 21,
+        "role_distribution": {
+          "Critical": 1,
+          "Mandatory": 7,
+          "Standard": 3
+        },
+        "source_linked_ratio": 0.8181818181818182,
+        "multi_source_ratio": 0.7272727272727273
+      },
+      "scientific_reasoning": {
+        "item_count": 33,
+        "max_score": 78,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 15,
+          "Standard": 8
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 1.0
+      },
+      "report_synthesis": {
+        "item_count": 12,
+        "max_score": 19,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 7,
+          "Standard": 5
+        },
+        "source_linked_ratio": 0.8333333333333334,
+        "multi_source_ratio": 0.75
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

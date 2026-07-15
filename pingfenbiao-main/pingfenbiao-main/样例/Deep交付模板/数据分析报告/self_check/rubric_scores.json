@@ -1,0 +1,301 @@
+{
+    "model_name": "OpenAI Deep Research",
+    "report_file": "self_check/report.md",
+    "raw_score": 55,
+    "total_score": 102,
+    "score_percentage": 53.92,
+    "dimension_scores": [
+        {
+            "dimension_id": "information_acquisition",
+            "score": 8,
+            "max_score": 20
+        },
+        {
+            "dimension_id": "scientific_reasoning",
+            "score": 41,
+            "max_score": 68
+        },
+        {
+            "dimension_id": "report_synthesis",
+            "score": 6,
+            "max_score": 14
+        }
+    ],
+    "items": [
+        {
+            "rubric_id": "R1",
+            "score": 0,
+            "reason": "The report does not mention the specific dataset as CIFAR-10 or state that it contains 10 classes."
+        },
+        {
+            "rubric_id": "R2",
+            "score": 0,
+            "reason": "The report mentions these fields in the analysis but does not list all 7 fields with their physical meanings at the beginning or in the data description section."
+        },
+        {
+            "rubric_id": "R3",
+            "score": 2,
+            "reason": "The first part of the report explicitly states: 'When ¦Á¡ú0, the data exhibits extreme Non-IID characteristics...; when ¦Á¡ú¡Þ, the data distribution tends to be uniform (IID)'."
+        },
+        {
+            "rubric_id": "R4",
+            "score": 1,
+            "reason": "The abstract and introduction explicitly state that 'a detailed quantitative analysis of Federated Averaging (FedAvg) and Federated Proximal (FedProx) algorithms is conducted'."
+        },
+        {
+            "rubric_id": "R5",
+            "score": 2,
+            "reason": "The fourth part of the report explicitly states: 'FedProx is designed as a robust extension of FedAvg, introducing the hyperparameter ¦Ì=0.01 to constrain local model drift'."
+        },
+        {
+            "rubric_id": "R6",
+            "score": 0,
+            "reason": "The report does not cite S2 or mention the term 'statistical challenge'."
+        },
+        {
+            "rubric_id": "R7",
+            "score": 0,
+            "reason": "The report does not mention this theory."
+        },
+        {
+            "rubric_id": "R8",
+            "score": 2,
+            "reason": "The sixth part of the report explicitly states: 'Client drift is a unique failure mode of federated learning... Weight Divergence is used as a direct metric to measure drift'."
+        },
+        {
+            "rubric_id": "R9",
+            "score": 0,
+            "reason": "The report does not cite S1 or mention the FedHybrid algorithm."
+        },
+        {
+            "rubric_id": "R10",
+            "score": 1,
+            "reason": "The first part of the report explicitly states: 'through 100 rounds of global communication iterations'."
+        },
+        {
+            "rubric_id": "R11",
+            "score": 0,
+            "reason": "The report does not mention the random client sampling ratio per round."
+        },
+        {
+            "rubric_id": "R12",
+            "score": 0,
+            "reason": "The report does not mention the number of local training epochs."
+        },
+        {
+            "rubric_id": "R13",
+            "score": 4,
+            "reason": "The table on page 2 of the report clearly lists the identified convergence round for FedAvg (Alpha=10) as 89."
+        },
+        {
+            "rubric_id": "R14",
+            "score": 2,
+            "reason": "The table on page 3 of the report explicitly states that the status of FedAvg (Alpha=0.1) is 'extremely oscillatory, no convergence'."
+        },
+        {
+            "rubric_id": "R15",
+            "score": 4,
+            "reason": "The table and text summary on page 5 clearly indicate a loss of about 50%, consistent with the conclusion."
+        },
+        {
+            "rubric_id": "R16",
+            "score": 2,
+            "reason": "The 'Drift Intensity Ratio' table on page 6 clearly shows this trend."
+        },
+        {
+            "rubric_id": "R17",
+            "score": 4,
+            "reason": "The table on page 5 shows that at Alpha=0.5, the mean accuracy of FedProx is 53.24% while FedAvg is 40.41%."
+        },
+        {
+            "rubric_id": "R18",
+            "score": 2,
+            "reason": "The report analyzes the mechanism but does not use the decrease of Weight_Divergence as evidence; instead, it uses Client_Variance and process logic to explain, earning half the points."
+        },
+        {
+            "rubric_id": "R19",
+            "score": 0,
+            "reason": "The report does not cite S2 or mention EMD."
+        },
+        {
+            "rubric_id": "R20",
+            "score": 0,
+            "reason": "The report does not cite S2's specific experimental data on this point."
+        },
+        {
+            "rubric_id": "R21",
+            "score": 2,
+            "reason": "The seventh part of the report clearly indicates the increase in Client_Variance."
+        },
+        {
+            "rubric_id": "R22",
+            "score": 0,
+            "reason": "The report does not mention the model architecture as a 5-layer CNN."
+        },
+        {
+            "rubric_id": "R23",
+            "score": 1,
+            "reason": "The idea is consistent, but the report does not explicitly cite S2 or provide specific data."
+        },
+        {
+            "rubric_id": "R24",
+            "score": 0,
+            "reason": "The report does not cite S1 or mention FedHybrid."
+        },
+        {
+            "rubric_id": "R25",
+            "score": 2,
+            "reason": "Page 5 of the report explicitly states that the advantage is not obvious or even slightly lags behind."
+        },
+        {
+            "rubric_id": "R26",
+            "score": 0,
+            "reason": "The report does not quantify this metric."
+        },
+        {
+            "rubric_id": "R27",
+            "score": 1,
+            "reason": "Page 2 of the report indicates that correlation coefficients range between [-0.92, -0.98]."
+        },
+        {
+            "rubric_id": "R28",
+            "score": 0,
+            "reason": "The report does not analyze this aspect."
+        },
+        {
+            "rubric_id": "R29",
+            "score": 1,
+            "reason": "The report mentions cross-validation and all data fall within this range."
+        },
+        {
+            "rubric_id": "R30",
+            "score": 1,
+            "reason": "Pages 1-2 of the report clearly indicate the specific locations of missing values."
+        },
+        {
+            "rubric_id": "R31",
+            "score": 0,
+            "reason": "The report does not cite S2's theoretical formula on this point."
+        },
+        {
+            "rubric_id": "R32",
+            "score": 2,
+            "reason": "This is a consistent conclusion throughout the report, clearly stated."
+        },
+        {
+            "rubric_id": "R33",
+            "score": 2,
+            "reason": "Page 6 of the report discusses the scenario where 'clients only hold 1-2 classes of samples'."
+        },
+        {
+            "rubric_id": "R34",
+            "score": 2,
+            "reason": "Page 3 of the report provides the formula including the proximal term."
+        },
+        {
+            "rubric_id": "R35",
+            "score": 0,
+            "reason": "The report does not mention EMD."
+        },
+        {
+            "rubric_id": "R36",
+            "score": 2,
+            "reason": "This is a consistent conclusion throughout the report."
+        },
+        {
+            "rubric_id": "R37",
+            "score": 2,
+            "reason": "Page 7 of the report provides an explanation for this."
+        },
+        {
+            "rubric_id": "R38",
+            "score": 1,
+            "reason": "Page 5 of the report sets Alpha=10.0 as the 'baseline (0%)'."
+        },
+        {
+            "rubric_id": "R39",
+            "score": 0,
+            "reason": "The report does not mention the learning rate setting."
+        },
+        {
+            "rubric_id": "R40",
+            "score": 1,
+            "reason": "Page 6 of the report mentions the corresponding content."
+        },
+        {
+            "rubric_id": "R41",
+            "score": 1,
+            "reason": "Page 5 of the report shows about 48% system performance loss."
+        },
+        {
+            "rubric_id": "R42",
+            "score": 0,
+            "reason": "The report does not mention batch size."
+        },
+        {
+            "rubric_id": "R43",
+            "score": 0,
+            "reason": "The report does not mention the optimizer settings."
+        },
+        {
+            "rubric_id": "R44",
+            "score": 0,
+            "reason": "The report does not describe the specific workflow of federated learning."
+        },
+        {
+            "rubric_id": "R45",
+            "score": 0,
+            "reason": "The report does not cite S2's data on MNIST accuracy drop."
+        },
+        {
+            "rubric_id": "R46",
+            "score": 0,
+            "reason": "The report is a PDF text and contains no line charts."
+        },
+        {
+            "rubric_id": "R47",
+            "score": 0,
+            "reason": "Same as above, no visualizations are included."
+        },
+        {
+            "rubric_id": "R48",
+            "score": 2,
+            "reason": "The core numerical values in the report have clear sources and are logically self-consistent and traceable."
+        },
+        {
+            "rubric_id": "R49",
+            "score": 1,
+            "reason": "The report has a complete structure and a clear logical chain."
+        },
+        {
+            "rubric_id": "R50",
+            "score": 1,
+            "reason": "Professional terms are correctly and frequently used throughout."
+        },
+        {
+            "rubric_id": "R51",
+            "score": 1,
+            "reason": "Part 8 of the report specifically conducts a sensitivity elasticity analysis."
+        },
+        {
+            "rubric_id": "R52",
+            "score": 1,
+            "reason": "The conclusion and table data both reflect this view."
+        },
+        {
+            "rubric_id": "R53",
+            "score": 0,
+            "reason": "The report uses superscript numbers for citations, not the standard [S1][S2] format."
+        },
+        {
+            "rubric_id": "R54",
+            "score": 0,
+            "reason": "The report begins with background review and does not include an independent executive summary."
+        },
+        {
+            "rubric_id": "R55",
+            "score": 0,
+            "reason": "The report does not cite S1 or mention control variates."
+        }
+    ]
+}

@@ -1,0 +1,754 @@
+{
+  "task_id": "data_analysis_auto_v1",
+  "task_type": "data_analysis",
+  "subject": "",
+  "document_heavy": false,
+  "query": "How do different parameter-efficient fine-tuning methods (LoRA, QLoRA, DoRA) compare in terms of trainable parameters, memory consumption, and downstream task performance on large language models?",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "DoRA.pdf",
+      "relative_path": "DoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 23 pages"
+    },
+    {
+      "file_id": "S2",
+      "file_name": "LoRA.pdf",
+      "relative_path": "LoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 26 pages"
+    },
+    {
+      "file_id": "S3",
+      "file_name": "QLoRA.pdf",
+      "relative_path": "QLoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 26 pages"
+    }
+  ],
+  "rubrics": {
+    "total_score": 117,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 17,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_data_splits_e_g_tra",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report describe the data splits (e.g., training, validation, test) and their sizes?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_specific_hyperparamete",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report state the specific hyperparameters configured for each fine-tuning method (e.g., learning rate, batch size, number of epochs)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.definition.does_the_report_identify_the_low_rank_dimension",
+            "competency_category": "definition",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report identify the low-rank dimension values used for the adapter-based methods?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.comparison.does_the_report_distinguish_between_the_quantiza",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report distinguish between the quantization levels used for the base model weights (e.g., full precision versus lower-bit quantization)?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.definition.does_the_report_indicate_the_valid_range_of_the",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report indicate the valid range of the low-rank dimension parameter and its effect on the number of trainable parameters?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.evidence.does_the_report_examine_the_memory_consumption_c",
+            "competency_category": "evidence",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report examine the memory consumption constraints, such as peak GPU memory usage during training?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.evidence.does_the_report_check_for_potential_data_quality",
+            "competency_category": "evidence",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report check for potential data quality issues such as missing values or anomalies in the benchmark datasets?",
+            "source_ids": [
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.definition.does_the_report_describe_the_evaluation_metrics",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe the evaluation metrics used to assess downstream task performance (e.g., accuracy, F1 score)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.methodology.does_the_report_categorize_the_performance_metri",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report categorize the performance metrics into primary and secondary measures?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 82,
+        "items": [
+          {
+            "rubric_id": "R10",
+            "rubric_key": "scientific_reasoning.comparison.trend_analysis_does_the_report_identify_the_conv",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report identify the convergence point of each fine-tuning method based on a predefined criterion (e.g., validation loss not decreasing by more than 0.01 over 5 consecutive epochs)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_quantify_the_numb",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report quantify the number of training steps required for each method to reach a plateau in validation performance, and compare these step counts across methods?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_analyze_why_some",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report analyze why some methods exhibit slower convergence when the number of trainable parameters is reduced, using evidence from training loss curves?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.comparison.trend_analysis_does_the_report_demonstrate_that",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report demonstrate that the methods' performance trajectories are monotonic with respect to the number of training steps, or identify non-monotonic behavior?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.limitation.trend_analysis_does_the_report_verify_that_the_v",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Trend analysis: Does the report verify that the validation performance of each method stabilizes within the allocated training budget, and if not, explain why?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.synthesis.factor_analysis_does_the_report_quantify_the_eff",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report quantify the effect of varying the number of trainable parameters on downstream task performance for each method, and compare these effects?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_trace_the_causal",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report trace the causal chain from the choice of quantization level to changes in memory consumption and final model accuracy for a method that combines quantization with low-rank updates?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_explain_why_incr",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report explain why increasing the rank of low-rank updates leads to diminishing returns in performance improvement for some methods?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_derive_the_relat",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report derive the relationship between the number of trainable parameters and peak memory usage across methods, using a mathematical or empirical model?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.comparison.factor_analysis_does_the_report_demonstrate_that",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report demonstrate that the impact of the magnitude decomposition component on memory usage is negligible compared to the low-rank update component for a given method?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_compare_the_do",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report compare the downstream task performance of the methods using a consistent set of evaluation metrics and statistical significance tests?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_contrast_the_m",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report contrast the memory efficiency of the methods during training, accounting for both the storage of model parameters and activation gradients?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.synthesis.method_comparison_does_the_report_evaluate_the_t",
+            "competency_category": "synthesis",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report evaluate the trade-offs between the method that decomposes weights into magnitude and direction and the standard low-rank method in terms of inference speed and model quality?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_show_that_the",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report show that the method using quantization with low-rank updates achieves on-par or better performance than the standard low-rank method under identical experimental conditions?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.synthesis.method_comparison_does_the_report_infer_a_rankin",
+            "competency_category": "synthesis",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Method comparison: Does the report infer a ranking of the methods based on a composite score that balances performance, memory, and training speed, and justify the ranking criteria?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.comparison.statistical_rigor_does_the_report_apply_a_statis",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report apply a statistical test (e.g., paired t-test, Wilcoxon signed-rank test) to determine whether the performance differences between methods are statistically significant?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.limitation.statistical_rigor_does_the_report_report_confide",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report report confidence intervals for the key performance metrics of each method, and interpret the overlapping intervals?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.limitation.statistical_rigor_does_the_report_check_for_mult",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Statistical rigor: Does the report check for multiple comparison correction when testing multiple hypotheses across tasks or metrics?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_decompos",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report decompose the variance in performance across repeated runs into contributions from random seed, data shuffle, and inherent model stochasticity?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.limitation.error_variance_analysis_does_the_report_identify",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report identify outliers or anomalous runs for any method, and provide a plausible explanation (e.g., optimizer instability, memory corruption)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_trace_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Error/Variance analysis: Does the report trace the source of performance variance to the choice of quantization level, showing that higher quantization noise leads to higher variance?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.synthesis.error_variance_analysis_does_the_report_quantify",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report quantify the bias-variance trade-off for each method, relating the number of trainable parameters to both bias and variance estimates?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.comparison.sensitivity_analysis_does_the_report_assess_the",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report assess the sensitivity of each method's performance to the learning rate by varying it over a range and identifying the optimal value?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.mechanism.sensitivity_analysis_does_the_report_identify_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Sensitivity analysis: Does the report identify the threshold rank value below which the low-rank method's performance degrades sharply, and explain why?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.limitation.sensitivity_analysis_does_the_report_determine_t",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Sensitivity analysis: Does the report determine the robustness of the magnitude-decomposition method to different initialization strategies for the magnitude vector?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.synthesis.sensitivity_analysis_does_the_report_evaluate_ho",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report evaluate how the batch size affects the memory consumption and training stability of each method, and identify a safe batch size range?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_verify_t",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report verify that the reported memory consumption values are consistent across multiple runs and free of measurement errors (e.g., from system fluctuations)?",
+            "source_ids": [
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.comparison.data_quality_validation_does_the_report_check_th",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report check that the number of trainable parameters reported for each method matches the theoretical calculation based on the model architecture and configuration?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_detect_a",
+            "competency_category": "limitation",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report detect and handle missing values or incomplete training runs (e.g., due to out-of-memory errors) in the experimental results?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_confirm",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report confirm that the evaluation metrics are computed on held-out test sets that are not contaminated by validation data?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_connect_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report connect the empirical observation that a method combining magnitude decomposition with low-rank updates achieves better performance than standard low-rank updates to the theoretical advantage of learning magnitude and direction separately?",
+            "source_ids": [
+              "S1"
+            ]
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_explain_th",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report explain the mechanism by which quantization-aware fine-tuning preserves model quality despite using lower precision, referencing information theory or noise analysis?",
+            "source_ids": [
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "scientific_reasoning.synthesis.theoretical_grounding_does_the_report_verify_tha",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report verify that the relationship between the number of trainable parameters and performance for low-rank methods aligns with the theoretical expectation that more parameters capture more task-specific information?",
+            "source_ids": [
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "scientific_reasoning.comparison.theoretical_grounding_does_the_report_analyze_th",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report analyze the extreme case where the rank is set to the full weight matrix rank, and show that the low-rank method recovers the performance of full model fine-tuning, as predicted by theory?",
+            "source_ids": [
+              "S2"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 18,
+        "items": [
+          {
+            "rubric_id": "R44",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_line_charts_showing_trai",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include line charts showing training loss or validation metrics over training steps for each compared method?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R45",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_bar_charts_or_tables_com",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include bar charts or tables comparing the number of trainable parameters and peak memory consumption across the different fine-tuning methods?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R46",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_scatter_plots_or_correla",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include scatter plots or correlation diagrams showing the relationship between the number of trainable parameters and downstream task performance?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R47",
+            "rubric_key": "report_synthesis.integrity.does_the_report_ensure_that_every_key_numerical",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report ensure that every key numerical claim in the conclusions can be traced back to a specific data point, table, or figure in the analysis section?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R48",
+            "rubric_key": "report_synthesis.language.does_the_report_use_domain_specific_terminology",
+            "competency_category": "language",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report use domain-specific terminology (e.g., \"rank\", \"quantization\", \"adapter\") correctly and consistently?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R49",
+            "rubric_key": "report_synthesis.recommendation.does_the_report_discuss_the_sensitivity_of_the_f",
+            "competency_category": "recommendation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report discuss the sensitivity of the findings to hyperparameter choices such as learning rate or rank size?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R50",
+            "rubric_key": "report_synthesis.structure.does_the_report_provide_an_executive_summary_at",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report provide an executive summary at the beginning that concisely states the key findings?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R51",
+            "rubric_key": "report_synthesis.integrity.does_the_report_include_a_summary_table_of_all_e",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report include a summary table of all experimental configurations and their corresponding results?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R52",
+            "rubric_key": "report_synthesis.integrity.does_the_report_falsely_claim_that_one_method_st",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report falsely claim that one method statistically significantly outperforms another without performing any statistical test?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          {
+            "rubric_id": "R53",
+            "rubric_key": "report_synthesis.integrity.does_the_report_attribute_performance_difference",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report attribute performance differences to the core algorithmic difference of a method when they could be explained by other factors (e.g., different adapter sizes or quantization levels)?",
+            "source_ids": []
+          },
+          {
+            "rubric_id": "R54",
+            "rubric_key": "report_synthesis.integrity.does_the_report_over_generalize_conclusions_beyo",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report over-generalize conclusions beyond the experimental conditions (e.g., claiming a method is universally best without specifying model size or task)?",
+            "source_ids": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "da-v1",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 9,
+        "max_score": 17,
+        "role_distribution": {
+          "Critical": 1,
+          "Mandatory": 5,
+          "Standard": 3
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.4444444444444444
+      },
+      "scientific_reasoning": {
+        "item_count": 34,
+        "max_score": 82,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 18,
+          "Standard": 6
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.7352941176470589
+      },
+      "report_synthesis": {
+        "item_count": 11,
+        "max_score": 18,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 7,
+          "Standard": 4
+        },
+        "source_linked_ratio": 0.8181818181818182,
+        "multi_source_ratio": 0.8181818181818182
+      }
+    },
+    "generation_model": "deepseek-v4-flash",
+    "extraction_model": "deepseek-v4-flash"
+  }
+}

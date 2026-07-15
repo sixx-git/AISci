@@ -1,0 +1,32 @@
+# LLM
+openai>=1.30.0
+
+# Web
+fastapi>=0.110.0
+uvicorn>=0.29.0
+streamlit>=1.35.0
+
+# Data
+pydantic>=2.5.0
+plotly>=5.22.0
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Sandbox analysis
+scikit-learn>=1.4.0
+scipy>=1.11.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+imbalanced-learn>=0.12.0
+Pillow>=10.0.0
+
+# Template
+jinja2>=3.1.0
+
+# Utils
+python-dotenv>=1.0.0
+httpx>=0.27.0
+
+# Test
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

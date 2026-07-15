@@ -1,0 +1,233 @@
+# Project: Rubric Auto-Generator (评分表自动生成系统)
+
+## 项目概述
+
+本项目是一个基于大语言模型（LLM）的自动化评分表（Rubric）生成与评分系统，面向学术报告评估场景。系统接收研究问题和源文献作为输入，生成领域级质量标准评分表，并可对报告进行自动评分和 PDF 标注。
+
+三种任务类型使用独立优化的生成器，共享相同的 7 阶段流水线架构。
+
+## 项目结构
+
+```
+pingfenbiao/
+├── rubric-auto-gen/              # 类型1: 主张核查 (claim_verification)
+│   ├── main.py                   # CLI 入口 (generate/score/highlight/full)
+│   ├── config.py                 # 配置 (DashScope API)
+│   └── pipeline/
+│       ├── rubric_generator_v5.py # 生成器 (当前版本)
+│       ├── orchestrator.py       # 流水线编排
+│       ├── llm_utils.py          # LLM 调用工具
+│       ├── source_parser.py     # 源文件解析 (PDF/CSV/MD)
+│       ├── calibrator.py        # 校准器
+│       ├── scorer.py             # 自动评分器
+│       └── highlighter.py        # PDF 高亮标注
+│
+├── rubric-auto-gen-2/            # 类型2: 数据分析 (data_analysis)
+│   ├── main.py
+│   └── pipeline/
+│       ├── rubric_generator.py   # 独立 Prompt 设计 (8 主题驱动)
+│       └── ...                   # 共享模块结构
+│
+├── rubric-auto-gen-3/            # 类型3: 科学调研 (literature_review)
+│   ├── main.py
+│   └── pipeline/
+│       ├── rubric_generator.py   # 独立 Prompt 设计 (5 焦点驱动)
+│       └── ...
+│
+├── 样例/Deep交付模板/             # 人工编制的黄金标准样例
+│   ├── 主张核查报告/task.json     # 120pts/50项
+│   ├── 数据分析报告/task.json     # 102pts/55项
+│   └── 科学调研报告/task.json     # 103pts/50项
+│
+└── 测试报告/                      # 各类型的测试输出
+    ├── 主张核查/
+    │   ├── test1/sources/         # 输入: S1.pdf, S2.pdf, S3.pdf
+    │   └── test2/sources/         # 输入: 5篇 PEFT 论文 PDF
+    ├── 数据分析/
+    │   ├── test1/files/           # 输入: datadict.md, experiment_metadata.md, fl_training_metrics.csv
+    │   └── test2/sources/         # 输入: DoRA.pdf, LoRA.pdf, QLoRA.pdf
+    └── 科学调研/
+        ├── test1/sources/         # 输入: S1_highlighted.pdf, source_notes.md
+        └── test2/sources/         # 输入: DoRA.pdf, LoRA.pdf, PEFT_Survey.pdf
+```
+
+## 核心架构: 7 阶段流水线
+
+所有三个生成器共享以下流水线（代码实现在各自的 `rubric_generator.py` / `rubric_generator_v5.py`）:
+
+```
+Stage 1a: 解析研究问题 → 子问题列表
+Stage 1b: 从源文件提取关键知识点
+Stage 1c: 概念泛化 + LLM 术语过滤 (跨领域泛用性核心)
+  ├── 通用化: 将源文档特有术语替换为领域通用概念
+  └── LLM 过滤: 区分"领域通用术语"(移除)与"论文特有术语"(保留在 forbidden_terms)
+Stage 2:  按维度生成评分项 (IA/SR/Synth 三个 Prompt 分别生成)
+Stage 3a: 轻量校准 (规则检查 + 角色约束 + Critical 自动提升)
+Stage 3b: LLM 去重 (20% 删除上限保护)
+```
+
+### 三个维度
+
+| 维度 | 全称 | 权重 | 认知层次 | 核心动词 |
+|------|------|------|---------|---------|
+| IA | Information Acquisition | 20% | remember/understand | define, identify, distinguish, classify |
+| SR | Scientific Reasoning | 65% | analyze/evaluate/create | analyze, evaluate, derive, argue, synthesize |
+| Synth | Report Synthesis | 15% | apply/evaluate | include, demonstrate, assess, avoid |
+
+### 角色 & 分值
+
+- **Critical** (4分): 最深层推理项，使用强动词 (analyze, derive, argue, prove)
+- **Mandatory** (2分): 核心分析项
+- **Standard** (1分): 补充项
+
+### 输出格式
+
+```json
+{
+  "rubric_id": "R1",
+  "rubric_key": "information_acquisition.definition.does_the_report_define...",
+  "competency_category": "definition",
+  "role": "Critical",
+  "weight": 4,
+  "question": "Does the report define X as...?",
+  "source_ids": ["S1", "S2"]
+}
+```
+
+## 三种任务类型差异
+
+| 特征 | 主张核查 (Gen-1) | 数据分析 (Gen-2) | 科学调研 (Gen-3) |
+|------|-----------------|-----------------|-----------------|
+| **输入** | 领域论文 PDF | 文献 + 数据集 + 实验配置 | 综述论文 / 领域文献 |
+| **SR 驱动** | 主张验证推理 (40% 直接针对 claim) | 8 主题 (趋势/因素/方法对比/统计/误差/敏感性/数据质量/理论) | 5 焦点 (机制/比较/瓶颈/策略/定量) |
+| **SR 项数** | 22-26 | 28-38 | 28-38 |
+| **SR Critical** | 30% | 25% | 25% |
+| **Synth 设计** | Critical ≤2, Mandatory ≥4 | Critical ≤2, Mandatory ≥4 | 全 Standard (与样例一致) |
+| **特有规则** | claim-focused reasoning | data-driven reasoning (40% 量化) | NO ANSWER LEAKAGE (禁止泄露结论) |
+
+## 跨版本共享的优化设计
+
+以下设计已在三个生成器中统一实现:
+
+1. **LLM 术语过滤** (`_filter_domain_general_terms`): 替代硬编码白名单，用 LLM 自动区分领域通用术语 vs 论文特有术语
+2. **target_count**: `int(range[0] * 0.3 + range[1] * 0.7)` — 30%下限 + 70%上限加权
+3. **跨维度冗余阈值**: 0.88 (4字母以上词汇重叠率)
+4. **LLM 去重保护**: 每维度最多删除 20%
+5. **Critical 自动提升**: IA/SR 的 Critical 低于目标 80% 时，提升最高质量 Mandatory 项
+6. **校准器术语过滤**: 只过滤 camelCase / 全大写缩写 / 含赋值符号的术语
+
+## 环境配置
+
+```bash
+# API
+export DASHSCOPE_API_KEY="sk-xxx"
+# 模型: deepseek-v4-flash (阿里云百炼平台)
+# Base URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+# 使用 OpenAI SDK 兼容调用
+
+# 依赖
+pip install -r requirements.txt  # openai, pymupdf, rich, httpx
+```
+
+## 当前最佳输出 (黄金基准)
+
+### Gen-1: 主张核查 (rubric-auto-gen)
+
+**最佳版本**: `output_v5_3_p4` (commit `396cbe1`)
+
+| 测试 | 路径 | 总分 | 项数 | 输入 |
+|------|------|------|------|------|
+| test1 | `测试报告/主张核查/test1/output_v5_3_p4/task.json` | 87pts | 41 | S1.pdf, S2.pdf, S3.pdf (FL后门防御) |
+| test2 | `测试报告/主张核查/test2/output_p4/task.json` | 91pts | 41 | 5篇PEFT论文 |
+| 样例 | `样例/Deep交付模板/主张核查报告/task.json` | 120pts | 50 | 人工编制 |
+
+**test1 输入**:
+- Query: "在差分隐私保护下，联邦学习的后门防御机制在面对自适应攻击时是否仍然有效？"
+- Sources: `测试报告/主张核查/test1/sources/` (S1.pdf, S2.pdf, S3.pdf)
+
+**test2 输入**:
+- Query: "What are the recent advances in parameter-efficient fine-tuning methods for large language models, and what are the key trade-offs between different approaches?"
+- Sources: `测试报告/主张核查/test2/sources/` (5篇 arXiv PEFT 论文)
+
+**生成命令**:
+```bash
+cd rubric-auto-gen
+python main.py generate --source-dir "测试报告/主张核查/test1/sources" --query "在差分隐私保护下，联邦学习的后门防御机制在面对自适应攻击时是否仍然有效？" --output output_v5_3_p4
+```
+
+### Gen-2: 数据分析 (rubric-auto-gen-2)
+
+**最佳版本**: `output_gen2_v7` (commit `851e4ae`)
+
+| 测试 | 路径 | 总分 | 项数 | 输入 |
+|------|------|------|------|------|
+| test1 | `测试报告/数据分析/test1/output_gen2_v7/task.json` | 118pts | 56 | datadict.md, experiment_metadata.md, fl_training_metrics.csv |
+| test2 | `测试报告/数据分析/test2/output_v7/task.json` | 117pts | 54 | DoRA.pdf, LoRA.pdf, QLoRA.pdf |
+| 样例 | `样例/Deep交付模板/数据分析报告/task.json` | 102pts | 55 | 人工编制 |
+
+**test1 输入** (FL 训练日志分析):
+- Query: "You are given a training log file from federated learning experiments: fl_training_metrics.csv. Based on the provided input files, write a data analysis report covering: data quality inspection and cleaning, convergence round identification (fluctuation of Global_Accuracy over 10 consecutive rounds < 0.2%), algorithm effectiveness comparison (FedAvg vs FedProx), quantification of Non-IID impact on performance, quantitative analysis of Client Drift (based on Weight_Divergence), and sensitivity analysis. Experimental design parameters, convergence criteria, and algorithm configuration are detailed in experiment_metadata.md. Variable definitions, missing value encodings, physical constraints, and derived metric calculation methods are detailed in datadict.md."
+- Sources: `测试报告/数据分析/test1/files/` (datadict.md, experiment_metadata.md, fl_training_metrics.csv)
+
+**test2 输入** (PEFT 方法对比):
+- Query: "How do different parameter-efficient fine-tuning methods (LoRA, QLoRA, DoRA) compare in terms of trainable parameters, memory consumption, and downstream task performance on large language models?"
+- Sources: `测试报告/数据分析/test2/sources/` (DoRA.pdf, LoRA.pdf, QLoRA.pdf)
+
+**生成命令**:
+```bash
+cd rubric-auto-gen-2
+python main.py generate --source-dir "测试报告/数据分析/test1/files" --query "..." --output output_gen2_v7
+```
+
+### Gen-3: 科学调研 (rubric-auto-gen-3)
+
+**最佳版本**: `output_gen3_v6` (commit `84adc0d`)
+
+| 测试 | 路径 | 总分 | 项数 | 输入 |
+|------|------|------|------|------|
+| test1 | `测试报告/科学调研/test1/output_gen3_v6/task.json` | 96pts | 45 | S1_highlighted.pdf, source_notes.md |
+| test2 | `测试报告/科学调研/test2/output_v6/task.json` | 100pts | 45 | DoRA.pdf, LoRA.pdf, PEFT_Survey.pdf |
+| 样例 | `样例/Deep交付模板/科学调研报告/task.json` | 103pts | 50 | 人工编制 |
+
+**test1 输入** (FL 后门防御综述):
+- Query: "To address the security risks of hidden backdoor attacks injected by malicious clients in distributed machine learning, investigate defense mechanisms against persistent and adaptive backdoor attacks in Federated Learning (FL)... (2017-2025 综述，4 个子问题)"
+- Sources: `测试报告/科学调研/test1/sources/` (S1_highlighted.pdf, source_notes.md)
+
+**test2 输入** (PEFT 综述):
+- Query: "What are the recent advances in parameter-efficient fine-tuning methods for large language models, and what are the key trade-offs between different approaches?"
+- Sources: `测试报告/科学调研/test2/sources/` (DoRA.pdf, LoRA.pdf, PEFT_Survey.pdf)
+
+**生成命令**:
+```bash
+cd rubric-auto-gen-3
+python main.py generate --source-dir "测试报告/科学调研/test1/sources" --query "..." --output output_gen3_v6
+```
+
+## 关键设计约束 (修改时必须遵守)
+
+1. **所有评分项必须为英文** — 与样例保持一致
+2. **评分项是领域级质量标准** — 不是检测"是否是原报告"，而是评估该领域任何报告应达到的质量
+3. **禁止答案泄露** — 问题中不能直接给出结论（如 "Does the report explain why X fundamentally fails?" 应改为 "Does the report evaluate whether X creates challenges for Y?"）
+4. **禁止论文特有术语** — forbidden_terms 中的论文特有标识符 (camelCase/全大写缩写) 不能出现在评分项中
+5. **LLM 术语过滤替代硬编码白名单** — 不要引入硬编码的领域术语白名单，用 LLM 动态过滤
+6. **target_count 使用 30/70 加权** — 不要用上限或下限
+7. **跨维度冗余阈值 0.88** — 不要降低，否则会误删
+8. **LLM 去重 20% 上限** — 每个维度最多删除 20% 的项
+9. **SR vague 检查需区分维度** — SR 有强动词时保留含模糊词的项
+10. **Critical 项必须使用强动词** — analyze/evaluate/explain/derive/argue/compare，禁止 identify/describe
+
+## 已知问题 & 改进方向
+
+1. **概念泛化超时**: Stage 1c 的 LLM 调用偶尔超时，需重试 2-3 次。可考虑分批处理或使用更快模型
+2. **LLM JSON 解析失败**: 偶尔 LLM 返回非标准 JSON，已有 fallback 逻辑但可改进提示词稳定性
+3. **SR multi-source 偏低**: Gen-1 test1 的 SR 多源引用率仅 31-46%（样例为 0%，但理想值应更高）
+4. **样例本身有答案泄露**: 人工编制的样例在 IA 维度有大量源文档特定数值（如 CIFAR-10, μ=0.01），生成器已避免此问题
+5. **Gen-1 总分偏低**: 87/91pts vs 样例 120pts，主要因为项数较少 (41 vs 50) 和 Synth 项数不足
+
+## 技术栈
+
+- Python >= 3.10
+- OpenAI SDK (兼容 DashScope API)
+- PyMuPDF (PDF 解析与标注)
+- rich (终端输出)
+- 模型: deepseek-v4-flash (阿里云百炼)

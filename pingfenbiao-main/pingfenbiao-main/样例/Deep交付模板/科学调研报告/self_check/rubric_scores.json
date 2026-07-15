@@ -1,0 +1,276 @@
+{
+    "model_name": "OpenAI Deep Research",
+    "report_file": "self_check/report.md",
+    "raw_score": 55,
+    "total_score": 103,
+    "score_percentage": 53.40,
+    "dimension_scores": [
+        {
+            "dimension_id": "information_acquisition",
+            "score": "17",
+            "max_score": "24"
+        },
+        {
+            "dimension_id": "scientific_reasoning",
+            "score": "29",
+            "max_score": "69"
+        },
+        {
+            "dimension_id": "report_synthesis",
+            "score": "9",
+            "max_score": "10"
+        }
+    ],
+    "items": [
+        {
+            "rubric_id": "R1",
+            "score": 4,
+            "reason": "The report accurately defines Backdoor Attack in FL."
+        },
+        {
+            "rubric_id": "R2",
+            "score": 2,
+            "reason": "Distinction between Data Poisoning and Model Poisoning is clear."
+        },
+        {
+            "rubric_id": "R3",
+            "score": 0,
+            "reason": "Impact of Poisoning Ratio on attack success rate is not discussed."
+        },
+        {
+            "rubric_id": "R4",
+            "score": 2,
+            "reason": "Explains how Non-IID data masks malicious updates."
+        },
+        {
+            "rubric_id": "R5",
+            "score": 1,
+            "reason": "Lists common datasets (MNIST, CIFAR-10, etc.)."
+        },
+        {
+            "rubric_id": "R6",
+            "score": 2,
+            "reason": "Explains the 'Model Replacement' strategy."
+        },
+        {
+            "rubric_id": "R7",
+            "score": 1,
+            "reason": "Mentions DBA and its trigger decomposition characteristics."
+        },
+        {
+            "rubric_id": "R8",
+            "score": 2,
+            "reason": "Mentions Stealthiness as a core pursuit of attackers."
+        },
+        {
+            "rubric_id": "R9",
+            "score": 0,
+            "reason": "Does not mention targets can be personalized branches."
+        },
+        {
+            "rubric_id": "R10",
+            "score": 2,
+            "reason": "Mentions adaptive attackers adjusting strategies."
+        },
+        {
+            "rubric_id": "R11",
+            "score": 1,
+            "reason": "Mentions trigger types (static, natural, semantic)."
+        },
+        {
+            "rubric_id": "R12",
+            "score": 4,
+            "reason": "Clarifies the persistence fade issue under continuous updates."
+        },
+        {
+            "rubric_id": "R13",
+            "score": 4,
+            "reason": "Compares robust aggregation algorithms against high-dimensional attacks."
+        },
+        {
+            "rubric_id": "R14",
+            "score": 0,
+            "reason": "Does not explain DP defense via noise interference."
+        },
+        {
+            "rubric_id": "R15",
+            "score": 0,
+            "reason": "Analysis of 'dormant neurons' in pruning is missing."
+        },
+        {
+            "rubric_id": "R16",
+            "score": 0,
+            "reason": "Reason for utility drop after pruning is not derived."
+        },
+        {
+            "rubric_id": "R17",
+            "score": 0,
+            "reason": "Adversarial training overhead in FL is not discussed."
+        },
+        {
+            "rubric_id": "R18",
+            "score": 4,
+            "reason": "Discusses logic of trigger inversion for label identification."
+        },
+        {
+            "rubric_id": "R19",
+            "score": 2,
+            "reason": "Explains use of Knowledge Distillation for purification."
+        },
+        {
+            "rubric_id": "R20",
+            "score": 0,
+            "reason": "Does not discuss distinguishing features from noise in PFL."
+        },
+        {
+            "rubric_id": "R21",
+            "score": 2,
+            "reason": "Explores scarcity of validation sets on server side."
+        },
+        {
+            "rubric_id": "R22",
+            "score": 1,
+            "reason": "Analyzes weight scaling effect on L2-norm detection."
+        },
+        {
+            "rubric_id": "R23",
+            "score": 0,
+            "reason": "Feature squeezing analysis is missing."
+        },
+        {
+            "rubric_id": "R24",
+            "score": 4,
+            "reason": "Evaluates misdetection risks of clustering under Non-IID."
+        },
+        {
+            "rubric_id": "R25",
+            "score": 2,
+            "reason": "Discusses necessity of dynamic defense thresholds."
+        },
+        {
+            "rubric_id": "R26",
+            "score": 0,
+            "reason": "Non-linear relationship of client number is not derived."
+        },
+        {
+            "rubric_id": "R27",
+            "score": 0,
+            "reason": "Similarity between watermarking and backdoors is not argued."
+        },
+        {
+            "rubric_id": "R28",
+            "score": 4,
+            "reason": "Explains how 'Constraint-and-scale' hides malicious updates."
+        },
+        {
+            "rubric_id": "R29",
+            "score": 2,
+            "reason": "Compares Training-phase vs Post-training defenses."
+        },
+        {
+            "rubric_id": "R30",
+            "score": 1,
+            "reason": "Explains vulnerability of FedAvg in adversarial settings."
+        },
+        {
+            "rubric_id": "R31",
+            "score": 0,
+            "reason": "Shapley Value quantification analysis is missing."
+        },
+        {
+            "rubric_id": "R32",
+            "score": 0,
+            "reason": "HE environment auditing dilemma is not discussed."
+        },
+        {
+            "rubric_id": "R33",
+            "score": 2,
+            "reason": "Discusses energy bottlenecks for detection on edge devices."
+        },
+        {
+            "rubric_id": "R34",
+            "score": 0,
+            "reason": "NAS-based robust structure defense is not mentioned."
+        },
+        {
+            "rubric_id": "R35",
+            "score": 0,
+            "reason": "Adversarial detector migration value is not evaluated."
+        },
+        {
+            "rubric_id": "R36",
+            "score": 0,
+            "reason": "Impact difference between VFL and HFL is not discussed."
+        },
+        {
+            "rubric_id": "R37",
+            "score": 0,
+            "reason": "Mathematical logic of clustering-then-aggregation is missing."
+        },
+        {
+            "rubric_id": "R38",
+            "score": 1,
+            "reason": "Discusses Long-term vs Single-shot defense strategies."
+        },
+        {
+            "rubric_id": "R39",
+            "score": 0,
+            "reason": "Difference between label-flipping and triggers is not analyzed."
+        },
+        {
+            "rubric_id": "R40",
+            "score": 0,
+            "reason": "Scalability bottleneck of Certified Robustness is missing."
+        },
+        {
+            "rubric_id": "R41",
+            "score": 1,
+            "reason": "Contains a summary table of key papers (2017-2025)."
+        },
+        {
+            "rubric_id": "R42",
+            "score": 1,
+            "reason": "Structure includes Abstract, Intro, Attack, Defense, Future."
+        },
+        {
+            "rubric_id": "R43",
+            "score": 1,
+            "reason": "Identifies new risks in LLM post-2023."
+        },
+        {
+            "rubric_id": "R44",
+            "score": 1,
+            "reason": "Logical flow from attack mechanism to defense is rigorous."
+        },
+        {
+            "rubric_id": "R45",
+            "score": 0,
+            "reason": "Taxonomy Map for defense methods is missing."
+        },
+        {
+            "rubric_id": "R46",
+            "score": 1,
+            "reason": "Discusses balance between security and efficiency."
+        },
+        {
+            "rubric_id": "R47",
+            "score": 1,
+            "reason": "Citations include recent 2024/2025 academic trends."
+        },
+        {
+            "rubric_id": "R48",
+            "score": 1,
+            "reason": "Proposes 3 specific high-depth research entry points."
+        },
+        {
+            "rubric_id": "R49",
+            "score": 1,
+            "reason": "Summarizes performance comparison under Non-IID degrees."
+        },
+        {
+            "rubric_id": "R50",
+            "score": 1,
+            "reason": "Conclusion reiterates the consensus on defense limitations."
+        }
+    ]
+}

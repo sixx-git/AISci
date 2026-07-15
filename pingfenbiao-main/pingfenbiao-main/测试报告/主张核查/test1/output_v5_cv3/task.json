@@ -1,0 +1,562 @@
+{
+    "task_id": "claim_verification_auto_v5",
+    "task_type": "claim_verification",
+    "subject": "",
+    "document_heavy": false,
+    "query": "在差分隐私保护下，联邦学习的后门防御机制在面对自适应攻击时是否仍然有效？",
+    "input_files": [
+        {
+            "file_id": "S1",
+            "file_name": "S1.pdf",
+            "relative_path": "S1.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 9 pages"
+        },
+        {
+            "file_id": "S2",
+            "file_name": "S2.pdf",
+            "relative_path": "S2.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 25 pages"
+        },
+        {
+            "file_id": "S3",
+            "file_name": "S3.pdf",
+            "relative_path": "S3.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 10 pages"
+        }
+    ],
+    "rubrics": {
+        "total_score": 88,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 24,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_explain_how_the_addition_of_rand",
+                        "competency_category": "evidence",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain how the addition of random noise to local updates in distributed learning alters the distribution of update norms, and why this can be exploited by adaptive attackers?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_mechanism_by_which",
+                        "competency_category": "methodology",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report describe the mechanism by which robust aggregation methods that rely on statistical properties of updates (e.g., element-wise mean) can differentiate between clean and malicious updates in the presence of privacy noise?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_evaluate_the_effectiveness_of_mi",
+                        "competency_category": "evidence",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate the effectiveness of mild defenses, such as combining norm clipping with a small amount of differential privacy noise, in countering backdoor attacks?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "rubric_key": "information_acquisition.definition.does_the_report_define_the_concept_of_differenti",
+                        "competency_category": "definition",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report define the concept of differential privacy applied to federated learning, specifically that privacy is achieved by perturbing local updates with random noise before aggregation?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_contrast_the_effectiveness_of_di",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report contrast the effectiveness of differential privacy in mitigating standard poisoning attacks versus adaptive attacks that exploit the norm distribution of perturbed updates?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_describe_how_attackers_in_distri",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report describe how attackers in distributed learning can manipulate the magnitude of their poisoned updates to either amplify the backdoor signal or stay within defensive clipping thresholds?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "rubric_key": "information_acquisition.definition.does_the_report_identify_the_granularity_of_diff",
+                        "competency_category": "definition",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify the granularity of differential privacy (e.g., per-record versus per-client) and explain how this affects the privacy-utility trade-off?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "rubric_key": "information_acquisition.definition.does_the_report_explain_the_concept_of_byzantine",
+                        "competency_category": "definition",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain the concept of Byzantine attacks in federated learning, distinguishing between attacks aimed at degrading model quality and those aimed at implanting a hidden behavior?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_contrast_the_performance_of_meth",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report contrast the performance of methods that combine differential privacy and Byzantine robustness against existing baseline methods that also aim to achieve both objectives?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "rubric_key": "information_acquisition.definition.does_the_report_describe_the_realistic_threat_mo",
+                        "competency_category": "definition",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report describe the realistic threat model where honest clients also possess data from the target task, making backdoor insertion more difficult?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 48,
+                "items": [
+                    {
+                        "rubric_id": "R11",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_derive_the_boundary_conditions_u",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the boundary conditions under which differential privacy alone fails to provide robustness against poisoning attacks, as evidenced by the persistence of adaptive attacks that mimic the noise distribution?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_mechanism_by_which_te",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the mechanism by which temporal averaging of client updates can reveal persistent malicious changes while averaging out random noise, and how this interacts with differential privacy noise?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R13",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_whether_the_claim_that",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the claim that weak differential privacy can mitigate backdoor attacks without harming main task accuracy holds under conditions where the attacker has a large fraction of clients or a simple backdoor task?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_vulnerability_of_dif",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the vulnerability of differentially private federated learning to poisoning attacks versus non-private federated learning?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_analyze_how_the_choice_of_differ",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze how the choice of differential privacy granularity affects the trade-off between privacy and robustness?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_mechanism_by_which_a",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the mechanism by which attackers can scale their poisoned updates to match the norm distribution of differentially private updates?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_limitation_that_naive",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess the limitation that naively combining existing robustness and privacy mechanisms can degrade performance, requiring bespoke integration?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_condition_under_which",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report derive the condition under which a defense based on element-wise averages of updates can detect malicious amplification, exploiting the fact that noise cancels out over many dimensions?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_effectiveness_of_per",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the effectiveness of periodic versus random attack patterns in the presence of differential privacy defenses?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_impact_of_honest_cli",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the impact of honest clients having data from the target backdoor class on the difficulty of backdoor insertion?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_the_claim_that_differ",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report argue that the claim that 'differential privacy is not inherently robust' is supported by evidence that specific adaptive attacks can achieve high success rates despite differential privacy?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_explain_how_the_application_of_d",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how the application of differential privacy to optimizer states rather than gradients offers an alternative privacy-utility trade-off?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_role_of_the_attacker",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report assess the role of the attacker fraction and backdoor task complexity in determining the success of attacks under differential privacy?",
+                        "source_ids": [
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_whether_secure_multi_par",
+                        "competency_category": "mechanism",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze whether secure multi-party computation can remove the need for a trusted server while preserving privacy and robustness?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_convergence_rate_of",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report compare the convergence rate of differentially private federated learning with and without robustness mechanisms?",
+                        "source_ids": [
+                            "S2"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_analyze_the_forward_looking_impl",
+                        "competency_category": "synthesis",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze the forward-looking implication that future adaptive attacks may further exploit the interaction between differential privacy noise and aggregation mechanisms?",
+                        "source_ids": [
+                            "S1",
+                            "S2",
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_core_claim",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the core claim remains valid when attackers adapt their strategy to known defense parameters?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_absolute_claims_of_co",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report argue that absolute claims of complete protection overstate what the reviewed evidence actually demonstrates?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_reconcile_conflicting_evidence_a",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report reconcile conflicting evidence across sources regarding whether the proposed defense holds under adaptive attack models?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_experimenta",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the experimental evidence supports generalizing the defense claim beyond the specific settings studied?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 16,
+                "items": [
+                    {
+                        "rubric_id": "R31",
+                        "rubric_key": "report_synthesis.structure.does_the_report_include_a_structured_evidence_ta",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report include a structured evidence table that categorizes evidence as supporting, refuting, or neutral with respect to the claim?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "rubric_key": "report_synthesis.structure.does_the_report_state_a_clear_verdict_on_the_cla",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report state a clear verdict on the claim, supported by a justification that synthesizes evidence from the reviewed sources?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "rubric_key": "report_synthesis.structure.does_the_report_map_each_piece_of_evidence_to_sp",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report map each piece of evidence to specific sub-propositions of the claim (e.g., the three sub-questions listed in the prompt)?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_accurately_attribute_findings_to",
+                        "competency_category": "integrity",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report accurately attribute findings to the correct sources, avoiding conflation of results across different studies or experimental conditions?",
+                        "source_ids": [
+                            "S1",
+                            "S2",
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "rubric_key": "report_synthesis.structure.does_the_report_provide_a_confidence_score_or_un",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a confidence score or uncertainty quantification for the verdict, reflecting the strength of the evidence?",
+                        "source_ids": []
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "rubric_key": "report_synthesis.recommendation.does_the_report_identify_specific_non_trivial_re",
+                        "competency_category": "recommendation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report identify specific, non-trivial research gaps that are not directly addressed in the reviewed sources, such as the need for defenses against adaptive attacks that exploit the noise distribution?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_derive_the_conditions_under_whic",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report derive the conditions under which the combined differential privacy and robustness mechanisms would fail, such as when the attacker proportion exceeds a certain threshold or when the noise magnitude is too small?",
+                        "source_ids": [
+                            "S1",
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_identify_implicit_assumptions_in",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report identify implicit assumptions in the claim that are not explicitly stated in any of the reviewed sources, such as the assumption that the defender knows the attacker's norm distribution?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_critically_evaluate_the_diversit",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report critically evaluate the diversity and realism of the experimental settings (e.g., datasets, attack patterns, client selection) and discuss limitations for generalizing the findings to real-world federated learning deployments?",
+                        "source_ids": [
+                            "S2",
+                            "S3"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "rubric_key": "report_synthesis.structure.does_the_report_evaluate_the_logical_self_consis",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the logical self-consistency of the evidence presented across different sources?",
+                        "source_ids": [
+                            "S1"
+                        ]
+                    },
+                    {
+                        "rubric_id": "R41",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_use_precise_hedging_language_and",
+                        "competency_category": "integrity",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report use precise hedging language and avoid unsupported superlatives (e.g., 'proven', 'guaranteed') when discussing research findings?",
+                        "source_ids": []
+                    }
+                ]
+            }
+        ]
+    },
+    "generation_meta": {
+        "version": "5.1-cv",
+        "rubric_key_enabled": true,
+        "capability_coverage_enabled": true,
+        "dimension_stats": {
+            "information_acquisition": {
+                "item_count": 10,
+                "max_score": 24,
+                "role_distribution": {
+                    "Critical": 3,
+                    "Mandatory": 5,
+                    "Standard": 2
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "scientific_reasoning": {
+                "item_count": 20,
+                "max_score": 48,
+                "role_distribution": {
+                    "Critical": 6,
+                    "Mandatory": 10,
+                    "Standard": 4
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.05
+            },
+            "report_synthesis": {
+                "item_count": 11,
+                "max_score": 16,
+                "role_distribution": {
+                    "Critical": 0,
+                    "Mandatory": 5,
+                    "Standard": 6
+                },
+                "source_linked_ratio": 0.6363636363636364,
+                "multi_source_ratio": 0.2727272727272727
+            }
+        },
+        "generation_model": "deepseek-v4-flash",
+        "extraction_model": "deepseek-v4-flash"
+    },
+    "calibration": {
+        "version": "2.0",
+        "issues_found": 7,
+        "issues": [
+            "R2: 问题包含模糊词汇 'proper': Does the report describe the mechanism by which robust aggre...",
+            "report_synthesis: Critical 项过少 (0/11=0%, 目标 15%-35%)",
+            "report_synthesis: Standard 项过多 (6/11=55%, 目标 10%-30%)",
+            "report_synthesis: 过多评分项带有 source_ids (7/11), 综合维度应主要评估报告结构而非内容",
+            "scientific_reasoning: 分值占比 55% 不在合理范围 (55%-70%) for claim_verification",
+            "report_synthesis: 分值占比 18% 不在合理范围 (8%-18%) for claim_verification",
+            "information_acquisition: 条目数过少 (10, 目标 12-16)"
+        ],
+        "fixes_applied": [],
+        "task_type": "claim_verification"
+    }
+}
