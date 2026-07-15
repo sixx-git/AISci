@@ -6,12 +6,14 @@ export const PIPELINE_STAGE_TAB: Record<string, string> = {
   hypothesis_generation: 'hypotheses',
   hypothesis_review: 'hypotheses',
   iterative_experiment: 'experiments',
-  experiment_design: 'experiments', // legacy
-  small_validation: 'experiments', // legacy
   report_generation: 'reports',
   data_acquisition: 'experiments',
 };
 
 export function getPipelineStageTab(stageId: string): string | undefined {
+  // 历史 stage 键 → 迭代实验 Tab
+  if (stageId === 'experiment_design' || stageId === 'small_validation') {
+    return 'experiments';
+  }
   return PIPELINE_STAGE_TAB[stageId];
 }

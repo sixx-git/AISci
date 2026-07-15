@@ -135,6 +135,43 @@ export function IterativeExperimentPage({
             await iterativeExperimentService.recommendDatasets(projectId, selected.id, feedback);
           });
         }}
+        onUploadFile={async (file) => {
+          setBusy(true);
+          setError(null);
+          try {
+            const out = await iterativeExperimentService.uploadDataset(
+              projectId,
+              selected.id,
+              file,
+            );
+            await reload();
+            return out.data_config;
+          } catch (err: unknown) {
+            const msg = getErrorMessage(err, '上传失败');
+            setError(msg);
+            throw new Error(msg);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        onAutoDetect={async (directoryPath) => {
+          setBusy(true);
+          setError(null);
+          try {
+            const out = await iterativeExperimentService.autoDetectProfile(
+              projectId,
+              selected.id,
+              directoryPath,
+            );
+            return { preview: out.preview, data_config: out.data_config };
+          } catch (err: unknown) {
+            const msg = getErrorMessage(err, '自动识别失败');
+            setError(msg);
+            throw new Error(msg);
+          } finally {
+            setBusy(false);
+          }
+        }}
         onDesignScript={(dataConfig: DataConfig) => {
           void withBusy(async () => {
             await iterativeExperimentService.designScript(projectId, selected.id, dataConfig);

@@ -13,6 +13,7 @@ import type {
   RunMode,
 } from '@/types/iterativeExperiment';
 import { PHASE_EMOJI, PHASE_LABEL } from './phaseLabels';
+import { IterationTimeline } from './IterationTimeline';
 
 interface ExperimentDetailProps {
   experiment: IterativeExperiment;
@@ -21,6 +22,11 @@ interface ExperimentDetailProps {
   onBack: () => void;
   onDelete: () => void;
   onRecommend: (feedback?: string) => void;
+  onUploadFile: (file: File) => Promise<DataConfig>;
+  onAutoDetect: (directoryPath: string) => Promise<{
+    preview: Record<string, unknown>;
+    data_config: DataConfig;
+  }>;
   onDesignScript: (dataConfig: DataConfig) => void;
   onSetRunMode: (mode: RunMode) => void;
   onRunIteration: () => void;
@@ -45,6 +51,8 @@ export function ExperimentDetail({
   onBack,
   onDelete,
   onRecommend,
+  onUploadFile,
+  onAutoDetect,
   onDesignScript,
   onSetRunMode,
   onRunIteration,
@@ -56,25 +64,38 @@ export function ExperimentDetail({
   const isSandbox = experiment.executor_type === 'sandbox';
 
   const [sourceType, setSourceType] = useState<DataSourceType>('uploaded');
-  const [fileName, setFileName] = useState('');
+  const [uploadedConfig, setUploadedConfig] = useState<DataConfig | null>(
+    experiment.data_config?.source_type === 'uploaded' || experiment.data_config?.source_type === 'local_json'
+      ? experiment.data_config
+      : null,
+  );
+  const [fileName, setFileName] = useState(experiment.data_config?.file_name || '');
   const [filePath, setFilePath] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileConfirmed, setProfileConfirmed] = useState(false);
   const [autodetectPreview, setAutodetectPreview] = useState<Record<string, unknown> | null>(null);
+  const [autodetectConfig, setAutodetectConfig] = useState<DataConfig | null>(null);
   const [feedback, setFeedback] = useState(experiment.human_feedback || '');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const canShowUpload = isSandbox && phase !== 'running' && phase !== 'completed';
   const canIterate =
     phase === 'script_designed'
     || phase === 'running'
+    || phase === 'needs_human_review'
     || (Boolean(experiment.initial_plan) && phase !== 'completed' && phase !== 'failed');
 
   const metricsHistory = useMemo(
-    () => experiment.iterations.map((it) => ({
-      n: it.iteration_number,
-      accuracy: Number(it.metrics.accuracy ?? 0),
-      f1: Number(it.metrics.f1 ?? 0),
-    })),
+    () => experiment.iterations.map((it) => {
+      const m = it.metrics || it.result?.metrics || {};
+      const f1 = Number(
+        m.f1 ?? m.fedavg_f1 ?? m.adaptive_f1 ?? m.f1_score ?? 0,
+      );
+      const accuracy = Number(
+        m.accuracy ?? m.fedavg_accuracy ?? m.adaptive_accuracy ?? 0,
+      );
+      return { n: it.iteration_number, accuracy, f1 };
+    }),
     [experiment.iterations],
   );
 
@@ -84,20 +105,32 @@ export function ExperimentDetail({
     && !profileConfirmed;
 
   const buildDataConfig = (): DataConfig => {
-    const path = sourceType === 'uploaded' ? (fileName || 'mock_upload.csv') : filePath.trim();
+    if (sourceType === 'uploaded') {
+      if (!uploadedConfig?.source_path) {
+        throw new Error('请先上传并完成试加载的数据文件');
+      }
+      return uploadedConfig;
+    }
+    if (sourceType === 'directory' && profileName === 'AutoDetect') {
+      if (!autodetectConfig || !profileConfirmed) {
+        throw new Error('请先完成 AutoDetect 识别试加载并确认');
+      }
+      return autodetectConfig;
+    }
+    const path = filePath.trim();
+    if (!path) {
+      throw new Error('请填写数据路径');
+    }
     return {
       source_type: sourceType === 'local_csv' && path.endsWith('.json') ? 'local_json' : sourceType,
       source_path: path,
-      file_name: sourceType === 'uploaded' ? fileName || 'mock_upload.csv' : undefined,
-      profile_name: sourceType === 'directory'
-        ? (profileName === 'AutoDetect' ? 'AutoDetect' : profileName || undefined)
-        : undefined,
+      profile_name: sourceType === 'directory' ? (profileName || undefined) : undefined,
       sample_size: 5000,
       preprocessing_steps: [],
-      columns: ['id', 'feature_1', 'feature_2', 'label'],
-      row_count: 4800,
     };
   };
+
+  const displayError = error || localError;
 
   return (
     <div className="space-y-4">
@@ -133,10 +166,10 @@ export function ExperimentDetail({
           </div>
         </div>
 
-        {error && (
+        {displayError && (
           <div className="mb-3 p-2.5 rounded-lg border border-danger-500/30 bg-danger-500/10 text-xs text-danger-300 flex gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            {error}
+            {displayError}
           </div>
         )}
 
@@ -155,7 +188,7 @@ export function ExperimentDetail({
 
       {/* 推荐数据集 */}
       {isSandbox && (phase === 'created' || phase === 'data_recommended' || phase === 'data_uploaded') && (
-        <Card title="推荐数据集" subtitle="AI 分析假设后的推荐（mock）">
+        <Card title="推荐数据集" subtitle="根据实验假设由 LLM 推荐经典数据集">
           {!experiment.dataset_recommendations?.length ? (
             <p className="text-sm text-bp-muted mb-3">暂无推荐。可点击下方按钮让 AI 推荐，或直接上传数据。</p>
           ) : (
@@ -202,7 +235,7 @@ export function ExperimentDetail({
 
       {/* 上传数据 */}
       {canShowUpload && (
-        <Card title="上传数据集" subtitle="对齐 shaxiang：缺数据不可设计脚本 / 不可迭代">
+        <Card title="上传数据集" subtitle="缺数据不可设计脚本 / 不可迭代（与 shaxiang 一致）">
           <div className="flex flex-wrap gap-2 mb-4">
             {SOURCE_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -214,6 +247,8 @@ export function ExperimentDetail({
                     setSourceType(opt.value);
                     setProfileConfirmed(false);
                     setAutodetectPreview(null);
+                    setAutodetectConfig(null);
+                    setLocalError(null);
                   }}
                   className={cn(
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors',
@@ -232,15 +267,34 @@ export function ExperimentDetail({
           {sourceType === 'uploaded' && (
             <div className="mb-3">
               <label className="text-xs text-bp-muted mb-1 block">
-                选择数据文件（mock：仅记录文件名，不实际上传）
+                选择数据文件（上传到服务端并试加载）
               </label>
               <input
                 type="file"
                 accept=".csv,.json,.jsonl,.parquet,.xlsx,.tsv"
-                onChange={(e) => setFileName(e.target.files?.[0]?.name || '')}
+                disabled={busy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setLocalError(null);
+                  setFileName(file.name);
+                  void onUploadFile(file)
+                    .then((cfg) => {
+                      setUploadedConfig(cfg);
+                    })
+                    .catch((err: unknown) => {
+                      setUploadedConfig(null);
+                      setLocalError(err instanceof Error ? err.message : '上传失败');
+                    });
+                }}
                 className="block w-full text-xs text-bp-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-bp-panel file:text-bp-text"
               />
-              {fileName && <p className="text-xs text-bp-cyan mt-1">已选择: {fileName}</p>}
+              {fileName && uploadedConfig?.source_path && (
+                <p className="text-xs text-bp-cyan mt-1">
+                  已上传并通过试加载: {fileName}
+                  {uploadedConfig.row_count != null ? `（${uploadedConfig.row_count} 行）` : ''}
+                </p>
+              )}
             </div>
           )}
 
@@ -262,6 +316,7 @@ export function ExperimentDetail({
                   setProfileName(e.target.value);
                   setProfileConfirmed(false);
                   setAutodetectPreview(null);
+                  setAutodetectConfig(null);
                 }}
                 className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
               >
@@ -278,15 +333,18 @@ export function ExperimentDetail({
                     size="sm"
                     disabled={!filePath.trim() || busy}
                     onClick={() => {
-                      setAutodetectPreview({
-                        modality: 'tabular',
-                        row_count: 5000,
-                        column_count: 4,
-                        numeric_columns: ['feature_1', 'feature_2'],
-                        suggested_target_columns: ['label'],
-                        profile: 'AutoDetect(mock)',
-                      });
-                      setProfileConfirmed(false);
+                      setLocalError(null);
+                      void onAutoDetect(filePath.trim())
+                        .then((out) => {
+                          setAutodetectPreview(out.preview);
+                          setAutodetectConfig(out.data_config);
+                          setProfileConfirmed(false);
+                        })
+                        .catch((err: unknown) => {
+                          setAutodetectPreview(null);
+                          setAutodetectConfig(null);
+                          setLocalError(err instanceof Error ? err.message : '自动识别失败');
+                        });
                     }}
                   >
                     自动识别并试加载验证
@@ -305,6 +363,7 @@ export function ExperimentDetail({
                           size="sm"
                           onClick={() => {
                             setAutodetectPreview(null);
+                            setAutodetectConfig(null);
                             setProfileConfirmed(false);
                           }}
                         >
@@ -357,9 +416,17 @@ export function ExperimentDetail({
             disabled={
               busy
               || autodetectBlocked
-              || (sourceType === 'uploaded' ? !fileName : !filePath.trim())
+              || (sourceType === 'uploaded' ? !uploadedConfig?.source_path : !filePath.trim())
+              || (sourceType === 'directory' && !profileName)
             }
-            onClick={() => onDesignScript(buildDataConfig())}
+            onClick={() => {
+              try {
+                setLocalError(null);
+                onDesignScript(buildDataConfig());
+              } catch (err: unknown) {
+                setLocalError(err instanceof Error ? err.message : '请完善数据配置');
+              }
+            }}
           >
             {busy ? '设计中（生成 → 试跑 → 修补）…' : '确认并设计分析脚本'}
           </Button>
@@ -368,7 +435,7 @@ export function ExperimentDetail({
 
       {/* 迭代区 */}
       {canIterate && (
-        <Card title="执行与分析" subtitle="对齐 shaxiang：smoke / 全量 · 自我纠正在脚本设计阶段完成">
+        <Card title="执行与分析" subtitle="smoke / 全量 · 自我纠正在脚本设计阶段完成">
           {isSandbox && (
             <div className="mb-4 p-3 rounded-lg border border-bp-border">
               <div className="flex items-center justify-between gap-3">
@@ -425,7 +492,7 @@ export function ExperimentDetail({
 
           {metricsHistory.length > 0 && (
             <div className="mb-4">
-              <h5 className="text-sm font-medium text-bp-text mb-2">指标趋势（mock）</h5>
+              <h5 className="text-sm font-medium text-bp-text mb-2">指标趋势</h5>
               <div className="space-y-2">
                 {metricsHistory.map((m) => (
                   <div key={m.n} className="flex items-center gap-3 text-xs">
@@ -447,43 +514,14 @@ export function ExperimentDetail({
 
           {experiment.iterations.length > 0 && (
             <div className="mb-4">
-              <h5 className="text-sm font-medium text-bp-text mb-2">迭代历史</h5>
-              <div className="space-y-3">
-                {[...experiment.iterations].reverse().map((it) => (
-                  <div key={it.iteration_number} className="rounded-lg border border-bp-border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold text-bp-text">第 {it.iteration_number} 轮</span>
-                      <span className="text-bp-muted">{it.plan.title}</span>
-                      <span className={it.status === 'success' ? 'text-bp-green' : 'text-danger-300'}>
-                        {it.status === 'success' ? '成功' : '失败'}
-                      </span>
-                      <span className="text-bp-muted">{it.duration_seconds.toFixed(1)}s</span>
-                    </div>
-                    <p className="text-xs text-bp-muted mt-1">{it.result.summary}</p>
-                    <p className="text-xs text-bp-cyan/80 mt-1">{it.analysis.summary}</p>
-                    {it.result.charts && it.result.charts.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {it.result.charts.map((c) => (
-                          <span
-                            key={c.name}
-                            className="text-[11px] px-2 py-0.5 rounded border border-bp-border text-bp-muted"
-                            title={c.note}
-                          >
-                            📊 {c.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <IterationTimeline iterations={experiment.iterations} />
             </div>
           )}
 
           <div className="pt-3 border-t border-bp-border">
             <h5 className="text-sm font-medium text-bp-text mb-1">人工反馈</h5>
             <p className="text-xs text-bp-muted mb-2">
-              写入后进入下一轮脚本迭代；也可立即「基于反馈重新设计脚本」（对齐 shaxiang 自我纠正）。
+              写入后进入下一轮脚本迭代；也可立即「基于反馈重新设计脚本」。
             </p>
             <textarea
               value={feedback}
@@ -529,15 +567,7 @@ export function ExperimentDetail({
       {phase === 'completed' && (
         <Card title="实验已完成">
           <p className="text-sm text-bp-green mb-3">本实验已完成迭代。可在列表中勾选「用于报告」以纳入报告生成。</p>
-          {metricsHistory.length > 0 && (
-            <div className="space-y-2">
-              {metricsHistory.map((m) => (
-                <div key={m.n} className="text-xs font-mono text-bp-muted">
-                  #{m.n} accuracy={m.accuracy.toFixed(3)} f1={m.f1.toFixed(3)}
-                </div>
-              ))}
-            </div>
-          )}
+          <IterationTimeline iterations={experiment.iterations} />
         </Card>
       )}
     </div>

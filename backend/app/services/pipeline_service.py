@@ -1389,12 +1389,8 @@ class PipelineService:
                     results.get("hypothesis_review"), project_id, project_mode,
                 ))
             ie = results.get("iterative_experiment") or {}
-            if isinstance(ie, dict):
-                if ie.get("experiment_design"):
-                    results["experiment_design"] = ie["experiment_design"]
-                if ie.get("small_validation"):
-                    results["small_validation"] = ie["small_validation"]
-                    self._apply_post_validation_updates(results, ie["small_validation"])
+            if isinstance(ie, dict) and ie.get("small_validation"):
+                self._apply_post_validation_updates(results, ie["small_validation"])
             if ie.get("status") in {"blocked_need_data", "blocked_need_hypothesis"}:
                 self._record_closed_loop_decision(
                     trigger="iterative_experiment_blocked",
@@ -1874,7 +1870,6 @@ class PipelineService:
                 self._run_science_iteration_hooks(
                     "after_hypothesis_generation", results, research_question, project_id, project_mode,
                 )
-                self._maybe_pause_for_hitl_gate("hypothesis_generation", results)
             
             # ── 阶段 5: HypothesisReviewAgent ──
             if start_idx <= 4:
@@ -1886,7 +1881,6 @@ class PipelineService:
                 results.pop("counterfactual_preview", None)
                 self._stage_results.pop("counterfactual_preview", None)
                 self._ensure_counterfactual_preview(results, research_question)
-                self._maybe_pause_for_hitl_gate("hypothesis_review", results)
             
             # ── 阶段 6: 迭代实验（替换原实验设计 + 小样验证）──
             teaching_report_ran = False
@@ -1899,18 +1893,11 @@ class PipelineService:
                         project_mode,
                     ))
                 ie = results.get("iterative_experiment") or {}
-                # 兼容报告/旧闭环：附带合成 experiment_design / small_validation
-                if isinstance(ie, dict):
-                    if ie.get("experiment_design"):
-                        results["experiment_design"] = ie["experiment_design"]
-                    if ie.get("small_validation"):
-                        results["small_validation"] = ie["small_validation"]
-                        self._apply_post_validation_updates(results, ie["small_validation"])
-                self._maybe_pause_for_hitl_gate("iterative_experiment", results)
+                if isinstance(ie, dict) and ie.get("small_validation"):
+                    self._apply_post_validation_updates(results, ie["small_validation"])
 
-            # 旧实验自纠错 / 联邦 Campaign 已移除：自我纠正由 shaxiang 脚本修补承担
-
-            # ── Teaching 轻量自动闭环：暂跳过（依赖旧 experiment_design 重跑）──
+            # 旧实验自纠错 / HITL 阶段门控已移除
+            # 人工审阅：假设页操作 + 迭代实验（shaxiang）页；报告直接读 iterative_experiment
 
             # ── 阶段 7: ReportGenerationAgent ──
             ie_status = (results.get("iterative_experiment") or {}).get("status")
@@ -1929,7 +1916,6 @@ class PipelineService:
                     )
                 self._run_stage(stages, 6, results, research_question, project_id, _exec_report)
                 final_report_id = self._persist_pipeline_report(project_id, results)
-                self._maybe_pause_for_hitl_gate("report_generation", results)
             elif block_report:
                 results["report_generation"] = {
                     "status": "skipped",
@@ -2898,6 +2884,32 @@ class PipelineService:
         except Exception:
             pass
 
+    @staticmethod
+    def _report_payload_from_iterative_experiment(
+        results: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """报告只读 iterative_experiment；内部仍映射为 agent 现有 ed/sv 入参形状。"""
+        ie = results.get("iterative_experiment") or {}
+        if not isinstance(ie, dict):
+            ie = {}
+        ed = ie.get("experiment_design") if isinstance(ie.get("experiment_design"), dict) else {}
+        sv = ie.get("small_validation") if isinstance(ie.get("small_validation"), dict) else {}
+        if not ed or not sv:
+            experiments = ie.get("experiments") or []
+            primary = None
+            pid = ie.get("primary_experiment_id")
+            if pid:
+                primary = next((e for e in experiments if isinstance(e, dict) and e.get("id") == pid), None)
+            if not primary and experiments and isinstance(experiments[0], dict):
+                primary = experiments[0]
+            if primary:
+                from app.services.iterative_experiment_service import IterativeExperimentService
+
+                synth = IterativeExperimentService.synthesize_report_fields(primary)
+                ed = ed or synth.get("experiment_design") or {}
+                sv = sv or synth.get("small_validation") or {}
+        return ie, ed, sv
+
     def _exec_report_generation(
         self,
         results: Dict[str, Any],
@@ -2911,24 +2923,25 @@ class PipelineService:
         kg = results.get("knowledge_gap", {})
         hg = results.get("hypothesis_generation", {})
         hr = results.get("hypothesis_review", {})
-        ed = results.get("experiment_design", {})
-        sv = results.get("small_validation", {})
+        ie, ed, sv = self._report_payload_from_iterative_experiment(results)
 
         evidence_facts, citation_map, verified_references = self._normalize_literature_bundle(lm)
-        
+
         project_info = {
             "title": "研究项目",
             "id": self.run_id,
             "project_mode": project_mode,
+            "iterative_experiment_id": ie.get("primary_experiment_id"),
+            "report_experiment_ids": ie.get("report_experiment_ids") or [],
         }
 
         multimodal_datasets = []
-        ed_skill_outputs = ed.get("skill_outputs", {})
+        ed_skill_outputs = ed.get("skill_outputs", {}) if isinstance(ed, dict) else {}
         ingest_output = ed_skill_outputs.get("multimodal_data_ingest", {})
         if isinstance(ingest_output, dict) and ingest_output.get("data"):
             multimodal_datasets = ingest_output["data"].get("datasets", [])
 
-        preliminary_analysis_outputs = sv.get("skill_outputs", {})
+        preliminary_analysis_outputs = sv.get("skill_outputs", {}) if isinstance(sv, dict) else {}
 
         data_context = {}
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
@@ -2938,6 +2951,16 @@ class PipelineService:
         hg_input = hg.get("input_data") or hg
         if isinstance(hg_input, dict) and hg_input.get("data_context"):
             data_context = {**data_context, **hg_input.get("data_context", {})}
+        data_context = {
+            **data_context,
+            "iterative_experiment": {
+                "status": ie.get("status"),
+                "primary_experiment_id": ie.get("primary_experiment_id"),
+                "report_experiment_ids": ie.get("report_experiment_ids") or [],
+                "experiment_count": len(ie.get("experiments") or []),
+                "provider": ie.get("provider"),
+            },
+        }
 
         result = agent.generate_report(
             project_info=project_info,
@@ -2951,7 +2974,7 @@ class PipelineService:
             small_validation=sv,
             pipeline_run_info=pipeline_run_info,
             novelty_review_skill_outputs=hr.get("skill_outputs"),
-            sanity_check_skill_outputs=ed.get("skill_outputs"),
+            sanity_check_skill_outputs=ed.get("skill_outputs") if isinstance(ed, dict) else None,
             evidence_facts=evidence_facts,
             verified_references=verified_references,
             preliminary_analysis_skill_outputs=preliminary_analysis_outputs,
@@ -2960,8 +2983,13 @@ class PipelineService:
             project_mode=project_mode,
         )
         result_dict = self._safe_model_dump(result)
+        result_dict["iterative_experiment_ref"] = {
+            "primary_experiment_id": ie.get("primary_experiment_id"),
+            "report_experiment_ids": ie.get("report_experiment_ids") or [],
+            "status": ie.get("status"),
+        }
 
-        hypothesis = ed.get("hypothesis") or ""
+        hypothesis = (ed.get("hypothesis") if isinstance(ed, dict) else "") or ""
         reviews = hr.get("reviews") or []
         if not hypothesis and reviews:
             hypothesis = reviews[0].get("hypothesis", "")
@@ -2974,7 +3002,7 @@ class PipelineService:
             data_rows=data_rows or None,
         )
         if result_dict.get("human_review_required"):
-            self._mark_stage_human_review(7, "图表 VLM 评审未达标，需人工复核")
+            self._mark_stage_human_review(6, "图表 VLM 评审未达标，需人工复核")
 
         return result_dict
 

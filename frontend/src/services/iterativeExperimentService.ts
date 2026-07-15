@@ -1,5 +1,5 @@
 /**
- * 迭代实验 API 客户端；失败时降级到 localStorage mock，保证前端可联调。
+ * 迭代实验 API 客户端（真实 shaxiang 后端；失败直接抛错，无 localStorage mock）
  */
 import api from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -9,7 +9,6 @@ import type {
   IterationRecordMock,
   RunMode,
 } from '@/types/iterativeExperiment';
-import { iterativeExperimentMock } from '@/services/iterativeExperimentMock';
 
 function unwrap<T>(res: ApiResponse<T>, fallbackMsg = '请求失败'): T {
   if (res.code !== 200 || res.data === undefined || res.data === null) {
@@ -18,57 +17,30 @@ function unwrap<T>(res: ApiResponse<T>, fallbackMsg = '请求失败'): T {
   return res.data;
 }
 
-async function withMockFallback<T>(
-  apiCall: () => Promise<T>,
-  mockCall: () => T | Promise<T>,
-): Promise<T> {
-  try {
-    return await apiCall();
-  } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[iterativeExperiment] API 失败，降级 mock:', err);
-    }
-    return mockCall();
-  }
-}
-
 export const iterativeExperimentService = {
   async list(projectId: string): Promise<{
     experiments: IterativeExperiment[];
     reportExperimentIds: string[];
   }> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.get<
-          ApiResponse<{ items: IterativeExperiment[]; report_experiment_ids: string[] }>
-        >(`/projects/${projectId}/iterative-experiments`);
-        const payload = unwrap(data);
-        return {
-          experiments: Array.isArray(payload.items) ? payload.items : [],
-          reportExperimentIds: Array.isArray(payload.report_experiment_ids)
-            ? payload.report_experiment_ids
-            : [],
-        };
-      },
-      () => ({
-        experiments: iterativeExperimentMock.list(projectId),
-        reportExperimentIds: iterativeExperimentMock.getReportExperimentIds(projectId),
-      }),
-    );
+    const { data } = await api.get<
+      ApiResponse<{ items: IterativeExperiment[]; report_experiment_ids: string[] }>
+    >(`/projects/${projectId}/iterative-experiments`);
+    const payload = unwrap(data);
+    return {
+      experiments: Array.isArray(payload.items) ? payload.items : [],
+      reportExperimentIds: Array.isArray(payload.report_experiment_ids)
+        ? payload.report_experiment_ids
+        : [],
+    };
   },
 
   async get(projectId: string, experimentId: string): Promise<IterativeExperiment | null> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.get<ApiResponse<IterativeExperiment>>(
-          `/iterative-experiments/${experimentId}`,
-          { params: { project_id: projectId } },
-        );
-        if (data.code === 404) return null;
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.get(projectId, experimentId),
+    const { data } = await api.get<ApiResponse<IterativeExperiment>>(
+      `/iterative-experiments/${experimentId}`,
+      { params: { project_id: projectId } },
     );
+    if (data.code === 404) return null;
+    return unwrap(data);
   },
 
   async create(
@@ -81,40 +53,26 @@ export const iterativeExperimentService = {
       max_iterations: number;
     },
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments`,
-          input,
-        );
-        return unwrap(data, '创建实验失败');
-      },
-      () => iterativeExperimentMock.create(projectId, input),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments`,
+      input,
+      { timeout: 300000 },
     );
+    return unwrap(data, '创建实验失败');
   },
 
   async delete(projectId: string, experimentId: string): Promise<void> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.delete<ApiResponse<{ deleted: boolean }>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}`,
-        );
-        unwrap(data);
-      },
-      () => iterativeExperimentMock.delete(projectId, experimentId),
+    const { data } = await api.delete<ApiResponse<{ deleted: boolean }>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}`,
     );
+    unwrap(data);
   },
 
   async toggleReport(projectId: string, experimentId: string): Promise<string[]> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<{ report_experiment_ids: string[] }>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/toggle-report`,
-        );
-        return unwrap(data).report_experiment_ids || [];
-      },
-      () => iterativeExperimentMock.toggleReportExperiment(projectId, experimentId),
+    const { data } = await api.post<ApiResponse<{ report_experiment_ids: string[] }>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/toggle-report`,
     );
+    return unwrap(data).report_experiment_ids || [];
   },
 
   async recommendDatasets(
@@ -122,16 +80,69 @@ export const iterativeExperimentService = {
     experimentId: string,
     feedback?: string,
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/recommend-datasets`,
-          { feedback: feedback || '' },
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.recommendDatasets(projectId, experimentId, feedback),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/recommend-datasets`,
+      { feedback: feedback || '' },
+      { timeout: 300000 },
     );
+    return unwrap(data, '推荐数据集失败');
+  },
+
+  async uploadDataset(
+    projectId: string,
+    experimentId: string,
+    file: File,
+  ): Promise<{
+    data_config: DataConfig;
+    preview: Record<string, unknown>;
+    experiment: IterativeExperiment;
+  }> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await api.post<
+      ApiResponse<{
+        data_config: DataConfig;
+        preview: Record<string, unknown>;
+        experiment: IterativeExperiment;
+      }>
+    >(`/projects/${projectId}/iterative-experiments/${experimentId}/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+    return unwrap(data, '上传失败');
+  },
+
+  async verifyData(
+    projectId: string,
+    experimentId: string,
+    dataConfig: DataConfig,
+  ): Promise<{ ok: boolean; preview: Record<string, unknown> }> {
+    const { data } = await api.post<ApiResponse<{ ok: boolean; preview: Record<string, unknown> }>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/verify-data`,
+      { data_config: dataConfig },
+    );
+    return unwrap(data, '数据校验失败');
+  },
+
+  async autoDetectProfile(
+    projectId: string,
+    experimentId: string,
+    directoryPath: string,
+  ): Promise<{
+    profile: Record<string, unknown>;
+    preview: Record<string, unknown>;
+    data_config: DataConfig;
+  }> {
+    const { data } = await api.post<
+      ApiResponse<{
+        profile: Record<string, unknown>;
+        preview: Record<string, unknown>;
+        data_config: DataConfig;
+      }>
+    >(`/projects/${projectId}/iterative-experiments/${experimentId}/auto-detect-profile`, {
+      directory_path: directoryPath,
+    }, { timeout: 300000 });
+    return unwrap(data, '自动识别失败');
   },
 
   async designScript(
@@ -139,16 +150,12 @@ export const iterativeExperimentService = {
     experimentId: string,
     dataConfig?: DataConfig,
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/design-script`,
-          { data_config: dataConfig },
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.designScript(projectId, experimentId, dataConfig),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/design-script`,
+      { data_config: dataConfig },
+      { timeout: 600000 },
     );
+    return unwrap(data, '设计脚本失败');
   },
 
   async setRunMode(
@@ -156,50 +163,33 @@ export const iterativeExperimentService = {
     experimentId: string,
     runMode: RunMode,
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/run-mode`,
-          { run_mode: runMode },
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.setRunMode(projectId, experimentId, runMode),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/run-mode`,
+      { run_mode: runMode },
     );
+    return unwrap(data);
   },
 
   async runIteration(
     projectId: string,
     experimentId: string,
   ): Promise<{ record: IterationRecordMock; experiment: IterativeExperiment | null }> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<
-          ApiResponse<{ record: IterationRecordMock; experiment: IterativeExperiment }>
-        >(`/projects/${projectId}/iterative-experiments/${experimentId}/run-iteration`);
-        const payload = unwrap(data);
-        return { record: payload.record, experiment: payload.experiment ?? null };
-      },
-      () => {
-        const record = iterativeExperimentMock.runIteration(projectId, experimentId);
-        return {
-          record,
-          experiment: iterativeExperimentMock.get(projectId, experimentId),
-        };
-      },
-    );
+    const { data } = await api.post<
+      ApiResponse<{ record: IterationRecordMock; experiment: IterativeExperiment }>
+    >(`/projects/${projectId}/iterative-experiments/${experimentId}/run-iteration`, null, {
+      timeout: 600000,
+    });
+    const payload = unwrap(data, '执行迭代失败');
+    return { record: payload.record, experiment: payload.experiment ?? null };
   },
 
   async runToCompletion(projectId: string, experimentId: string): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/run-to-completion`,
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.runToCompletion(projectId, experimentId),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/run-to-completion`,
+      null,
+      { timeout: 600000 },
     );
+    return unwrap(data, '自动运行失败');
   },
 
   async submitFeedback(
@@ -207,16 +197,11 @@ export const iterativeExperimentService = {
     experimentId: string,
     feedback: string,
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/feedback`,
-          { feedback },
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.submitFeedback(projectId, experimentId, feedback),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/feedback`,
+      { feedback },
     );
+    return unwrap(data);
   },
 
   async redesignFromFeedback(
@@ -224,16 +209,12 @@ export const iterativeExperimentService = {
     experimentId: string,
     feedback: string,
   ): Promise<IterativeExperiment> {
-    return withMockFallback(
-      async () => {
-        const { data } = await api.post<ApiResponse<IterativeExperiment>>(
-          `/projects/${projectId}/iterative-experiments/${experimentId}/redesign`,
-          { feedback },
-        );
-        return unwrap(data);
-      },
-      () => iterativeExperimentMock.redesignFromFeedback(projectId, experimentId, feedback),
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/redesign`,
+      { feedback },
+      { timeout: 600000 },
     );
+    return unwrap(data, '重设计脚本失败');
   },
 };
 

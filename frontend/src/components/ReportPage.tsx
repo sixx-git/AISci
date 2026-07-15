@@ -450,7 +450,7 @@ export function ReportPage({
                 当前仅有预期结果，建议补充公式推导、模拟验证或小样实验
               </p>
               <p className="text-xs text-bp-yellow/70 leading-relaxed">
-                Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议补充小样验证或可行性模拟来增强报告可信度。
+                Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议在「迭代实验」完成至少一轮 smoke/full 推演以增强报告可信度。
               </p>
             </div>
           </div>
@@ -687,9 +687,9 @@ export function ReportPage({
                 <div>
                   <p className="text-xs font-medium text-bp-yellow mb-1">暂无实验结果图表</p>
                   <p className="text-xs text-bp-yellow/70 leading-relaxed">
-                    报告图表需来自小样验证或沙箱实验（含方法对比指标、误差棒与显著性），
+                    报告图表需来自迭代实验（smoke/full）沙箱产物（含方法对比指标、误差棒与显著性），
                     不再从原始 FITS/CSV 自动生成均值/标准差描述图。
-                    请先完成 Pipeline「小样验证」阶段，并确保分析脚本输出 metrics.json 与实验图。
+                    请先在「迭代实验」页完成推演，并确保分析脚本输出 metrics.json 与实验图。
                   </p>
                 </div>
               </div>

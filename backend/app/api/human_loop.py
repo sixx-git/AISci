@@ -181,10 +181,13 @@ async def mentor_review(body: MentorReviewRequest, db: Session = Depends(get_db)
             if run and not research_question:
                 research_question = run.research_question or ""
 
+        target_type = body.target_type
+        if target_type == "experiment_design":
+            target_type = "iterative_experiment"
         skill = MentorReviewSkill()
         result = await skill.run(
             {
-                "target_type": body.target_type,
+                "target_type": target_type,
                 "content": content or {},
                 "research_question": research_question,
                 "user_notes": body.user_notes,

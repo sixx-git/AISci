@@ -34,7 +34,7 @@ export function NewExperimentForm({
   return (
     <Card
       title="新建实验"
-      subtitle="输入你的实验假设；数据驱动路径将推荐经典数据集帮助验证（对齐 shaxiang）"
+      subtitle="输入实验假设；数据驱动路径将调用 LLM 推荐经典数据集"
     >
       <div className="flex justify-between mb-4">
         <Button variant="secondary" size="sm" icon={<ArrowLeft className="w-4 h-4" />} onClick={onBack}>

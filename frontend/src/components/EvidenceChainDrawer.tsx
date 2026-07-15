@@ -187,7 +187,7 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
     return <p className="text-sm text-bp-muted py-8 text-center">加载验证规格...</p>;
   }
   if (!provenance?.verification) {
-    return <p className="text-sm text-bp-muted py-8 text-center">暂无 verifiable_spec / 小样验证结果</p>;
+    return <p className="text-sm text-bp-muted py-8 text-center">暂无 verifiable_spec / 迭代实验结果</p>;
   }
 
   const v = provenance.verification;

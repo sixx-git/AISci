@@ -184,13 +184,38 @@ def report_to_db_response(
     )
 
 
+def _report_fields_from_iterative_stage(
+    ie_stage: Optional[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """从 iterative_experiment 阶段输出解析报告用 ed/sv（不再读顶层旧键/DB 实验设计表）。"""
+    if not isinstance(ie_stage, dict):
+        return {}, {}
+    ed = ie_stage.get("experiment_design") if isinstance(ie_stage.get("experiment_design"), dict) else {}
+    sv = ie_stage.get("small_validation") if isinstance(ie_stage.get("small_validation"), dict) else {}
+    if ed and sv:
+        return ed, sv
+    experiments = ie_stage.get("experiments") or []
+    primary = None
+    pid = ie_stage.get("primary_experiment_id")
+    if pid:
+        primary = next((e for e in experiments if isinstance(e, dict) and e.get("id") == pid), None)
+    if not primary and experiments and isinstance(experiments[0], dict):
+        primary = experiments[0]
+    if primary:
+        from app.services.iterative_experiment_service import IterativeExperimentService
+
+        synth = IterativeExperimentService.synthesize_report_fields(primary)
+        ed = ed or synth.get("experiment_design") or {}
+        sv = sv or synth.get("small_validation") or {}
+    return ed if isinstance(ed, dict) else {}, sv if isinstance(sv, dict) else {}
+
+
 def enrich_report_for_response(report: Report, db: Session) -> ReportDBResponse:
     """读取报告时重算合规指标，对齐 Pipeline 文献阶段与 References 章节。"""
     from app.models.pipeline import PipelineStage
-    from app.models.research import ExperimentDesign
     from app.services._utils.pipeline_queries import get_latest_pipeline_run, get_literature_mining_output, get_stage_output
     from app.services.literature_bundle_service import enrich_literature_mining
-    from app.services.report_compliance_service import enrich_report_extra_metadata, experiment_design_record_to_dict
+    from app.services.report_compliance_service import enrich_report_extra_metadata
 
     literature_mining = enrich_literature_mining(get_literature_mining_output(db, report.project_id))
     hypotheses: List[Dict[str, Any]] = []
@@ -200,26 +225,11 @@ def enrich_report_for_response(report: Report, db: Session) -> ReportDBResponse:
         hg = get_stage_output(db, latest_run.id, PipelineStage.HYPOTHESIS_GENERATION)
         if isinstance(hg, dict):
             hypotheses = hg.get("hypotheses") or []
-        ed_stage = get_stage_output(db, latest_run.id, PipelineStage.EXPERIMENT_DESIGN)
-        if isinstance(ed_stage, dict):
-            experiment_design = ed_stage
-
-    if not experiment_design and report.experiment_design_id:
-        ed_row = db.query(ExperimentDesign).filter(
-            ExperimentDesign.id == report.experiment_design_id
-        ).first()
-        if ed_row:
-            experiment_design = experiment_design_record_to_dict(ed_row)
-
-    if not experiment_design and report.project_id:
-        ed_row = (
-            db.query(ExperimentDesign)
-            .filter(ExperimentDesign.project_id == report.project_id)
-            .order_by(ExperimentDesign.priority, ExperimentDesign.created_at.desc())
-            .first()
+        ie_stage = get_stage_output(db, latest_run.id, PipelineStage.ITERATIVE_EXPERIMENT)
+        ed, _sv = _report_fields_from_iterative_stage(
+            ie_stage if isinstance(ie_stage, dict) else None
         )
-        if ed_row:
-            experiment_design = experiment_design_record_to_dict(ed_row)
+        experiment_design = ed or None
 
     extra = enrich_report_extra_metadata(
         report,
@@ -516,11 +526,11 @@ class ReportService:
     def _re_enrich_report_chapters(self, db_report: Report) -> Dict[str, Any]:
         """用 Pipeline 数据上下文回填/补全报告章节（尤其 results 与 FITS 数据）。"""
         from app.agents.report_generation_agent import get_report_generation_agent
+        from app.models.pipeline import PipelineStage
         from app.services.data_finder_service import get_data_finder_service
         from app.services.dataset_service import DatasetService
         from app.services.data_finder_slim import slim_data_context
-        from app.services.experiment_service import ExperimentDesignService
-        from app.services.report_compliance_service import experiment_design_record_to_dict
+        from app.services._utils.pipeline_queries import get_latest_pipeline_run, get_stage_output
 
         agent = get_report_generation_agent()
         chapters: Dict[str, Any] = {
@@ -550,24 +560,28 @@ class ReportService:
             result = agent._enrich_report_with_data_finder(result, df_results)
 
         experiment_design: Dict[str, Any] = {}
-        if db_report.experiment_design_id:
-            ed_row = ExperimentDesignService(self.db).get_experiment_design_by_id(
-                db_report.experiment_design_id
+        small_validation: Dict[str, Any] = {}
+        latest_run = get_latest_pipeline_run(self.db, db_report.project_id)
+        if latest_run:
+            ie_stage = get_stage_output(self.db, latest_run.id, PipelineStage.ITERATIVE_EXPERIMENT)
+            experiment_design, small_validation = _report_fields_from_iterative_stage(
+                ie_stage if isinstance(ie_stage, dict) else None
             )
-            if ed_row:
-                experiment_design = experiment_design_record_to_dict(ed_row)
-        if not experiment_design:
-            designs = ExperimentDesignService(self.db).get_experiment_designs_by_project(
-                db_report.project_id, limit=1
-            )
-            if designs:
-                experiment_design = experiment_design_record_to_dict(designs[0])
+            if isinstance(ie_stage, dict):
+                data_context = {
+                    **data_context,
+                    "iterative_experiment": {
+                        "status": ie_stage.get("status"),
+                        "primary_experiment_id": ie_stage.get("primary_experiment_id"),
+                        "report_experiment_ids": ie_stage.get("report_experiment_ids") or [],
+                    },
+                }
 
         result = agent._backfill_chapters_from_pipeline(
             result,
             experiment_design=experiment_design,
             data_context=data_context,
-            small_validation={},
+            small_validation=small_validation,
         )
         enriched = result.get("chapters")
         return enriched if isinstance(enriched, dict) else chapters

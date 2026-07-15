@@ -28,12 +28,8 @@ DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
-DEFAULT_HITL_GATE_STAGES = (
-    "hypothesis_generation",
-    "hypothesis_review",
-    "iterative_experiment",
-    "report_generation",
-)
+# 人工审阅改走「候选假设」页操作 +「迭代实验」(shaxiang) 页；Pipeline 默认不再门控暂停
+DEFAULT_HITL_GATE_STAGES: tuple[str, ...] = ()
 DEFAULT_GATE_STAGNANT_ROUNDS = 2
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
 DEFAULT_DATA_SPEC_GAP_THRESHOLD = 60.0
@@ -49,13 +45,11 @@ HITL_GATE_STAGE_LABELS = {
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
     "iterative_experiment": "迭代实验",
-    "experiment_design": "实验设计(旧)",
-    "small_validation": "小样验证(旧)",
     "report_generation": "报告生成",
 }
 
 ITERATION_MODE_LABELS_ZH = {
-    IterationMode.HUMAN.value: "人工主导 — HITL 门控 + 单阶段重跑（推荐）",
+    IterationMode.HUMAN.value: "人工主导 — 单阶段重跑（假设/迭代实验页内审阅）",
     IterationMode.TEACHING_AUTO.value: "轻量自动 — 验证失败时自动精化 1 轮",
     IterationMode.DISCOVERY_AUTO.value: "深度自动 — 未 Accept 时多轮 Discovery 循环",
 }
@@ -103,10 +97,8 @@ def apply_iteration_mode(opts: Dict[str, Any]) -> Dict[str, Any]:
 
     if mode == IterationMode.HUMAN.value:
         out["pipeline_mode"] = PipelineMode.TEACHING.value
-        if "enable_hitl_gate" not in opts:
-            out["enable_hitl_gate"] = True
-        else:
-            out["enable_hitl_gate"] = bool(opts.get("enable_hitl_gate"))
+        # HITL 阶段门控默认关闭（人工审在假设页 / 迭代实验页完成）
+        out["enable_hitl_gate"] = bool(opts.get("enable_hitl_gate", False))
         out["enable_teaching_auto_refinement"] = False
     elif mode == IterationMode.TEACHING_AUTO.value:
         out["pipeline_mode"] = PipelineMode.TEACHING.value

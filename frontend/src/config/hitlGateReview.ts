@@ -36,38 +36,18 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
     continueHint: '确认评估结果后，将运行迭代实验及后续智能体。',
     continueTitle: '假设评估已完成',
     continueDescription:
-      '确认评估结果后，将依次运行：迭代实验 → 报告生成。',
+      '确认评估结果后，将依次运行：迭代实验 → 报告生成。人工细节审阅请在「迭代实验」页完成。',
     continueButtonLabel: '运行迭代实验及后续智能体',
   },
+  // 兼容：若旧 run / 配置仍卡在迭代实验门控
   iterative_experiment: {
-    title: '迭代实验已完成',
+    title: '迭代实验阶段已过门控',
     description:
-      '请前往「迭代实验」审阅脚本、迭代结果与报告实验勾选。缺数据时需先绑定数据后再继续。',
-    tab: 'experiments',
-    ctaLabel: '前往审阅迭代实验',
-    continueHint: '确认实验就绪后，将运行报告生成。',
-    continueTitle: '迭代实验已完成',
-    continueDescription: '确认迭代结果后，将运行报告生成智能体。',
-    continueButtonLabel: '运行报告生成智能体',
-  },
-  // legacy HITL 文案
-  experiment_design: {
-    title: '实验设计已完成（旧）',
-    description: '该阶段已合并为「迭代实验」。请前往迭代实验页继续。',
+      '实验细节审阅请在「迭代实验」页（shaxiang 流程）完成；确认后可继续报告生成。',
     tab: 'experiments',
     ctaLabel: '前往迭代实验',
-    continueHint: '将运行报告生成（若仍从旧阶段恢复）。',
-    continueTitle: '实验设计已完成（旧）',
-    continueDescription: '确认后继续报告生成。',
-    continueButtonLabel: '运行报告生成智能体',
-  },
-  small_validation: {
-    title: '小样验证已完成（旧）',
-    description: '该阶段已合并为「迭代实验」。请前往迭代实验页继续。',
-    tab: 'experiments',
-    ctaLabel: '前往迭代实验',
-    continueHint: '审阅完成后，将运行报告生成智能体。',
-    continueTitle: '小样验证已完成（旧）',
+    continueHint: '确认后将运行报告生成。',
+    continueTitle: '迭代实验可继续',
     continueDescription: '确认后将运行报告生成智能体。',
     continueButtonLabel: '运行报告生成智能体',
   },
@@ -84,11 +64,16 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
 };
 
 export function getHitlGateReviewTarget(stage?: string | null): HitlGateReviewTarget {
-  if (stage && STAGE_REVIEW_COPY[stage]) {
-    return STAGE_REVIEW_COPY[stage];
+  // 历史 run：旧实验阶段统一视作迭代实验
+  const normalized =
+    stage === 'experiment_design' || stage === 'small_validation'
+      ? 'iterative_experiment'
+      : stage;
+  if (normalized && STAGE_REVIEW_COPY[normalized]) {
+    return STAGE_REVIEW_COPY[normalized];
   }
-  const tab = (stage && getPipelineStageTab(stage)) || 'workflow';
-  const label = stage || '当前阶段';
+  const tab = (normalized && getPipelineStageTab(normalized)) || 'workflow';
+  const label = normalized || '当前阶段';
   return {
     title: '等待人工确认',
     description: `阶段「${label}」已完成，请审阅相关内容后确认继续。`,

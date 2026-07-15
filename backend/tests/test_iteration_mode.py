@@ -10,7 +10,7 @@ from app.core.pipeline_modes import (
 def test_default_iteration_mode_is_human():
     opts = resolve_run_options({})
     assert opts["iteration_mode"] == DEFAULT_ITERATION_MODE == "human"
-    assert opts["enable_hitl_gate"] is True
+    assert opts["enable_hitl_gate"] is False
     assert opts["enable_teaching_auto_refinement"] is False
     assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
 

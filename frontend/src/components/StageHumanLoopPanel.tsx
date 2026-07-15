@@ -163,8 +163,7 @@ export function StageHumanLoopPanel({
   const mentorTarget = useMemo(() => {
     if (stage.includes('hypothesis')) return 'hypothesis' as const;
     if (stage.includes('experiment') || stage.includes('validation') || stage.includes('iterative')) {
-      // mentor API 仍沿用 experiment_design target_type
-      return 'experiment_design' as const;
+      return 'iterative_experiment' as const;
     }
     if (stage.includes('report')) return 'report' as const;
     return 'hypothesis' as const;

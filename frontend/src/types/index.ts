@@ -1092,7 +1092,7 @@ export interface ReportGenerationRequest {
 // ==================== 运行日志 ====================
 
 export type RunLogStatus = 'success' | 'running' | 'failed' | 'pending';
-export type RunLogStage = '问题理解' | '文献挖掘' | '知识缺口' | '假设生成' | '假设评估' | '实验设计' | '小样验证' | '实验执行' | '报告生成';
+export type RunLogStage = '问题理解' | '文献挖掘' | '知识缺口' | '假设生成' | '假设评估' | '迭代实验' | '实验执行' | '报告生成';
 
 export interface RunLog {
   id: string;

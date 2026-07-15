@@ -70,7 +70,7 @@ export function HitlGatePanel({
 
       <textarea
         className="w-full mb-3 px-3 py-2 text-xs rounded-lg bg-bp-base border border-bp-border text-bp-text placeholder:text-bp-muted min-h-[72px]"
-        placeholder="可选：输入人工反馈，将在继续运行时注入下一轮假设/实验设计约束…"
+        placeholder="可选：输入人工反馈，将在继续运行时注入下一轮假设/迭代实验约束…"
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
       />

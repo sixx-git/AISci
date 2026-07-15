@@ -35,8 +35,8 @@ STAGE_LABELS_ZH = {
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
     "iterative_experiment": "迭代实验",
-    "experiment_design": "实验设计(旧)",
-    "small_validation": "小样验证(旧)",
+    "experiment_design": "迭代实验",  # 历史 run 展示别名
+    "small_validation": "迭代实验",  # 历史 run 展示别名
     "report_generation": "报告生成",
 }
 
@@ -256,6 +256,9 @@ class StageHumanLoopService:
         summaries: List[str] = []
         for key in STAGE_KEY_ORDER[start_idx + 1 :]:
             exec_row = stage_map.get(key)
+            # 历史 run：旧实验阶段映射到迭代实验摘要槽
+            if not exec_row and key == "iterative_experiment":
+                exec_row = stage_map.get("experiment_design") or stage_map.get("small_validation")
             if not exec_row:
                 continue
             output = get_effective_output(exec_row, use_human_modified=True)
@@ -278,25 +281,17 @@ class StageHumanLoopService:
             elif key == "iterative_experiment":
                 status = output.get("status") or ""
                 n_exp = len(output.get("experiments") or [])
-                warn = (output.get("warning") or "")[:160]
-                if status or n_exp:
+                warn_list = output.get("warnings") or []
+                warn = (
+                    (output.get("warning") or output.get("summary") or "")
+                    or ("; ".join(str(w) for w in warn_list[:3]) if isinstance(warn_list, list) else "")
+                )[:160]
+                if status or n_exp or warn:
                     summaries.append(
-                        f"{label}: status={status or 'ok'}，实验数={n_exp}"
+                        f"{label}: status={status or 'ok'}"
+                        + (f"，实验数={n_exp}" if n_exp else "")
                         + (f"；{warn}" if warn else "")
                     )
-            elif key == "experiment_design":
-                plan = (output.get("experiment_plan") or output.get("summary") or "")[:200]
-                if plan:
-                    summaries.append(f"{label}: {plan}")
-            elif key == "small_validation":
-                for w in (output.get("warnings") or [])[:3]:
-                    summaries.append(f"{label}警告: {w}")
-                pa = (
-                    ((output.get("skill_outputs") or {}).get("preliminary_analysis") or {}).get("data")
-                    or {}
-                )
-                if isinstance(pa, dict) and pa.get("summary"):
-                    summaries.append(f"{label}预分析: {str(pa['summary'])[:200]}")
             elif key == "literature_mining":
                 facts_n = len(output.get("facts") or [])
                 papers_n = len(output.get("retrieved_papers") or output.get("source_papers") or [])
@@ -498,9 +493,8 @@ class StageHumanLoopService:
             "hypothesis_generation": "hypothesis_review",
             "hypothesis_review": "iterative_experiment",
             "iterative_experiment": "report_generation",
-            # legacy 兼容
-            "experiment_design": "report_generation",
-            "small_validation": "report_generation",
+            "experiment_design": "report_generation",  # 历史 gate
+            "small_validation": "report_generation",  # 历史 gate
         }
         run.current_stage = next_stage_map.get(stage, stage)
 

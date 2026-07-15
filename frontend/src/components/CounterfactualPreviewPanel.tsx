@@ -26,7 +26,7 @@ export function CounterfactualPreviewPanel({ data }: CounterfactualPreviewPanelP
         <span className="px-2 py-0.5 rounded border border-bp-border text-bp-muted">
           L0 定性预演
         </span>
-        {data.proceed_to_experiment_design === false ? (
+        {data.proceed_to_experiment_design === false || data.proceed_to_iterative_experiment === false ? (
           <span className="px-2 py-0.5 rounded border border-danger-400/40 text-danger-400 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
             建议加强对照后再设计实验
@@ -34,7 +34,7 @@ export function CounterfactualPreviewPanel({ data }: CounterfactualPreviewPanelP
         ) : (
           <span className="px-2 py-0.5 rounded border border-bp-green/40 text-bp-green flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3" />
-            可进入实验设计
+            可进入迭代实验
           </span>
         )}
       </div>

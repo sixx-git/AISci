@@ -62,8 +62,8 @@ const STAGE_CN_MAP: Record<string, string> = {
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
   iterative_experiment: '迭代实验',
-  experiment_design: '实验设计(旧)',
-  small_validation: '小样验证(旧)',
+  experiment_design: '迭代实验',
+  small_validation: '迭代实验',
   report_generation: '报告生成',
 };
 
@@ -389,10 +389,10 @@ export function ProjectWorkspace() {
     if (!runId) return;
     const expStage = latestRunStages.find((s) => {
       const key = (s.stage ?? '').toLowerCase();
-      return key === 'iterative_experiment' || key === 'experiment_design';
+      return key === 'iterative_experiment' || key === 'experiment_design' || key === 'small_validation';
     });
     if (expStage?.status !== 'completed') return;
-    const syncKey = `${runId}:${(expStage.stage ?? 'iterative_experiment').toLowerCase()}`;
+    const syncKey = `${runId}:iterative_experiment`;
     if (experimentDesignSyncedRef.current === syncKey) return;
     experimentDesignSyncedRef.current = syncKey;
     setRevalidateKey((k) => k + 1);

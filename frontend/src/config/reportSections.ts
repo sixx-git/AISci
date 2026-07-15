@@ -9,7 +9,7 @@ export const REPORT_SECTION_OPTIONS = [
   { key: 'source', label: '历史数据' },
   { key: 'target', label: '目标数据' },
   { key: 'methods', label: '方法论' },
-  { key: 'experiments', label: '实验设计' },
+  { key: 'experiments', label: '迭代实验' },
   { key: 'results', label: '实验结果' },
   { key: 'references', label: '参考文献' },
 ] as const;

@@ -111,7 +111,7 @@ export const humanLoopService = {
     run_id?: string;
     report_id?: string;
     stage?: string;
-    target_type: 'hypothesis' | 'experiment_design' | 'report';
+    target_type: 'hypothesis' | 'iterative_experiment' | 'experiment_design' | 'report';
     content?: Record<string, unknown>;
     research_question?: string;
     user_notes?: string;

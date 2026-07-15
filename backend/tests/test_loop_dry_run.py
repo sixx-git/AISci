@@ -34,7 +34,7 @@ def test_simulate_loop_decisions_human_default():
     result = simulate_loop_decisions(run_options={"pipeline_mode": "teaching"})
     assert result["pipeline_mode"] == "teaching"
     assert result["iteration_mode"] == "human"
-    assert result["teaching_config"]["enable_hitl_gate"] is True
+    assert result["teaching_config"]["enable_hitl_gate"] is False
 
 
 def test_simulate_loop_decisions_teaching_auto():

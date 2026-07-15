@@ -29,7 +29,7 @@ export function ExperimentList({
 
   return (
     <div className="space-y-4">
-      <Card title="迭代实验" subtitle="对齐 shaxiang：假设驱动 · 数据门禁 · 多轮脚本迭代（当前为 localStorage mock）">
+      <Card title="迭代实验">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           <Metric label="总实验数" value={experiments.length} />
           <Metric label="运行中" value={running} />

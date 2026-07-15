@@ -221,11 +221,11 @@ export function ResearchClosedLoopOverview({
         subtitle="九阶段 Pipeline · Discovery / Teaching 双模式 · 质量 Gate 趋势"
       >
         <div className="mb-4 p-3 rounded-bp border border-bp-cyan/20 bg-bp-cyan-tint/40 text-xs text-bp-muted leading-relaxed">
-          <strong className="text-bp-text">人工主导</strong>：关键阶段 HITL 门控 + 单阶段重跑（推荐）。
+          <strong className="text-bp-text">人工主导</strong>：假设页 + 迭代实验页审阅，支持单阶段重跑（推荐）。
           <span className="mx-2 text-bp-border">|</span>
           <strong className="text-bp-text">轻量自动</strong>：验证失败时最多 1 轮自动精化。
           <span className="mx-2 text-bp-border">|</span>
-          <strong className="text-bp-text">Discovery 自动</strong>：未 Accept 时多轮文献回退与假设→实验→报告迭代。
+          <strong className="text-bp-text">Discovery 自动</strong>：未 Accept 时多轮文献回退与假设→迭代实验→报告迭代。
           <span className="ml-2 text-bp-cyan">
             当前：{iterationModeLabel[iterationMode] || iterationMode}
           </span>

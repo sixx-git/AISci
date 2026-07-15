@@ -26,8 +26,8 @@ const STAGE_CN: Record<string, string> = {
   hypothesis_generation: '假设生成',
   hypothesis_review: '假设评估',
   iterative_experiment: '迭代实验',
-  experiment_design: '实验设计(旧)',
-  small_validation: '小样验证(旧)',
+  experiment_design: '迭代实验',
+  small_validation: '迭代实验',
   report_generation: '报告生成',
 };
 

@@ -142,7 +142,10 @@ class MentorReviewRequest(BaseModel):
     project_id: str
     run_id: Optional[str] = None
     report_id: Optional[str] = None
-    target_type: str = Field(..., description="hypothesis | experiment_design | report")
+    target_type: str = Field(
+        ...,
+        description="hypothesis | iterative_experiment | report（历史别名 experiment_design 仍接受）",
+    )
     stage: Optional[str] = None
     content: Optional[Dict[str, Any]] = None
     research_question: str = ""

@@ -17,7 +17,7 @@ export interface LoopConfigState {
 
 export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   iterationMode: 'human',
-  enableHitl: true,
+  enableHitl: false,
   numIdeas: 3,
   literatureMaxPapers: 10,
   maxRounds: 3,
@@ -34,7 +34,8 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
     literature_max_papers: config.literatureMaxPapers,
     discovery_max_rounds: config.maxRounds,
     gate_stagnant_rounds: config.gateStagnantRounds,
-    enable_hitl_gate: config.iterationMode === 'human' ? config.enableHitl : false,
+    // 假设生成/评估与报告不再走 HITL；人工审在假设页与「迭代实验」页完成
+    enable_hitl_gate: false,
     enable_pro_con_adversarial: config.enableProConAdversarial,
     adversarial_mode: config.adversarialMode,
     con_challenge_max_rounds: config.conChallengeMaxRounds,
@@ -44,11 +45,11 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
 
 export const ITERATION_MODE_HINTS: Record<IterationMode, string> = {
   human:
-    '人工主导：关键阶段 HITL 门控暂停，支持阶段修订与单阶段重跑；迭代历史自动记录。',
+    '人工主导：在「候选假设」与「迭代实验」页审阅；支持阶段修订与单阶段重跑，无关键阶段 HITL 门控。',
   teaching_auto:
-    '轻量自动：验证或图表检查失败时，自动重跑实验设计→验证→报告（最多 1 轮）。',
+    '轻量自动：验证或图表检查失败时自动精化（旧实验环已退役；请以「迭代实验」页反馈重设计为主）。',
   discovery_auto:
-    '深度自动：评审未 Accept 时自动刷新文献并重跑假设→实验→报告（最多 N 轮）。',
+    '深度自动：评审未 Accept 时自动刷新文献并重跑假设→迭代实验→报告（最多 N 轮）。',
 };
 
 interface LoopConfigPanelProps {
@@ -88,19 +89,6 @@ export function LoopConfigPanel({
             <option value="discovery_auto">深度 Discovery 循环</option>
           </select>
         </Field>
-
-        {value.iterationMode === 'human' && (
-          <label className="flex items-center gap-2 text-xs text-bp-muted cursor-pointer pb-1">
-            <input
-              type="checkbox"
-              checked={value.enableHitl}
-              onChange={(e) => patch({ enableHitl: e.target.checked })}
-              disabled={disabled}
-              className="rounded border-bp-border"
-            />
-            关键阶段 HITL 门控
-          </label>
-        )}
 
         {value.iterationMode === 'discovery_auto' && (
           <>

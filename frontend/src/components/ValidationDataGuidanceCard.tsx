@@ -153,7 +153,7 @@ export function ValidationDataGuidanceCard({
                           打开下载页
                         </a>
                       ) : (
-                        <span className="text-bp-muted text-xs">请自行检索或见实验设计推荐</span>
+                        <span className="text-bp-muted text-xs">请自行检索或见迭代实验推荐数据集</span>
                       )}
                     </td>
                     <td className="px-3 py-3 align-top text-xs text-bp-muted max-w-xs">

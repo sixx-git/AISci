@@ -5,20 +5,17 @@ import { Card } from '@/components/Card';
 import { AgentNode } from '@/components/AgentNode';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { WorkflowActionBar } from '@/components/WorkflowActionBar';
-import { ExecutionTierBadge } from '@/components/ExecutionTierBadge';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { IterationHistoryPanel } from '@/components/IterationHistoryPanel';
-import { VerifiableChecksPanel } from '@/components/VerifiableChecksPanel';
-import { PlotCritiquePanel } from '@/components/PlotCritiquePanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
 import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, ITERATION_MODE_HINTS, type LoopConfigState } from '@/components/LoopConfigPanel';
 import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
 import { RunHistoryPanel } from '@/components/RunHistoryPanel';
 import { HitlGateModal } from '@/components/HitlGateModal';
+import { ReportPdfPreview, ReportPreviewHeader } from '@/components/ReportPdfPreview';
 import { Button } from '@/components/Button';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
-import { extractValidationDataGuidance, formatValidationBlockedSummary } from '@/lib/validationDataGuidance';
-import { ValidationDataGuidanceCard } from '@/components/ValidationDataGuidanceCard';
+import { formatValidationBlockedSummary } from '@/lib/validationDataGuidance';
 import { getHitlGateReviewTarget } from '@/config/hitlGateReview';
 import {
   buildHitlGateEventKey,
@@ -27,15 +24,17 @@ import {
 } from '@/lib/hitlGateModalStorage';
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
+import { reportService } from '@/services/reportService';
+import { buildReportDownloadFilename } from '@/lib/reportExport';
 import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import type {
   AgentNodeData,
   AgentStatus,
-  PlotQualityData,
   HitlGateInfo,
   PipelineRunExtraMetadata,
   PipelineRunResult,
   PipelineStageLog,
+  ReportData,
 } from '@/types';
 
 interface WorkflowPageProps {
@@ -651,106 +650,66 @@ export function WorkflowPage({
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
   const selectedNodeId = selectedNode?.id ?? null;
+  const isExperimentNode = selectedNodeId === 'experiment';
+  const isReportNode = selectedNodeId === 'report';
 
-  const experimentNodeOutput = useMemo(() => {
-    return nodes.find((n) => n.id === 'experiment')?.output_data as Record<string, unknown> | undefined;
-  }, [nodes]);
+  const [workflowReport, setWorkflowReport] = useState<ReportData | null>(null);
+  const [workflowReportLoading, setWorkflowReportLoading] = useState(false);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
+  const [regeneratingPdf, setRegeneratingPdf] = useState(false);
 
-  /** 兼容：iterative_experiment 嵌套 / 历史顶层 small_validation */
-  const validationOutFromExperiment = useMemo(() => {
-    const out = experimentNodeOutput;
-    if (!out) return undefined;
-    const nested = out.small_validation;
-    if (nested && typeof nested === 'object') return nested as Record<string, unknown>;
-    if (out.validation_status != null || out.sandbox_execution != null) return out;
-    return undefined;
-  }, [experimentNodeOutput]);
-
-  const experimentDesignOutput = useMemo(() => {
-    const out = experimentNodeOutput;
-    if (!out) return undefined;
-    const nested = out.experiment_design;
-    if (nested && typeof nested === 'object') return nested as Record<string, unknown>;
-    return out;
-  }, [experimentNodeOutput]);
-
-  const plotQualityData = useMemo((): PlotQualityData | null => {
-    for (const nodeId of ['experiment', 'report'] as const) {
-      const out = nodes.find((n) => n.id === nodeId)?.output_data as Record<string, unknown> | undefined;
-      const pq = out?.plot_quality as PlotQualityData | undefined;
-      if (pq?.critique) return pq;
-      const nested = (out?.small_validation as Record<string, unknown> | undefined)?.plot_quality as PlotQualityData | undefined;
-      if (nested?.critique) return nested;
+  useEffect(() => {
+    if (!isReportNode || !projectId) {
+      setWorkflowReport(null);
+      setWorkflowReportLoading(false);
+      return;
     }
-    return null;
-  }, [nodes]);
-
-  const validationExecutionMeta = useMemo(() => {
-    const validationOut = validationOutFromExperiment;
-    if (!validationOut) return null;
-    return {
-      executionTier: validationOut.execution_tier as string | undefined,
-      executionTierLabel: validationOut.execution_tier_label as string | undefined,
-      dataAuthenticity: validationOut.data_authenticity as string | undefined,
-      dataAuthenticityLabel: validationOut.data_authenticity_label as string | undefined,
-    };
-  }, [validationOutFromExperiment]);
-
-  const validationDataGuidance = useMemo(() => {
-    return extractValidationDataGuidance(validationOutFromExperiment ?? experimentNodeOutput);
-  }, [validationOutFromExperiment, experimentNodeOutput]);
-
-  const validationBlockedReason = useMemo(() => {
-    const validationOut = validationOutFromExperiment ?? experimentNodeOutput;
-    if (typeof validationOut?.validation_blocked_reason === 'string') {
-      return validationOut.validation_blocked_reason;
-    }
-    if (validationOut?.status === 'blocked_need_data' && typeof validationOut.warning === 'string') {
-      return validationOut.warning;
-    }
-    return '';
-  }, [validationOutFromExperiment, experimentNodeOutput]);
-
-  const verifiableValidation = useMemo(() => {
-    const validationOut = validationOutFromExperiment;
-    if (validationOut) {
-      const checks = validationOut.verifiable_checks as import('@/types').VerifiableCheck[] | undefined;
-      const spec = validationOut.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
-      if (checks?.length || spec?.claim) {
-        return {
-          checks,
-          passed: validationOut.verifiable_passed as boolean | null | undefined,
-          spec,
-          isPreview: false,
-        };
+    let cancelled = false;
+    (async () => {
+      setWorkflowReportLoading(true);
+      try {
+        const latest = await reportService.getLatest(projectId);
+        if (!cancelled) setWorkflowReport(latest);
+      } catch {
+        if (!cancelled) setWorkflowReport(null);
+      } finally {
+        if (!cancelled) setWorkflowReportLoading(false);
       }
-    }
-    const expSpec = experimentDesignOutput?.verifiable_hypothesis as { claim?: string; primary_metric?: string } | undefined;
-    const expExpected = experimentDesignOutput?.expected_results;
-    if (expSpec?.claim || expExpected) {
-      return {
-        checks: undefined,
-        passed: null,
-        spec: expSpec?.claim
-          ? expSpec
-          : { claim: typeof expExpected === 'string' ? expExpected.slice(0, 300) : undefined },
-        isPreview: true,
-      };
-    }
-    return null;
-  }, [validationOutFromExperiment, experimentDesignOutput]);
-
-  const validationPendingPreview = useMemo(() => {
-    const experimentStatus = nodes.find((n) => n.id === 'experiment')?.status;
-    if (validationOutFromExperiment || experimentStatus !== 'completed' || !experimentDesignOutput) return null;
-    return {
-      verifiable_hypothesis: experimentDesignOutput.verifiable_hypothesis,
-      expected_results: experimentDesignOutput.expected_results,
-      methods: experimentDesignOutput.methods,
-      metrics: experimentDesignOutput.metrics,
-      hypothesis: experimentDesignOutput.hypothesis,
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [nodes, experimentDesignOutput, validationOutFromExperiment]);
+  }, [isReportNode, projectId, selectedNode?.status, currentRunId, latestRunId]);
+
+  const handleWorkflowReportDownload = useCallback(async () => {
+    if (!workflowReport?.id) return;
+    try {
+      const blob = await reportService.download(workflowReport.id, 'pdf');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = buildReportDownloadFilename(workflowReport.title, 'pdf');
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('报告下载失败', err);
+    }
+  }, [workflowReport]);
+
+  const handleWorkflowReportRegenerate = useCallback(async () => {
+    if (!workflowReport?.id) return;
+    setRegeneratingPdf(true);
+    try {
+      await reportService.regeneratePdf(workflowReport.id);
+      const detail = await reportService.getDetail(workflowReport.id);
+      if (detail) setWorkflowReport(detail);
+      setPdfRefreshKey((k) => k + 1);
+    } catch (err) {
+      console.error('报告 PDF 重新生成失败', err);
+    } finally {
+      setRegeneratingPdf(false);
+    }
+  }, [workflowReport?.id]);
 
   const openHitlGateModal = useCallback(async (runId: string) => {
     setHitlGateRunId(runId);
@@ -1317,7 +1276,7 @@ export function WorkflowPage({
   const showIterationHistory = Boolean(
     effectiveRunId
     && selectedNodeId
-    && ['report', 'experiment', 'hypothesis', 'evaluation'].includes(selectedNodeId),
+    && ['hypothesis', 'evaluation'].includes(selectedNodeId),
   );
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
@@ -1589,101 +1548,110 @@ export function WorkflowPage({
 
         {/* 右侧：详情 + 收拢辅助面板 */}
         <div className="lg:col-span-2 space-y-4">
-          <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
-
-          {selectedNodeId === 'experiment' && validationPendingPreview && (
-            <Card title="待验证方案" subtitle="实验设计已完成，小样验证尚未产出结果时将显示此处预览">
-              <div className="p-3 rounded-bp border bg-bp-cyan/5 border-bp-cyan/20 space-y-2 text-sm text-bp-text">
-                {typeof validationPendingPreview.hypothesis === 'string' && validationPendingPreview.hypothesis && (
-                  <p><span className="text-bp-muted">假设：</span>{validationPendingPreview.hypothesis}</p>
-                )}
-                {typeof validationPendingPreview.methods === 'string' && validationPendingPreview.methods && (
-                  <p><span className="text-bp-muted">方法：</span>{validationPendingPreview.methods.slice(0, 280)}{validationPendingPreview.methods.length > 280 ? '…' : ''}</p>
-                )}
-                {typeof validationPendingPreview.expected_results === 'string' && validationPendingPreview.expected_results && (
-                  <p><span className="text-bp-muted">预期结果：</span>{validationPendingPreview.expected_results.slice(0, 280)}{validationPendingPreview.expected_results.length > 280 ? '…' : ''}</p>
-                )}
-              </div>
+          {isExperimentNode ? (
+            <div className="rounded-bp border border-bp-border bg-bp-panel/40 px-4 py-8 text-center space-y-3">
+              <FlaskConical className="w-8 h-8 text-bp-muted mx-auto" />
+              <p className="text-sm text-bp-muted">迭代实验详情请在「迭代实验」页查看与操作</p>
+              {projectId && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ArrowRight className="w-3.5 h-3.5" />}
+                  onClick={() => navigate(buildProjectTabUrl(projectId, 'experiments'))}
+                >
+                  前往迭代实验
+                </Button>
+              )}
+            </div>
+          ) : isReportNode ? (
+            <Card className="min-w-0">
+              {workflowReportLoading ? (
+                <p className="text-sm text-bp-muted py-8 text-center">正在加载报告预览…</p>
+              ) : workflowReport ? (
+                <>
+                  <ReportPreviewHeader
+                    title={workflowReport.title}
+                    onDownloadPdf={
+                      workflowReport.pdfDownloadUrl
+                        ? () => void handleWorkflowReportDownload()
+                        : undefined
+                    }
+                    onRegeneratePdf={() => void handleWorkflowReportRegenerate()}
+                    regenerating={regeneratingPdf}
+                  />
+                  <ReportPdfPreview
+                    reportId={workflowReport.id}
+                    refreshKey={pdfRefreshKey}
+                    onRegeneratePdf={() => void handleWorkflowReportRegenerate()}
+                    regenerating={regeneratingPdf}
+                  />
+                </>
+              ) : (
+                <div className="py-10 text-center space-y-3">
+                  <FileText className="w-8 h-8 text-bp-muted mx-auto" />
+                  <p className="text-sm text-bp-muted">暂无报告可预览，请先完成报告生成阶段</p>
+                  {projectId && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ArrowRight className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(buildProjectTabUrl(projectId, 'reports'))}
+                    >
+                      前往报告页
+                    </Button>
+                  )}
+                </div>
+              )}
             </Card>
-          )}
+          ) : (
+            <>
+              <AgentDetailPanel node={selectedNode} onRerun={handleRerunCurrentStage} />
 
-          {showIterationHistory && (
-            <CollapsiblePanel title="迭代历史" subtitle="里程碑 · 时间线 · 版本对比" defaultOpen>
-              <IterationHistoryPanel
-                runId={effectiveRunId}
-                extraMetadata={runExtraMetadata}
-              />
-            </CollapsiblePanel>
-          )}
+              {showIterationHistory && (
+                <CollapsiblePanel title="迭代历史" subtitle="里程碑 · 时间线 · 版本对比" defaultOpen>
+                  <IterationHistoryPanel
+                    runId={effectiveRunId}
+                    extraMetadata={runExtraMetadata}
+                  />
+                </CollapsiblePanel>
+              )}
 
-          {selectedNodeId === 'experiment' && validationDataGuidance && (
-            <CollapsiblePanel title="数据不匹配 · 所需数据集" defaultOpen>
-              <ValidationDataGuidanceCard
-                guidance={validationDataGuidance}
-                blockedReason={validationBlockedReason || undefined}
-              />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'experiment' && validationExecutionMeta && (
-            <CollapsiblePanel title="执行层级" defaultOpen={false}>
-              <ExecutionTierBadge {...validationExecutionMeta} />
-            </CollapsiblePanel>
-          )}
-
-          {selectedNodeId === 'experiment' && verifiableValidation && (
-            <CollapsiblePanel
-              title={verifiableValidation.isPreview ? '可验证性检查（实验设计预览）' : '可验证性检查'}
-              defaultOpen={false}
-            >
-              <VerifiableChecksPanel
-                checks={verifiableValidation.checks}
-                passed={verifiableValidation.passed ?? null}
-                spec={verifiableValidation.spec}
-              />
-            </CollapsiblePanel>
-          )}
-
-          {plotQualityData && selectedNodeId && (selectedNodeId === 'experiment' || selectedNodeId === 'report') && (
-            <CollapsiblePanel title="小样验证图表质量检查" defaultOpen={false}>
-              <PlotCritiquePanel plotQuality={plotQualityData} />
-            </CollapsiblePanel>
-          )}
-
-          {projectId && effectiveRunId && selectedNode && (
-            <CollapsiblePanel
-              title="阶段人工介入"
-              subtitle={selectedNode.name}
-              defaultOpen={selectedNode.status === 'human_review_required' || selectedNode.status === 'human_review'}
-            >
-              <StageHumanLoopPanel
-                projectId={projectId}
-                runId={effectiveRunId}
-                nodeId={selectedNode.id}
-                researchQuestion={researchQuestion}
-                inputData={selectedNode.input_data}
-                outputData={selectedNode.output_data}
-                humanModifiedOutput={selectedNode.human_modified_output}
-                humanReviewed={selectedNode.human_reviewed}
-                humanFeedback={selectedNode.human_feedback}
-                editedAt={selectedNode.edited_at}
-                revisionHistory={selectedNode.revision_history}
-                chatHistory={selectedNode.chat_history as Array<Record<string, unknown>> | undefined}
-                onUpdated={() => {
-                  refreshFromRunDetail(effectiveRunId);
-                  onHumanLoopUpdated?.(NODE_ID_TO_STAGE[selectedNode.id] || selectedNode.id);
-                }}
-                onRerunStarted={(runIdForPoll) => {
-                  if (runIdForPoll !== currentRunIdRef.current) {
-                    setCurrentRunId(runIdForPoll);
-                    currentRunIdRef.current = runIdForPoll;
-                    rememberLatestRunId(runIdForPoll);
-                    if (projectId) setActiveRunId(projectId, runIdForPoll);
-                  }
-                  startPolling(runIdForPoll);
-                }}
-              />
-            </CollapsiblePanel>
+              {projectId && effectiveRunId && selectedNode && (
+                <CollapsiblePanel
+                  title="阶段人工介入"
+                  subtitle={selectedNode.name}
+                  defaultOpen={selectedNode.status === 'human_review_required' || selectedNode.status === 'human_review'}
+                >
+                  <StageHumanLoopPanel
+                    projectId={projectId}
+                    runId={effectiveRunId}
+                    nodeId={selectedNode.id}
+                    researchQuestion={researchQuestion}
+                    inputData={selectedNode.input_data}
+                    outputData={selectedNode.output_data}
+                    humanModifiedOutput={selectedNode.human_modified_output}
+                    humanReviewed={selectedNode.human_reviewed}
+                    humanFeedback={selectedNode.human_feedback}
+                    editedAt={selectedNode.edited_at}
+                    revisionHistory={selectedNode.revision_history}
+                    chatHistory={selectedNode.chat_history as Array<Record<string, unknown>> | undefined}
+                    onUpdated={() => {
+                      refreshFromRunDetail(effectiveRunId);
+                      onHumanLoopUpdated?.(NODE_ID_TO_STAGE[selectedNode.id] || selectedNode.id);
+                    }}
+                    onRerunStarted={(runIdForPoll) => {
+                      if (runIdForPoll !== currentRunIdRef.current) {
+                        setCurrentRunId(runIdForPoll);
+                        currentRunIdRef.current = runIdForPoll;
+                        rememberLatestRunId(runIdForPoll);
+                        if (projectId) setActiveRunId(projectId, runIdForPoll);
+                      }
+                      startPolling(runIdForPoll);
+                    }}
+                  />
+                </CollapsiblePanel>
+              )}
+            </>
           )}
         </div>
       </div>

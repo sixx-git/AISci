@@ -6,6 +6,7 @@ export type IterativeExperimentPhase =
   | 'data_uploaded'
   | 'script_designed'
   | 'running'
+  | 'needs_human_review'
   | 'completed'
   | 'failed';
 
@@ -39,8 +40,8 @@ export interface DataConfig {
   profile_name?: string;
   sample_size?: number;
   preprocessing_steps?: string[];
-  /** mock：上传文件名 */
   file_name?: string;
+  profile_json?: string;
   row_count?: number;
   columns?: string[];
 }
@@ -54,17 +55,56 @@ export interface ExperimentPlanMock {
   success_criteria: string[];
 }
 
+export interface IterationChart {
+  name: string;
+  path?: string;
+  note?: string;
+  url?: string;
+}
+
+export interface VisualizationNote {
+  chart_name?: string;
+  description?: string;
+}
+
+export interface IterationAnalysis {
+  overall_assessment?: string;
+  summary?: string;
+  findings?: string[];
+  identified_issues?: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  suggested_adjustments?: string[];
+  visualization_notes?: VisualizationNote[];
+  confidence_level?: string | number;
+}
+
+export interface IterationDecision {
+  continue: boolean;
+  should_continue?: boolean;
+  reason?: string;
+  expected_improvement?: string;
+  focus_areas?: string[];
+  next_plan_adjustments?: string[];
+}
+
 export interface IterationRecordMock {
   iteration_number: number;
   status: 'success' | 'failed' | 'partial';
-  plan: { title: string; methodology?: string };
+  plan: {
+    title: string;
+    methodology?: string;
+    description?: string;
+    success_criteria?: string[];
+  };
   result: {
     metrics?: Record<string, number | string>;
-    charts?: Array<{ name: string; note?: string }>;
+    charts?: IterationChart[];
     summary?: string;
+    script_log?: string;
   };
-  analysis: { summary?: string; strengths?: string[]; weaknesses?: string[] };
-  decision: { continue: boolean; reason?: string };
+  analysis: IterationAnalysis;
+  decision: IterationDecision;
   metrics: Record<string, number | string>;
   duration_seconds: number;
   error_message?: string;
