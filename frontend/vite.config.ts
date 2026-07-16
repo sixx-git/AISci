@@ -13,21 +13,26 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 3000,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        timeout: 3600000,           // 60分钟超时（Pipeline运行较长）
       },
       '/storage': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        timeout: 600000,
       },
       // pingfenbiao 评分表 / 影响力预测服务（需单独启动 :8765）
       '/pingfenbiao': {
         target: 'http://127.0.0.1:8765',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/pingfenbiao/, ''),
+        timeout: 600000,
       },
     },
   },

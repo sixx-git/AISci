@@ -72,6 +72,58 @@ bash scripts/run_dev.sh
 | http://localhost:8000/docs | Swagger API 文档 |
 | http://localhost:8000/redoc | ReDoc API 文档 |
 
+### 🌐 内网渗透（公网访问）
+
+如需让其他人从公网访问本地项目，可使用 **Cloudflare Tunnel**：
+
+#### 安装 Cloudflare Tunnel
+
+```bash
+# Windows
+winget install cloudflare.cloudflared
+
+# 安装后刷新 PATH
+$env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+```
+
+#### 启动内网穿透
+
+```bash
+# 启动前端和后端后，新开终端执行
+cloudflared tunnel --url http://localhost:3000
+```
+
+启动后会输出类似以下的公网地址：
+
+```
+2026-07-17T08:00:00Z INF +--------------------------------------------------------------------------------------------+
+2026-07-17T08:00:00Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-07-17T08:00:00Z INF |  https://xxx-xxx-xxx-xxx.trycloudflare.com                                                 |
+2026-07-17T08:00:00Z INF +--------------------------------------------------------------------------------------------+
+```
+
+#### Vite 配置
+
+确保 `frontend/vite.config.ts` 中已配置允许外部访问：
+
+```typescript
+server: {
+  host: '0.0.0.0',        // 监听所有接口
+  port: 3000,
+  allowedHosts: true,     // 允许所有域名访问（内网穿透必需）
+}
+```
+
+#### 注意事项
+
+| 事项 | 说明 |
+|------|------|
+| **临时地址** | 每次启动会生成新地址，关闭终端后失效 |
+| **HTTPS** | Cloudflare 自动配置 HTTPS，公网访问为安全连接 |
+| **延迟** | 通过 Cloudflare 中转，公网访问延迟约 100–200ms |
+| **稳定性** | 免费试用模式，适合临时分享和测试 |
+| **长期使用** | 建议注册 Cloudflare 账号并创建命名隧道 |
+
 #### 预测 Tab（pingfenbiao）
 
 顶栏 **首页 → 预测 → 文献**。页面复刻 pingfenbiao：侧栏历史 + 三 Tab（生成评分表 / 报告打分 / 科学影响力预测）+ 详情四面板。
