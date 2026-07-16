@@ -14,6 +14,7 @@
 | `catalog/` | 项目 Data Catalog `{project_id}/data_catalog.json` |
 | `data_finder/` | Data Finder 结果、合并 CSV、Analysis-Ready Bundle |
 | `feedback/` | Feedback Hub 全局约束 `{project_id}/constraints.json` |
+| `pingfenbiao_jobs/` | 预测 Tab（pingfenbiao）任务与历史；由 `PINGFENBIAO_WORK_DIR` 指向 |
 
 ## 审计链格式
 

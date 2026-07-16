@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import uuid
@@ -29,8 +30,20 @@ from jobs import JobManager
 from runner import ALLOWED_SUFFIXES, PACKAGES, REPORT_SUFFIXES, resolve_task_type, scores_output_path
 
 APP_DIR = Path(__file__).resolve().parent
-WORK_DIR = APP_DIR / "_jobs"
-WORK_DIR.mkdir(exist_ok=True)
+
+
+def _resolve_work_dir() -> Path:
+    """任务落盘目录：优先环境变量，便于 AISci 与独立启动共用同一套历史。"""
+    raw = (os.environ.get("PINGFENBIAO_WORK_DIR") or "").strip()
+    if raw:
+        path = Path(raw).expanduser().resolve()
+    else:
+        path = APP_DIR / "_jobs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+WORK_DIR = _resolve_work_dir()
 
 app = FastAPI(title="Rubric Generator", docs_url=None, redoc_url=None)
 job_manager = JobManager(WORK_DIR)
