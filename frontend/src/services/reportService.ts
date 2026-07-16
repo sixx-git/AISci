@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { ApiResponse, ReportData, ComplianceCheck } from '@/types';
+import type { ApiResponse, ReportData, ComplianceCheck, ReportPlot } from '@/types';
 import { extractComplianceCheck, reconcileComplianceForDisplay } from '@/lib/reportCompliance';
 
 /** 后端 ReportDBResponse 原始格式 */

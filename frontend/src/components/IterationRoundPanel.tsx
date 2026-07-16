@@ -143,7 +143,7 @@ export function IterationRoundPanel({ session, loading, error }: IterationRoundP
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        {best.ensemble_decision && (
+        {!!best.ensemble_decision && (
           <span className="flex items-center gap-1 text-bp-green">
             <CheckCircle2 className="w-3.5 h-3.5" />
             当前决策: {String(best.ensemble_decision)}

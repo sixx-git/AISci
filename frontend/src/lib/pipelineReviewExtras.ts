@@ -4,7 +4,7 @@ import type {
   ProConAdversarialData,
 } from '@/types';
 
-type StageLike = Pick<PipelineStageExecutionSummary, 'stage' | 'output_data'>;
+type StageLike = Pick<PipelineStageExecutionSummary, 'stage' | 'output_data' | 'status'>;
 
 export interface HypothesisReviewExtras {
   proCon: ProConAdversarialData | null;

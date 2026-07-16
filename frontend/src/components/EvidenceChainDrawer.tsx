@@ -201,7 +201,7 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
           <FlaskConical className="w-4 h-4 text-bp-purple" />
           可验证规格
         </h4>
-        {spec.claim && (
+        {!!spec.claim && (
           <p className="text-sm text-bp-text p-3 rounded-bp border border-bp-border bg-bp-panel/40 mb-2">
             {String(spec.claim)}
           </p>
@@ -209,7 +209,7 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
         <div className="text-xs text-bp-muted space-y-1">
           {v.validation_target && <p>验证目标: {v.validation_target}</p>}
           {v.expected_measurable_effect && <p>预期效应: {v.expected_measurable_effect}</p>}
-          {spec.primary_metric && (
+          {!!spec.primary_metric && (
             <p className="font-mono text-bp-green">主指标: {String(spec.primary_metric)}</p>
           )}
         </div>
@@ -225,7 +225,7 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
                 {chk.passed === false && <ShieldAlert className="w-3.5 h-3.5 text-danger-400 shrink-0 mt-0.5" />}
                 <div>
                   <p className="text-bp-text">{String(chk.check || chk.name || `检查 ${i + 1}`)}</p>
-                  {chk.detail && <p className="text-bp-muted mt-0.5">{String(chk.detail)}</p>}
+                  {!!chk.detail && <p className="text-bp-muted mt-0.5">{String(chk.detail)}</p>}
                 </div>
               </div>
             ))}

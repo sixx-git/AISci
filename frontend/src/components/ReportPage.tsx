@@ -1,4 +1,4 @@
-﻿﻿import { useState, useCallback, useEffect, useMemo } from 'react';
+﻿import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History } from 'lucide-react';
 import { Card } from './Card';
@@ -101,7 +101,7 @@ function ReportPlotImage({
 
 export function ReportPage({
   projectId,
-  projectMode,
+  projectMode: _projectMode,
   compact: _compact = false,
   literatureCount,
   revalidateKey: _revalidateKey,

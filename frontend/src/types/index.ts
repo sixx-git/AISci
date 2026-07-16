@@ -322,6 +322,11 @@ export interface PipelineRunExtraMetadata {
   rerun_from?: string;
   run_options?: PipelineRunOptions;
   hitl_gate?: HitlGateInfo;
+  /** Pipeline 暂停/续跑时的阶段结果检查点 */
+  pipeline_checkpoint?: {
+    results?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 }
 
 export interface ClosedLoopDecision {
@@ -741,7 +746,6 @@ export type IterationMode = 'human' | 'teaching_auto' | 'discovery_auto';
 
 export interface PipelineRunOptions {
   iteration_mode?: IterationMode;
-  iteration_mode?: IterationMode;
   pipeline_mode?: PipelineRunMode;
   num_ideas?: number;
   literature_max_papers?: number;
@@ -784,6 +788,8 @@ export interface PipelineStageLog {
   human_feedback?: string | null;
   edited_at?: string | null;
   revision_history?: Array<Record<string, unknown>>;
+  human_edited?: boolean;
+  chat_history?: Array<Record<string, unknown>>;
 }
 
 export interface PipelineRunResult {

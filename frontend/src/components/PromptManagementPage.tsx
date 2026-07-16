@@ -14,7 +14,7 @@ interface PromptManagementPageProps {
   projectMode?: string;
 }
 
-export function PromptManagementPage({ projectId, projectMode = 'general' }: PromptManagementPageProps) {
+export function PromptManagementPage({ projectId, projectMode: _projectMode = 'general' }: PromptManagementPageProps) {
   const [searchParams] = useSearchParams();
   const stageFromUrl = searchParams.get('prompt_stage');
   const initialStage =

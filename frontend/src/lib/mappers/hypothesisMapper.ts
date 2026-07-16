@@ -1,4 +1,4 @@
-import type { BackendHypothesis, BackendReviewScores } from '@/services/hypothesisService';
+import type { BackendHypothesis, BackendReviewScores, BackendEvidence } from '@/services/hypothesisService';
 import type { DetailedHypothesis, EvidenceItem } from '@/types';
 
 function scoreTo100(value?: number | null): number | undefined {

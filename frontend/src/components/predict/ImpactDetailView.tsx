@@ -671,7 +671,7 @@ export function ImpactDetailView({ jobId, report, onBack }: ImpactDetailViewProp
           </>
         )}
 
-        {(fairness.overall_fairness_score != null || fairness.confidence) && (
+        {(fairness.overall_fairness_score != null || fairness.confidence != null) && (
           <>
             <SectionLabel>公平性评估</SectionLabel>
             <InfoGrid
@@ -836,7 +836,7 @@ export function ImpactDetailView({ jobId, report, onBack }: ImpactDetailViewProp
           </p>
           <p>
             <strong>标题提取</strong>: {str(report.title || meta.title, '未提取')}
-            {meta.title && report.title && meta.title !== report.title && (
+            {!!meta.title && !!report.title && meta.title !== report.title && (
               <span className="text-[#e65100]"> (元数据修正: {str(meta.title)})</span>
             )}
           </p>

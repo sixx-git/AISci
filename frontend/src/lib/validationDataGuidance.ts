@@ -28,6 +28,7 @@ export interface ValidationDataGuidance {
   next_steps?: string[];
   search_query_used?: string;
   discovery_notes?: string[];
+  upload_requirement_legend?: Partial<Record<UploadRequirement, string>>;
 }
 
 export function extractValidationDataGuidance(data: unknown): ValidationDataGuidance | null {

@@ -124,7 +124,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
 // ============ 各 Tab 子组件包装 ============
 function QuestionsTab({
   projectId,
-  projectMode,
+  projectMode: _projectMode,
   onSaved,
   pollWhileRunning,
   revalidateKey,
