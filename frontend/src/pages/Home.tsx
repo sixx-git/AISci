@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, Trash2,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { projectService } from '@/services';
 import { formatDate } from '@/lib/utils';
@@ -12,7 +13,6 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
-import { RecentPipelineSection } from '@/components/workspace/RecentPipelineSection';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { useLatestPipelineRuns } from '@/hooks/useLatestPipelineRuns';
 import { resolveResearchField } from '@/lib/researchField';
@@ -26,6 +26,9 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: '已完成' },
   { value: 'failed', label: '失败' },
 ] as const;
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
+const DEFAULT_PAGE_SIZE = 10;
 
 const selectChevronStyle = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
@@ -45,9 +48,10 @@ export function Home() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
 
   const {
-    rows: recentPipelineRows,
     loading: pipelineLoading,
     getDisplayStatus,
     pipelineStatusByProjectId,
@@ -157,6 +161,21 @@ export function Home() {
     return list;
   }, [search, statusFilter, projects, getDisplayStatus]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paged = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
@@ -201,6 +220,52 @@ export function Home() {
   const completedCount = projects.filter((p) => getDisplayStatus(p) === 'completed').length;
   const runningCount = projects.filter((p) => getDisplayStatus(p) === 'running').length;
   const pendingCount = projects.filter((p) => getDisplayStatus(p) === 'pending').length;
+
+  const paginationBar = filtered.length > 0 ? (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 px-1">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-bp-muted">
+        <span>
+          第 {page} / {totalPages} 页，共 {filtered.length} 条
+        </span>
+        <label className="inline-flex items-center gap-2">
+          <span className="text-xs">每页</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            disabled={loading}
+            className="input-field py-1 px-2 text-xs w-auto min-w-[4.5rem]"
+            style={selectChevronStyle}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} 条
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={page <= 1 || loading}
+          icon={<ChevronLeft className="w-4 h-4" />}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          上一页
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={page >= totalPages || loading || totalPages <= 1}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        >
+          下一页
+          <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -270,15 +335,17 @@ export function Home() {
         </div>
       </div>
 
-      {!loading && !error && projects.length > 0 && (
-        <RecentPipelineSection rows={recentPipelineRows} loading={pipelineLoading} />
-      )}
-
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-bp-text">我的项目</h2>
-          {!loading && !error && hasFilters && (
-            <span className="text-sm text-bp-muted">共 {filtered.length} 个匹配结果</span>
+          {!loading && !error && (
+            <span className="text-sm text-bp-muted">
+              {hasFilters
+                ? `共 ${filtered.length} 个匹配结果`
+                : filtered.length > 0
+                  ? `第 ${page}/${totalPages} 页`
+                  : null}
+            </span>
           )}
         </div>
 
@@ -315,63 +382,95 @@ export function Home() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((project) => (
-              <Card key={project.id} hover className="h-full transition-all duration-200 group-hover:shadow-bp-glow relative">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 bg-bp-cyan-tint border border-bp-cyan/20 rounded-bp flex items-center justify-center">
-                    <FlaskConical className="w-5 h-5 text-bp-cyan" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge
-                      status={getDisplayStatus(project)}
-                      label={statusBadgeLabel(
-                        getDisplayStatus(project),
-                        pipelineStatusByProjectId.get(project.id)?.status,
-                        pipelineStatusByProjectId.has(project.id),
-                      )}
-                    />
-                    <button
-                      type="button"
-                      title="删除项目"
-                      disabled={deletingId === project.id}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openDeleteDialog(project.id, project.name);
-                      }}
-                      className="p-1.5 rounded-bp text-bp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <Link to={`/projects/${project.id}`} className="block group">
-                  <h3 className="font-semibold text-bp-text mb-2 group-hover:text-bp-cyan transition-colors">
-                    {project.name}
-                  </h3>
-                  {project.description && (
-                    <p className="text-sm text-bp-muted line-clamp-2 mb-3">
-                      {project.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="bp-chip bp-chip-cyan text-xs">
-                      {resolveResearchField(project, project.id)}
-                    </span>
-                  </div>
-                  <div className="flex items-center text-bp-muted text-sm">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {formatDate(project.created_at)}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-bp-cyan-dim flex items-center justify-between">
-                    <span className="text-sm text-bp-cyan">进入项目</span>
-                    <ArrowRight className="w-4 h-4 text-bp-cyan group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </Link>
-              </Card>
-            ))}
-          </div>
+          <>
+            <Card noPadding className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-bp-cyan-dim bg-bp-panel/50">
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium">项目名称</th>
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden md:table-cell">领域</th>
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium">状态</th>
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden sm:table-cell">创建时间</th>
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium w-36">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paged.map((project) => (
+                      <tr
+                        key={project.id}
+                        className="border-b border-bp-border/50 last:border-0 hover:bg-bp-cyan-tint/20 transition-colors"
+                      >
+                        <td className="py-3 px-4 min-w-[200px]">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-bp bg-bp-cyan-tint border border-bp-cyan/20 flex items-center justify-center shrink-0 mt-0.5">
+                              <FlaskConical className="w-4 h-4 text-bp-cyan" />
+                            </div>
+                            <div className="min-w-0">
+                              <Link
+                                to={`/projects/${project.id}`}
+                                className="font-medium text-bp-text hover:text-bp-cyan transition-colors line-clamp-1"
+                                title={project.name}
+                              >
+                                {project.name}
+                              </Link>
+                              {project.description && (
+                                <p className="text-xs text-bp-muted mt-1 line-clamp-1" title={project.description}>
+                                  {project.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 hidden md:table-cell">
+                          <span className="bp-chip bp-chip-cyan text-xs">
+                            {resolveResearchField(project, project.id)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <StatusBadge
+                            status={getDisplayStatus(project)}
+                            label={statusBadgeLabel(
+                              getDisplayStatus(project),
+                              pipelineStatusByProjectId.get(project.id)?.status,
+                              pipelineStatusByProjectId.has(project.id),
+                            )}
+                          />
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap hidden sm:table-cell">
+                          <span className="inline-flex items-center gap-1 text-xs text-bp-muted">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {formatDate(project.created_at)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/projects/${project.id}`}
+                              className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:underline"
+                            >
+                              进入
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                            <button
+                              type="button"
+                              title="删除项目"
+                              disabled={deletingId === project.id}
+                              onClick={() => openDeleteDialog(project.id, project.name)}
+                              className="p-1.5 rounded-bp text-bp-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+            {paginationBar}
+          </>
         )}
       </div>
 

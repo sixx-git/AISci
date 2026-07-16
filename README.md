@@ -74,7 +74,11 @@ bash scripts/run_dev.sh
 
 #### 预测 Tab（pingfenbiao）
 
-顶栏 **首页 → 预测 → 文献**。页面复刻 pingfenbiao：侧栏历史 + 三 Tab（生成评分表 / 报告打分 / 科学影响力预测）+ 详情四面板。后端为独立服务，前端经 Vite `/pingfenbiao` 反代。
+顶栏 **首页 → 预测 → 文献**。页面复刻 pingfenbiao：侧栏历史 + 三 Tab（生成评分表 / 报告打分 / 科学影响力预测）+ 详情四面板。
+
+- 独立服务默认监听 `127.0.0.1:8765`
+- 前端经 AISci 后端 BFF：`/api/v1/pingfenbiao/*` → `:8765/*`（走现有 `/api` 代理，不依赖 Vite 专用 `/pingfenbiao` 反代）
+- 需同时启动：**AISci 后端 :8000** + **pingfenbiao :8765** + **前端 :3000**
 
 ```batch
 # 新开终端（需 DASHSCOPE_API_KEY，可写在 pingfenbiao-main/pingfenbiao-main/.env）
@@ -133,15 +137,16 @@ AISci/
 │   │   │   ├── hypothesis_review_agent.py
 │   │   │   └── report_generation_agent.py
 │   │   │   # 迭代实验：services/iterative_experiment_service.py + integrations/shaxiang/
-│   │   ├── api/                  # API 路由模块
-│   │   │   ├── projects.py, research.py, literature.py, datasets.py
-│   │   │   ├── agents.py, pipeline.py, reports.py, documents.py
-│   │   │   ├── iterative_experiments.py, data_finder.py, feedback.py, human_loop.py
-│   │   │   ├── kg.py, chat.py, vector_search.py, diagnose.py, v1.py
+│   │   ├── api/                  # API 路由（v1.py 汇总挂载）
+│   │   │   ├── projects.py, literature.py, agents.py, pipeline.py, reports.py
+│   │   │   ├── documents.py, iterative_experiments.py, pingfenbiao_proxy.py
+│   │   │   ├── feedback.py, human_loop.py, prompts.py, skills.py
+│   │   │   ├── science_iteration.py, vector_search.py, diagnose.py, llm_config.py
+│   │   │   # 未挂载（保留文件）：research.py / chat.py / datasets.py / data_finder.py 等
 │   │   ├── core/                 # 配置、闭环控制、质量评分、溯源
 │   │   │   ├── quality_scoring.py, iterative_science.py, data_cleaning.py
 │   │   │   ├── closed_loop_decisions.py, hypothesis_provenance.py, data_citation.py
-│   │   ├── models/               # SQLAlchemy 模型（project / core / pipeline / chat / research）
+│   │   ├── models/               # SQLAlchemy 模型（project / core / pipeline 等）
 │   │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   │   ├── services/             # 业务逻辑 + Qwen 客户端 + 向量存储
 │   │   │   ├── pipeline_service.py, iterative_experiment_service.py
@@ -158,6 +163,7 @@ AISci/
 │   │   │   ├── data/             # 数据清洗、数据集发现
 │   │   │   ├── report/           # 图表生成、VLM 评审、质量检查
 │   │   │   ├── reasoning/        # 新颖性审查、问题对齐、Ideation
+│   │   │   ├── counterfactual/   # 反事实预演（L0）
 │   │   │   └── experiment/       # 实验合理性检查
 │   │   └── main.py               # FastAPI 入口 + /health + /health/llm
 │   ├── prompts/                  # 阶段 Prompt 模板 + presets/ 范式预设库（见 prompts/README.md）
@@ -177,7 +183,7 @@ AISci/
 │       ├── services/             # pipelineService、predictService、iterativeExperimentService 等
 │       ├── types/                # TypeScript 类型定义
 │       ├── lib/                  # 工具函数（api.ts、utils.ts）
-│       └── config/               # projectTabs、promptStages、llmModels 等
+│       └── config/               # projectTabs、pipelineStageNavigation、promptStages 等
 ├── scripts/
 │   ├── setup_backend.bat/sh      # 后端环境搭建（venv + pip install）
 │   ├── setup_frontend.bat/sh     # 前端环境搭建（pnpm install）
@@ -235,18 +241,17 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 
 ## 🤖 智能体架构
 
-| Agent | 输入 | 输出 | 核心职责 |
+| Agent / 阶段 | 输入 | 输出 | 核心职责 |
 |-------|------|------|----------|
 | **ProblemUnderstanding** | 研究问题文本 | 问题陈述、领域、关键词、边界 | 将模糊问题转化为可研究的结构化描述 |
 | **LiteratureMining** | project_id + 研究问题 | 科学事实 + 证据列表 + 引用映射 | FAISS 检索 → Qwen 提取事实，每条绑定 chunk_id |
-| **DataAcquisition**（Pipeline 阶段） | 数据需求 + 文献/外部源 | 合并表格、Bundle、provenance | Data Finder 多源检索、PDF 表格/图表抽取、HF/Zenodo 等连接器 |
 | **KnowledgeGap** | 文献事实 + 不确定点 | 知识缺口、矛盾、研究机会 | 发现文献中的空白和可研究方向 |
 | **HypothesisGeneration** | 知识缺口 + 文献证据 | 候选假设 + 对齐评分 + 数据证据 | 基于缺口生成可验证假设，标注 supporting_fact_ids |
-| **HypothesisReview** | 候选假设 + 文献上下文 | 新颖性评分、可行性评估 | 评估假设质量和原创性 |
-| **IterativeExperiment** | 主假设 + 数据集绑定 | 脚本设计、smoke/full 迭代、图表与反馈重设计 | 对接 shaxiang 实验闭环；可手动勾选实验作为报告输入 |
-| **ReportGeneration** | 全流程中间产物（含迭代实验投影） | 12 字段最终报告 + 合规检查 | 聚合各阶段输出，生成完整报告 |
+| **HypothesisReview** | 候选假设 + 文献上下文 | 新颖性评分、可行性评估、反事实预演 | 评估假设质量；可选 L0 CounterfactualPreview |
+| **IterativeExperiment** | 主假设 + 数据集绑定 | 脚本设计、smoke/full 迭代、图表与反馈重设计 | 对接 shaxiang；嵌套投影 `experiment_design` / `small_validation` 供报告与溯源 |
+| **ReportGeneration** | 全流程中间产物（只读迭代实验投影） | 12 字段最终报告 + 合规检查 | 聚合各阶段输出，生成完整报告 |
 
-> 历史阶段 `experiment_design` / `small_validation` / `data_acquisition` 已并入或迁移；新 run 以 `iterative_experiment` 为准。
+> 历史阶段 `experiment_design` / `small_validation` / `data_acquisition` 已淘汰出主链路；新 run 以 `iterative_experiment` 为准。观测/溯源/Feedback 重跑经 `resolve_ed_sv_from_results` 优先读新格式、兼容旧顶层键。
 
 每个 Agent 的特点：
 - **独立类** — 可单独实例化和测试
@@ -275,15 +280,17 @@ API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/appl
 | 入口 | 路径 | 说明 |
 |------|------|------|
 | 首页 | `/` | 项目搜索、筛选与列表 |
-| **预测** | `/predict` | 评分表生成 / 报告打分 / 科学影响力预测（pingfenbiao） |
+| **预测** | `/predict` | 评分表生成 / 报告打分 / 科学影响力预测（经 BFF → pingfenbiao） |
 | 文献 | `/documents` | 文献上传、arXiv 检索与导入 |
 | 报告 | `/reports` | 研究报告浏览与导出 |
+| Skills | `/skills` | Skill 启用与目录 |
 | 项目工作台 | `/projects/:id` | 多 Tab 科研全流程 |
-| 设置 | `/settings` | LLM 与系统配置 |
 
-`/projects`、`/workflow` 已重定向至 `/`。
+`/projects`、`/workflow`、`/settings` 已重定向至 `/`。LLM 配置在顶栏 **DeveloperMenu**（不再单独 Settings 页）。
 
-**项目工作台 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 科研闭环总览 · 研究问题 · 文献库 · 知识图谱 · 数据集 · 智能体工作流 · **Prompt 管理** · 候选假设 · **迭代实验** · 研究报告 · 运行日志
+**项目工作台主 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 研究问题 · 文献库 · 智能体工作流 · 候选假设 · **迭代实验** · 研究报告  
+
+高级深链：Prompt 管理 · 运行日志（数据绑定仅在「迭代实验」内完成）
 
 ---
 
@@ -329,9 +336,11 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | GET | `/api/v1/pipeline/audit-export/{run_id}` | 导出完整审计链（quality_trend / events / decisions / jsonl） |
 | GET | `/api/v1/agents/hypotheses/{id}/provenance-timeline` | 假设溯源时间线（fact → 多模态 → 数据集 → spec） |
 | POST | `/api/v1/agents/hypotheses/{id}/evidence-chain/iterate` | 单条假设证据链迭代修正 |
-| GET | `/api/v1/data-finder/citation/{citation_id}` | 按 `data_citation_id` 追溯 provenance |
-| GET | `/api/v1/datasets/catalog` | 项目级 Data Catalog |
-| POST | `/api/v1/feedback/submit` | Feedback Hub 提交全局约束 |
+| POST | `/api/v1/feedback/submit` | Feedback Hub 提交全局约束（实验类重跑目标为 `iterative_experiment`） |
+| GET/POST | `/api/v1/pingfenbiao/*` | 预测服务 BFF 代理（转发至本机 :8765） |
+| * | `/api/v1/iterative-experiments/*` | 项目级迭代实验 CRUD / 运行 / 报告勾选 |
+
+> `datasets` / `data_finder` / `research` / `chat` HTTP 面已下线（服务层可能仍被 Pipeline 内部调用）。单阶段 Agent POST（如 `/agents/problem-understanding`）仍可调用，但默认不出现在 OpenAPI schema。
 
 审计链持久化路径：`storage/audit/{run_id}.jsonl`。
 
@@ -398,7 +407,7 @@ POST /api/v1/pipeline/run
 python scripts/check_e2e.py
 ```
 
-检查项（14 项）：
+检查项示例（以 `scripts/check_e2e.py` 当前实现为准）：
 
 ```
 [PASS] 后端健康检查 (/health)
@@ -406,13 +415,10 @@ python scripts/check_e2e.py
 [PASS] 项目列表 (/api/v1/projects)
 [PASS] 文献源列表 (/api/v1/literature/sources)
 [PASS] arXiv 论文搜索
-[PASS] 数据集列表 (/api/v1/datasets)
-[PASS] Pipeline 运行列表
-[PASS] Pipeline 状态接口
+[PASS] Pipeline 运行列表 / 状态接口
 [PASS] 最新报告 (/api/v1/reports/latest)
-[PASS] Agent 接口 (hypotheses / experiment-designs / small-validations)
-[PASS] Skills 文件完整性 (10 个核心 Skill)
-[PASS] .env 配置文件
+[PASS] 假设相关 Agent 接口
+[PASS] Skills / .env 等完整性检查
 ```
 
 ---
@@ -454,14 +460,15 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 项目：AISci — Qwen 多智能体科研系统（d:\Workplace\AISci）
 栈：FastAPI + React/Vite/Tailwind + FAISS + SQLite
 Pipeline 7 阶段：问题理解→文献→知识缺口→假设→评估→迭代实验→报告
+ed/sv：优先 iterative_experiment 嵌套，resolve_ed_sv_from_results 兼容旧键
 闭环：Discovery 迭代 / HITL / CQS / 审计链 storage/audit/{run_id}.jsonl
-前端：/ 首页 | /predict 预测 | /documents 文献 | /reports 报告 | /projects/:id 工作台
-关键路径：pipeline_service.py | iterative_experiment_service.py | predict/ | projectTabs.ts
+前端：/ 首页 | /predict 预测(BFF) | /documents 文献 | /reports 报告 | /projects/:id 工作台
+关键路径：pipeline_service.py | iterative_experiment_service.py | pingfenbiao_proxy.py | predict/
 原则：最小改动、中文回复、禁止虚构引用、不擅自 git commit
 任务：（在此填写）
 ```
 
-**Pencil 设计任务**（需安装 Pencil 扩展并连接 MCP）：设计稿 `designs/aisci-ui.pen`，须用 Pencil MCP 读写（勿直接 Read `.pen` 文件）；风格对齐深色 Tailwind UI（参考 `Home.tsx`、`ResearchClosedLoopOverview.tsx`）。
+**Pencil 设计任务**（需安装 Pencil 扩展并连接 MCP）：设计稿 `designs/aisci-ui.pen`，须用 Pencil MCP 读写（勿直接 Read `.pen` 文件）；风格对齐深色 Tailwind UI（参考 `Home.tsx`、工作流相关组件）。
 
 **建议 Agent 按任务选读**：`README.md` → `backend/DATABASE.md` → `docs/DATA_ACQUISITION.md` → 相关组件/服务源码。
 

@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import get_settings
 
@@ -595,6 +595,65 @@ class IterativeExperimentService:
             "_experiment_id": primary.get("id"),
         }
         return {"experiment_design": experiment_design, "small_validation": small_validation}
+
+    @staticmethod
+    def resolve_ed_sv_from_results(
+        results: Optional[Dict[str, Any]],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """优先从 iterative_experiment 解析 ed/sv；兼容顶层旧键。
+
+        返回 (ie, experiment_design, small_validation)。
+        顺序：
+          1) results.iterative_experiment 嵌套 ed/sv
+          2) 从 primary 实验 synthesize_report_fields
+          3) 顶层 results.experiment_design / small_validation（历史 run）
+        """
+        results = results if isinstance(results, dict) else {}
+        ie = results.get("iterative_experiment") or {}
+        if not isinstance(ie, dict):
+            ie = {}
+
+        ed: Dict[str, Any] = {}
+        sv: Dict[str, Any] = {}
+        nested_ed = ie.get("experiment_design")
+        nested_sv = ie.get("small_validation")
+        if isinstance(nested_ed, dict):
+            ed = nested_ed
+        if isinstance(nested_sv, dict):
+            sv = nested_sv
+
+        if not ed or not sv:
+            experiments = ie.get("experiments") or []
+            primary = None
+            pid = ie.get("primary_experiment_id")
+            if pid:
+                primary = next(
+                    (e for e in experiments if isinstance(e, dict) and e.get("id") == pid),
+                    None,
+                )
+            if not primary and experiments and isinstance(experiments[0], dict):
+                primary = experiments[0]
+            if primary:
+                synth = IterativeExperimentService.synthesize_report_fields(primary)
+                ed = ed or (synth.get("experiment_design") or {})
+                sv = sv or (synth.get("small_validation") or {})
+
+        # 历史顶层键兜底
+        top_ed = results.get("experiment_design")
+        top_sv = results.get("small_validation")
+        if not ed and isinstance(top_ed, dict):
+            ed = top_ed
+        if not sv and isinstance(top_sv, dict):
+            sv = top_sv
+
+        return ie, ed, sv
+
+
+def resolve_ed_sv_from_results(
+    results: Optional[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """模块级便捷入口。"""
+    return IterativeExperimentService.resolve_ed_sv_from_results(results)
 
 
 def get_iterative_experiment_service() -> IterativeExperimentService:

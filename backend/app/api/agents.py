@@ -45,7 +45,11 @@ from app.services.hypothesis_service import HypothesisService
 router = APIRouter(tags=["agents"])
 
 
-@router.post("/problem-understanding", response_model=ApiResponse[ProblemUnderstandingResponse])
+@router.post(
+    "/problem-understanding",
+    response_model=ApiResponse[ProblemUnderstandingResponse],
+    include_in_schema=False,
+)
 async def problem_understanding(
     request: ProblemUnderstandingRequest
 ):
@@ -71,7 +75,11 @@ async def problem_understanding(
         return error(str(e))
 
 
-@router.post("/literature-mining", response_model=ApiResponse[LiteratureMiningResponse])
+@router.post(
+    "/literature-mining",
+    response_model=ApiResponse[LiteratureMiningResponse],
+    include_in_schema=False,
+)
 async def literature_mining(
     request: LiteratureMiningRequest,
     db: Session = Depends(get_db),
@@ -100,7 +108,11 @@ async def literature_mining(
         return error(str(e))
 
 
-@router.post("/knowledge-gap", response_model=ApiResponse[KnowledgeGapResponse])
+@router.post(
+    "/knowledge-gap",
+    response_model=ApiResponse[KnowledgeGapResponse],
+    include_in_schema=False,
+)
 async def knowledge_gap(
     request: KnowledgeGapRequest
 ):
@@ -126,7 +138,11 @@ async def knowledge_gap(
         return error(str(e))
 
 
-@router.post("/hypothesis-generation", response_model=ApiResponse[HypothesisGenerationResponse])
+@router.post(
+    "/hypothesis-generation",
+    response_model=ApiResponse[HypothesisGenerationResponse],
+    include_in_schema=False,
+)
 async def hypothesis_generation(
     request: HypothesisGenerationRequest,
     db: Session = Depends(get_db)
@@ -456,7 +472,11 @@ async def get_hypothesis_provenance_timeline(
         return error(str(e))
 
 
-@router.post("/hypothesis-review", response_model=ApiResponse[HypothesisReviewResult])
+@router.post(
+    "/hypothesis-review",
+    response_model=ApiResponse[HypothesisReviewResult],
+    include_in_schema=False,
+)
 async def hypothesis_review(
     request: HypothesisReviewRequest
 ):

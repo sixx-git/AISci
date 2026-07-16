@@ -21,9 +21,6 @@ CATALOG_IDS = {
     # 中文写作
     "ChineseStyleDiagnosis", "HumanizeRewrite", "RevisionReason",
     "MultiVersionRewrite", "ChineseGECCheck", "ToneControl",
-    # 影响力
-    "PaperFeatureExtraction", "CitationGraphFeature", "EarlyImpactPrediction",
-    "BiasExplanation", "ImpactCalibration", "ReportInfluencePrediction",
 }
 
 

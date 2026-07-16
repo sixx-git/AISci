@@ -4,16 +4,8 @@ import type { ProjectOverview, PipelineRunSummary } from '@/types';
 import type { StatusType } from '@/components/StatusBadge';
 import { normalizeStatusKey, resolveProjectDisplayStatus } from '@/lib/projectStatus';
 
-export interface RecentPipelineRow {
-  projectId: string;
-  projectName: string;
-  run: PipelineRunSummary;
-}
-
-const MAX_ROWS = 6;
-
+/** 拉取各项目最近一次 Pipeline，用于首页状态徽章与运行中轮询。 */
 export function useLatestPipelineRuns(projects: ProjectOverview[]) {
-  const [rows, setRows] = useState<RecentPipelineRow[]>([]);
   const [pipelineStatusByProjectId, setPipelineStatusByProjectId] = useState<
     Map<string, PipelineRunSummary>
   >(() => new Map());
@@ -21,7 +13,6 @@ export function useLatestPipelineRuns(projects: ProjectOverview[]) {
 
   useEffect(() => {
     if (projects.length === 0) {
-      setRows([]);
       setPipelineStatusByProjectId(new Map());
       return;
     }
@@ -40,30 +31,22 @@ export function useLatestPipelineRuns(projects: ProjectOverview[]) {
             const latest = [...res.data].sort(
               (a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime(),
             )[0];
-            return { projectId: p.id, projectName: p.name, run: latest };
+            return { projectId: p.id, run: latest };
           }),
         );
 
-        const merged: RecentPipelineRow[] = [];
         const runMap = new Map<string, PipelineRunSummary>();
         results.forEach((r) => {
           if (r.status === 'fulfilled' && r.value) {
-            merged.push(r.value);
             runMap.set(r.value.projectId, r.value.run);
           }
         });
 
-        merged.sort(
-          (a, b) => new Date(b.run.created_at || '').getTime() - new Date(a.run.created_at || '').getTime(),
-        );
-
         if (!cancelled) {
           setPipelineStatusByProjectId(runMap);
-          setRows(merged.slice(0, MAX_ROWS));
         }
       } catch {
         if (!cancelled) {
-          setRows([]);
           setPipelineStatusByProjectId(new Map());
         }
       } finally {
@@ -90,7 +73,6 @@ export function useLatestPipelineRuns(projects: ProjectOverview[]) {
     displayStatusByProjectId.get(project.id) ?? normalizeStatusKey(project.status);
 
   return {
-    rows,
     loading,
     pipelineStatusByProjectId,
     displayStatusByProjectId,

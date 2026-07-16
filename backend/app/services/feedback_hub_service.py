@@ -18,9 +18,9 @@ VALID_SOURCES = {
 }
 RERUN_TARGETS = {
     "literature": ["literature_mining"],
-    "data_finder": ["experiment_design"],
+    "data_finder": ["iterative_experiment"],
     "hypothesis": ["hypothesis_generation", "hypothesis_review"],
-    "experiment": ["experiment_design", "small_validation"],
+    "experiment": ["iterative_experiment"],
     "kg": ["knowledge_gap"],
     "full": ["literature_mining"],
 }
@@ -32,8 +32,9 @@ STAGE_TO_FEEDBACK_TARGET: Dict[str, str] = {
     "knowledge_gap": "kg",
     "hypothesis_generation": "hypothesis",
     "hypothesis_review": "hypothesis",
-    "experiment_design": "experiment",
-    "small_validation": "experiment",
+    "iterative_experiment": "experiment",
+    "experiment_design": "experiment",  # 历史别名
+    "small_validation": "experiment",  # 历史别名
     "report_generation": "full",
 }
 

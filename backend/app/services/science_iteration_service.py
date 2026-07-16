@@ -111,8 +111,9 @@ def build_hypothesis_provenance(
 
     hg = results.get("hypothesis_generation") or {}
     hr = results.get("hypothesis_review") or {}
-    ed = results.get("experiment_design") or {}
-    sv = results.get("small_validation") or {}
+    from app.services.iterative_experiment_service import resolve_ed_sv_from_results
+
+    _, ed, sv = resolve_ed_sv_from_results(results)
 
     hypo_dict = {
         "hypothesis": hypo.hypothesis,

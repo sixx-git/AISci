@@ -26,7 +26,6 @@ CATEGORY_LABELS: Dict[str, str] = {
     "multimodal": "多模态",
     "evidence_reasoning": "证据推理",
     "chinese_writing": "中文写作",
-    "impact_prediction": "影响力预测",
     "general": "通用",
 }
 
@@ -51,7 +50,6 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
         "CitationGrounding", "CitationIntegrityCheck", "ReportChartGeneration",
         "ScientificPlot", "ReportQualityCheck", "ProposalLogicReview", "ReportReviewer",
         "ChineseStyleDiagnosis", "HumanizeRewrite", "ToneControl",
-        "ReportInfluencePrediction",
     ],
     "Pipeline 编排": [
         "QuestionAlignment", "IdeationNovelty", "IterativeHypothesisLoop",
@@ -88,10 +86,6 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "中文写作服务": [
         "ChineseStyleDiagnosis", "HumanizeRewrite", "RevisionReason",
         "MultiVersionRewrite", "ChineseGECCheck", "ToneControl",
-    ],
-    "影响力预测服务": [
-        "PaperFeatureExtraction", "CitationGraphFeature", "EarlyImpactPrediction",
-        "BiasExplanation", "ImpactCalibration", "ReportInfluencePrediction",
     ],
     "图表质量": ["PlotVlmCritique", "ScientificPlot"],
 }

@@ -656,6 +656,8 @@ export interface CounterfactualPreviewData {
   failure_predictions?: string[];
   recommended_pivots?: string[];
   proceed_to_experiment_design?: boolean;
+  /** 新字段；与 proceed_to_experiment_design 等价，优先读此字段 */
+  proceed_to_iterative_experiment?: boolean;
   summary?: string;
   skipped?: boolean;
   reason?: string;

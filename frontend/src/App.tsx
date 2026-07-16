@@ -8,7 +8,6 @@ import { Documents } from './pages/Documents';
 import { Predict } from './pages/Predict';
 import { Reports } from './pages/Reports';
 import { Skills } from './pages/Skills';
-import { Settings } from './pages/Settings';
 
 function App() {
   return (
@@ -31,7 +30,7 @@ function App() {
             <Route path="/workflow" element={<Navigate to="/" replace />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/skills" element={<Skills />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>

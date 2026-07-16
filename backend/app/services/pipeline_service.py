@@ -726,7 +726,7 @@ class PipelineService:
                     "counterfactual_preview",
                     {
                         "scenario_count": len(preview.get("scenarios") or []),
-                        "proceed": preview.get("proceed_to_experiment_design"),
+                        "proceed": preview.get("proceed_to_iterative_experiment", preview.get("proceed_to_experiment_design")),
                         "summary": (preview.get("summary") or "")[:200],
                     },
                 )
@@ -907,8 +907,9 @@ class PipelineService:
             primary_idx = 0
         primary_idx = min(max(0, primary_idx), len(reviews) - 1) if reviews else 0
 
-        ed = results.get("experiment_design") or {}
-        sv = results.get("small_validation") or {}
+        from app.services.iterative_experiment_service import resolve_ed_sv_from_results
+
+        _, ed, sv = resolve_ed_sv_from_results(results)
         sb = sv.get("sandbox_execution") or {}
         fp = sv.get("federated_pilot") or {}
 
@@ -973,8 +974,20 @@ class PipelineService:
         from app.core.iterative_science import (
             evaluate_verifiable_spec_against_validation,
         )
+        from app.services.iterative_experiment_service import resolve_ed_sv_from_results
 
-        ed = results.get("experiment_design") or {}
+        _, ed, _ = resolve_ed_sv_from_results(results)
+        # 写回顶层旧键，供仍读 experiment_design 的下游兼容
+        if ed and not results.get("experiment_design"):
+            results["experiment_design"] = ed
+        ie = results.get("iterative_experiment")
+        if isinstance(ie, dict):
+            ie = dict(ie)
+            ie["small_validation"] = validation_result
+            if ed and not ie.get("experiment_design"):
+                ie["experiment_design"] = ed
+            results["iterative_experiment"] = ie
+
         hg = results.get("hypothesis_generation") or {}
         vspec = (
             ed.get("verifiable_hypothesis")
@@ -996,7 +1009,7 @@ class PipelineService:
 
         project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         data_context = self._build_data_context(project_id) if project_id else {}
-        ed_for_replan = results.get("experiment_design") or {}
+        _, ed_for_replan, _ = resolve_ed_sv_from_results(results)
         replan_actions = build_general_replan_actions(
             ed_for_replan, validation_result, data_context
         )
@@ -1004,7 +1017,7 @@ class PipelineService:
             validation_result["replan_actions"] = replan_actions
             results["small_validation"] = validation_result
 
-        ed = results.get("experiment_design") or {}
+        _, ed, _ = resolve_ed_sv_from_results(results)
         self._validation_feedback_constraints = self._build_validation_feedback_constraints(
             validation_result, ed
         )
@@ -1141,21 +1154,6 @@ class PipelineService:
             "refinement_count": len(refinement_notes),
         }
 
-    def _needs_teaching_auto_refinement(self, results: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """已淘汰：teaching_auto 依赖旧实验设计/小样验证阶段。"""
-        return False, []
-
-    def _run_teaching_auto_refinement(
-        self,
-        stages: List[PipelineStageLog],
-        results: Dict[str, Any],
-        research_question: str,
-        project_id: str,
-        project_mode: str,
-    ) -> Optional[Dict[str, Any]]:
-        """已淘汰：主路径不再运行 teaching 自动精化。"""
-        return None
-
     def _merge_science_iteration_run_options(self, project_id: str) -> None:
         """将 project.config.science_iteration 合并进 run_options。"""
         if not project_id:
@@ -1219,14 +1217,6 @@ class PipelineService:
         except Exception as exc:
             logger.warning("[Pipeline] 自动 gap enrichment 失败: %s", exc)
             return None
-
-    def _run_experiment_self_correction_loop(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
-        """已淘汰：自我纠正改由 iterative_experiment / shaxiang 脚本修补承担。"""
-        return None
-
-    def _run_federated_campaign_refinement(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
-        """已淘汰：联邦 Campaign 环依赖旧小样验证，第一期已排除。"""
-        return None
 
     def _run_discovery_loop(
         self,
@@ -1959,8 +1949,7 @@ class PipelineService:
                 knowledge_gap=results.get('knowledge_gap'),
                 hypothesis_generation=results.get('hypothesis_generation'),
                 hypothesis_review=results.get('hypothesis_review'),
-                experiment_design=results.get('experiment_design'),
-                small_validation=results.get('small_validation'),
+                **self._flatten_ed_sv_fields(results),
                 report_generation=results.get('report_generation'),
                 final_report=results.get('report_generation'),
                 final_report_id=final_report_id,
@@ -1990,8 +1979,7 @@ class PipelineService:
                 knowledge_gap=results.get('knowledge_gap'),
                 hypothesis_generation=results.get('hypothesis_generation'),
                 hypothesis_review=results.get('hypothesis_review'),
-                experiment_design=results.get('experiment_design'),
-                small_validation=results.get('small_validation'),
+                **self._flatten_ed_sv_fields(results),
                 report_generation=results.get('report_generation'),
                 run_id=self.run_id,
                 extra_metadata=meta,
@@ -2025,8 +2013,7 @@ class PipelineService:
                 knowledge_gap=results.get('knowledge_gap'),
                 hypothesis_generation=results.get('hypothesis_generation'),
                 hypothesis_review=results.get('hypothesis_review'),
-                experiment_design=results.get('experiment_design'),
-                small_validation=results.get('small_validation'),
+                **self._flatten_ed_sv_fields(results),
                 report_generation=results.get('report_generation'),
                 final_report=results.get('report_generation'),
                 final_report_id=final_report_id,
@@ -2062,8 +2049,7 @@ class PipelineService:
                 knowledge_gap=results.get('knowledge_gap'),
                 hypothesis_generation=results.get('hypothesis_generation'),
                 hypothesis_review=results.get('hypothesis_review'),
-                experiment_design=results.get('experiment_design'),
-                small_validation=results.get('small_validation'),
+                **self._flatten_ed_sv_fields(results),
                 report_generation=results.get('report_generation'),
                 final_report=results.get('report_generation'),
                 final_report_id=None,
@@ -2328,7 +2314,12 @@ class PipelineService:
         if idx >= 5:
             base["hypothesis_review"] = results.get("hypothesis_review", {})
         if idx >= 6:
-            base["experiment_design"] = results.get("experiment_design", {})
+            from app.services.iterative_experiment_service import resolve_ed_sv_from_results
+
+            ie, ed, sv = resolve_ed_sv_from_results(results)
+            base["iterative_experiment"] = ie
+            base["experiment_design"] = ed
+            base["small_validation"] = sv
         return base
     
     def _build_pipeline_run_info(self) -> Dict[str, Any]:
@@ -2860,16 +2851,6 @@ class PipelineService:
             self._executability_blocked = True
         return out
 
-    def _exec_experiment_design(self, *args, **kwargs):
-        raise RuntimeError(
-            "experiment_design 阶段已移除，请使用 iterative_experiment / 迭代实验 API"
-        )
-
-    def _exec_small_validation(self, *args, **kwargs):
-        raise RuntimeError(
-            "small_validation 阶段已移除，请使用 iterative_experiment / 迭代实验 API"
-        )
-
     def _mark_stage_human_review(self, stage_idx: int, reason: str) -> None:
         """将阶段标记为需人工复核。"""
         db_stage = self.db_stage_executions.get(stage_idx + 1)
@@ -2889,26 +2870,21 @@ class PipelineService:
         results: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """报告只读 iterative_experiment；内部仍映射为 agent 现有 ed/sv 入参形状。"""
-        ie = results.get("iterative_experiment") or {}
-        if not isinstance(ie, dict):
-            ie = {}
-        ed = ie.get("experiment_design") if isinstance(ie.get("experiment_design"), dict) else {}
-        sv = ie.get("small_validation") if isinstance(ie.get("small_validation"), dict) else {}
-        if not ed or not sv:
-            experiments = ie.get("experiments") or []
-            primary = None
-            pid = ie.get("primary_experiment_id")
-            if pid:
-                primary = next((e for e in experiments if isinstance(e, dict) and e.get("id") == pid), None)
-            if not primary and experiments and isinstance(experiments[0], dict):
-                primary = experiments[0]
-            if primary:
-                from app.services.iterative_experiment_service import IterativeExperimentService
+        from app.services.iterative_experiment_service import resolve_ed_sv_from_results
 
-                synth = IterativeExperimentService.synthesize_report_fields(primary)
-                ed = ed or synth.get("experiment_design") or {}
-                sv = sv or synth.get("small_validation") or {}
-        return ie, ed, sv
+        return resolve_ed_sv_from_results(results)
+
+    @staticmethod
+    def _flatten_ed_sv_fields(results: Dict[str, Any]) -> Dict[str, Any]:
+        """PipelineRunResult 扁平字段：ie + 派生 ed/sv。"""
+        from app.services.iterative_experiment_service import resolve_ed_sv_from_results
+
+        ie, ed, sv = resolve_ed_sv_from_results(results)
+        return {
+            "iterative_experiment": ie or None,
+            "experiment_design": ed or None,
+            "small_validation": sv or None,
+        }
 
     def _exec_report_generation(
         self,

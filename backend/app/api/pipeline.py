@@ -493,6 +493,18 @@ async def get_run_status(
 
         total_duration = run.total_duration_ms / 1000.0 if run.total_duration_ms else None
 
+        # 从 stages 扁平化迭代实验及派生 ed/sv（兼容历史顶层键）
+        stage_payload: dict[str, Any] = {}
+        if isinstance(run.output_data, dict):
+            stage_payload.update(run.output_data)
+        for s in stages:
+            key = s.stage.value if hasattr(s.stage, "value") else str(s.stage)
+            if isinstance(s.output_data, dict) and s.output_data:
+                stage_payload[key] = s.output_data
+        from app.services.iterative_experiment_service import resolve_ed_sv_from_results
+
+        ie, ed, sv = resolve_ed_sv_from_results(stage_payload)
+
         return ResponseModel(
             code=200,
             message="获取成功",
@@ -515,6 +527,15 @@ async def get_run_status(
                 extra_metadata=run.extra_metadata if isinstance(run.extra_metadata, dict) else None,
                 created_at=run.created_at or run.started_at,
                 completed_at=run.completed_at,
+                iterative_experiment=ie or None,
+                experiment_design=ed or None,
+                small_validation=sv or None,
+                problem_understanding=stage_payload.get("problem_understanding"),
+                literature_mining=stage_payload.get("literature_mining"),
+                knowledge_gap=stage_payload.get("knowledge_gap"),
+                hypothesis_generation=stage_payload.get("hypothesis_generation"),
+                hypothesis_review=stage_payload.get("hypothesis_review"),
+                report_generation=stage_payload.get("report_generation"),
             )
         )
     except HTTPException:

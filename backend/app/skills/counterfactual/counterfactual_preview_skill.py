@@ -130,7 +130,9 @@ def build_counterfactual_feedback_constraints(preview: Optional[Dict[str, Any]])
         text = _norm_str(pivot, 240)
         if text:
             constraints.append(f"预演转向建议: {text}")
-    if preview.get("proceed_to_experiment_design") is False:
+    if preview.get("proceed_to_iterative_experiment") is False or preview.get(
+        "proceed_to_experiment_design"
+    ) is False:
         constraints.append(
             "反事实预演提示: 当前假设路径存在未缓解的高风险，实验设计须增加对照组或降级验证范围。"
         )
@@ -228,6 +230,7 @@ class CounterfactualPreviewSkill(BaseSkill):
                 "failure_predictions": ["..."],
                 "recommended_pivots": ["..."],
                 "proceed_to_experiment_design": True,
+                "proceed_to_iterative_experiment": True,
                 "summary": "...",
             }
             llm = qwen_structured_chat(
@@ -259,7 +262,12 @@ class CounterfactualPreviewSkill(BaseSkill):
             _norm_str(x, 240) for x in (llm.get("recommended_pivots") or []) if _norm_str(x, 240)
         ][:2]
 
-        proceed = bool(llm.get("proceed_to_experiment_design", True))
+        proceed = bool(
+            llm.get(
+                "proceed_to_iterative_experiment",
+                llm.get("proceed_to_experiment_design", True),
+            )
+        )
         if any(s.get("failure_risk") == "high" for s in filtered) and not failure_predictions:
             proceed = False
 
@@ -271,6 +279,7 @@ class CounterfactualPreviewSkill(BaseSkill):
             "failure_predictions": failure_predictions,
             "recommended_pivots": recommended_pivots,
             "proceed_to_experiment_design": proceed,
+            "proceed_to_iterative_experiment": proceed,
             "summary": _norm_str(llm.get("summary"), 500),
             "skill": self.name,
         }

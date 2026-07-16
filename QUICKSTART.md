@@ -33,7 +33,9 @@ scripts\run_dev.bat
 
 ### 预测 Tab（评分表 / 影响力预测）
 
-顶栏「预测」依赖独立服务 **pingfenbiao**（默认 `127.0.0.1:8765`）。前端经 Vite 代理 `/pingfenbiao` 访问。
+顶栏「预测」依赖独立服务 **pingfenbiao**（默认 `127.0.0.1:8765`）。前端经 AISci 后端 BFF：`/api/v1/pingfenbiao/*` → `:8765`（走 `/api` 代理，不依赖 Vite 专用 `/pingfenbiao` 反代）。
+
+需同时启动：**后端 :8000** + **pingfenbiao :8765** + **前端 :3000**。
 
 ```batch
 # 新开终端
@@ -49,7 +51,7 @@ pip install -r requirements.txt
 uvicorn app:app --host 127.0.0.1 --port 8765
 ```
 
-配置 `DASHSCOPE_API_KEY`（环境变量或页面内填写）。修改 `vite.config.ts` 后需重启 `pnpm dev`。
+配置 `DASHSCOPE_API_KEY`（`pingfenbiao-main/pingfenbiao-main/.env` 或环境变量）。
 
 ### Linux/Mac 用户
 
@@ -124,7 +126,7 @@ VECTOR_STORE_PATH=./storage/faiss_index
 USE_MOCK_LLM=true
 ```
 
-Mock 模式下，8 个智能体会使用模拟数据依次执行，可跑通完整 Pipeline 流程并生成报告，适合快速体验和前端开发调试。
+Mock 模式下，各阶段智能体会使用模拟数据依次执行，可跑通完整 7 阶段 Pipeline 并生成报告，适合快速体验和前端开发调试。
 
 ---
 
@@ -134,22 +136,23 @@ Mock 模式下，8 个智能体会使用模拟数据依次执行，可跑通完�
 AISci/
 ├── backend/              # FastAPI 后端
 │   ├── app/
-│   │   ├── agents/     # 8 个智能体（独立类 + Prompt + JSON Schema）
-│   │   ├── api/        # API 路由
+│   │   ├── agents/     # 阶段智能体（问题理解→…→报告；迭代实验走 service/shaxiang）
+│   │   ├── api/        # API 路由（含 pingfenbiao_proxy、iterative_experiments）
 │   │   ├── core/       # 配置、闭环控制、质量评分、溯源
-│   │   ├── services/   # 业务逻辑（Pipeline、Data Finder、审计链等）
+│   │   ├── services/   # Pipeline、迭代实验、Feedback Hub、审计链等
 │   │   ├── skills/     # 科研 Skill 工具层（40+）
 │   │   └── main.py
 │   ├── prompts/         # Markdown Prompt 模板
 │   └── tests/           # pytest（含 test_batch1–7 回归）
 ├── frontend/            # React + Vite 前端
 │   └── src/
-│       ├── components/  # 60+ UI 组件
-│       ├── pages/       # 8 个页面
-│       ├── services/    # API 服务模块
+│       ├── components/  # 工作流、迭代实验、predict/ 等
+│       ├── pages/       # Home、Predict、Documents、Reports、ProjectWorkspace 等
+│       ├── services/    # API 服务模块（含 predictService BFF）
 │       └── types/       # TypeScript 类型定义
-├── scripts/             # setup / run_dev / check_e2e 等
-├── storage/             # 审计链、证据链、Catalog、Data Finder 等（见 storage/README.md）
+├── pingfenbiao-main/    # 预测独立服务 :8765
+├── scripts/             # setup / run_dev / run_pingfenbiao / check_e2e 等
+├── storage/             # 审计链、证据链、Catalog 等（见 storage/README.md）
 └── .env.example         # 环境变量模板
 ```
 
@@ -157,13 +160,13 @@ AISci/
 
 ## 主要功能
 
-### 1. 8 阶段智能科研 Pipeline
+### 1. 7 阶段智能科研 Pipeline
 
 ```
-研究问题 → 文献挖掘 → 知识缺口分析 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
+研究问题 → 文献挖掘 → 知识缺口 → 假设生成 → 假设评估 → 迭代实验 → 报告生成
 ```
 
-一键运行，每阶段记录输入、输出、Prompt、模型参数、Token 用量和耗时。
+一键运行，每阶段记录输入、输出、Prompt、模型参数、Token 用量和耗时。实验数据绑定与脚本迭代在「迭代实验」阶段（shaxiang）完成。
 
 ### 2. 项目工作台
 
@@ -171,6 +174,7 @@ AISci/
 - 上传文献（PDF / DOCX / TXT / MD / CSV）
 - 输入研究问题，自动向量化文献并检索
 - 实时查看 Pipeline 运行进度和日志
+- Tab：概览 · 研究问题 · 文献 · 工作流 · 假设 · **迭代实验** · 报告（高级：Prompt / 日志）
 
 ### 3. 报告生成与质量检查
 
@@ -185,11 +189,15 @@ AISci/
 - FAISS 语义检索
 - 文献证据绑定与引用溯源
 
-### 5. 科研闭环（A 级优化）
+### 5. 预测 Tab
+
+- 评分表生成 / 报告打分 / 科学影响力预测（pingfenbiao，经 `/api/v1/pingfenbiao` BFF）
+
+### 6. 科研闭环（A 级优化）
 
 - **CQS 质量趋势** — 工作流页展示综合质量分与闭环事件/决策
 - **HITL Gate** — 关键节点人工审核暂停与恢复
-- **Data Finder** — PDF 表格抽取、Merge + provenance、Bundle 下载
+- **Feedback Hub** — 全局约束；实验类反馈重跑 `iterative_experiment`
 - **假设溯源** — 假设卡片「溯源时间线」Tab，可跳转文献 chunk
 - **审计链导出** — 工作流页「导出审计链」或 `GET /pipeline/audit-export/{run_id}`
 
