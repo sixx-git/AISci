@@ -1,0 +1,846 @@
+{
+    "task_id": "claim_verification_auto_v5",
+    "task_type": "claim_verification",
+    "subject": "astrophysics_cosmology",
+    "document_heavy": false,
+    "query": "Evaluate the observational evidence from Type Ia supernovae for an accelerating universe and a positive cosmological constant, assessing the statistical significance and robustness of this claim. The analysis should account for systematic uncertainties in supernova distance measurements, light curve calibration, and potential biases. The goal is to determine whether the data consistently support an accelerating expansion and a non-zero cosmological constant across different fitting methods and subsamples.",
+    "input_files": [
+        {
+            "file_id": "S1",
+            "file_name": "9805201v1.pdf",
+            "relative_path": "9805201v1.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 72 pages"
+        }
+    ],
+    "rubrics": {
+        "total_score": 91,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 20,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_quantify_the_statistical_signifi",
+                        "competency_category": "evidence",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report quantify the statistical significance of the acceleration detection, distinguishing between cases with and without a flat-universe prior?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "state significance without prior (3-4σ)",
+                            "state significance with flat prior (7-9σ)",
+                            "note that this excludes a matter-dominated universe"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_describe_how_a_multi_color_photo",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report describe how a multi-color photometric calibration technique improves distance precision and accounts for dust extinction?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "identify that multi-color calibration increases precision to ~0.15 mag",
+                            "explain that it accounts for reddening by dust",
+                            "state that it provides robust uncertainty estimates"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_describe_a_method_that_estimates",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report describe a method that estimates distances from a single spectrum and a single set of photometric measurements, achieving moderate precision?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "identify that such a method uses minimal data",
+                            "state that it achieves ~10% precision"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "rubric_key": "information_acquisition.limitation.does_the_report_evaluate_whether_a_broad_range_o",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether a broad range of systematic biases can explain the evidence for a cosmological constant?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "list at least three categories of biases examined (e.g., evolution, dust, selection, inhomogeneities)",
+                            "state that none of these biases can reconcile data with ΩΛ=0"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_explain_how_light_curve_shape_co",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report explain how light curve shape corrections reduce scatter and improve the statistical power of supernova distance measurements?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "state that scatter reduces from ~0.4 mag to ~0.15 mag",
+                            "explain that this reduces susceptibility to selection bias",
+                            "note that it enhances sensitivity"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_state_the_expansion_age_derived",
+                        "competency_category": "evidence",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report state the expansion age derived from cosmic distances and identify the dominant source of uncertainty?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "state that the age is 14.2 ± 1.5 Gyr",
+                            "identify that the Cepheid distance scale calibration dominates the uncertainty"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_identify_the_need_for_consistent",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify the need for consistent documentation of methods when combining results from independent supernova surveys?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "state that valid meta-analysis requires detailed method descriptions",
+                            "note that combining data requires careful calibration and consistency checks"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "rubric_key": "information_acquisition.definition.does_the_report_define_the_cosmological_constant",
+                        "competency_category": "definition",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report define the cosmological constant and explain how it drives cosmic acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "define cosmological constant as vacuum energy density",
+                            "explain that its negative pressure leads to acceleration"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_compare_the_multi_color_photomet",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report compare the multi-color photometric calibration method with the minimal-data approach in terms of data requirements and precision?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "note that multi-color uses multiple photometric bands",
+                            "note that minimal-data uses single spectrum and photometry",
+                            "state that multi-color achieves ~0.15 mag precision while minimal-data achieves ~10% precision"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_state_the_specific_reduction_in",
+                        "competency_category": "evidence",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report state the specific reduction in scatter from 0.4 mag to 0.15 mag achieved by light curve shape corrections?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "state pre-correction scatter",
+                            "state post-correction scatter"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 56,
+                "items": [
+                    {
+                        "rubric_id": "R11",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_whether_the_observed_di",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the observed dimming of high-redshift Type Ia supernovae, relative to expectations in a matter-only model, is consistently reproduced across different distance estimation methods?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report discusses multiple distance estimation methods (e.g., multi-band photometric calibration and a single-epoch approach).",
+                            "The report compares the results from these methods regarding the inferred distance dimming.",
+                            "The report concludes that the dimming is consistently observed across the methods."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R12",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_whether_the_statistical_s",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report assess whether the statistical significance of the accelerating universe claim (e.g., 3-4σ without prior, 7-9σ with flat prior) meets the conventional threshold for a robust discovery?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report states the numerical significance levels from the available sources.",
+                            "The report discusses the conventional threshold (e.g., 5σ) used in physics for claiming a discovery.",
+                            "The report evaluates whether the significance without a flat prior is sufficient or insufficient."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R13",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_whether_systematic_uncert",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report assess whether systematic uncertainties in supernova distance measurements (e.g., progenitor evolution, metallicity, dust extinction, sample selection, inhomogeneities) could plausibly reverse the conclusion of an accelerating expansion?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report enumerates multiple systematic uncertainties considered in the analysis.",
+                            "The report evaluates the potential magnitude of each systematic effect.",
+                            "The report concludes that the combined systematics cannot mimic the observed acceleration (i.e., cannot reconcile data with ΩΛ=0)."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_whether_the_use_of_ligh",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the use of light curve shape corrections introduces a systematic bias that could affect the inference of acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report explains the purpose of light curve shape corrections (reducing scatter, mitigating selection bias).",
+                            "The report considers potential sources of bias from the calibration of the correction.",
+                            "The report evaluates whether such bias could alter the sign of the acceleration parameter."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_whether_the_evidence_for",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report assess whether the evidence for a positive cosmological constant is robust across different fitting methods and supernova subsamples?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report discusses at least two different fitting methods (e.g., multi-band and single-epoch approaches).",
+                            "The report examines the results from different subsamples (e.g., high-redshift vs. low-redshift).",
+                            "The report concludes that all methods and subsamples favor ΩΛ>0."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_whether_the_claim_of_an",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the claim of an accelerating universe overstates the confidence level given the systematic uncertainties considered?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report identifies systematic uncertainties that could reduce significance.",
+                            "The report compares the statistical significance to the magnitude of systematics.",
+                            "The report argues that the claim remains statistically valid even after accounting for systematics."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_whether_the_exclusion_of",
+                        "competency_category": "limitation",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report assess whether the exclusion of a matter-dominated universe (ΩM=1) at 7-8σ confidence level is justified, given the assumptions required?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report states the confidence level at which ΩM=1 is ruled out.",
+                            "The report discusses the assumptions (e.g., flat prior, Gaussian statistics) underlying that exclusion.",
+                            "The report evaluates whether those assumptions are reasonable or could lead to overconfidence."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_derived_age",
+                        "competency_category": "synthesis",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate whether the derived age of the universe (14.2±1.5 Gyr) is consistent with the accelerating model, and if any tension exists?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report presents the age estimate with its uncertainty.",
+                            "The report compares the age to other independent age estimates (e.g., from globular clusters).",
+                            "The report discusses whether the age is compatible with an accelerating universe."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_evaluate_whether_the_evidence_fo",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report evaluate whether the evidence for acceleration depends on the assumption of a flat universe (ΩM+ΩΛ=1), or holds without that prior?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report distinguishes between results with and without a flat-universe prior.",
+                            "The report states the significance of acceleration under each condition.",
+                            "The report concludes whether acceleration is still supported without the flat prior."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_logical_chain_from_th",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the logical chain from the observed distance modulus vs. redshift relation to the inference of a positive cosmological constant?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report describes how distance measurements relate to expansion history.",
+                            "The report shows that a matter-only model predicts closer distances than observed at high z.",
+                            "The report explains that an additional component with negative pressure (cosmological constant) is required to explain the dimming."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_trace_how_applying_light_curve_s",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report trace how applying light curve shape corrections reduces scatter in the Hubble diagram and improves the statistical power to detect acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report mentions that light curve shape corrections reduce scatter from ~0.4 mag to ~0.15 mag.",
+                            "The report explains the connection between reduced scatter and improved signal-to-noise for measuring deceleration/acceleration.",
+                            "The report notes that reduced scatter also mitigates selection bias."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_strengths_and_weakne",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the strengths and weaknesses of a multi-band photometric calibration technique versus a minimal-data single-epoch approach in supporting the acceleration claim?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report describes a multi-band method that corrects for dust and yields ~0.15 mag precision.",
+                            "The report describes a single-epoch method with ~10% distance precision.",
+                            "The report compares the consistency of their results regarding acceleration."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_analyze_the_role_of_dust_extinct",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze the role of dust extinction correction in the reliability of supernova distance measurements for testing acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report discusses how dust corrects the apparent magnitude.",
+                            "The report acknowledges that dust correction relies on color information.",
+                            "The report evaluates whether residual dust extinction could bias the distance estimates and affect the acceleration conclusion."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_whether_sample_selectio",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether sample selection biases (e.g., Malmquist bias) could skew the observed distance-redshift relation and undermine the acceleration detection?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report defines selection bias in the context of supernova surveys.",
+                            "The report quantifies the expected magnitude of selection bias.",
+                            "The report argues that the bias is insufficient to explain the acceleration signal."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_impact_of_gravitation",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report assess the impact of gravitational lensing on the distance estimates of high-redshift supernovae and its potential to mimic acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report mentions gravitational lensing as a systematic effect.",
+                            "The report explains that lensing can both brighten and dim sources.",
+                            "The report concludes that lensing does not systematically bias the average distance in a way that would produce acceleration."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_whether_the_report_synthe",
+                        "competency_category": "synthesis",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report assess whether the report synthesizes evidence from multiple methods (distance estimation, light curve calibration, redshift measurement) to support the conclusion of an accelerating universe?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report mentions at least two different analysis approaches.",
+                            "The report presents a combined or integrated conclusion from these approaches.",
+                            "The report states that the convergence of evidence strengthens the claim."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_report_argu",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the report argues that the cosmological constant is the only viable explanation for the observed acceleration, rather than alternative dark energy models?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report mentions the cosmological constant as the explanation.",
+                            "The report discusses or acknowledges alternative explanations (e.g., dynamical dark energy, modified gravity).",
+                            "The report evaluates whether the data uniquely favor the cosmological constant."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_whether_the_report_conclu",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess whether the report concludes that the accelerating universe paradigm is secure, or does it identify residual uncertainties?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report states a conclusion about the validity of acceleration.",
+                            "The report discusses uncertainties or potential caveats.",
+                            "The report balances the strength of evidence against the limitations."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_report_iden",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the report identifies any remaining tensions or contradictions between different data sets or analysis methods regarding the acceleration claim?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report compares results from different fitting methods.",
+                            "The report notes any discrepancies in significance levels or best-fit parameters.",
+                            "The report discusses possible reasons for tension or concludes they are minor."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_analyze_whether_the_fact_that_di",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report analyze whether the fact that different fitting methods yield different significance levels (e.g., 2.8σ vs. 3.9σ) affects the overall confidence in acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report states the significance levels from different methods.",
+                            "The report compares the significance levels across methods.",
+                            "The report discusses whether the variation indicates fragility or is expected given method differences."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R31",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_evaluate_whether_the_report_disc",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate whether the report discusses the implications of the Cepheid distance scale uncertainties on the calibration of supernova distances and the acceleration evidence?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report mentions the Cepheid distance scale as a calibrator for SNe Ia.",
+                            "The report acknowledges uncertainties in the Cepheid scale (e.g., metallicity, period-luminosity).",
+                            "The report assesses how these uncertainties affect the absolute magnitude of SNe and the acceleration conclusion."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R32",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_assess_whether_the_report_derive",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess whether the report derives the relationship between the distance modulus and the parameters ΩM and ΩΛ, and uses that to infer acceleration?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report presents or references the distance modulus as a function of redshift and cosmological parameters.",
+                            "The report uses that function to fit for ΩM and ΩΛ.",
+                            "The report interprets the resulting fit (e.g., negative q0, positive ΩΛ) as evidence for acceleration."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 15,
+                "items": [
+                    {
+                        "rubric_id": "R33",
+                        "rubric_key": "report_synthesis.structure.does_the_report_include_a_structured_evidence_ta",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report include a structured evidence table that clearly categorizes supporting, refuting, and neutral evidence for the claim?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "rubric_key": "report_synthesis.structure.is_the_verdict_clearly_stated_with_a_justificati",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Is the verdict clearly stated with a justification that references the evidence?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "rubric_key": "report_synthesis.structure.does_the_report_map_each_piece_of_evidence_to_sp",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report map each piece of evidence to specific sub-questions or sub-propositions of the claim?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "rubric_key": "report_synthesis.citation.does_the_report_accurately_attribute_findings_to",
+                        "competency_category": "citation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report accurately attribute findings to the source, without misrepresenting the strength or scope of the evidence?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_accurately_represent_the_systema",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report accurately represent the systematic uncertainties examined in the source (e.g., progenitor evolution, extinction, selection bias)?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "rubric_key": "report_synthesis.recommendation.does_the_report_suggest_future_research_directio",
+                        "competency_category": "recommendation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report suggest future research directions based on the limitations of the source?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_identify_implicit_assumptions_in",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report identify implicit assumptions in the source's methodology (e.g., assumption of a flat universe for high significance)?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "rubric_key": "report_synthesis.structure.does_the_report_provide_a_final_confidence_score",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report provide a final confidence score or uncertainty quantification for the verdict?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R41",
+                        "rubric_key": "report_synthesis.structure.does_the_report_evaluate_the_logical_self_consis",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the logical self-consistency of the evidence presented across different sources?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R42",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_use_precise_hedging_language_and",
+                        "competency_category": "integrity",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report use precise hedging language and avoid unsupported superlatives (e.g., 'proven', 'guaranteed') when discussing research findings?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    }
+                ]
+            }
+        ]
+    },
+    "generation_meta": {
+        "version": "5.2-ocr",
+        "rubric_key_enabled": true,
+        "capability_coverage_enabled": true,
+        "ocr_enabled": true,
+        "ocr_checklist_items": 32,
+        "ocr_naked_explain_remaining": 0,
+        "dimension_stats": {
+            "information_acquisition": {
+                "item_count": 10,
+                "max_score": 20,
+                "role_distribution": {
+                    "Critical": 1,
+                    "Mandatory": 7,
+                    "Standard": 2
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "scientific_reasoning": {
+                "item_count": 22,
+                "max_score": 58,
+                "role_distribution": {
+                    "Critical": 9,
+                    "Mandatory": 9,
+                    "Standard": 4
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "report_synthesis": {
+                "item_count": 10,
+                "max_score": 15,
+                "role_distribution": {
+                    "Critical": 0,
+                    "Mandatory": 5,
+                    "Standard": 5
+                },
+                "source_linked_ratio": 0.5,
+                "multi_source_ratio": 0.0
+            }
+        },
+        "generation_model": "deepseek-v4-flash",
+        "extraction_model": "deepseek-v4-flash",
+        "query_style": "claim",
+        "query_warnings": []
+    },
+    "calibration": {
+        "version": "2.0",
+        "issues_found": 7,
+        "issues": [
+            "information_acquisition: Critical 项过少 (1/10=10%, 目标 15%-35%)",
+            "information_acquisition: Mandatory 项过多 (7/10=70%, 目标 40%-60%)",
+            "scientific_reasoning: Critical 项过多 (9/22=41%, 目标 15%-35%)",
+            "report_synthesis: Critical 项过少 (0/10=0%, 目标 15%-35%)",
+            "report_synthesis: Standard 项过多 (5/10=50%, 目标 10%-30%)",
+            "report_synthesis: 过多评分项带有 source_ids (5/10), 综合维度应主要评估报告结构而非内容",
+            "information_acquisition: 条目数过少 (10, 目标 12-16)"
+        ],
+        "fixes_applied": [],
+        "task_type": "claim_verification"
+    }
+}

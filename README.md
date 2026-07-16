@@ -14,12 +14,12 @@
 ### 核心流程
 
 ```
-研究问题 → 文献挖掘 → **领域数据集发现** → 知识缺口 → 假设生成 → 假设评估 → 实验设计 → 小样验证 → 报告生成
-                              ↑___________________________________________________________|
+研究问题 → 文献挖掘 → 知识缺口 → 假设生成 → 假设评估 → 迭代实验 → 报告生成
+                              ↑_________________________________________|
                                     科研闭环（Discovery 迭代 / HITL / CQS）
 ```
 
-除标准 **9 阶段** Pipeline 外，系统支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）** 与 **完整审计链导出**，覆盖从假设溯源到数据 citation 追溯的全链路可审计科研流程。
+标准 Pipeline 为 **7 阶段**（`iterative_experiment` 取代原实验设计 + 小样验证）。系统另支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）**、**完整审计链导出**，以及顶栏 **预测**（基于 pingfenbiao 的评分表 / 科学影响力预测）。
 
 ### 8 条设计原则
 
@@ -68,8 +68,24 @@ bash scripts/run_dev.sh
 | 地址 | 说明 |
 |------|------|
 | http://localhost:3000 | 前端界面 |
+| http://localhost:3000/predict | 预测（评分表 / 影响力；需另启 pingfenbiao :8765） |
 | http://localhost:8000/docs | Swagger API 文档 |
 | http://localhost:8000/redoc | ReDoc API 文档 |
+
+#### 预测 Tab（pingfenbiao）
+
+顶栏 **首页 → 预测 → 文献**。页面复刻 pingfenbiao：侧栏历史 + 三 Tab（生成评分表 / 报告打分 / 科学影响力预测）+ 详情四面板。后端为独立服务，前端经 Vite `/pingfenbiao` 反代。
+
+```batch
+# 新开终端（需 DASHSCOPE_API_KEY，可写在 pingfenbiao-main/pingfenbiao-main/.env）
+scripts\run_pingfenbiao.bat
+```
+
+```bash
+cd pingfenbiao-main/pingfenbiao-main/web
+pip install -r requirements.txt   # 首次；另需各 rubric-auto-gen*/requirements.txt
+uvicorn app:app --host 127.0.0.1 --port 8765
+```
 
 ### 端到端验收
 
@@ -115,13 +131,12 @@ AISci/
 │   │   │   ├── knowledge_gap_agent.py
 │   │   │   ├── hypothesis_generation_agent.py
 │   │   │   ├── hypothesis_review_agent.py
-│   │   │   ├── experiment_design_agent.py
-│   │   │   ├── small_validation_agent.py
 │   │   │   └── report_generation_agent.py
+│   │   │   # 迭代实验：services/iterative_experiment_service.py + integrations/shaxiang/
 │   │   ├── api/                  # API 路由模块
 │   │   │   ├── projects.py, research.py, literature.py, datasets.py
 │   │   │   ├── agents.py, pipeline.py, reports.py, documents.py
-│   │   │   ├── data_finder.py, feedback.py, human_loop.py, multimodal.py
+│   │   │   ├── iterative_experiments.py, data_finder.py, feedback.py, human_loop.py
 │   │   │   ├── kg.py, chat.py, vector_search.py, diagnose.py, v1.py
 │   │   ├── core/                 # 配置、闭环控制、质量评分、溯源
 │   │   │   ├── quality_scoring.py, iterative_science.py, data_cleaning.py
@@ -129,9 +144,10 @@ AISci/
 │   │   ├── models/               # SQLAlchemy 模型（project / core / pipeline / chat / research）
 │   │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   │   ├── services/             # 业务逻辑 + Qwen 客户端 + 向量存储
-│   │   │   ├── pipeline_service.py, evidence_reasoning_service.py
-│   │   │   ├── data_finder_service.py, feedback_hub_service.py
-│   │   │   ├── audit_chain_service.py, data_catalog_service.py
+│   │   │   ├── pipeline_service.py, iterative_experiment_service.py
+│   │   │   ├── evidence_reasoning_service.py, data_finder_service.py
+│   │   │   ├── feedback_hub_service.py, audit_chain_service.py
+│   │   ├── integrations/         # 外部系统桥接（如 shaxiang）
 │   │   ├── skills/               # 科研 Skill 工具层（40+）
 │   │   │   ├── literature/       # 论文搜索、引用验证、PDF 证据提取
 │   │   │   ├── data_finder/      # 表格抽取、Schema 对齐、Merge、Entity 对齐
@@ -149,14 +165,16 @@ AISci/
 │   ├── tests/                    # pytest 测试
 │   ├── data/                     # arXiv fallback 数据
 │   └── storage/                  # 运行时数据（见 storage/README.md）
+├── pingfenbiao-main/              # 评分表 / 科学影响力预测（独立 Web :8765，顶栏「预测」）
+├── shaxiang-main/                # 迭代实验上游实现（桥接用，通常 gitignore）
 ├── storage/                      # 项目级持久化（audit / catalog / evidence_chains 等）
 ├── docs/                         # 专题文档（如 DATA_ACQUISITION.md）
 ├── designs/                      # Pencil UI 设计稿（*.pen，与前端代码同仓版本管理）
 ├── frontend/
 │   └── src/
-│       ├── components/           # 60+ 组件（ClosedLoopTimeline、DataFinderPanel、PromptManagementPage 等）
-│       ├── pages/                # Home、ProjectWorkspace、Documents、Reports、Settings 等
-│       ├── services/             # API 模块（pipelineService、dataFinderService、promptService 等）
+│       ├── components/           # 工作流、迭代实验、predict/ 预测页等
+│       ├── pages/                # Home、Predict、Documents、Reports、ProjectWorkspace 等
+│       ├── services/             # pipelineService、predictService、iterativeExperimentService 等
 │       ├── types/                # TypeScript 类型定义
 │       ├── lib/                  # 工具函数（api.ts、utils.ts）
 │       └── config/               # projectTabs、promptStages、llmModels 等
@@ -164,6 +182,7 @@ AISci/
 │   ├── setup_backend.bat/sh      # 后端环境搭建（venv + pip install）
 │   ├── setup_frontend.bat/sh     # 前端环境搭建（pnpm install）
 │   ├── run_dev.bat/sh            # 一键启动前后端
+│   ├── run_pingfenbiao.bat       # 启动预测服务（:8765）
 │   ├── start_backend.bat/sh      # 仅启动后端
 │   ├── init_db.py                # 数据库建表脚本
 │   └── check_e2e.py              # 端到端验收脚本
@@ -224,9 +243,10 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 | **KnowledgeGap** | 文献事实 + 不确定点 | 知识缺口、矛盾、研究机会 | 发现文献中的空白和可研究方向 |
 | **HypothesisGeneration** | 知识缺口 + 文献证据 | 候选假设 + 对齐评分 + 数据证据 | 基于缺口生成可验证假设，标注 supporting_fact_ids |
 | **HypothesisReview** | 候选假设 + 文献上下文 | 新颖性评分、可行性评估 | 评估假设质量和原创性 |
-| **ExperimentDesign** | 通过审查的假设 + 多模态数据 | 实验方案 + 指标 + 基线 | 为每个假设设计验证实验 |
-| **SmallValidation** | 实验设计 + 数据集 | 验证结果 + 量化指标 | 小样本快速验证假设可行性 |
-| **ReportGeneration** | 全流程中间产物 | 12 字段最终报告 + 合规检查 | 聚合所有阶段输出，生成完整报告 |
+| **IterativeExperiment** | 主假设 + 数据集绑定 | 脚本设计、smoke/full 迭代、图表与反馈重设计 | 对接 shaxiang 实验闭环；可手动勾选实验作为报告输入 |
+| **ReportGeneration** | 全流程中间产物（含迭代实验投影） | 12 字段最终报告 + 合规检查 | 聚合各阶段输出，生成完整报告 |
+
+> 历史阶段 `experiment_design` / `small_validation` / `data_acquisition` 已并入或迁移；新 run 以 `iterative_experiment` 为准。
 
 每个 Agent 的特点：
 - **独立类** — 可单独实例化和测试
@@ -254,15 +274,16 @@ API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/appl
 
 | 入口 | 路径 | 说明 |
 |------|------|------|
-| 首页 | `/` | 项目搜索、筛选与列表（已合并原「项目」页） |
-| 项目工作台 | `/projects/:id` | 多 Tab 科研全流程 |
+| 首页 | `/` | 项目搜索、筛选与列表 |
+| **预测** | `/predict` | 评分表生成 / 报告打分 / 科学影响力预测（pingfenbiao） |
 | 文献 | `/documents` | 文献上传、arXiv 检索与导入 |
 | 报告 | `/reports` | 研究报告浏览与导出 |
+| 项目工作台 | `/projects/:id` | 多 Tab 科研全流程 |
 | 设置 | `/settings` | LLM 与系统配置 |
 
 `/projects`、`/workflow` 已重定向至 `/`。
 
-**项目工作台 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 科研闭环总览 · 研究问题 · 文献库 · 知识图谱 · 数据集 · 智能体工作流 · **Prompt 管理** · 候选假设 · 实验设计 · 研究报告 · 运行日志
+**项目工作台 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 科研闭环总览 · 研究问题 · 文献库 · 知识图谱 · 数据集 · 智能体工作流 · **Prompt 管理** · 候选假设 · **迭代实验** · 研究报告 · 运行日志
 
 ---
 
@@ -322,9 +343,9 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 POST /api/v1/pipeline/run
 ```
 
-阶段顺序：`problem_understanding` → `literature_mining` → `data_acquisition` → `knowledge_gap` → `hypothesis_generation` → `hypothesis_review` → `experiment_design` → `small_validation` → `report_generation`
+阶段顺序：`problem_understanding` → `literature_mining` → `knowledge_gap` → `hypothesis_generation` → `hypothesis_review` → `iterative_experiment` → `report_generation`
 
-9 个阶段顺序执行；其中 `data_acquisition` **默认仅检索与问题相关的公开领域数据集**（HF/Zenodo 等），完整 PDF 抽取/合并需配置 `data_acquisition.mode: "full"` 或在 Data Finder 分步操作。每个阶段记录：
+7 个阶段顺序执行。`iterative_experiment` 负责数据绑定、脚本设计与 smoke/full 迭代；报告阶段从该阶段投影实验方案与结果。每个阶段记录：
 
 ```
   StageExecution
@@ -432,10 +453,10 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 ```
 项目：AISci — Qwen 多智能体科研系统（d:\Workplace\AISci）
 栈：FastAPI + React/Vite/Tailwind + FAISS + SQLite
-Pipeline 9 阶段：问题理解→文献→数据采集→知识缺口→假设→评估→实验→小样→报告
+Pipeline 7 阶段：问题理解→文献→知识缺口→假设→评估→迭代实验→报告
 闭环：Discovery 迭代 / HITL / CQS / 审计链 storage/audit/{run_id}.jsonl
-前端：/ 首页 | /projects/:id 工作台 | /documents 文献 | /reports 报告
-关键路径：pipeline_service.py | projectTabs.ts | DATABASE.md | prompts/presets/
+前端：/ 首页 | /predict 预测 | /documents 文献 | /reports 报告 | /projects/:id 工作台
+关键路径：pipeline_service.py | iterative_experiment_service.py | predict/ | projectTabs.ts
 原则：最小改动、中文回复、禁止虚构引用、不擅自 git commit
 任务：（在此填写）
 ```

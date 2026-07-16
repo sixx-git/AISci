@@ -1,0 +1,72 @@
+[
+  {
+    "max_chars": 10000,
+    "label": "10K",
+    "truncated_chars": 9929,
+    "retention_ratio": 0.1200691706774373,
+    "est_input_tokens": 3971,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 20000,
+    "label": "20K",
+    "truncated_chars": 19929,
+    "retention_ratio": 0.24099692843495296,
+    "est_input_tokens": 7971,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 30000,
+    "label": "30K",
+    "truncated_chars": 29386,
+    "retention_ratio": 0.35535830894623555,
+    "est_input_tokens": 11754,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 40000,
+    "label": "40K",
+    "truncated_chars": 38299,
+    "retention_ratio": 0.46314121943550923,
+    "est_input_tokens": 15319,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 50000,
+    "label": "50K",
+    "truncated_chars": 46699,
+    "retention_ratio": 0.5647205359518224,
+    "est_input_tokens": 18679,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 60000,
+    "label": "60K",
+    "truncated_chars": 54536,
+    "retention_ratio": 0.6594916197063874,
+    "est_input_tokens": 21814,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  },
+  {
+    "max_chars": 82694,
+    "label": "Full",
+    "truncated_chars": 82694,
+    "retention_ratio": 1.0,
+    "est_input_tokens": 33077,
+    "elapsed_seconds": 0.5,
+    "exit_code": 2,
+    "error": true
+  }
+]

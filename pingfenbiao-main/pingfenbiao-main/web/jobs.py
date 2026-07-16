@@ -99,7 +99,7 @@ class JobManager:
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             return None
 
@@ -156,10 +156,12 @@ class JobManager:
         output_dir: Path,
         api_key: str = "",
         preloaded_rubrics: dict[str, dict[str, Path | None]] | None = None,
+        max_report_chars: int = 200000,
     ) -> None:
         """启动影响力预测任务（纯 Python，不通过子进程）。"""
         started_at = _utc_now()
         started_ts = time.time()
+        report_limit = max_report_chars if max_report_chars > 0 else 200000
 
         self._write_status(
             job_id,
@@ -182,7 +184,10 @@ class JobManager:
         thread = threading.Thread(
             target=self._run_impact,
             args=(job_id, source_dir, output_dir, api_key, started_at, started_ts),
-            kwargs={"preloaded_rubrics": preloaded_rubrics or {}},
+            kwargs={
+                "preloaded_rubrics": preloaded_rubrics or {},
+                "max_report_chars": report_limit,
+            },
             daemon=True,
         )
         with self._lock:
@@ -241,10 +246,12 @@ class JobManager:
         started_at: str,
         started_ts: float,
         preloaded_rubrics: dict[str, dict[str, Path | None]] | None = None,
+        max_report_chars: int = 200000,
     ) -> None:
         """影响力预测的独立运行逻辑（不通过子进程）。"""
         logs: list[str] = []
         progress = 2
+        report_limit = max_report_chars if max_report_chars > 0 else 200000
 
         def _update(msg: str, pct: int):
             nonlocal progress
@@ -368,7 +375,7 @@ class JobManager:
             # 三种任务类型
             content_scores = []  # [{task_type, score_percentage, raw_score, total_score}]
 
-            from web.runner import build_generate_command, build_score_command, scores_output_path, PACKAGES
+            from runner import build_generate_command, build_score_command, scores_output_path, PACKAGES
             import concurrent.futures
 
             def _generate_and_score(tt: str) -> dict | None:
@@ -419,6 +426,7 @@ class JobManager:
                         score_cmd, score_env = build_score_command(
                             tt, tt_output / "task.json", report_text_path,
                             tt_score_output, source_dir, effective_api_key,
+                            max_report_chars=report_limit,
                             quiet=True,
                         )
                         score_proc = subprocess.run(
@@ -487,6 +495,7 @@ class JobManager:
                     score_cmd, score_env = build_score_command(
                         tt, task_path, report_text_path,
                         tt_score_output, source_dir, effective_api_key,
+                        max_report_chars=report_limit,
                         quiet=True,
                     )
                     score_proc = subprocess.run(
@@ -531,7 +540,7 @@ class JobManager:
                     if result:
                         content_scores.append(result)
 
-            # 计算内容质量分（满分 170）
+            # 计算内容质量分（取三种评分表最高百分比）
             # 找出最高一项
             content_details = list(content_scores)
             best_pct = 0.0
@@ -542,31 +551,34 @@ class JobManager:
             logs.append(f"内容质量（最高项）: {best_pct:.1f}%")
             _update("评分表打分完成", 60)
 
-            # Step 3: LLM 影响力评估
-            _update("LLM 正在评估影响力…", 60)
+            # Step 3: LLM 影响力评估（增强版，整合新技能）
+            _update("LLM 正在评估影响力（增强版：引用网络+早期预测+文本特征）…", 60)
             from common.impact_evaluator import evaluate_impact
-            from openai import OpenAI
 
-            # effective_api_key 已在 Step 2b-prep 中获取
-            if not effective_api_key:
-                raise ValueError("未找到 DASHSCOPE_API_KEY")
-
-            DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-            client = OpenAI(api_key=effective_api_key, base_url=DASHSCOPE_BASE_URL, timeout=120)
-
-            impact = evaluate_impact(metadata, client)
+            impact = evaluate_impact(
+                title=metadata.get("title", ""),
+                doi=doi or metadata.get("doi", ""),
+                pdf_text=pdf_text,
+                api_key=effective_api_key,
+            )
             if impact:
-                logs.append(f"Impact score: {impact.get('total_score', 0)}/30")
-                logs.append(f"Impact level: {impact.get('impact_level', 'Unknown')}")
+                cal_total = impact.get("calibrated_total", {})
+                logs.append(f"Impact calibrated score: {cal_total.get('score', 0)}/30")
+                logs.append(f"D1 文本质量: {impact.get('d1_text_quality', {}).get('score', 0)}/10")
+                logs.append(f"D2 声誉影响: {impact.get('d2_reputation', {}).get('score', 0)}/10")
+                logs.append(f"D3 未来潜力: {impact.get('d3_future_potential', {}).get('score', 0)}/6")
+                logs.append(f"D4 偏差公平: {impact.get('d4_bias_fairness', {}).get('score', 0)}/4")
+                logs.append(f"预测置信度: {impact.get('prediction_confidence', 'unknown')}")
             else:
                 logs.append("LLM 影响力评估失败")
             _update("影响力评估完成", 85)
 
             # Step 4: 组合评级（百分制）
             _update("生成评级报告…", 90)
-            from common.composite_scorer import calculate_composite_rating
+            from common.composite_scorer import calculate_composite_rating, resolve_impact_score
 
-            impact_score = impact.get("total_score") if impact else None
+            impact_score, _impact_max = resolve_impact_score(impact, None)
+
             rating = calculate_composite_rating(
                 content_details=content_details,
                 impact_score=impact_score,
@@ -575,19 +587,21 @@ class JobManager:
             composite_pct = rating.get("composite_score", 0)
             logs.append(f"总分: {composite_pct}% ({rating.get('rating')})")
 
-            # Step 5: 偏差解释
-            _update("生成偏差解释…", 95)
-            from common.impact_explainer import explain_impact_bias
+            # Step 5: 增强版偏差解释
+            _update("生成深度偏差解释（7维度偏差分析）…", 95)
+            from common.impact_explainer import explain_prediction_bias
 
             bias_explanation = None
-            if impact and metadata:
-                bias_explanation = explain_impact_bias(impact, metadata, client)
+            if impact:
+                bias_explanation = explain_prediction_bias(impact, api_key=effective_api_key)
                 if bias_explanation:
-                    logs.append("偏差解释生成成功")
+                    logs.append("深度偏差解释生成成功")
+                    fairness = bias_explanation.get("fairness_assessment", {})
+                    logs.append(f"公平性评分: {fairness.get('overall_fairness_score', 0)}/10")
                 else:
-                    logs.append("偏差解释生成失败")
+                    logs.append("深度偏差解释生成失败")
             else:
-                logs.append("偏差解释跳过（缺少 impact 或 metadata）")
+                logs.append("偏差解释跳过（缺少 impact）")
 
             # 保存结果
             result = {

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DeveloperMenu } from '@/components/DeveloperMenu';
 
@@ -8,6 +8,7 @@ export function Navbar() {
 
   const navItems = [
     { path: '/', label: '首页', icon: Home },
+    { path: '/predict', label: '预测', icon: TrendingUp },
     { path: '/documents', label: '文献', icon: BookOpen },
     { path: '/reports', label: '报告', icon: ClipboardList },
   ];

@@ -1,420 +1,335 @@
 """
-影响力偏差解释模块 — 基于 LLM 影响力评估结果，生成双向偏差解释。
+偏差解释模块（增强版）— BiasExplanationSkill
 
-核心思路：
-  1. 提供完整评分标准与实际打分结果给 LLM
-  2. LLM 生成两种方向的解释：
-     - 提升路径：如果更有影响力，需要在哪些维度改进（基于当前得分的短板）
-     - 下降风险：如果影响力变差，可能是因为哪些因素（基于当前得分已暴露的弱点）
-  3. 严格区分"基于真实数据"与"基于推断"的内容，确保判断依据属实
+解释影响力预测中的偏差来源，增加更多维度：
+  - 领域热度偏差
+  - 期刊/会议声誉偏差
+  - 作者声望偏差
+  - 发表时间偏差
+  - 机构偏差
+  - 语言/地域偏差
+  - 性别偏差（基于作者姓名推断，仅供参考）
+
+不只给出一个分数，还要说明：
+  1. 影响判断的因素
+  2. 这些因素是否可能带来不公平或不稳定的评价
+  3. 如何校准这些偏差
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+import os
+import re
+from typing import Any
+
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-PROMPT_IMPACT_BIAS_EXPLANATION = """\
-You are an academic impact assessment analyst specializing in systematic bias detection. Based on the following paper's metadata and its impact evaluation scores, generate a rigorous bias explanation.
 
-## Scoring Standards (Full marks = 30)
-
-1. Academic Reach (0-10): Citation count considering publication age.
-   - 10: >1000 citations / top 1% in field
-   - 8: 200-1000 citations / highly cited
-   - 6: 50-200 citations / solid recognition
-   - 4: 10-50 citations / early traction
-   - 2: <10 citations / limited reach
-   - Adjust for recency (published <2yr ago gets leniency)
-
-2. Publication Venue Quality (0-8): Venue ranking (CCF-A/B/C equivalent).
-   - 8: CCF-A equivalent top venue
-   - 5-6: CCF-B equivalent solid venue
-   - 3-4: CCF-C equivalent respectable venue
-   - 2: Unranked
-   - 1-2: Preprint only
-
-3. Author Influence (0-7): Author reputation and institution prestige.
-   - 7: Well-established senior researchers from top institutions
-   - 5: Mid-career researchers with solid publications
-   - 3: Early-career or less established
-   - 1: Unknown authors, first publication
-
-4. Research Network Position (0-5): Collaboration diversity and breadth.
-   - 5: Large international team with top-tier collaborators
-   - 3: Multi-institution collaboration
-   - 1: Single author or single institution
-
-## Actual Scoring Result
-
-{impact_result_text}
-
-## Paper Metadata (VERIFIED DATA)
-
-- Title: {title}
-- Venue: {host_venue}
-- Publication Year: {publication_year}
-- Citation Count: {cited_by_count} (from OpenAlex API)
-- Open Access: {open_access}
-- Authors: {authors_summary}
-- Institutions: {institutions_summary}
-
-## Task
-
-You MUST analyze this score from TWO opposing directions: "偏高" (overestimation) and "偏低" (underestimation). For EACH dimension, explain BOTH why the score might be too HIGH and why it might be too LOW, based on the specific numerical score and the metadata.
-
-### Section 1: Current Assessment Summary ("现状诊断")
-One paragraph summarizing the score distribution, strengths, and weaknesses. Use SPECIFIC numbers from the scoring result.
-
-### Section 2: Underestimation Bias Analysis ("偏低误差分析")
-For EACH dimension, explain why this score might UNDERESTIMATE the paper's actual impact. Consider:
-- Academic Reach: Is the citation count artificially low due to preprint stigma, database lag, or field-specific citation norms?
-- Venue Quality: Did the scoring system miss the actual publication venue (e.g., OpenAlex shows preprint but paper was accepted at a top conference)?
-- Author Influence: Did missing institutional metadata cause conservative scoring? Are the authors more influential than the score suggests?
-- Network Position: Is collaboration diversity underestimated due to incomplete affiliation data?
-
-For each dimension, provide:
-- "score_may_be_low_because": specific reason the score is conservative
-- "evidence": what data supports this claim
-- "estimated_true_range": your best estimate of what the score SHOULD be (e.g., "6-8/10" instead of "4/10")
-
-### Section 3: Overestimation Bias Analysis ("偏高误差分析")
-For EACH dimension, explain why this score might OVERESTIMATE the paper's actual impact. Consider:
-- Academic Reach: Could citations be inflated by self-citation, citation rings, or early hype? Is the citation velocity sustainable?
-- Venue Quality: Could the venue's prestige be overrated? Is it a "pay-to-publish" or low-acceptance-barrier venue?
-- Author Influence: Could author reputation create a "halo effect" that inflates the score beyond what THIS specific paper deserves?
-- Network Position: Could "multi-institutional" collaboration be superficial (guest authors, honorary affiliations)?
-
-For each dimension, provide:
-- "score_may_be_high_because": specific reason the score is inflated
-- "evidence": what data supports this claim
-- "risk_level": "High/Medium/Low" for how likely this overestimation is
-
-### Section 4: Improvement Path ("提升路径") — ANCHORED TO SCORING RUBRIC
-For each dimension where the score is NOT at maximum, reference the EXACT scoring rubric thresholds above:
-
-**Academic Reach (0-10)** — reference the citation thresholds:
-- If scored 4 (10-50 citations): to reach 6, need 50+ citations; to reach 8, need 200+; to reach 10, need 1000+.
-- If scored 6 (50-200 citations): to reach 8, need 200+ citations; to reach 10, need 1000+.
-- State: which threshold boundary is the score near? What would push it over?
-
-**Venue Quality (0-8)** — reference the CCF ranking thresholds:
-- If scored 2 (Unranked/Preprint): to reach 5-6, need CCF-B acceptance; to reach 8, need CCF-A.
-- If scored 5-6 (CCF-B): to reach 8, need CCF-A acceptance.
-- State: what specific venue tier is needed, and is it realistic for this paper?
-
-**Author Influence (0-7)** — reference the tier thresholds:
-- If scored 3 (Early-career): to reach 5, need mid-career with solid publication record; to reach 7, need senior from top institution.
-- If scored 5 (Mid-career): to reach 7, need established senior from top institution.
-- State: what specific career milestone or institutional affiliation would raise the score?
-
-**Network Position (0-5)** — reference the collaboration thresholds:
-- If scored 1 (Single institution): to reach 3, need multi-institution; to reach 5, need large international team.
-- If scored 3 (Multi-institution): to reach 5, need large international team with top-tier collaborators.
-- State: what specific collaboration expansion would raise the score?
-
-For each, provide: dimension, current_score, current_rubric_tier (quote the exact rubric description), next_tier (quote the exact rubric description), gap_to_close (what specifically is needed), realistic (boolean).
-
-### Section 5: Decline Risks ("下降风险") — ANCHORED TO SCORING RUBRIC
-For each dimension, reference the EXACT scoring rubric thresholds BELOW:
-
-- What would cause the score to DROP to the next lower tier?
-- For Academic Reach: citation growth stalling, field moving on from this topic
-- For Venue Quality: venue reputation declining (unlikely but possible for new venues)
-- For Author Influence: authors leaving the field, institution declining
-- For Network Position: team dispersing, no follow-up collaborations
-- State: current tier, risk of dropping to which tier, what specific trigger would cause the drop, severity.
-
-### Section 6: Data Reliability Statement ("依据声明")
-- verified_claims: claims based on OpenAlex API data
-- inferred_claims: claims based on LLM knowledge inference
-- missing_data: data gaps that limit assessment accuracy
-
-## Output Format
-Return ONLY a JSON object (no markdown, no code fences):
-{{
-  "current_assessment": "string",
-  "underestimation_bias": [
-    {{
-      "dimension": "Academic Reach / Venue Quality / Author Influence / Network Position",
-      "current_score": "X/Y",
-      "score_may_be_low_because": "string: specific reason",
-      "evidence": "string: supporting evidence",
-      "estimated_true_range": "string: e.g., '6-8/10'"
-    }}
-  ],
-  "overestimation_bias": [
-    {{
-      "dimension": "Academic Reach / Venue Quality / Author Influence / Network Position",
-      "current_score": "X/Y",
-      "score_may_be_high_because": "string: specific reason",
-      "evidence": "string: supporting evidence",
-      "risk_level": "High/Medium/Low"
-    }}
-  ],
-  "improvement_path": [
-    {{
-      "dimension": "Academic Reach / Venue Quality / Author Influence / Network Position",
-      "current_score": "X/Y",
-      "current_rubric_tier": "string: exact rubric description for this score (e.g., '10-50 citations / early traction')",
-      "next_tier": "string: exact rubric description for the next higher score (e.g., '50-200 citations / solid recognition')",
-      "gap_to_close": "string: what specific change is needed to reach the next tier",
-      "realistic": true/false
-    }}
-  ],
-  "decline_risks": [
-    {{
-      "dimension": "Academic Reach / Venue Quality / Author Influence / Network Position",
-      "current_score": "X/Y",
-      "current_rubric_tier": "string: exact rubric description",
-      "risk_drop_to_tier": "string: exact rubric description of the next lower tier",
-      "trigger": "string: what specific event would cause the drop",
-      "severity": "High/Medium/Low"
-    }}
-  ],
-  "data_reliability": {{
-    "verified_claims": ["string"],
-    "inferred_claims": ["string"],
-    "missing_data": ["string"]
-  }}
-}}"""
-
-
-def explain_impact_bias(
-    impact: dict[str, Any],
-    metadata: dict[str, Any],
-    llm_client,
-    model: str = "deepseek-v4-flash",
-    temperature: float = 0.3,
-) -> Optional[dict[str, Any]]:
-    """调用 LLM 生成影响力评估的偏差解释。
-
-    Args:
-        impact: evaluate_impact() 返回的影响力评估结果
-        metadata: fetch_work_by_doi/title 返回的元数据
-        llm_client: OpenAI 兼容客户端
-        model: 模型名称
-        temperature: 生成温度
-
-    Returns:
-        偏差解释结果字典，或 None。
-    """
-    prompt = _build_explanation_prompt(impact, metadata)
-
-    try:
-        resp = llm_client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=8000,
-        )
-        text = resp.choices[0].message.content.strip()
-
-        # 清理 markdown 代码块
-        text = text.strip()
-        while text.startswith("```"):
-            text = text[3:].lstrip()
-            if text.startswith("json"):
-                text = text[4:].lstrip()
-            break
-        while text.endswith("```"):
-            text = text[:-3].rstrip()
-            break
-        text = text.strip()
-
-        # 尝试提取 JSON 对象
-        brace_start = text.find("{")
-        brace_end = text.rfind("}")
-        if brace_start >= 0 and brace_end > brace_start:
-            text = text[brace_start:brace_end + 1]
-
-        result = json.loads(text.strip())
-        _validate_explanation(result)
-        return result
-
-    except json.JSONDecodeError as e:
-        logger.warning("Bias explanation JSON parse failed: %s", e)
-        logger.warning("Raw text (repr): %s", repr(text[:500]))
-        return None
-    except Exception as e:
-        logger.error("Bias explanation failed: %s", e)
-        return None
-
-
-def _build_explanation_prompt(impact: dict[str, Any], metadata: dict[str, Any]) -> str:
-    """构建偏差解释 prompt。"""
-    # 将 impact 结果格式化为可读文本
-    lines = []
-    lines.append(f"Total Score: {impact.get('total_score', 0)}/30")
-    lines.append(f"Impact Level: {impact.get('impact_level', 'Unknown')}")
-    lines.append("")
-
-    dim_names = {
-        "academic_reach": "学术传播度 (Academic Reach)",
-        "venue_quality": "发表平台质量 (Venue Quality)",
-        "author_influence": "作者影响力 (Author Influence)",
-        "network_position": "研究网络位置 (Network Position)",
-    }
-
-    for key, cn_name in dim_names.items():
-        entry = impact.get(key, {})
-        score = entry.get("score", 0)
-        max_score = entry.get("max", 0)
-        reason = entry.get("reason", "No reason provided")
-        lines.append(f"{cn_name}: {score}/{max_score}")
-        lines.append(f"  Reason: {reason}")
-        if key == "venue_quality" and "equivalent_ccf" in entry:
-            lines.append(f"  CCF Equivalent: {entry['equivalent_ccf']}")
-        lines.append("")
-
-    impact_result_text = "\n".join(lines)
-
-    # 作者摘要
-    authors = metadata.get("authors", [])
-    authors_summary = "; ".join(
-        f"{a.get('name', 'Unknown')} ({', '.join(a.get('institutions', []))})"
-        for a in authors[:5]
-    ) if authors else "Unknown"
-
-    institutions = metadata.get("institutions", [])
-    institutions_summary = "; ".join(institutions[:5]) if institutions else "Unknown (arXiv papers often lack institutional metadata)"
-
-    return PROMPT_IMPACT_BIAS_EXPLANATION.format(
-        impact_result_text=impact_result_text,
-        title=metadata.get("title", "Unknown"),
-        host_venue=metadata.get("host_venue", "Unknown / Preprint"),
-        publication_year=metadata.get("publication_year", "Unknown"),
-        cited_by_count=metadata.get("cited_by_count", 0),
-        open_access="Yes" if metadata.get("open_access") else "No",
-        authors_summary=authors_summary,
-        institutions_summary=institutions_summary,
+def _get_client(api_key: str):
+    key = api_key or os.getenv("DASHSCOPE_API_KEY", "")
+    return OpenAI(
+        api_key=key,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
 
 
-def _validate_explanation(result: dict[str, Any]) -> None:
-    """验证偏差解释结果的结构，补全缺失字段。"""
-    if not isinstance(result, dict):
-        raise ValueError(f"Expected dict, got {type(result).__name__}")
+# ---------------------------------------------------------------------------
+# 增强版 System prompt
+# ---------------------------------------------------------------------------
+_EXPLAINER_SYSTEM_PROMPT = """You are a scientific-impact bias analyst.
 
-    # current_assessment: string
-    if "current_assessment" not in result or not isinstance(result["current_assessment"], str):
-        result["current_assessment"] = ""
+## Task
+Analyze the prediction output for potential biases and unfairness. You must identify:
+1. Which factors influenced the prediction
+2. Whether these factors could lead to unfair or unstable evaluations
+3. How the calibration mitigates these biases
+4. What residual risks remain
 
-    # list fields
-    for key in ["underestimation_bias", "overestimation_bias", "improvement_path", "decline_risks"]:
-        if key not in result or not isinstance(result[key], list):
-            result[key] = []
+## Input
+You will receive:
+- Original prediction scores
+- Calibrated scores with adjustments
+- Citation graph features
+- Early impact predictions
+- Paper text features
+- Bias direction analysis
 
-    # data_reliability: dict
-    if "data_reliability" not in result or not isinstance(result["data_reliability"], dict):
-        result["data_reliability"] = {
-            "verified_claims": [],
-            "inferred_claims": [],
-            "missing_data": [],
-        }
-    else:
-        dr = result["data_reliability"]
-        for key in ["verified_claims", "inferred_claims", "missing_data"]:
-            if key not in dr or not isinstance(dr[key], list):
-                dr[key] = []
+## Bias Dimensions to Analyze
+
+### 1. Venue Bias (期刊/会议声誉偏差)
+- High-prestige venues may inflate scores through halo effect
+- Lesser-known venues may undervalue genuinely good work
+- Preprints may be unfairly penalized
+
+### 2. Author Bias (作者声望偏差)
+- Famous authors may receive inflated scores
+- Early-career researchers may be undervalued
+- Famous institutions may create implicit bias
+
+### 3. Field Bias (领域热度偏差)
+- Hot fields (AI, biomedicine) naturally attract more citations
+- Niche fields may have lower citation ceilings
+- Interdisciplinary work may be undercounted
+
+### 4. Temporal Bias (发表时间偏差)
+- Very new papers haven't had time to accumulate citations
+- Very old papers may be undervalued due to citation decay
+- Seasonal effects in publication
+
+### 5. Language/Region Bias (语言/地域偏差)
+- Non-English papers may be under-cited
+- Non-Western institutions may face implicit bias
+- Regional citation practices vary
+
+### 6. Gender Bias (性别偏差)
+- Gender imbalances in STEM may create structural bias
+- Note: gender inference from names is imperfect and should be flagged as uncertain
+
+### 7. Methodological Bias (方法论偏差)
+- Quantitative fields may be overvalued vs qualitative
+- Experimental vs theoretical work may be treated differently
+- Replication studies may be undervalued
+
+## Output Format
+Respond with a JSON object containing:
+
+{
+  "bias_analysis": {
+    "venue_bias": {
+      "detected": boolean,
+      "direction": "positive|negative|neutral",
+      "estimated_impact": float,
+      "description": "string",
+      "mitigation": "string"
+    },
+    "author_bias": { ... },
+    "field_bias": { ... },
+    "temporal_bias": { ... },
+    "language_region_bias": { ... },
+    "gender_bias": { ... },
+    "methodological_bias": { ... }
+  },
+  "fairness_assessment": {
+    "overall_fairness_score": float,
+    "max": 10,
+    "confidence": "high|medium|low",
+    "key_concerns": ["string"],
+    "recommendations": ["string"]
+  },
+  "stability_analysis": {
+    "prediction_stability": "high|medium|low",
+    "time_sensitivity": "high|medium|low",
+    "sample_size_concerns": "string",
+    "robustness_notes": "string"
+  },
+  "calibration_effectiveness": {
+    "reputation_adjustment_effectiveness": "high|medium|low",
+    "quality_adjustment_effectiveness": "high|medium|low",
+    "remaining_bias_risk": "high|medium|low",
+    "suggested_further_calibration": ["string"]
+  },
+  "transparency_report": {
+    "factors_influencing_judgment": [
+      { "factor": "string", "weight": "high|medium|low", "source": "string", "potential_bias": "string" }
+    ],
+    "uncertainty_quantification": {
+      "score_uncertainty_range": "string",
+      "prediction_interval": "string",
+      "confidence_level": "string"
+    }
+  }
+}
+"""
 
 
-def format_bias_explanation(explanation: dict[str, Any]) -> str:
-    """将偏差解释格式化为人类可读的文本报告。"""
-    lines = []
-    lines.append("=" * 50)
-    lines.append("影响力评估偏差解释")
-    lines.append("=" * 50)
+def explain_prediction_bias(
+    impact_result: dict[str, Any],
+    api_key: str = "",
+    model: str = "qwen-plus",
+    max_chars: int = 6000,
+    temperature: float = 0.2,
+) -> dict[str, Any] | None:
+    """对影响力预测结果进行深度偏差分析（增强版）。
 
-    # 现状诊断
-    lines.append("\n【现状诊断】")
-    lines.append(explanation.get("current_assessment", "暂无诊断"))
+    Args:
+        impact_result: evaluate_impact() 的完整输出
+        api_key: DashScope API Key
+        model: 模型名称
+        max_chars: 用户提示最大字符数
+        temperature: 生成温度
 
-    # 偏低误差分析
-    lines.append("\n【偏低误差分析】得分可能低估了实际影响力：")
-    under = explanation.get("underestimation_bias", [])
-    if under:
-        for item in under:
-            dim = item.get("dimension", "Unknown")
-            score = item.get("current_score", "?/?")
-            reason = item.get("score_may_be_low_because", "")
-            evidence = item.get("evidence", "")
-            est_range = item.get("estimated_true_range", "")
-            lines.append(f"  • {dim} ({score})")
-            lines.append(f"    原因: {reason}")
-            if evidence:
-                lines.append(f"    证据: {evidence}")
-            if est_range:
-                lines.append(f"    估计真实范围: {est_range}")
-    else:
-        lines.append("  未发现显著低估")
+    Returns:
+        偏差分析结果字典。
+    """
+    # 提取关键数据
+    analysis_data = impact_result.get("_analysis_data", {})
+    metadata = analysis_data.get("metadata", {})
+    citation_graph = analysis_data.get("citation_graph", {})
+    early_impact = analysis_data.get("early_impact_prediction", {})
+    paper_features = analysis_data.get("paper_features", {})
 
-    # 偏高误差分析
-    lines.append("\n【偏高误差分析】得分可能高估了实际影响力：")
-    over = explanation.get("overestimation_bias", [])
-    if over:
-        for item in over:
-            dim = item.get("dimension", "Unknown")
-            score = item.get("current_score", "?/?")
-            reason = item.get("score_may_be_high_because", "")
-            evidence = item.get("evidence", "")
-            risk = item.get("risk_level", "Medium")
-            lines.append(f"  • {dim} ({score}) [风险: {risk}]")
-            lines.append(f"    原因: {reason}")
-            if evidence:
-                lines.append(f"    证据: {evidence}")
-    else:
-        lines.append("  未发现显著高估")
+    # 构建提示
+    lines = ["请对以下影响力预测结果进行偏差分析。", ""]
 
-    # 提升路径
-    lines.append("\n【提升路径】如果影响力更高，需要改进：")
-    improvements = explanation.get("improvement_path", [])
-    if improvements:
-        for item in improvements:
-            dim = item.get("dimension", "Unknown")
-            current = item.get("current_score", "?/?")
-            potential = item.get("potential_score", "?/?")
-            change = item.get("specific_change", "")
-            realistic = "可行" if item.get("realistic") else "不确定"
-            lines.append(f"  • {dim}: {current} → {potential} | {change} ({realistic})")
-    else:
-        lines.append("  暂无具体提升建议")
+    # 预测结果摘要
+    lines.append("=== 预测结果摘要 ===")
+    for key in ["d1_text_quality", "d2_reputation", "d3_future_potential", "d4_bias_fairness"]:
+        if key in impact_result:
+            d = impact_result[key]
+            lines.append(f"{key}: {d.get('score', 0)}/{d.get('max', 10)} - {d.get('rationale', 'N/A')[:100]}")
 
-    # 下降风险
-    lines.append("\n【下降风险】影响力可能被高估的因素：")
-    risks = explanation.get("decline_risks", [])
-    if risks:
-        for item in risks:
-            dim = item.get("dimension", "Unknown")
-            score = item.get("current_score", "?/?")
-            desc = item.get("risk_description", "")
-            severity = item.get("severity", "Medium")
-            lines.append(f"  • [{severity}] {dim} ({score}): {desc}")
-    else:
-        lines.append("  暂无显著风险")
+    if "calibrated_total" in impact_result:
+        ct = impact_result["calibrated_total"]
+        lines.append(f"校准总分: {ct.get('score', 0)}/{ct.get('max', 30)}")
+        lines.append(f"校准方法: {ct.get('method', 'N/A')}")
 
-    # 数据可靠性
-    lines.append("\n【依据声明】")
-    dr = explanation.get("data_reliability", {})
-    verified = dr.get("verified_claims", [])
-    inferred = dr.get("inferred_claims", [])
-    missing = dr.get("missing_data", [])
-
-    if verified:
-        lines.append("  基于真实数据：")
-        for c in verified:
-            lines.append(f"    ✓ {c}")
-    if inferred:
-        lines.append("  基于推断：")
-        for c in inferred:
-            lines.append(f"    ~ {c}")
-    if missing:
-        lines.append("  缺失数据（影响评估准确性）：")
-        for c in missing:
-            lines.append(f"    ? {c}")
+    if "calibration_details" in impact_result:
+        cd = impact_result["calibration_details"]
+        lines.append(f"原始声誉分量: {cd.get('raw_reputation_component', 'N/A')}")
+        lines.append(f"原始质量分量: {cd.get('raw_quality_component', 'N/A')}")
+        lines.append(f"声誉调整: {cd.get('reputation_adjustment', 'N/A')}")
+        lines.append(f"质量调整: {cd.get('quality_adjustment', 'N/A')}")
 
     lines.append("")
-    return "\n".join(lines)
+
+    # 关键影响因素
+    if "key_factors" in impact_result:
+        lines.append("=== 关键影响因素 ===")
+        for f in impact_result["key_factors"][:5]:
+            lines.append(f"- {f.get('factor', 'N/A')}: {f.get('impact', 'N/A')} ({f.get('magnitude', 'N/A')}) - {f.get('description', 'N/A')[:80]}")
+        lines.append("")
+
+    # 风险因素
+    if "risk_factors" in impact_result:
+        lines.append("=== 风险因素 ===")
+        for r in impact_result["risk_factors"][:5]:
+            lines.append(f"- {r.get('risk', 'N/A')}: 概率{r.get('probability', 'N/A')} - {r.get('mitigation', 'N/A')[:80]}")
+        lines.append("")
+
+    # 引用网络特征
+    if citation_graph:
+        lines.append("=== 引用网络特征 ===")
+        lines.append(f"被引次数: {citation_graph.get('network_size', {}).get('cited_by_count', 0)}")
+        lines.append(f"引用速度: {citation_graph.get('citation_velocity', 0)} 次/年")
+        lines.append(f"领域百分位: {citation_graph.get('field_percentile', 50)}%")
+        lines.append(f"引用多样性: {citation_graph.get('diversity_score', 0)}")
+        lines.append("")
+
+    # 早期预测
+    if early_impact:
+        lines.append("=== 早期影响力预测 ===")
+        lines.append(f"生命周期阶段: {early_impact.get('current_state', {}).get('life_stage', 'unknown')}")
+        lines.append(f"预测不确定性: {early_impact.get('uncertainty', {}).get('overall_level', 'unknown')}")
+        lines.append(f"置信度: {early_impact.get('confidence_level', 'unknown')}")
+        lines.append("")
+
+    # 元数据
+    lines.append("=== 论文元数据 ===")
+    lines.append(f"标题: {metadata.get('title', 'N/A')}")
+    lines.append(f"作者: {', '.join(metadata.get('authors', [])[:5])}")
+    lines.append(f"期刊: {metadata.get('journal', 'N/A')}")
+    lines.append(f"发表年份: {metadata.get('publication_year', 'N/A')}")
+    lines.append(f"引用数: {metadata.get('cited_by_count', 0)}")
+    lines.append("")
+
+    # 文本特征
+    if paper_features:
+        lines.append("=== 文本特征 ===")
+        lines.append(f"综合质量分: {paper_features.get('overall_quality_score', 0)}/100")
+        innov = paper_features.get("innovation", {})
+        lines.append(f"创新密度: {innov.get('innovation_density', 0)}")
+        lines.append(f"跨领域程度: {innov.get('cross_domain_degree', 'unknown')}")
+        lines.append("")
+
+    user_prompt = "\n".join(lines)
+    if len(user_prompt) > max_chars:
+        user_prompt = user_prompt[:max_chars] + "\n[内容截断...]"
+
+    # LLM 分析
+    client = _get_client(api_key)
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": _EXPLAINER_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content
+        result = json.loads(raw)
+    except Exception as e:
+        logger.error("偏差解释 LLM 调用失败: %s", e)
+        return None
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 原有辅助函数（保持兼容）
+# ---------------------------------------------------------------------------
+
+HIGH_PRESTIGE_KEYWORDS = [
+    "nature", "science", "cell", "ieee", "acm", "springer", "elsevier",
+    "neurips", "icml", "iclr", "cvpr", "acl", "emnlp", "aaai", "ijcai",
+    "物理评论快报", "自然", "科学",
+]
+
+
+def explain_bias_direction(meta: dict) -> str:
+    """判断整体偏差方向（+ 高估 / - 低估 / ~ 中性）。"""
+    score = 0
+    reasons = []
+
+    journal = (meta.get("journal") or "").lower()
+    if any(k in journal for k in HIGH_PRESTIGE_KEYWORDS):
+        score += 1
+        reasons.append("高声誉期刊")
+
+    cited = meta.get("cited_by_count", 0) or 0
+    if cited > 1000:
+        score += 1
+        reasons.append("高引用数")
+    elif cited < 10:
+        score -= 1
+        reasons.append("低引用数")
+
+    year = meta.get("publication_year")
+    if year:
+        age = 2025 - year
+        if age < 2:
+            score -= 1
+            reasons.append("新近发表")
+        elif age > 10:
+            score -= 0.5
+            reasons.append("发表时间较长")
+
+    authors = meta.get("authors", []) or []
+    if len(authors) > 10:
+        score += 0.5
+        reasons.append("大团队合作")
+
+    if score > 1:
+        return f"+{score}（{'、'.join(reasons)} → 可能高估）"
+    elif score < -1:
+        return f"{score}（{'、'.join(reasons)} → 可能低估）"
+    return f"~{score}（{'、'.join(reasons)} → 偏差较小）"
+
+
+def should_boost(meta: dict) -> bool:
+    """判断是否应提升评分（存在明显低估信号）。"""
+    cited = meta.get("cited_by_count", 0) or 0
+    year = meta.get("publication_year")
+    journal = (meta.get("journal") or "").lower()
+
+    is_new = year is not None and (2025 - year) <= 2
+    is_low_cited = cited < 10
+    is_lesser_known_venue = not any(k in journal for k in HIGH_PRESTIGE_KEYWORDS)
+
+    return is_new and is_low_cited and is_lesser_known_venue

@@ -190,13 +190,6 @@ def extract_title(pdf_path: str | Path) -> Optional[str]:
     return None
 
 
-def extract_doi_and_title(pdf_path: str | Path) -> dict[str, Optional[str]]:
-    """同时提取 DOI 和标题，返回 dict。"""
-    doi = extract_doi(pdf_path)
-    title = extract_title(pdf_path)
-    return {"doi": doi, "title": title}
-
-
 def _clean_doi(raw: str) -> Optional[str]:
     """清洗 DOI 字符串。"""
     # 去掉 doi.org 前缀

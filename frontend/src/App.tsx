@@ -5,6 +5,7 @@ import { Home } from './pages/Home';
 import { CreateProject } from './pages/CreateProject';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
 import { Documents } from './pages/Documents';
+import { Predict } from './pages/Predict';
 import { Reports } from './pages/Reports';
 import { Skills } from './pages/Skills';
 import { Settings } from './pages/Settings';
@@ -25,6 +26,7 @@ function App() {
             <Route path="/projects" element={<Navigate to="/" replace />} />
             <Route path="/projects/new" element={<CreateProject />} />
             <Route path="/projects/:projectId" element={<ProjectWorkspace />} />
+            <Route path="/predict" element={<Predict />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/workflow" element={<Navigate to="/" replace />} />
             <Route path="/reports" element={<Reports />} />

@@ -117,6 +117,9 @@ out/
 *.sdf.gz
 chembl_37.sdf.gz
 
+# pingfenbiao job workspace
+pingfenbiao-main/**/web/_jobs/
+
 # =========================
 # OS files
 # =========================

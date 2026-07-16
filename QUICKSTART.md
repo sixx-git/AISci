@@ -31,6 +31,26 @@ copy .env.example backend\.env
 scripts\run_dev.bat
 ```
 
+### 预测 Tab（评分表 / 影响力预测）
+
+顶栏「预测」依赖独立服务 **pingfenbiao**（默认 `127.0.0.1:8765`）。前端经 Vite 代理 `/pingfenbiao` 访问。
+
+```batch
+# 新开终端
+scripts\run_pingfenbiao.bat
+```
+
+或：
+
+```bash
+cd pingfenbiao-main/pingfenbiao-main/web
+pip install -r requirements.txt
+# 另需安装各 rubric-auto-gen*/requirements.txt（首次）
+uvicorn app:app --host 127.0.0.1 --port 8765
+```
+
+配置 `DASHSCOPE_API_KEY`（环境变量或页面内填写）。修改 `vite.config.ts` 后需重启 `pnpm dev`。
+
 ### Linux/Mac 用户
 
 ```bash
@@ -56,6 +76,7 @@ bash scripts/run_dev.sh
 | 地址 | 说明 |
 |------|------|
 | http://localhost:3000 | 前端界面 |
+| http://localhost:3000/predict | 预测（评分表 / 影响力，需 pingfenbiao :8765） |
 | http://localhost:8000/docs | Swagger API 文档 |
 | http://localhost:8000/redoc | ReDoc API 文档 |
 

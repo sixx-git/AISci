@@ -17,12 +17,14 @@ from app.api import (
     skills,
     science_iteration,
     iterative_experiments,
+    pingfenbiao_proxy,
 )
 
 router = APIRouter()
 
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
 router.include_router(iterative_experiments.router, tags=["iterative-experiments"])
+router.include_router(pingfenbiao_proxy.router, tags=["pingfenbiao-proxy"])
 router.include_router(research.router, prefix="/research", tags=["research"])
 router.include_router(chat.router, prefix="/chat", tags=["chat"])
 router.include_router(documents.router, prefix="/documents", tags=["documents"])

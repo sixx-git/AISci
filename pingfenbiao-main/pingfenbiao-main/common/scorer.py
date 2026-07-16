@@ -20,21 +20,33 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_REPORT_CHARS = 20000
+DEFAULT_MAX_REPORT_CHARS = 200000
+# 论文全文评估时使用更大的上限，避免截断导致评分项找不到证据
+DEFAULT_PAPER_MAX_REPORT_CHARS = 200000
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_SOURCE_EXCERPT_CHARS = 800
 SINGLE_RETRY_ATTEMPTS = 2
 
 # 长报告截断：保留首尾 + 关键章节
-HEAD_RATIO = 0.40
-TAIL_RATIO = 0.30
+HEAD_RATIO = 0.35
+TAIL_RATIO = 0.25
 SECTION_PATTERNS = [
+    # Markdown 标题格式（报告类）
     r"(?im)^#{1,4}\s*abstract\b.*?(?=^#{1,4}\s|\Z)",
     r"(?im)^#{1,4}\s*conclusion\b.*?(?=^#{1,4}\s|\Z)",
     r"(?im)^#{1,4}\s*verdict\b.*?(?=^#{1,4}\s|\Z)",
     r"(?im)^#{1,4}\s*summary\b.*?(?=^#{1,4}\s|\Z)",
     r"(?im)^#{1,4}\s*discussion\b.*?(?=^#{1,4}\s|\Z)",
     r"(?im)^#{1,4}\s*future\s+directions?\b.*?(?=^#{1,4}\s|\Z)",
+    # 纯文本论文格式（PDF提取后的文本，标题通常是全大写或首字母大写独占一行）
+    r"(?im)^(?:\s*\n)?(abstract)\s*\n.*?(?=\n\s*(?:introduction|1[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    r"(?im)^(?:\s*\n)?(introduction)\s*\n.*?(?=\n\s*(?:methods?|2[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    r"(?im)^(?:\s*\n)?(methods?|methodology|materials?\s+and\s+methods?)\s*\n.*?(?=\n\s*(?:results?|3[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    r"(?im)^(?:\s*\n)?(results?|findings?)\s*\n.*?(?=\n\s*(?:discussion|conclusion|4[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    r"(?im)^(?:\s*\n)?(discussion)\s*\n.*?(?=\n\s*(?:conclusion|5[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    r"(?im)^(?:\s*\n)?(conclusions?)\s*\n.*?(?=\n\s*(?:references?|acknowledg|6[\.\s]|\d+\.\s+[A-Z]|\Z))",
+    # 数字编号章节（如 "1. Introduction", "2. Methods"）
+    r"(?im)^\d+[\.\)]\s*(?:introduction|methods?|results?|discussion|conclusion|abstract)\b.*?(?=^\d+[\.\)]\s*[A-Z]|\Z)",
 ]
 
 from common.rubric_observability import (
@@ -238,7 +250,10 @@ def prepare_report_text(text: str, max_chars: int = DEFAULT_MAX_REPORT_CHARS) ->
                 continue
             chunk = match.group(0).strip()
             if len(chunk) > 80:
-                sections.append(chunk[:1200])
+                # 根据截断上限动态调整每个章节的保留长度
+                # 旧值固定1200太小，改为 max_chars 的 8%，上限 5000
+                chunk_max = min(5000, max(1200, int(max_chars * 0.08)))
+                sections.append(chunk[:chunk_max])
                 seen_spans.append((start, end))
 
     section_text = "\n\n---\n\n".join(sections)
@@ -253,8 +268,23 @@ def prepare_report_text(text: str, max_chars: int = DEFAULT_MAX_REPORT_CHARS) ->
     parts.append(f"\n\n... [Report tail preserved] ...\n\n{text[-tail_size:]}")
 
     result = "".join(parts)
+    # 如果总长超过上限，逐步缩减非关键部分
     if len(result) > max_chars:
-        result = result[:max_chars]
+        # 优先策略：保留完整的关键章节，缩减头部和尾部
+        # 先尝试只保留头部的一部分 + 完整章节 + 尾部的一部分
+        shrink_head = int(max_chars * 0.30)
+        shrink_tail = int(max_chars * 0.20)
+        remaining = max_chars - shrink_head - shrink_tail - 100
+        if len(section_text) > remaining:
+            section_text = section_text[:remaining]
+        parts = [
+            text[:shrink_head],
+            f"\n\n... [Extracted key sections ({len(sections)} blocks)] ...\n\n{section_text}" if section_text else "",
+            f"\n\n... [Report tail preserved] ...\n\n{text[-shrink_tail:]}",
+        ]
+        result = "".join(p for p in parts if p)
+        if len(result) > max_chars:
+            result = result[:max_chars]
     result += "\n\n... [Report truncated for context window] ..."
 
     meta["used_chars"] = len(result)
@@ -843,5 +873,3 @@ def add_scoring_arguments(parser, *, include_source_dir: bool = True) -> None:
     )
 
 
-# 向后兼容：旧代码可能从此模块导入 prompt 常量
-PROMPT_SCORE_BATCH_LEGACY = PROMPT_SCORE_BATCH

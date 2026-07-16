@@ -23,6 +23,12 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // pingfenbiao 评分表 / 影响力预测服务（需单独启动 :8765）
+      '/pingfenbiao': {
+        target: 'http://127.0.0.1:8765',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/pingfenbiao/, ''),
+      },
     },
   },
 })

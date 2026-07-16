@@ -131,38 +131,6 @@ def fetch_work_by_title(title: str, api_key: str = "") -> Optional[dict[str, Any
         return None
 
 
-def fetch_author(author_id: str, api_key: str = "") -> Optional[dict[str, Any]]:
-    """获取单个作者的摘要信息。"""
-    clean_id = author_id.rstrip("/")
-    cache_key = f"author:{clean_id}"
-    now = time.time()
-    if cache_key in _cache:
-        ts, data = _cache[cache_key]
-        if now - ts < _CACHE_TTL:
-            return data
-
-    url = f"{OPENALEX_BASE}/authors/{clean_id}"
-    try:
-        session = _get(api_key)
-        resp = session.get(url, timeout=_TIMEOUT)
-        if resp.status_code != 200:
-            return None
-        data = resp.json()
-        result = {
-            "display_name": data.get("display_name"),
-            "works_count": data.get("works_count", 0),
-            "cited_by_count": data.get("cited_by_count", 0),
-            "last_known_institutions": [
-                inst.get("display_name")
-                for inst in data.get("last_known_institutions", [])
-            ],
-        }
-        _cache[cache_key] = (now, result)
-        return result
-    except requests.RequestException:
-        return None
-
-
 def _summarize_work(raw: dict[str, Any]) -> dict[str, Any]:
     """将 OpenAlex Work 对象精简为摘要字典。"""
     host_venue = raw.get("host_venue") or {}

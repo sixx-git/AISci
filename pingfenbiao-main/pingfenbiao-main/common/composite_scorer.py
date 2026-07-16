@@ -85,6 +85,8 @@ def calculate_composite_rating(
         "impact_max": impact_max,
         "impact_pct": round(impact_pct, 2),
         "composite_score": round(composite, 2),
+        "total_max": 100,
+        "score_scale": "percent",
         "rating": rating,
         "rating_label": rating_label,
         "available_dimensions": available_dims,
@@ -99,32 +101,83 @@ def _get_rating(score: float) -> tuple[str, str]:
     return "D", "需要大幅改进"
 
 
-def format_rating_report(rating_result: dict[str, Any], metadata: dict | None = None) -> str:
-    """生成人类可读的评级报告。"""
-    lines = []
-    lines.append("=" * 50)
-    lines.append("综合学术质量评估报告")
-    lines.append("=" * 50)
+def resolve_display_composite_score(
+    rating: dict[str, Any] | None = None,
+    total_score: float | int | None = None,
+) -> float | None:
+    """解析用于展示的百分制综合分（0–100）。
 
-    pct = rating_result.get("composite_score", 0)
+    优先级（新格式优先，兼容旧格式）：
+      1. rating.composite_score —— 新旧格式均为百分制展示分
+      2. rating.composite_score_raw / total_max —— 旧 200 分制原始分换算
+      3. 顶层 total_score —— 若 total_max==200 且数值>100，按 200 分制归一化
+    """
+    rating = rating or {}
+    cs = rating.get("composite_score")
+    if cs is not None:
+        try:
+            return round(float(cs), 2)
+        except (TypeError, ValueError):
+            pass
 
-    lines.append(f"\n综合评级: {rating_result['rating']} ({rating_result['rating_label']})")
-    lines.append(f"总分: {pct}%")
+    total_max = rating.get("total_max") or 100
+    try:
+        total_max = float(total_max)
+    except (TypeError, ValueError):
+        total_max = 100.0
 
-    # 内容质量分（最高一项）
-    best_pct = rating_result.get("best_content_pct", 0)
-    best_detail = rating_result.get("best_content_detail")
-    lines.append(f"\n内容质量（最高项）: {best_pct}%")
-    if best_detail:
-        lines.append(f"  来源: {best_detail.get('label', '?')}")
-        lines.append(f"  得分: {best_detail.get('raw_score', '?')}/{best_detail.get('total_score', '?')}")
+    raw = rating.get("composite_score_raw")
+    if raw is not None and total_max > 0:
+        try:
+            return round(float(raw) / total_max * 100.0, 2)
+        except (TypeError, ValueError):
+            pass
 
-    # 影响力分
-    impact_pct = rating_result.get("impact_pct", 0)
-    impact_score = rating_result.get("impact_score")
-    impact_max = rating_result.get("impact_max", 30)
-    if impact_score is not None:
-        lines.append(f"\n影响力评估: {impact_score}/{impact_max} ({impact_pct}%)")
+    if total_score is not None:
+        try:
+            ts = float(total_score)
+        except (TypeError, ValueError):
+            return None
+        # 旧格式 total_max=200：顶层 total_score 为 0–200 加权原始分
+        if total_max == 200:
+            return round(ts / 200.0 * 100.0, 2)
+        return round(ts, 2)
 
-    lines.append("")
-    return "\n".join(lines)
+    return None
+
+
+def resolve_impact_score(
+    impact: dict[str, Any] | None = None,
+    rating: dict[str, Any] | None = None,
+) -> tuple[float | int | None, int]:
+    """解析影响力得分与满分。
+
+    优先级：calibrated_total.score（新）→ impact.total_score（旧）→ rating.impact_score
+    """
+    impact = impact or {}
+    rating = rating or {}
+    impact_max = 30
+
+    cal = impact.get("calibrated_total")
+    if isinstance(cal, dict) and cal.get("score") is not None:
+        try:
+            mx = int(cal.get("max") or impact_max)
+            return cal.get("score"), mx
+        except (TypeError, ValueError):
+            return cal.get("score"), impact_max
+
+    if impact.get("total_score") is not None and not isinstance(impact.get("total_score"), dict):
+        try:
+            mx = int(impact.get("max_score") or impact.get("total_max") or impact_max)
+            return impact.get("total_score"), mx
+        except (TypeError, ValueError):
+            return impact.get("total_score"), impact_max
+
+    if rating.get("impact_score") is not None:
+        try:
+            mx = int(rating.get("impact_max") or impact_max)
+            return rating.get("impact_score"), mx
+        except (TypeError, ValueError):
+            return rating.get("impact_score"), impact_max
+
+    return None, impact_max
