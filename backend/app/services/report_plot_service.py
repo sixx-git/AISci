@@ -100,12 +100,25 @@ def sync_plot_to_public_storage(
         enriched.get("file_path"),
         enriched.get("image_path"),
     ]
+    # 迭代实验相对路径（如 smoke/xxx.png）相对 shaxiang data/charts
+    try:
+        from app.integrations.shaxiang.bridge import shaxiang_root
+
+        charts_root = shaxiang_root() / "data" / "charts"
+    except Exception:
+        charts_root = None
+
     copied = False
     for src in src_candidates:
         if not src:
             continue
-        src_path = Path(str(src))
-        if src_path.is_file():
+        candidates = [Path(str(src))]
+        if charts_root is not None and not Path(str(src)).is_absolute():
+            candidates.append((charts_root / str(src)).resolve())
+            candidates.append((charts_root / Path(str(src)).name).resolve())
+        for src_path in candidates:
+            if not src_path.is_file():
+                continue
             try:
                 if src_path.resolve() != target.resolve():
                     shutil.copy2(src_path, target)
@@ -113,6 +126,8 @@ def sync_plot_to_public_storage(
                 break
             except OSError as exc:
                 logger.warning("复制图表失败 %s -> %s: %s", src_path, target, exc)
+        if copied:
+            break
 
     if not copied and not target.is_file() and enriched.get("base64"):
         try:

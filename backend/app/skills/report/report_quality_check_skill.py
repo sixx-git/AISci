@@ -348,6 +348,7 @@ class ReportQualityCheckSkill(BaseSkill):
                 for kw in (
                     "actual_result", "actual results", "simulated_result", "simulated results",
                     "实际结果", "模拟结果", "合并 csv", "data_finder",
+                    "experiment run", "实测指标", "sandbox", "初步实验验证",
                 )
             )
         return False
@@ -371,9 +372,13 @@ class ReportQualityCheckSkill(BaseSkill):
                 re.compile(r"doi\s*:", re.IGNORECASE),
                 re.compile(r"DOI\s*:", re.IGNORECASE),
                 re.compile(r"数据集\s*[：:]", re.IGNORECASE),
+                re.compile(r"数据集路径", re.IGNORECASE),
                 re.compile(r"公开数据", re.IGNORECASE),
                 re.compile(r"拟采集", re.IGNORECASE),
                 re.compile(r"将(收集|采集|获取)", re.IGNORECASE),
+                re.compile(r"(directory|local_csv|uploaded|huggingface)", re.IGNORECASE),
+                re.compile(r"[A-Za-z]:\\"),  # Windows 本地路径
+                re.compile(r"/(?:data|datasets|storage)/", re.IGNORECASE),
             ]
         )
         has_fake = any(pat.search(value) for pat in FAKE_DATASET_PATTERNS)

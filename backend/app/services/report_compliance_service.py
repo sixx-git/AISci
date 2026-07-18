@@ -410,7 +410,18 @@ def assess_result_type(chapter: Any) -> Tuple[bool, str]:
     """返回 (has_result, result_type)。result_type: actual_result | simulated_result | expected_result | none"""
     parsed = parse_chapter_value(chapter)
     if isinstance(parsed, dict):
-        if _structured_item_count(parsed.get("actual_results")):
+        actual = parsed.get("actual_results")
+        if isinstance(actual, dict):
+            if (
+                actual.get("sandbox_metrics")
+                or actual.get("sandbox_plots")
+                or (actual.get("sandbox_execution") or {}).get("success")
+                or (actual.get("sandbox_execution") or {}).get("metrics")
+                or actual.get("modeling_result")
+                or actual.get("summary_statistics")
+            ):
+                return True, "actual_result"
+        if _structured_item_count(actual):
             return True, "actual_result"
         if _structured_item_count(parsed.get("simulated_results")):
             return True, "simulated_result"
@@ -422,7 +433,18 @@ def assess_result_type(chapter: Any) -> Tuple[bool, str]:
         if not text:
             return False, "none"
         lower = text.lower()
-        if "actual_result" in lower or "actual results" in lower or "实际结果" in lower:
+        if any(
+            kw in lower
+            for kw in (
+                "actual_result",
+                "actual results",
+                "实际结果",
+                "experiment run",
+                "实测指标",
+                "sandbox",
+                "初步实验验证",
+            )
+        ):
             return True, "actual_result"
         if "simulated_result" in lower or "simulated results" in lower or "模拟结果" in lower:
             return True, "simulated_result"
@@ -537,12 +559,25 @@ def refresh_compliance_metrics(
     merged["has_results"] = chapter_has_results(results_chapter)
 
     has_result, result_type = assess_result_type(results_chapter)
+    # 实验设计侧已有沙箱绑定数据时，章节即便偏短也视为有实际结果来源
+    if result_type in ("expected_result", "none") and isinstance(ed_dict, dict):
+        if ed_dict.get("_provider") == "iterative_experiment" and (
+            ed_dict.get("datasets") or ed_dict.get("data_requirements", {}).get("upload_status") == "ready"
+        ):
+            # 仅当 Results 文本已含实测信号时抬升；否则保持，由 regenerate 回填章节
+            pass
     merged["has_actual_or_simulated_result"] = result_type in ("actual_result", "simulated_result")
     merged["result_type"] = result_type
 
     has_datasets = chapter_has_content(chapter_map.get("datasets"))
     has_source = chapter_has_content(chapter_map.get("source"))
     has_target = chapter_has_content(chapter_map.get("target"))
+    if not has_datasets and chapter_has_content(ed_dict.get("datasets")):
+        has_datasets = True
+    if not has_source and chapter_has_content(ed_dict.get("source_data")):
+        has_source = True
+    if not has_target and chapter_has_content(ed_dict.get("target_data")):
+        has_target = True
     merged["has_datasets"] = has_datasets
     merged["has_source"] = has_source
     merged["has_target"] = has_target
@@ -552,7 +587,7 @@ def refresh_compliance_metrics(
 
     warnings = [
         w for w in (merged.get("warnings") or [])
-        if not any(k in str(w) for k in ("数据集", "预期结果", "Source", "Target", "数据来源"))
+        if not any(k in str(w) for k in ("数据集", "预期结果", "Source", "Target", "数据来源", "Actual Results", "Simulated"))
     ]
     if not has_datasets:
         warnings.append("数据集来源不足，请补充真实或合规数据来源")

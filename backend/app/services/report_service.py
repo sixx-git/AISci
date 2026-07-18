@@ -676,6 +676,117 @@ class ReportService:
         )
         return plots, qc_output
 
+    def _resolve_report_export_dir(self, report_id: str) -> Tuple[Report, Path]:
+        db_report = self.get_report_by_id(report_id)
+        if not db_report:
+            raise ValueError("报告不存在")
+        file_id = db_report.pdf_path
+        if not file_id:
+            raise ValueError("报告未关联文件目录，无法编辑 LaTeX")
+        export_dir = get_reports_storage_dir() / file_id
+        if not export_dir.is_dir():
+            raise ValueError(f"报告文件目录不存在: {file_id}")
+        return db_report, export_dir
+
+    def get_latex_source(self, report_id: str) -> Dict[str, Any]:
+        """读取磁盘上的 report.tex（及可选 bib），供内置编辑器使用。"""
+        db_report, export_dir = self._resolve_report_export_dir(report_id)
+        tex_path = export_dir / "report.tex"
+        if not tex_path.is_file():
+            raise ValueError("尚无 LaTeX 源文件，请先生成/导出报告")
+        bib_path = export_dir / "references.bib"
+        pdf_path = export_dir / "report.pdf"
+        return {
+            "report_id": db_report.id,
+            "file_id": db_report.pdf_path,
+            "title": db_report.paper_title or db_report.title or "研究报告",
+            "tex": tex_path.read_text(encoding="utf-8", errors="replace"),
+            "bib": bib_path.read_text(encoding="utf-8", errors="replace") if bib_path.is_file() else "",
+            "has_bib": bib_path.is_file(),
+            "has_pdf": pdf_path.is_file() and pdf_path.stat().st_size > 0,
+            "updated_at": (
+                db_report.updated_at.isoformat()
+                if getattr(db_report, "updated_at", None)
+                else None
+            ),
+        }
+
+    def save_latex_source(
+        self,
+        report_id: str,
+        *,
+        tex: str,
+        bib: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """保存手改 LaTeX 源码到磁盘（不覆盖章节字段，也不从章节重导）。"""
+        db_report, export_dir = self._resolve_report_export_dir(report_id)
+        tex_text = (tex or "").strip()
+        if len(tex_text) < 20:
+            raise ValueError("LaTeX 内容过短，拒绝保存")
+        if "\\documentclass" not in tex_text and "\\begin{document}" not in tex_text:
+            raise ValueError("内容不像完整 LaTeX 文档（缺少 \\documentclass 或 \\begin{document}）")
+
+        tex_path = export_dir / "report.tex"
+        tex_path.write_text(tex, encoding="utf-8")
+        if bib is not None:
+            bib_path = export_dir / "references.bib"
+            bib_path.write_text(bib, encoding="utf-8")
+
+        db_report.version = (db_report.version or 1) + 1
+        extra = dict(db_report.extra_metadata or {}) if isinstance(db_report.extra_metadata, dict) else {}
+        extra["latex_hand_edited"] = True
+        extra["latex_edited_at"] = datetime.now().isoformat()
+        db_report.extra_metadata = extra
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_report, "extra_metadata")
+        except Exception:
+            pass
+        self.db.commit()
+        self.db.refresh(db_report)
+        logger.info("已保存手改 LaTeX report_id=%s file_id=%s", report_id, db_report.pdf_path)
+        return {
+            "report_id": db_report.id,
+            "saved": True,
+            "version": db_report.version,
+            "has_bib": (export_dir / "references.bib").is_file(),
+        }
+
+    def compile_latex_source(self, report_id: str) -> Dict[str, Any]:
+        """对磁盘现有 report.tex 编译 PDF（不从 DB 章节重建源码）。"""
+        from app.services.latex_export_service import compile_latex_to_pdf
+
+        db_report, export_dir = self._resolve_report_export_dir(report_id)
+        tex_path = export_dir / "report.tex"
+        if not tex_path.is_file():
+            raise ValueError("尚无 LaTeX 源文件，请先生成报告或保存源码")
+
+        result = compile_latex_to_pdf(export_dir, tex_filename="report.tex")
+        pdf_ok = bool(result.get("success"))
+        extra = dict(db_report.extra_metadata or {}) if isinstance(db_report.extra_metadata, dict) else {}
+        extra["pdf_success"] = pdf_ok
+        if result.get("warning"):
+            extra["pdf_warning"] = result.get("warning")
+        else:
+            extra.pop("pdf_warning", None)
+        extra["latex_compiled_at"] = datetime.now().isoformat()
+        db_report.extra_metadata = extra
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_report, "extra_metadata")
+        except Exception:
+            pass
+        self.db.commit()
+        return {
+            "report_id": db_report.id,
+            "pdf_success": pdf_ok,
+            "pdf_path": result.get("pdf_path"),
+            "warning": result.get("warning"),
+            "download_url": f"/api/v1/reports/download/{db_report.id}/pdf" if pdf_ok else None,
+        }
+
     def regenerate_pdf(
         self,
         report_id: str,

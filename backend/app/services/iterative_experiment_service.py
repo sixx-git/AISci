@@ -557,35 +557,124 @@ class IterativeExperimentService:
         }
 
     @staticmethod
+    def _resolve_iteration_charts(primary: Dict[str, Any]) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """汇总成功轮次的指标与图表，并把相对路径解析为 shaxiang 绝对路径。"""
+        from app.integrations.shaxiang.bridge import shaxiang_root
+
+        charts_root = (shaxiang_root() / "data" / "charts").resolve()
+        iterations = primary.get("iterations") or []
+        metrics: Dict[str, Any] = {}
+        chart_rows: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for it in iterations:
+            if not isinstance(it, dict):
+                continue
+            status = str(it.get("status") or "").lower()
+            if status in {"failed", "error"}:
+                continue
+            it_metrics = it.get("metrics") or (it.get("result") or {}).get("metrics") or {}
+            if isinstance(it_metrics, dict) and it_metrics:
+                metrics = {**metrics, **it_metrics}
+            for c in (it.get("result") or {}).get("charts") or []:
+                if not isinstance(c, dict):
+                    continue
+                rel = str(c.get("path") or c.get("file_path") or c.get("name") or "").strip()
+                name = str(c.get("name") or Path(rel).name or "").strip()
+                if not name and not rel:
+                    continue
+                abs_path = None
+                if rel:
+                    candidate = Path(rel)
+                    if not candidate.is_absolute():
+                        candidate = (charts_root / rel).resolve()
+                    if candidate.is_file():
+                        abs_path = candidate
+                if abs_path is None and name:
+                    candidate = (charts_root / name).resolve()
+                    if candidate.is_file():
+                        abs_path = candidate
+                        rel = name
+                key = str(abs_path) if abs_path else (c.get("url") or name or rel)
+                if key in seen:
+                    continue
+                seen.add(key)
+                plot_id = Path(name or rel or key).stem
+                entry = {
+                    "plot_id": plot_id,
+                    "title": (c.get("note") or name or plot_id).strip(),
+                    "path": str(abs_path) if abs_path else rel,
+                    "file_path": str(abs_path) if abs_path else rel,
+                    "url": c.get("url"),
+                    "source": "sandbox_execution",
+                    "type": "sandbox_plot",
+                    "chart_kind": "experiment_result",
+                    "is_generated_from_real_data": True,
+                    "source_dataset_id": (primary.get("data_config") or {}).get("source_path")
+                    or (primary.get("data_config") or {}).get("file_name")
+                    or primary.get("id"),
+                }
+                chart_rows.append(entry)
+        return metrics, chart_rows
+
+    @staticmethod
     def synthesize_report_fields(primary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """把单条迭代实验映射为报告 agent 入参（历史 ed/sv 形状）。"""
-        last_it = (primary.get("iterations") or [{}])[-1]
-        metrics = (last_it.get("metrics") or {}) if isinstance(last_it, dict) else {}
-        charts = ((last_it.get("result") or {}).get("charts") or []) if isinstance(last_it, dict) else []
+        metrics, plots = IterativeExperimentService._resolve_iteration_charts(primary)
         plan = primary.get("initial_plan") or {}
+        data_config = primary.get("data_config") or {}
+        source_path = data_config.get("source_path") or data_config.get("file_name") or ""
+        source_type = data_config.get("source_type") or ""
+        columns = data_config.get("columns") or data_config.get("feature_columns") or []
+        target_cols = data_config.get("target_columns") or []
+        if isinstance(target_cols, str):
+            target_cols = [target_cols]
+
+        dataset_desc = (
+            (
+                f"数据集路径: {source_path}"
+                + (f"（类型: {source_type}）" if source_type else "")
+                + "。来自迭代实验绑定的真实/本地数据，用于沙箱验证。"
+            )
+            if source_path
+            else ""
+        )
+        source_desc = ""
+        if source_path or source_type:
+            source_desc = (
+                f"历史/训练数据来源: {source_type or 'local'}；"
+                f"路径或标识: {source_path or '已绑定数据集'}。"
+            )
+            if columns:
+                source_desc += f" 可用字段包括: {', '.join(str(c) for c in list(columns)[:12])}。"
+        target_desc = ""
+        if target_cols:
+            target_desc = f"目标标签/验证字段: {', '.join(str(c) for c in target_cols)}。"
+        elif columns:
+            target_desc = (
+                "目标数据特征: 与绑定数据集同构的传感器/表格特征，"
+                f"用于二分类或指定标签验证；特征列示例: {', '.join(str(c) for c in list(columns)[:8])}。"
+            )
 
         experiment_design = {
             "hypothesis": primary.get("hypothesis"),
             "methods": plan.get("methodology") or "",
             "baselines": "baseline vs proposed (iterative experiment)",
-            "metrics": str(metrics.get("primary_metric") or "accuracy"),
+            "metrics": str(metrics.get("primary_metric") or metrics.get("accuracy") or "accuracy"),
             "experimental_steps": plan.get("description") or "",
             "expected_results": "; ".join(plan.get("success_criteria") or []),
             "limitations": "迭代实验引擎产出；详见 iterations",
-            "datasets": (primary.get("data_config") or {}).get("source_path")
-            or (primary.get("data_config") or {}).get("file_name")
-            or "",
-            "source_data": (primary.get("data_config") or {}).get("source_type") or "",
-            "target_data": "",
-            "experiment_spec": {
+            "datasets": dataset_desc or source_path or "",
+            "source_data": source_desc or source_type or "",
+            "target_data": target_desc,            "experiment_spec": {
                 "primary_metric": metrics.get("primary_metric") or "accuracy",
                 "task_type": "classification",
-                "feature_columns": (primary.get("data_config") or {}).get("columns") or [],
+                "feature_columns": columns,
             },
             "analysis_script": plan.get("analysis_script") or "",
             "data_requirements": {
-                "uploaded_dataset_count": 1 if primary.get("data_config") else 0,
-                "upload_status": "ready" if primary.get("data_config") else "missing",
+                "uploaded_dataset_count": 1 if data_config else 0,
+                "upload_status": "ready" if data_config else "missing",
             },
             "skill_outputs": {"experiment_sanity_check": {"data": {"executable": True}}},
             "executability_gate": {"passed": True, "score": 80},
@@ -593,36 +682,32 @@ class IterativeExperimentService:
             "_experiment_id": primary.get("id"),
         }
 
-        plots = [
-            {
-                "plot_id": c.get("name"),
-                "title": c.get("note") or c.get("name"),
-                "path": c.get("name") or c.get("path"),
-                "file_path": c.get("path") or c.get("file_path") or c.get("name"),
-                "source": "sandbox_execution",
-                "is_generated_from_real_data": True,
-            }
-            for c in charts
-            if isinstance(c, dict)
-        ]
+        sandbox_execution = {
+            "success": bool(metrics or plots),
+            "output_complete": bool(metrics or plots),
+            "metrics": metrics,
+            "plots": plots,
+        }
+        actual_results = {
+            "data_source": "sandbox_execution",
+            "sandbox_execution": sandbox_execution,
+            "sandbox_metrics": metrics,
+            "sandbox_plots": plots,
+            "summary": (
+                f"迭代实验沙箱已执行，产出 {len(metrics)} 项指标、{len(plots)} 张图表。"
+                if (metrics or plots)
+                else "迭代实验尚未产出可验证指标/图表。"
+            ),
+        }
         small_validation = {
             "hypothesis": primary.get("hypothesis"),
             "validation_status": "completed" if primary.get("phase") == "completed" else "partial",
-            "has_real_data": 1 if primary.get("data_config") else 0,
-            "sandbox_execution": {
-                "success": True,
-                "output_complete": True,
-                "metrics": metrics,
-                "plots": plots,
-            },
+            "has_real_data": 1 if data_config else 0,
+            "sandbox_execution": sandbox_execution,
             "artifacts": {"metrics": metrics, "plots": plots},
             "results": {
-                "actual_results": {
-                    "data_source": "sandbox_execution",
-                    "sandbox_metrics": metrics,
-                    "sandbox_plots": plots,
-                },
-                "result_type_summary": "has_actual_results",
+                "actual_results": actual_results,
+                "result_type_summary": "has_actual_results" if (metrics or plots) else "none",
             },
             "_provider": "iterative_experiment",
             "_experiment_id": primary.get("id"),

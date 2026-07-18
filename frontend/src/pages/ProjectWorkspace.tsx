@@ -15,6 +15,7 @@ import { WorkflowPage } from '@/components/WorkflowPage';
 import { HypothesesPage } from '@/components/HypothesesPage';
 import { IterativeExperimentPage } from '@/components/iterative-experiment/IterativeExperimentPage';
 import { ReportPage } from '@/components/ReportPage';
+import { LatexEditorPage } from '@/components/LatexEditorPage';
 import { RunLogsPage } from '@/components/RunLogsPage';
 import { buildProjectTabUrl } from '@/lib/projectNavigation';
 import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
@@ -213,6 +214,26 @@ function ReportsTab({ projectId, projectMode, revalidateKey, latestRunId }: {
   revalidateKey: number;
   latestRunId: string | null;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get('view');
+  const editorReportId = searchParams.get('reportId');
+
+  if (view === 'latex' && editorReportId) {
+    return (
+      <LatexEditorPage
+        projectId={projectId}
+        reportId={editorReportId}
+        onBack={() => {
+          const next = new URLSearchParams(searchParams);
+          next.delete('view');
+          next.delete('reportId');
+          next.set('tab', 'reports');
+          setSearchParams(next, { replace: true });
+        }}
+      />
+    );
+  }
+
   return (
     <ReportPage
       projectId={projectId}

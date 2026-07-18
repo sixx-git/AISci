@@ -199,6 +199,9 @@ class ReportGenerationAgent:
 
             # 图表写入 result.plots，最终 Markdown 由 latex_template 结构统一生成
 
+            # ── 用实验设计/数据配置回填 datasets/source/target（避免误报）──
+            result = self._backfill_chapters_from_experiment(result, experiment_design)
+
             # ── 丰富 Results 章节（区分 actual/simulated/expected）──
             result = self._enrich_results_with_categorized(
                 result, small_validation, preliminary_analysis_skill_outputs
@@ -322,6 +325,8 @@ class ReportGenerationAgent:
                 verified_references=verified_references,
                 literature_facts=evidence_facts or literature_facts,
                 hypotheses=all_hypotheses,
+                chapters=chapters,
+                experiment_design=experiment_design if isinstance(experiment_design, dict) else None,
             )
 
             # ── 按 latex_template 导出 LaTeX/PDF ──
@@ -1480,45 +1485,28 @@ class ReportGenerationAgent:
             if h.get("supporting_fact_ids") and len(h.get("supporting_fact_ids", [])) > 0
         )
 
-        has_result = False
-        result_type = "none"
-        rf = chapters.get("results", "")
-        if isinstance(rf, dict):
-            if rf.get("actual_results"):
-                has_result = True
-                result_type = "actual_result"
-            elif rf.get("simulated_results"):
-                has_result = True
-                result_type = "simulated_result"
-            elif rf.get("expected_results"):
-                has_result = True
-                result_type = "expected_result"
-        elif isinstance(rf, str):
-            rf_lower = rf.lower()
-            if "actual_result" in rf_lower or "actual results" in rf_lower or "实际结果" in rf_lower:
-                has_result = True
-                result_type = "actual_result"
-            elif "simulated_result" in rf_lower or "simulated results" in rf_lower or "模拟结果" in rf_lower:
-                has_result = True
-                result_type = "simulated_result"
-            elif "expected_result" in rf_lower or "expected results" in rf_lower or "预期结果" in rf_lower:
-                has_result = True
-                result_type = "expected_result"
-            elif len(rf.strip()) >= 50:
-                has_result = True
-                if "simulat" in rf_lower or "模拟" in rf_lower:
-                    result_type = "simulated_result"
-                elif "expect" in rf_lower or "预期" in rf_lower:
-                    result_type = "expected_result"
+        from app.services.report_compliance_service import assess_result_type
 
+        has_result, result_type = assess_result_type(chapters.get("results", ""))
+        # 顶层 results 结构化字段（enrichment 写入）
+        structured = result_dict.get("results") if isinstance(result_dict.get("results"), dict) else {}
+        if result_type not in ("actual_result", "simulated_result") and structured:
+            s_has, s_type = assess_result_type(structured)
+            if s_has and s_type in ("actual_result", "simulated_result"):
+                has_result, result_type = s_has, s_type
+
+        ed = experiment_design if isinstance(experiment_design, dict) else {}
         has_datasets = bool(
             self._has_text(chapters.get("datasets"), min_len=10)
+            or self._has_text(ed.get("datasets"), min_len=10)
         )
         has_source = bool(
             self._has_text(chapters.get("source"), min_len=10)
+            or self._has_text(ed.get("source_data"), min_len=10)
         )
         has_target = bool(
             self._has_text(chapters.get("target"), min_len=10)
+            or self._has_text(ed.get("target_data"), min_len=10)
         )
         has_paper_title = bool(
             self._has_text(result_dict.get("paper_title"), min_len=5)
@@ -1789,117 +1777,173 @@ class ReportGenerationAgent:
         return info
 
     @staticmethod
+    def _backfill_chapters_from_experiment(
+        result: Dict[str, Any],
+        experiment_design: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """章节为空时，用实验设计/数据绑定信息回填，避免合规误报。"""
+        ed = experiment_design if isinstance(experiment_design, dict) else {}
+        chapters = result.get("chapters") if isinstance(result.get("chapters"), dict) else {}
+        chapters = dict(chapters)
+
+        def _empty(key: str) -> bool:
+            val = chapters.get(key)
+            if val is None:
+                return True
+            if isinstance(val, str):
+                return len(val.strip()) < 10
+            if isinstance(val, (list, dict)):
+                return len(val) == 0
+            return False
+
+        if _empty("datasets") and ed.get("datasets"):
+            chapters["datasets"] = str(ed.get("datasets")).strip()
+        if _empty("source") and ed.get("source_data"):
+            chapters["source"] = str(ed.get("source_data")).strip()
+        if _empty("target") and ed.get("target_data"):
+            chapters["target"] = str(ed.get("target_data")).strip()
+
+        result["chapters"] = chapters
+        return result
+
+    @staticmethod
     def _enrich_results_with_categorized(
         result: Dict[str, Any],
         small_validation: Optional[Dict[str, Any]],
         preliminary_analysis_skill_outputs: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         sv = small_validation or {}
-        sv_results = sv.get("results", {})
+        sv_results = sv.get("results", {}) if isinstance(sv.get("results"), dict) else {}
+        # 兼容：sandbox_execution 在 sv 顶层（迭代实验 synthesize）
+        top_sandbox = sv.get("sandbox_execution") if isinstance(sv.get("sandbox_execution"), dict) else {}
 
-        if not sv_results or not isinstance(sv_results, dict):
+        if not sv_results and not top_sandbox and not (sv.get("artifacts") or {}).get("plots"):
             return result
 
         pa_so = preliminary_analysis_skill_outputs or {}
         pa_data = pa_so.get("preliminary_analysis", {}).get("data", {})
+        _ = pa_data  # 保留参数供后续扩展
+
+        actual = sv_results.get("actual_results", {})
+        if not isinstance(actual, dict):
+            actual = {}
+        sandbox_exec = actual.get("sandbox_execution") or top_sandbox or {}
+        if not isinstance(sandbox_exec, dict):
+            sandbox_exec = {}
+        metrics = (
+            sandbox_exec.get("metrics")
+            or actual.get("sandbox_metrics")
+            or (sv.get("artifacts") or {}).get("metrics")
+            or {}
+        )
+        plots = (
+            sandbox_exec.get("plots")
+            or actual.get("sandbox_plots")
+            or (sv.get("artifacts") or {}).get("plots")
+            or []
+        )
+        sandbox_success = bool(
+            sandbox_exec.get("success")
+            or (isinstance(metrics, dict) and metrics)
+            or (isinstance(plots, list) and plots)
+        )
+
+        if sandbox_success and "sandbox_execution" not in actual:
+            actual = {
+                **actual,
+                "sandbox_execution": {
+                    **sandbox_exec,
+                    "success": True,
+                    "metrics": metrics if isinstance(metrics, dict) else {},
+                    "plots": plots if isinstance(plots, list) else [],
+                },
+                "sandbox_metrics": metrics if isinstance(metrics, dict) else {},
+                "sandbox_plots": plots if isinstance(plots, list) else [],
+                "data_source": actual.get("data_source") or "sandbox_execution",
+            }
 
         result["results"] = {
-            "actual_results": sv_results.get("actual_results", {}),
+            "actual_results": actual,
             "simulated_results": sv_results.get("simulated_results", {}),
             "expected_results": sv_results.get("expected_results", {}),
-            "result_type_summary": sv_results.get("result_type_summary", "none"),
+            "result_type_summary": (
+                "has_actual_results"
+                if sandbox_success
+                else sv_results.get("result_type_summary", "none")
+            ),
             "warnings": sv_results.get("warnings", []),
         }
 
         chapters = result.get("chapters", {})
-        if isinstance(chapters, dict):
-            from app.services.report_compliance_service import assess_results_chapter
+        if not isinstance(chapters, dict):
+            return result
 
-            existing_results = chapters.get("results", "")
-            if assess_results_chapter(existing_results) == "none":
-                result_type = sv_results.get("result_type_summary", "none")
-                enriched = "### 实验结果\n\n"
-                modeling_result = None
-                sandbox_success = False
+        from app.services.report_compliance_service import assess_result_type
 
-                actual = sv_results.get("actual_results", {})
-                if not isinstance(actual, dict):
-                    actual = {}
-                sandbox_exec = actual.get("sandbox_execution") or {}
-                sandbox_success = bool(sandbox_exec.get("success"))
-                if sandbox_success:
-                    enriched += "### Experiment Run（初步实验验证）\n\n"
-                    enriched += "- 执行状态: 成功\n"
-                    if sandbox_exec.get("duration_ms"):
-                        enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
-                    metrics = sandbox_exec.get("metrics") or actual.get("sandbox_metrics") or {}
-                    if isinstance(metrics, dict) and metrics:
-                        enriched += "- 实测指标:\n"
-                        for k, v in list(metrics.items())[:8]:
-                            if k not in ("stdout_preview", "note"):
-                                enriched += f"  - {k}: {v}\n"
-                    enriched += "\n"
-                    enriched += "> 以下 Results 以初步实验验证为准；模拟/预期结果仅作参考。\n\n"
+        existing_results = chapters.get("results", "")
+        _, existing_type = assess_result_type(existing_results)
+        # 有沙箱实测时：始终写入/前置 Actual Results，即使 LLM 已写了长段预期结果
+        if sandbox_success or existing_type in ("none", "expected_result"):
+            enriched = "### Actual Results（实际分析结果）\n\n"
+            modeling_result = None
 
-                modeling_result = actual.get("modeling_result")
-                if modeling_result and isinstance(modeling_result, dict):
-                    enriched += "### Modeling Results（数据建模评估）\n\n"
-                    if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
-                        enriched += "> **Pilot Validation**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
-                    enriched += f"- 任务类型: {modeling_result.get('task_type', 'unknown')}\n"
-                    enriched += f"- 目标变量: {modeling_result.get('target_column', '-')}\n"
-                    enriched += f"- 最佳模型: {modeling_result.get('best_model', '-')}\n"
-                    best_metrics = {}
-                    for model in modeling_result.get("models", []):
-                        if model.get("model_name") == modeling_result.get("best_model"):
-                            best_metrics = model.get("metrics", {})
-                            break
-                    if best_metrics:
-                        enriched += "- 最佳模型指标:\n"
-                        for key, val in best_metrics.items():
-                            if key == "confusion_matrix":
-                                continue
-                            enriched += f"  - {key}: {val}\n"
-                    suggestions = modeling_result.get("self_correction_suggestions", [])
-                    if suggestions:
-                        enriched += "- 自校正建议:\n"
-                        for item in suggestions[:3]:
-                            if isinstance(item, dict):
-                                enriched += f"  - {item.get('reason', '')} → {item.get('suggestion', '')}\n"
-                    enriched += "\n"
+            if sandbox_success:
+                enriched += "### Experiment Run（初步实验验证）\n\n"
+                enriched += "- 执行状态: 成功\n"
+                if sandbox_exec.get("duration_ms"):
+                    enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
+                if isinstance(metrics, dict) and metrics:
+                    enriched += "- 实测指标:\n"
+                    for k, v in list(metrics.items())[:12]:
+                        if k not in ("stdout_preview", "note", "dataset_rows", "dataset_columns", "error"):
+                            enriched += f"  - {k}: {v}\n"
+                if isinstance(plots, list) and plots:
+                    enriched += f"- 沙箱图表: {len(plots)} 张（见报告图表区）\n"
+                enriched += "\n"
+                enriched += "> 以下 Results 以迭代实验/沙箱验证为准；模拟/预期结果仅作参考。\n\n"
 
-                if not sandbox_success and actual.get("summary_statistics"):
-                    enriched += "### Actual Results（实际分析结果）\n\n"
-                    enriched += "- 基于真实数据的统计分析已完成\n"
-                    enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
-                    if actual.get("correlations"):
-                        enriched += f"- 检测到 {len(actual.get('correlations', []))} 对相关性\n"
-                    if actual.get("anomalies"):
-                        enriched += f"- 发现 {len(actual.get('anomalies', []))} 个异常数据点\n"
-                    enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
+            modeling_result = actual.get("modeling_result")
+            if modeling_result and isinstance(modeling_result, dict):
+                enriched += "### Modeling Results（数据建模评估）\n\n"
+                if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
+                    enriched += "> **Pilot Validation**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
+                enriched += f"- 任务类型: {modeling_result.get('task_type', 'unknown')}\n"
+                enriched += f"- 目标变量: {modeling_result.get('target_column', '-')}\n"
+                enriched += f"- 最佳模型: {modeling_result.get('best_model', '-')}\n"
+                best_metrics = {}
+                for model in modeling_result.get("models", []):
+                    if model.get("model_name") == modeling_result.get("best_model"):
+                        best_metrics = model.get("metrics", {})
+                        break
+                if best_metrics:
+                    enriched += "- 最佳模型指标:\n"
+                    for key, val in best_metrics.items():
+                        if key == "confusion_matrix":
+                            continue
+                        enriched += f"  - {key}: {val}\n"
+                enriched += "\n"
 
-                simulated = sv_results.get("simulated_results", {})
-                if not sandbox_success and simulated and isinstance(simulated, dict) and simulated.get("data"):
-                    enriched += "### Simulated Results（模拟结果）\n\n"
-                    enriched += f"- 模拟数据已生成\n"
-                    if simulated.get("assumptions"):
-                        enriched += f"- 模拟假设: {simulated.get('assumptions', '')[:200]}\n"
-                    enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
+            if not sandbox_success and actual.get("summary_statistics"):
+                enriched += "- 基于真实数据的统计分析已完成\n"
+                enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
+                enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
 
-                expected = sv_results.get("expected_results", {})
-                if expected and isinstance(expected, dict) and expected.get("hypothesis"):
-                    enriched += "### Expected Results（预期结果）\n\n"
-                    enriched += f"- 假设: {expected.get('hypothesis', '')[:200]}\n"
-                    if expected.get("expected_outcome"):
-                        enriched += f"- 预期结果: {expected.get('expected_outcome')}\n"
-                    if expected.get("target_variable"):
-                        enriched += f"- 目标变量: {expected.get('target_variable')}\n"
-                    enriched += f"- 说明: {expected.get('note', '预期结果，需通过实验验证')}\n\n"
+            simulated = sv_results.get("simulated_results", {})
+            if not sandbox_success and simulated and isinstance(simulated, dict) and simulated.get("data"):
+                enriched += "### Simulated Results（模拟结果）\n\n"
+                enriched += f"- 模拟数据已生成\n"
+                enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
 
-                if result_type == "none" and not modeling_result:
-                    enriched += "⚠️ 当前缺少真实数据，未生成实际分析结果。请上传数据集以启用数据驱动分析。\n"
+            # 保留 LLM 原文作为补充（若非空且不是纯占位）
+            if isinstance(existing_results, str) and len(existing_results.strip()) >= 40:
+                if "Experiment Run" not in existing_results and "实测指标" not in existing_results:
+                    enriched += "### 报告叙述补充\n\n"
+                    enriched += existing_results.strip() + "\n"
 
-                chapters["results"] = enriched
+            if not sandbox_success and not modeling_result and existing_type == "none":
+                enriched += "⚠️ 当前缺少真实数据，未生成实际分析结果。请在「迭代实验」完成至少一轮验证。\n"
+
+            chapters["results"] = enriched
 
         result["chapters"] = chapters
         return result

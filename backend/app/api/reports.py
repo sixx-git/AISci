@@ -4,7 +4,7 @@
 import os
 import json
 from datetime import datetime, time
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import Optional, List
 from sqlalchemy.orm import Session
@@ -355,6 +355,59 @@ async def revise_report(body: ReportReviseRequest, db: Session = Depends(get_db)
             apply_change=body.apply_change,
         )
         return success(result, message="报告已根据反馈更新")
+    except ValueError as e:
+        return error(str(e), code=400)
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/{report_id}/latex-source", response_model=ApiResponse[dict])
+async def get_report_latex_source(report_id: str, db: Session = Depends(get_db)):
+    """读取报告磁盘上的 LaTeX 源码（内置编辑器用）。"""
+    try:
+        report_service = ReportService(db)
+        return success(report_service.get_latex_source(report_id), message="已加载 LaTeX 源码")
+    except ValueError as e:
+        return error(str(e), code=400)
+    except Exception as e:
+        return error(str(e))
+
+
+@router.put("/{report_id}/latex-source", response_model=ApiResponse[dict])
+async def save_report_latex_source(
+    report_id: str,
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """保存手改 LaTeX 源码到磁盘。"""
+    try:
+        tex = body.get("tex") if isinstance(body, dict) else None
+        bib = body.get("bib") if isinstance(body, dict) else None
+        if not isinstance(tex, str):
+            return error("缺少 tex 字段", code=400)
+        report_service = ReportService(db)
+        result = report_service.save_latex_source(
+            report_id,
+            tex=tex,
+            bib=bib if isinstance(bib, str) else None,
+        )
+        return success(result, message="LaTeX 源码已保存")
+    except ValueError as e:
+        return error(str(e), code=400)
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/{report_id}/compile-latex", response_model=ApiResponse[dict])
+async def compile_report_latex_source(report_id: str, db: Session = Depends(get_db)):
+    """编译磁盘上的 report.tex（不从章节重建，保留手改）。"""
+    try:
+        report_service = ReportService(db)
+        result = report_service.compile_latex_source(report_id)
+        return success(
+            result,
+            message="PDF 编译成功" if result.get("pdf_success") else "PDF 编译失败",
+        )
     except ValueError as e:
         return error(str(e), code=400)
     except Exception as e:

@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History, Code2 } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
@@ -80,10 +80,16 @@ function ReportPlotImage({
   }, [reportId, plot]);
 
   const [idx, setIdx] = useState(0);
-  const src = candidates[idx] ?? null;
+  const [exhausted, setExhausted] = useState(false);
+  const src = !exhausted ? (candidates[idx] ?? null) : null;
 
   if (!src) {
-    return <span className="text-xs text-bp-muted">图表不可用</span>;
+    return (
+      <span className="text-xs text-bp-muted text-center px-2">
+        图表不可用
+        {plot.plot_id ? `（${plot.plot_id}）` : ''}
+      </span>
+    );
   }
 
   return (
@@ -93,7 +99,11 @@ function ReportPlotImage({
       loading="lazy"
       className="max-w-full max-h-[300px] object-contain rounded"
       onError={() => {
-        setIdx((prev) => (prev + 1 < candidates.length ? prev + 1 : prev));
+        setIdx((prev) => {
+          if (prev + 1 < candidates.length) return prev + 1;
+          setExhausted(true);
+          return prev;
+        });
       }}
     />
   );
@@ -108,6 +118,7 @@ export function ReportPage({
   latestRunId: _latestRunId,
 }: ReportPageProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { message: alertMsg, showAlert } = useToast(2500);
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportVersions, setReportVersions] = useState<ReportData[]>([]);
@@ -301,6 +312,13 @@ export function ReportPage({
 
   const handleRegeneratePdf = useCallback(async () => {
     if (!report?.id) return;
+    const handEdited = Boolean(report.extraMetadata?.latex_hand_edited);
+    if (handEdited) {
+      const ok = window.confirm(
+        '该报告曾在 LaTeX 编辑器中手工修改。「重新生成 PDF」会从章节内容重建源码并覆盖手改，是否继续？\n\n若只想编译当前手改源码，请使用「打开 LaTeX 编辑器」→「编译 PDF」。',
+      );
+      if (!ok) return;
+    }
     setRegeneratingPdf(true);
     try {
       const res = await reportService.regeneratePdf(report.id);
@@ -316,7 +334,7 @@ export function ReportPage({
     } finally {
       setRegeneratingPdf(false);
     }
-  }, [report?.id, reloadReport, showAlert]);
+  }, [report?.id, report?.extraMetadata?.latex_hand_edited, reloadReport, showAlert]);
 
   if (isLoading) {
     return (
@@ -556,6 +574,21 @@ export function ReportPage({
             >
               <BookOpen className="w-3.5 h-3.5" />
               导入文献
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set('tab', 'reports');
+                next.set('view', 'latex');
+                next.set('reportId', report.id);
+                setSearchParams(next);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bp-cyan/15 border border-bp-cyan/30 text-xs text-bp-cyan hover:bg-bp-cyan/25 transition-colors"
+              title="打开内置 LaTeX 编辑器（类似 Overleaf）"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              打开 LaTeX 编辑器
             </button>
             <button
               type="button"

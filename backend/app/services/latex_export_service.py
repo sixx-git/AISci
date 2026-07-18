@@ -499,18 +499,24 @@ def _format_experiments(value: Any) -> str:
             parts.append(_format_paragraph(protocol))
 
     if parts:
-        parts.append(_experiment_design_table_block())
         return "".join(parts)
-    return _format_paragraph(str(value)) + _experiment_design_table_block()
+    return _format_paragraph(str(value))
 
 
-def _format_results(value: Any) -> str:
+def _format_results(value: Any, *, include_scaffold: bool = False) -> str:
+    """格式化实验结果章节。
+
+    include_scaffold=False（默认）：不再注入模板公式/\\fbox 占位图；
+    真实图表由后续 figures 节的沙箱/实验图承担。
+    """
     value = _coerce_chapter_json(value)
     if isinstance(value, str):
-        return _format_paragraph(value)
+        body = _format_paragraph(value)
+        return body + (_results_scaffold_block() if include_scaffold else "")
 
     if not isinstance(value, dict):
-        return _format_paragraph(value)
+        body = _format_paragraph(value)
+        return body + (_results_scaffold_block() if include_scaffold else "")
 
     parts: List[str] = []
     mapping = [
@@ -532,10 +538,12 @@ def _format_results(value: Any) -> str:
         parts.append(_format_itemize(_normalize_lines(warnings)))
 
     if parts:
-        parts.append(_results_scaffold_block())
-        return "".join(parts)
-    body = _format_paragraph("暂无实验结果，待完成实验后补充。")
-    return body + _results_scaffold_block()
+        body = "".join(parts)
+    else:
+        body = _format_paragraph("暂无实验结果，待完成实验后补充。")
+    if include_scaffold:
+        body += _results_scaffold_block()
+    return body
 
 
 def _load_template_preamble(template_dir: Path) -> str:
@@ -1051,6 +1059,7 @@ def build_latex_document(
     abstract = escape_latex(result.get("paper_abstract") or "")
     author = _build_author_block(project_info)
 
+    # 模板中的 \\fbox / 公式脚手架仅为写法示意，导出时不注入；真实图见 figures 节
     body_parts: List[str] = [
         "\\maketitle\n\n",
         "\\begin{abstract}\n",
@@ -1070,11 +1079,10 @@ def build_latex_document(
         _format_chapter_field(chapters.get("target", "")),
         "\\section{方法论}\n\n",
         _format_chapter_field(chapters.get("methods", "")),
-        _workflow_figure_block(),
         "\\section{实验设计}\n\n",
         _format_experiments(chapters.get("experiments", "")),
         "\\section{实验结果}\n\n",
-        _format_results(chapters.get("results", "")),
+        _format_results(chapters.get("results", ""), include_scaffold=False),
     ]
 
     if figure_files:

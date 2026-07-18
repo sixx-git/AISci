@@ -187,6 +187,43 @@ export const reportService = {
     return data;
   },
 
+  /** GET /api/v1/reports/:reportId/latex-source */
+  async getLatexSource(reportId: string): Promise<LatexSourcePayload> {
+    const { data } = await api.get<ApiResponse<LatexSourcePayload>>(`/reports/${reportId}/latex-source`);
+    if (data?.code !== 200 || !data.data) {
+      throw new Error(data?.message || '加载 LaTeX 源码失败');
+    }
+    return data.data;
+  },
+
+  /** PUT /api/v1/reports/:reportId/latex-source */
+  async saveLatexSource(
+    reportId: string,
+    payload: { tex: string; bib?: string },
+  ): Promise<ApiResponse<{ report_id: string; saved: boolean; version?: number }>> {
+    const { data } = await api.put<ApiResponse<{ report_id: string; saved: boolean; version?: number }>>(
+      `/reports/${reportId}/latex-source`,
+      payload,
+    );
+    return data;
+  },
+
+  /** POST /api/v1/reports/:reportId/compile-latex — 编译磁盘源码，保留手改 */
+  async compileLatex(reportId: string): Promise<ApiResponse<{
+    report_id?: string;
+    pdf_success?: boolean;
+    warning?: string;
+    download_url?: string | null;
+  }>> {
+    const { data } = await api.post<ApiResponse<{
+      report_id?: string;
+      pdf_success?: boolean;
+      warning?: string;
+      download_url?: string | null;
+    }>>(`/reports/${reportId}/compile-latex`, {}, { timeout: 300000 });
+    return data;
+  },
+
   /** GET /api/v1/reports/download/:reportId/:fileType */
   async download(reportId: string, fileType: 'pdf' | 'tex'): Promise<Blob> {
     const response = await api.get(`/reports/download/${reportId}/${fileType}`, {
@@ -218,6 +255,17 @@ export const reportService = {
     return data;
   },
 };
+
+export interface LatexSourcePayload {
+  report_id: string;
+  file_id: string;
+  title: string;
+  tex: string;
+  bib: string;
+  has_bib: boolean;
+  has_pdf: boolean;
+  updated_at?: string | null;
+}
 
 export interface ReportBrowseItem {
   id: string;
