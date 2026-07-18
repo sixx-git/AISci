@@ -440,17 +440,18 @@ SANDBOX_PARAM_ONLY_USER_TEMPLATE = Template("""## 研究目标
 请给出改进后的 script_params（不要输出脚本代码）。""")
 
 SANDBOX_SCRIPT_PATCH_SYSTEM_PROMPT = """你是脚本修复专家（类似 IDE 中看 traceback 改代码）。
-上一轮脚本执行/试跑失败。请在尽量保留原脚本结构的前提下做局部修复。
+上一轮脚本执行/试跑失败。请优先依据【traceback】与【出错代码附近】定位问题。
 硬性要求:
 1. script 与 analysis_script 必须是完整 Python 代码，含 def run(df, params)
-2. 禁止输出 "see analysis_script field" 等占位；禁止大幅重写无关逻辑
+2. 禁止输出 "see analysis_script field" 等占位；禁止大幅重写无关逻辑（broader 模式除外，仍须保留研究意图）
 3. feature_columns 只能使用 numeric_columns（注意列名可能是整数 0,1,2… 或字符串）；
    禁止把 activity_code/D01/subject 等字符串列直接作特征
-4. target_column 必须存在于列契约；字符串标签需 LabelEncoder
+4. target_column 必须存在于列契约；字符串标签需 LabelEncoder（得到 1D y，勿用 df[[col]].values 造成 (n,1)）
 5. 必须返回 (metrics_dict, chart_paths_list) 且至少保存 1 张图
-6. 只输出含 script / analysis_script / script_params 的 JSON 数据实例，不要输出 Schema
+6. 只输出 JSON 数据实例（可含 diagnosis / script / analysis_script / script_params），不要输出 Schema
 7. 若报错含 n_splits / groups：改用 groups=sensor(或受试者列)，并写
-   n_splits = min(5, len(np.unique(groups)))；组数太少则用 GroupShuffleSplit(n_splits=1) 或降折"""
+   n_splits = min(5, len(np.unique(groups)))；组数太少则用 GroupShuffleSplit(n_splits=1) 或降折
+8. 修复必须能解释 traceback；不要忽略【出错代码附近】里用 >>> 标出的行"""
 
 SANDBOX_SCRIPT_PATCH_USER_TEMPLATE = Template("""## 研究目标
 {{ research_goal }}
@@ -460,6 +461,9 @@ SANDBOX_SCRIPT_PATCH_USER_TEMPLATE = Template("""## 研究目标
 非数值列: {{ non_numeric_columns }}
 建议标签列: {{ suggested_target_columns }}
 
+## 修复模式
+mode={{ repair_mode }}，同错连续次数={{ same_error_streak }}
+
 ## 上一轮脚本
 ```python
 {{ previous_script }}
@@ -468,13 +472,13 @@ SANDBOX_SCRIPT_PATCH_USER_TEMPLATE = Template("""## 研究目标
 ## 上一轮 script_params
 {{ current_script_params }}
 
-## 执行错误
+## 执行错误（含 traceback / 出错代码附近 / 系统提示）
 {{ error_message }}
 
 ## 分析反馈
 {{ previous_analysis_summary }}
 
-请修复脚本，保持方法意图不变。""")
+请修复脚本，保持方法意图不变。若模式为 diagnose/broader，先写 diagnosis 再给完整 script。""")
 
 PLANNER_SANDBOX_USER_TEMPLATE = Template("""请为以下研究目标设计基于数据的实验方案。
 

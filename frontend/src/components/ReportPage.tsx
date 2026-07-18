@@ -351,7 +351,7 @@ export function ReportPage({
           <EmptyState
             icon={<FileText className="w-8 h-8" />}
             title="暂无研究报告"
-            description="请先通过工作流触发报告生成"
+            description="请先在「迭代实验」页勾选实验并点击「生成报告」"
           />
         </Card>
       </div>

@@ -1,4 +1,4 @@
-import { FlaskConical, Plus, Trash2, Eye, FileCheck2 } from 'lucide-react';
+import { FileText, FlaskConical, Plus, Trash2, Eye, FileCheck2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
@@ -9,23 +9,28 @@ import { PHASE_EMOJI, PHASE_LABEL } from './phaseLabels';
 interface ExperimentListProps {
   experiments: IterativeExperiment[];
   reportIds: string[];
+  generatingReport?: boolean;
   onNew: () => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleReport: (id: string) => void;
+  onGenerateReport?: () => void;
 }
 
 export function ExperimentList({
   experiments,
   reportIds,
+  generatingReport = false,
   onNew,
   onOpen,
   onDelete,
   onToggleReport,
+  onGenerateReport,
 }: ExperimentListProps) {
   const running = experiments.filter((e) => e.status === 'running' || e.phase === 'running').length;
   const completed = experiments.filter((e) => e.phase === 'completed').length;
   const pending = experiments.filter((e) => e.phase === 'created' || e.phase === 'data_recommended').length;
+  const canGenerate = reportIds.length > 0 && Boolean(onGenerateReport);
 
   return (
     <div className="space-y-4">
@@ -41,13 +46,27 @@ export function ExperimentList({
           <div>
             <h4 className="text-sm font-semibold text-bp-text">实验列表</h4>
             <p className="text-xs text-bp-muted mt-0.5">
-              勾选一个或多个实验作为报告输入（手动指定）
+              勾选一个或多个实验作为报告输入，再点击「生成报告」
               {reportIds.length > 0 ? ` · 已选 ${reportIds.length}` : ''}
             </p>
           </div>
-          <Button icon={<Plus className="w-4 h-4" />} onClick={onNew}>
-            新建实验
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onGenerateReport && (
+              <Button
+                variant="primary"
+                icon={<FileText className="w-4 h-4" />}
+                disabled={!canGenerate || generatingReport}
+                isLoading={generatingReport}
+                onClick={onGenerateReport}
+                title={reportIds.length === 0 ? '请先勾选用于报告的实验' : '基于勾选实验生成报告'}
+              >
+                生成报告
+              </Button>
+            )}
+            <Button icon={<Plus className="w-4 h-4" />} onClick={onNew}>
+              新建实验
+            </Button>
+          </div>
         </div>
 
         {experiments.length === 0 ? (

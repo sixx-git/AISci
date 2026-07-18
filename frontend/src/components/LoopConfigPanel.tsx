@@ -34,7 +34,7 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
     literature_max_papers: config.literatureMaxPapers,
     discovery_max_rounds: config.maxRounds,
     gate_stagnant_rounds: config.gateStagnantRounds,
-    // 假设生成/评估与报告不再走 HITL；人工审在假设页与「迭代实验」页完成
+    // 假设生成门控可选；可行性评估后由后端强制 handoff，不再经此开关自动跑迭代实验/报告
     enable_hitl_gate: false,
     enable_pro_con_adversarial: config.enableProConAdversarial,
     adversarial_mode: config.adversarialMode,
@@ -45,11 +45,11 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
 
 export const ITERATION_MODE_HINTS: Record<IterationMode, string> = {
   human:
-    '人工主导：在「候选假设」与「迭代实验」页审阅；支持阶段修订与单阶段重跑，无关键阶段 HITL 门控。',
+    '人工主导：可行性评估后自动暂停；请在「迭代实验」页完成实验设计与沙箱验证，并手动生成报告。',
   teaching_auto:
-    '轻量自动：验证或图表检查失败时自动精化（旧实验环已退役；请以「迭代实验」页反馈重设计为主）。',
+    '轻量自动：验证或图表检查失败时自动精化（旧实验环已退役；请以「迭代实验」页反馈重设计为主）。可行性评估后同样暂停。',
   discovery_auto:
-    '深度自动：评审未 Accept 时自动刷新文献并重跑假设→迭代实验→报告（最多 N 轮）。',
+    '深度自动：评审未 Accept 时自动刷新文献并重跑假设→迭代实验→报告（最多 N 轮）；不在可行性评估后暂停。',
 };
 
 interface LoopConfigPanelProps {

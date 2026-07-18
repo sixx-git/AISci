@@ -13,6 +13,7 @@ def test_default_iteration_mode_is_human():
     assert opts["enable_hitl_gate"] is False
     assert opts["enable_teaching_auto_refinement"] is False
     assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
+    assert opts["pause_after_hypothesis_review"] is True
 
 
 def test_teaching_auto_mode():
@@ -21,6 +22,7 @@ def test_teaching_auto_mode():
     assert opts["enable_hitl_gate"] is False
     assert opts["enable_teaching_auto_refinement"] is True
     assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
+    assert opts["pause_after_hypothesis_review"] is True
 
 
 def test_discovery_auto_mode():
@@ -30,6 +32,13 @@ def test_discovery_auto_mode():
     assert opts["force_sandbox"] is True
     assert opts["discovery_max_rounds"] == 4
     assert opts["enable_teaching_auto_refinement"] is False
+    assert opts["pause_after_hypothesis_review"] is False
+
+
+def test_human_mode_can_disable_feasibility_pause():
+    opts = resolve_run_options({"iteration_mode": "human", "pause_after_hypothesis_review": False})
+    assert opts["iteration_mode"] == "human"
+    assert opts["pause_after_hypothesis_review"] is False
 
 
 def test_human_mode_can_disable_hitl():

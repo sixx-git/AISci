@@ -35,6 +35,7 @@ from app.models.project import Report, Project, ProjectStatus
 from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.core.pipeline_modes import (
     PipelineMode,
+    IterationMode,
     normalize_pipeline_mode,
     resolve_run_options,
     ENSEMBLE_ACCEPT_SCORE,
@@ -357,6 +358,16 @@ class PipelineService:
                 "downstream_stale_from": from_stage,
             }
         )
+        # 从可行性评估 handoff 进入「生成报告」时清除暂停态
+        gate = dict(meta.get("hitl_gate") or {})
+        if gate.get("paused"):
+            cleared = list(gate.get("cleared_stages") or [])
+            if from_stage == "report_generation" and "hypothesis_review" not in cleared:
+                cleared.append("hypothesis_review")
+            gate["paused"] = False
+            gate["cleared_stages"] = cleared
+            gate["last_action"] = "report_generation"
+            meta["hitl_gate"] = gate
         meta.pop("parent_run_id", None)
         run.extra_metadata = meta
         flag_modified(run, "extra_metadata")
@@ -1871,10 +1882,12 @@ class PipelineService:
                 results.pop("counterfactual_preview", None)
                 self._stage_results.pop("counterfactual_preview", None)
                 self._ensure_counterfactual_preview(results, research_question)
-            
-            # ── 阶段 6: 迭代实验（替换原实验设计 + 小样验证）──
+                # 可行性评估后暂停：迭代实验 / 报告改由「迭代实验」页人工完成
+                self._pause_for_feasibility_handoff(results)
+
+            # ── 阶段 6: 迭代实验（仅 discovery / 显式关闭暂停 / 单阶段重跑时执行）──
             teaching_report_ran = False
-            if start_idx <= 5:
+            if start_idx <= 5 and not self._should_defer_iterative_experiment():
                 self._ensure_counterfactual_preview(results, research_question)
                 self._run_stage(stages, 5, results, research_question, project_id,
                     lambda: self._exec_iterative_experiment(
@@ -1885,20 +1898,55 @@ class PipelineService:
                 ie = results.get("iterative_experiment") or {}
                 if isinstance(ie, dict) and ie.get("small_validation"):
                     self._apply_post_validation_updates(results, ie["small_validation"])
+            elif start_idx <= 5 and self._should_defer_iterative_experiment():
+                results["iterative_experiment"] = {
+                    "status": "deferred_to_experiments_page",
+                    "warning": "请在「迭代实验」页完成实验设计与沙箱验证后再生成报告",
+                }
 
-            # 旧实验自纠错 / HITL 阶段门控已移除
-            # 人工审阅：假设页操作 + 迭代实验（shaxiang）页；报告直接读 iterative_experiment
+            # ── 阶段 7: ReportGenerationAgent（默认不自动触发；由迭代实验页「生成报告」触发）──
+            # 生成前用迭代实验页最新勾选快照覆盖 stage-6 陈旧输出（常见：blocked_need_data），
+            # 否则显式重跑 report_generation 会被旧状态误跳过，阶段一直停在 pending。
+            if project_id and start_idx <= 6:
+                try:
+                    from app.services.iterative_experiment_service import (
+                        get_iterative_experiment_service,
+                    )
 
-            # ── 阶段 7: ReportGenerationAgent ──
+                    snap = get_iterative_experiment_service().snapshot_for_report(project_id)
+                    if isinstance(snap, dict) and (
+                        snap.get("experiments")
+                        or snap.get("status")
+                        in {
+                            "completed",
+                            "partial",
+                            "blocked_need_data",
+                            "blocked_need_hypothesis",
+                            "deferred_to_experiments_page",
+                        }
+                    ):
+                        results["iterative_experiment"] = snap
+                        logger.info(
+                            "[Pipeline] 报告前注入迭代实验快照 status=%s n_exp=%s report_ids=%s",
+                            snap.get("status"),
+                            len(snap.get("experiments") or []),
+                            snap.get("report_experiment_ids"),
+                        )
+                except Exception as snap_err:
+                    logger.warning("[Pipeline] 报告前注入迭代实验快照失败: %s", snap_err)
+
             ie_status = (results.get("iterative_experiment") or {}).get("status")
             block_report = ie_status in {
                 "blocked_need_data",
                 "blocked_need_hypothesis",
             }
+            # deferred 仅在自动链路中阻断；显式重跑报告阶段时已由上方 snapshot 覆盖
+            if ie_status == "deferred_to_experiments_page" and self._should_defer_auto_report():
+                block_report = True
             if getattr(self, "_finalize_report_after_gate", False):
                 self._finalize_report_after_gate = False
                 final_report_id = self._persist_pipeline_report(project_id, results)
-            elif start_idx <= 6 and not teaching_report_ran and not block_report:
+            elif start_idx <= 6 and not teaching_report_ran and not block_report and not self._should_defer_auto_report():
                 def _exec_report():
                     pipeline_run_info = self._build_pipeline_run_info()
                     return self._exec_report_generation(
@@ -1906,12 +1954,23 @@ class PipelineService:
                     )
                 self._run_stage(stages, 6, results, research_question, project_id, _exec_report)
                 final_report_id = self._persist_pipeline_report(project_id, results)
-            elif block_report:
-                results["report_generation"] = {
+            elif block_report or (start_idx <= 6 and self._should_defer_auto_report()):
+                skip_payload = {
                     "status": "skipped",
                     "warning": (results.get("iterative_experiment") or {}).get("warning")
-                    or "迭代实验未完成，已跳过报告生成",
+                    or "请在「迭代实验」页完成实验后手动生成报告",
                 }
+                results["report_generation"] = skip_payload
+                stages[6].status = PipelineStageStatus.COMPLETED
+                stages[6].output_data = skip_payload
+                db_report = self.db_stage_executions.get(7)
+                if db_report is not None:
+                    self._update_stage_execution(db_report, "completed", output=skip_payload)
+                logger.warning(
+                    "[Pipeline] 报告生成已跳过 run_id=%s reason=%s",
+                    self.run_id,
+                    skip_payload.get("warning"),
+                )
 
             # ── P5: Discovery 开放循环（仅 discovery_auto 模式）──
             if (
@@ -2060,6 +2119,94 @@ class PipelineService:
             )
     
     # ────────────── 阶段执行 ──────────────
+
+    def _should_defer_iterative_experiment(self) -> bool:
+        """默认将迭代实验 defer 到「迭代实验」页；discovery / 显式关闭暂停 / 显式重跑除外。"""
+        if not self._run_options.get("pause_after_hypothesis_review", True):
+            return False
+        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
+            return False
+        start_idx = getattr(self, "_start_idx", 0) or 0
+        if getattr(self, "_rerun_single_stage_only", False) and start_idx == 5:
+            return False
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if self.db_pipeline_run and isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        if meta.get("rerun_from_stage") == "iterative_experiment":
+            return False
+        return True
+
+    def _should_defer_auto_report(self) -> bool:
+        """默认不自动生成报告；由迭代实验页「生成报告」或显式重跑报告阶段触发。"""
+        if not self._run_options.get("pause_after_hypothesis_review", True):
+            return False
+        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
+            return False
+        start_idx = getattr(self, "_start_idx", 0) or 0
+        if start_idx >= 6:
+            return False
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if self.db_pipeline_run and isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        rerun_from = meta.get("rerun_from_stage")
+        if rerun_from in {"report_generation", "iterative_experiment"}:
+            return False
+        return True
+
+    def _pause_for_feasibility_handoff(self, results: Dict[str, Any]) -> None:
+        """可行性评估完成后暂停 Pipeline，引导用户前往「迭代实验」页。"""
+        if not self._run_options.get("pause_after_hypothesis_review", True):
+            return
+        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
+            return
+        stage_key = "hypothesis_review"
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        gate = dict(meta.get("hitl_gate") or {})
+        cleared = list(gate.get("cleared_stages") or [])
+        if stage_key in cleared:
+            return
+
+        resume_phase = f"after_{stage_key}"
+        gate.update({
+            "paused": True,
+            "stage": stage_key,
+            "stage_label": HITL_GATE_STAGE_LABELS.get(stage_key, stage_key),
+            "resume_phase": resume_phase,
+            "paused_at": datetime.now(CHINA_TZ).isoformat(),
+            "cleared_stages": cleared,
+            "handoff": "iterative_experiment_page",
+        })
+        meta["hitl_gate"] = gate
+        meta["pipeline_checkpoint"] = {
+            "results": self._checkpoint_safe_results(results),
+            "resume_phase": resume_phase,
+        }
+        self.db_pipeline_run.status = DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
+        self.db_pipeline_run.current_stage = stage_key
+        self.db_pipeline_run.extra_metadata = meta
+        self.db.commit()
+        self._record_closed_loop_event(
+            "hitl_gate_pause",
+            {
+                "stage": stage_key,
+                "stage_label": gate.get("stage_label"),
+                "summary": "可行性评估已完成：请前往「迭代实验」页进行实验设计与沙箱验证",
+                "quality_trend_entry": {
+                    "stage": "hitl_gate",
+                    "score": 6.0,
+                    "label": stage_key,
+                },
+            },
+        )
+        raise HitlGatePause(stage_key)
 
     def _should_hitl_gate(self, stage_key: str) -> bool:
         if self._run_options.get("iteration_mode") != "human":
@@ -2899,6 +3046,17 @@ class PipelineService:
         kg = results.get("knowledge_gap", {})
         hg = results.get("hypothesis_generation", {})
         hr = results.get("hypothesis_review", {})
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        # 优先从「迭代实验」页勾选结果快照注入，避免依赖 Pipeline 阶段 6 自动跑实验
+        if project_id:
+            try:
+                from app.services.iterative_experiment_service import get_iterative_experiment_service
+
+                snap = get_iterative_experiment_service().snapshot_for_report(project_id)
+                if isinstance(snap, dict) and snap.get("experiments"):
+                    results["iterative_experiment"] = snap
+            except Exception as snap_err:
+                logger.warning("[报告生成] 注入迭代实验快照失败: %s", snap_err)
         ie, ed, sv = self._report_payload_from_iterative_experiment(results)
 
         evidence_facts, citation_map, verified_references = self._normalize_literature_bundle(lm)
@@ -2920,7 +3078,6 @@ class PipelineService:
         preliminary_analysis_outputs = sv.get("skill_outputs", {}) if isinstance(sv, dict) else {}
 
         data_context = {}
-        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
         if project_id:
             data_context = self._build_data_context(project_id)
         data_context = self._merge_data_acquisition_context(data_context, results)

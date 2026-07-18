@@ -10,6 +10,9 @@ import type {
   RunMode,
 } from '@/types/iterativeExperiment';
 
+/** 设计脚本 / smoke 修复 / 多轮迭代：最长 60 分钟 */
+const LONG_OP_TIMEOUT_MS = 60 * 60 * 1000;
+
 function unwrap<T>(res: ApiResponse<T>, fallbackMsg = '请求失败'): T {
   if (res.code !== 200 || res.data === undefined || res.data === null) {
     throw new Error(res.message || fallbackMsg);
@@ -153,7 +156,7 @@ export const iterativeExperimentService = {
     const { data } = await api.post<ApiResponse<IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/design-script`,
       { data_config: dataConfig },
-      { timeout: 600000 },
+      { timeout: LONG_OP_TIMEOUT_MS },
     );
     return unwrap(data, '设计脚本失败');
   },
@@ -177,7 +180,7 @@ export const iterativeExperimentService = {
     const { data } = await api.post<
       ApiResponse<{ record: IterationRecordMock; experiment: IterativeExperiment }>
     >(`/projects/${projectId}/iterative-experiments/${experimentId}/run-iteration`, null, {
-      timeout: 600000,
+      timeout: LONG_OP_TIMEOUT_MS,
     });
     const payload = unwrap(data, '执行迭代失败');
     return { record: payload.record, experiment: payload.experiment ?? null };
@@ -187,7 +190,7 @@ export const iterativeExperimentService = {
     const { data } = await api.post<ApiResponse<IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/run-to-completion`,
       null,
-      { timeout: 600000 },
+      { timeout: LONG_OP_TIMEOUT_MS },
     );
     return unwrap(data, '自动运行失败');
   },
@@ -212,7 +215,7 @@ export const iterativeExperimentService = {
     const { data } = await api.post<ApiResponse<IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/redesign`,
       { feedback },
-      { timeout: 600000 },
+      { timeout: LONG_OP_TIMEOUT_MS },
     );
     return unwrap(data, '重设计脚本失败');
   },

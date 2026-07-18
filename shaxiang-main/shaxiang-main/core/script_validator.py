@@ -141,6 +141,97 @@ def validate_plan_static(plan: ExperimentPlan) -> list[str]:
     return errors
 
 
+_TRACE_FILE_LINE_RE = re.compile(
+    r'File "(?:<string>|<script>|[^"]+)", line (\d+)(?:, in ([^\n]+))?'
+)
+
+
+def _script_log_from_result(result) -> str:
+    raw = getattr(result, "raw_output", None) or {}
+    if isinstance(raw, dict):
+        return str(raw.get("script_log") or "")
+    return ""
+
+
+def _traceback_tail(script_log: str, max_chars: int = 3500) -> str:
+    """从 script_log 抽取 traceback 尾部（含 [ERROR] 行）。"""
+    log = script_log or ""
+    if not log.strip():
+        return ""
+    markers = ("Traceback (most recent call last):", "[ERROR]")
+    starts = [log.rfind(m) for m in markers if log.rfind(m) >= 0]
+    if not starts:
+        return log[-max_chars:]
+    start = min(starts)
+    tail = log[start:].strip()
+    if len(tail) > max_chars:
+        tail = "…\n" + tail[-max_chars:]
+    return tail
+
+
+def _code_window(script: str, line_no: int, radius: int = 12) -> str:
+    """按 1-based 行号截取出错附近代码，并标记出错行。"""
+    if not script or line_no < 1:
+        return ""
+    lines = script.splitlines()
+    if not lines:
+        return ""
+    lo = max(1, line_no - radius)
+    hi = min(len(lines), line_no + radius)
+    out = []
+    for i in range(lo, hi + 1):
+        mark = ">>>" if i == line_no else "   "
+        out.append(f"{mark} {i:4d} | {lines[i - 1]}")
+    return "\n".join(out)
+
+
+def extract_failure_locus(script: str, script_log: str) -> dict:
+    """
+    从 traceback 定位用户脚本出错行。
+    Returns: {line, func, code_window, traceback}
+    """
+    tb = _traceback_tail(script_log)
+    frames = [(int(m.group(1)), (m.group(2) or "").strip()) for m in _TRACE_FILE_LINE_RE.finditer(tb)]
+    line_no = None
+    func = ""
+    # 优先最后一帧落在用户脚本（run / 同文件）
+    for ln, fn in reversed(frames):
+        if fn in {"run", "<module>"} or fn.startswith("run") or not fn:
+            line_no, func = ln, fn
+            break
+    if line_no is None and frames:
+        line_no, func = frames[-1]
+    window = _code_window(script, line_no) if line_no else ""
+    return {
+        "line": line_no,
+        "func": func,
+        "code_window": window,
+        "traceback": tb,
+        "frames": frames,
+    }
+
+
+def build_enriched_smoke_error(
+    script: str,
+    result,
+    short_message: str,
+) -> str:
+    """把短错误 + traceback + 出错代码窗拼成可喂给 LLM 的失败上下文。"""
+    log = _script_log_from_result(result)
+    locus = extract_failure_locus(script, log)
+    parts = [short_message.strip()]
+    if locus.get("line"):
+        parts.append(
+            f"\n【出错位置】脚本约第 {locus['line']} 行"
+            + (f"（{locus['func']}）" if locus.get("func") else "")
+        )
+    if locus.get("code_window"):
+        parts.append("\n【出错代码附近】\n```python\n" + locus["code_window"] + "\n```")
+    if locus.get("traceback"):
+        parts.append("\n【traceback】\n" + locus["traceback"])
+    return "\n".join(parts).strip()
+
+
 def smoke_run_plan(
     plan: ExperimentPlan,
     data_config: Optional[dict] = None,
@@ -154,6 +245,7 @@ def smoke_run_plan(
 
     Returns:
         (ok, errors, result)  result 为 IterationResult 或 None
+        失败时 errors[0] 含短错误 + traceback + 出错代码窗（若可得）
     """
     errors = validate_plan_static(plan)
     if errors:
@@ -187,7 +279,8 @@ def smoke_run_plan(
         return False, [f"smoke_run 执行异常: {e}"], None
 
     if result.status != "success":
-        return False, [f"smoke_run 失败: {result.error_message or result.summary}"], result
+        short = f"smoke_run 失败: {result.error_message or result.summary}"
+        return False, [build_enriched_smoke_error(script, result, short)], result
 
     numeric_metrics = [
         dp for dp in (result.data_points or [])

@@ -12,6 +12,8 @@ export interface HitlGateReviewTarget {
   continueDescription: string;
   /** 假设页继续按钮文案 */
   continueButtonLabel: string;
+  /** continue 行为：resume=恢复 Pipeline；navigate=仅跳转对应 Tab */
+  continueAction?: 'resume' | 'navigate';
 }
 
 const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
@@ -21,23 +23,24 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
       'Pipeline 已在此暂停。请前往「候选假设」审阅生成的假设，选定主假设后，可继续运行下游智能体。',
     tab: 'hypotheses',
     ctaLabel: '前往审阅假设',
-    continueHint: '审阅并选定主假设后，将运行可行性评估及后续智能体。',
+    continueHint: '审阅并选定主假设后，将运行可行性评估。',
     continueTitle: '假设已生成',
-    continueDescription:
-      '审阅并选定主假设后，将依次运行：可行性评估 → 迭代实验 → 报告生成。',
-    continueButtonLabel: '运行可行性评估及后续智能体',
+    continueDescription: '审阅并选定主假设后，将运行可行性评估智能体。',
+    continueButtonLabel: '运行可行性评估',
+    continueAction: 'resume',
   },
   hypothesis_review: {
-    title: '假设评估已完成',
+    title: '可行性评估已完成',
     description:
-      '请查看假设评估与对抗性审稿结果，确认无误后可继续迭代实验及下游流程。',
-    tab: 'hypotheses',
-    ctaLabel: '前往查看假设',
-    continueHint: '确认评估结果后，将运行迭代实验及后续智能体。',
-    continueTitle: '假设评估已完成',
+      'Pipeline 已自动终止。请前往「迭代实验」页进行实验设计与沙箱验证；完成后再勾选实验并生成报告。',
+    tab: 'experiments',
+    ctaLabel: '前往迭代实验',
+    continueHint: '报告不会自动生成，请在「迭代实验」页勾选实验后点击「生成报告」。',
+    continueTitle: '可行性评估已完成',
     continueDescription:
-      '确认评估结果后，将依次运行：迭代实验 → 报告生成。人工细节审阅请在「迭代实验」页完成。',
-    continueButtonLabel: '运行迭代实验及后续智能体',
+      '请前往「迭代实验」页完成实验设计与沙箱验证。报告需在该页手动生成，不会自动触发。',
+    continueButtonLabel: '前往迭代实验',
+    continueAction: 'navigate',
   },
   // 兼容：若旧 run / 配置仍卡在迭代实验门控
   iterative_experiment: {
@@ -50,6 +53,7 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
     continueTitle: '迭代实验可继续',
     continueDescription: '确认后将运行报告生成智能体。',
     continueButtonLabel: '运行报告生成智能体',
+    continueAction: 'resume',
   },
   report_generation: {
     title: '报告已生成',
@@ -60,6 +64,7 @@ const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
     continueTitle: '报告已生成',
     continueDescription: '确认报告内容后，将完成本次 Pipeline。',
     continueButtonLabel: '确认并完成 Pipeline',
+    continueAction: 'resume',
   },
 };
 
@@ -83,6 +88,7 @@ export function getHitlGateReviewTarget(stage?: string | null): HitlGateReviewTa
     continueTitle: '等待确认',
     continueDescription: '审阅完成后，将继续运行下游智能体。',
     continueButtonLabel: '继续运行下游智能体',
+    continueAction: 'resume',
   };
 }
 

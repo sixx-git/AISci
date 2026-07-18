@@ -44,6 +44,23 @@ const SOURCE_OPTIONS: Array<{ label: string; value: DataSourceType; icon: typeof
 
 const PROFILES = ['', 'SisFall', 'MobiAct', 'UCI_HAR', 'AutoDetect'];
 
+function resolveInitialSourceType(cfg?: DataConfig | null): DataSourceType {
+  if (!cfg?.source_type) return 'uploaded';
+  if (cfg.source_type === 'local_json') return 'local_csv';
+  if (SOURCE_OPTIONS.some((o) => o.value === cfg.source_type)) {
+    return cfg.source_type;
+  }
+  return 'uploaded';
+}
+
+function resolveInitialProfileName(cfg?: DataConfig | null): string {
+  if (!cfg) return '';
+  if (cfg.profile_name) return cfg.profile_name;
+  // AutoDetect 结果通常带 profile_json 而无显式 profile_name
+  if (cfg.source_type === 'directory' && cfg.profile_json) return 'AutoDetect';
+  return '';
+}
+
 export function ExperimentDetail({
   experiment,
   busy,
@@ -62,19 +79,31 @@ export function ExperimentDetail({
 }: ExperimentDetailProps) {
   const phase = experiment.phase;
   const isSandbox = experiment.executor_type === 'sandbox';
+  const boundConfig = experiment.data_config ?? null;
 
-  const [sourceType, setSourceType] = useState<DataSourceType>('uploaded');
+  const [sourceType, setSourceType] = useState<DataSourceType>(() =>
+    resolveInitialSourceType(boundConfig),
+  );
   const [uploadedConfig, setUploadedConfig] = useState<DataConfig | null>(
-    experiment.data_config?.source_type === 'uploaded' || experiment.data_config?.source_type === 'local_json'
-      ? experiment.data_config
+    boundConfig?.source_type === 'uploaded' || boundConfig?.source_type === 'local_json'
+      ? boundConfig
       : null,
   );
-  const [fileName, setFileName] = useState(experiment.data_config?.file_name || '');
-  const [filePath, setFilePath] = useState('');
-  const [profileName, setProfileName] = useState('');
-  const [profileConfirmed, setProfileConfirmed] = useState(false);
+  const [fileName, setFileName] = useState(boundConfig?.file_name || '');
+  const [filePath, setFilePath] = useState(boundConfig?.source_path || '');
+  const [profileName, setProfileName] = useState(() => resolveInitialProfileName(boundConfig));
+  const [profileConfirmed, setProfileConfirmed] = useState(() =>
+    Boolean(boundConfig?.source_path && (
+      resolveInitialProfileName(boundConfig) !== 'AutoDetect'
+      || Boolean(boundConfig.profile_json)
+    )),
+  );
   const [autodetectPreview, setAutodetectPreview] = useState<Record<string, unknown> | null>(null);
-  const [autodetectConfig, setAutodetectConfig] = useState<DataConfig | null>(null);
+  const [autodetectConfig, setAutodetectConfig] = useState<DataConfig | null>(() =>
+    resolveInitialProfileName(boundConfig) === 'AutoDetect' && boundConfig?.source_path
+      ? boundConfig
+      : null,
+  );
   const [feedback, setFeedback] = useState(experiment.human_feedback || '');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -85,48 +114,55 @@ export function ExperimentDetail({
     || phase === 'needs_human_review'
     || (Boolean(experiment.initial_plan) && phase !== 'completed' && phase !== 'failed');
 
-  const metricsHistory = useMemo(
-    () => experiment.iterations.map((it) => {
-      const m = it.metrics || it.result?.metrics || {};
-      const f1 = Number(
-        m.f1 ?? m.fedavg_f1 ?? m.adaptive_f1 ?? m.f1_score ?? 0,
-      );
-      const accuracy = Number(
-        m.accuracy ?? m.fedavg_accuracy ?? m.adaptive_accuracy ?? 0,
-      );
-      return { n: it.iteration_number, accuracy, f1 };
-    }),
-    [experiment.iterations],
-  );
+  const overviewHistory = useMemo(() => {
+    const rows = experiment.iterations.map((it) => ({
+      n: it.iteration_number,
+      duration: Number(it.duration_seconds || 0),
+    }));
+    const maxDuration = Math.max(0, ...rows.map((r) => r.duration));
+    return { rows, maxDuration };
+  }, [experiment.iterations]);
 
   const autodetectBlocked =
     sourceType === 'directory'
     && profileName === 'AutoDetect'
-    && !profileConfirmed;
+    && !profileConfirmed
+    && !boundConfig?.source_path;
+
+  const hasBoundData = Boolean(boundConfig?.source_path);
+  const formReadyForDesign =
+    sourceType === 'uploaded'
+      ? Boolean(uploadedConfig?.source_path)
+      : Boolean(filePath.trim())
+        && (sourceType !== 'directory' || Boolean(profileName))
+        && !autodetectBlocked;
+  const canDesignScript = !busy && (hasBoundData || formReadyForDesign);
 
   const buildDataConfig = (): DataConfig => {
     if (sourceType === 'uploaded') {
-      if (!uploadedConfig?.source_path) {
-        throw new Error('请先上传并完成试加载的数据文件');
-      }
-      return uploadedConfig;
+      if (uploadedConfig?.source_path) return uploadedConfig;
+      if (boundConfig?.source_path) return boundConfig;
+      throw new Error('请先上传并完成试加载的数据文件');
     }
     if (sourceType === 'directory' && profileName === 'AutoDetect') {
-      if (!autodetectConfig || !profileConfirmed) {
-        throw new Error('请先完成 AutoDetect 识别试加载并确认');
-      }
-      return autodetectConfig;
+      if (autodetectConfig && profileConfirmed) return autodetectConfig;
+      if (boundConfig?.source_path) return boundConfig;
+      throw new Error('请先完成 AutoDetect 识别试加载并确认');
     }
-    const path = filePath.trim();
+    const path = filePath.trim() || boundConfig?.source_path || '';
     if (!path) {
       throw new Error('请填写数据路径');
     }
     return {
       source_type: sourceType === 'local_csv' && path.endsWith('.json') ? 'local_json' : sourceType,
       source_path: path,
-      profile_name: sourceType === 'directory' ? (profileName || undefined) : undefined,
-      sample_size: 5000,
-      preprocessing_steps: [],
+      profile_name: sourceType === 'directory' ? (profileName || boundConfig?.profile_name || undefined) : undefined,
+      sample_size: boundConfig?.sample_size ?? 5000,
+      preprocessing_steps: boundConfig?.preprocessing_steps || [],
+      profile_json: boundConfig?.profile_json,
+      row_count: boundConfig?.row_count,
+      columns: boundConfig?.columns,
+      file_name: boundConfig?.file_name,
     };
   };
 
@@ -404,21 +440,17 @@ export function ExperimentDetail({
             </div>
           )}
 
-          {experiment.data_config && (
+          {boundConfig && (
             <p className="text-xs text-bp-green mb-3">
-              已绑定数据: {experiment.data_config.file_name || experiment.data_config.source_path}
-              （{experiment.data_config.row_count ?? '?'} 行）
+              已绑定数据: {boundConfig.file_name || boundConfig.source_path}
+              （{boundConfig.row_count ?? '?'} 行）
+              {hasBoundData && !formReadyForDesign ? ' · 可直接设计脚本' : ''}
             </p>
           )}
 
           <Button
             className="w-full"
-            disabled={
-              busy
-              || autodetectBlocked
-              || (sourceType === 'uploaded' ? !uploadedConfig?.source_path : !filePath.trim())
-              || (sourceType === 'directory' && !profileName)
-            }
+            disabled={!canDesignScript}
             onClick={() => {
               try {
                 setLocalError(null);
@@ -490,24 +522,29 @@ export function ExperimentDetail({
             )}
           </div>
 
-          {metricsHistory.length > 0 && (
+          {overviewHistory.rows.length > 0 && (
             <div className="mb-4">
-              <h5 className="text-sm font-medium text-bp-text mb-2">指标趋势</h5>
+              <h5 className="text-sm font-medium text-bp-text mb-2">概览</h5>
               <div className="space-y-2">
-                {metricsHistory.map((m) => (
-                  <div key={m.n} className="flex items-center gap-3 text-xs">
-                    <span className="w-12 text-bp-muted">#{m.n}</span>
-                    <div className="flex-1 h-2 rounded bg-bp-panel overflow-hidden">
-                      <div
-                        className="h-full bg-bp-cyan"
-                        style={{ width: `${Math.round(m.accuracy * 100)}%` }}
-                      />
+                {overviewHistory.rows.map((m) => {
+                  const barPct = overviewHistory.maxDuration > 0
+                    ? Math.round((m.duration / overviewHistory.maxDuration) * 100)
+                    : 0;
+                  return (
+                    <div key={m.n} className="flex items-center gap-3 text-xs">
+                      <span className="w-12 text-bp-muted">#{m.n}</span>
+                      <div className="flex-1 h-2 rounded bg-bp-panel overflow-hidden">
+                        <div
+                          className="h-full bg-bp-cyan"
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-bp-text w-28 text-right">
+                        耗时 {m.duration.toFixed(1)}s
+                      </span>
                     </div>
-                    <span className="font-mono text-bp-text w-28 text-right">
-                      acc {m.accuracy.toFixed(3)} / f1 {m.f1.toFixed(3)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -20,7 +20,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        timeout: 3600000,           // 60分钟超时（Pipeline运行较长）
+        timeout: 3600000,           // 60分钟（设计脚本 / Pipeline）
+        proxyTimeout: 3600000,
       },
       '/storage': {
         target: 'http://localhost:8000',

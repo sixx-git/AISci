@@ -182,9 +182,12 @@ class QwenDashScopeEmbedding(BaseEmbedding):
             raise ValueError(
                 "EMBEDDING_BACKEND=qwen 需要配置 QWEN_API_KEY（与对话模型共用）"
             )
+        from app.services.qwen_client import build_dashscope_http_client
+
         self._client = OpenAI(
             api_key=api_key,
             base_url=get_effective_base_url(),
+            http_client=build_dashscope_http_client(timeout=180.0),
         )
         logger.info(
             "千问 embedding 已就绪: model=%s, dimension=%s",

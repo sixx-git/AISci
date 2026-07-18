@@ -523,6 +523,39 @@ class IterativeExperimentService:
             "provider": primary.get("provider") or "shaxiang",
         }
 
+    def snapshot_for_report(self, project_id: str) -> Dict[str, Any]:
+        """汇总「用于报告」勾选实验；不自动设计脚本或跑迭代。"""
+        report_ids = self.get_report_ids(project_id)
+        experiments = self.list(project_id)
+        selected: List[Dict[str, Any]] = []
+        if report_ids:
+            id_set = set(report_ids)
+            selected = [e for e in experiments if e.get("id") in id_set]
+        if not selected:
+            selected = [e for e in experiments if e.get("phase") == "completed"]
+        if not selected:
+            return {
+                "status": "blocked_need_data",
+                "warning": "请先在「迭代实验」页完成实验并勾选「用于报告」",
+                "experiments": [],
+                "report_experiment_ids": report_ids,
+            }
+
+        completed = [e for e in selected if e.get("phase") == "completed"]
+        use = completed or selected
+        primary = use[0]
+        synth = self.synthesize_report_fields(primary)
+        return {
+            "status": "completed" if completed else "partial",
+            "experiments": use,
+            "report_experiment_ids": [e.get("id") for e in use],
+            "primary_experiment_id": primary.get("id"),
+            "experiment_design": synth["experiment_design"],
+            "small_validation": synth["small_validation"],
+            "provider": primary.get("provider") or "shaxiang",
+            "warning": None if completed else "所选实验尚未全部完成，将基于当前进度生成报告",
+        }
+
     @staticmethod
     def synthesize_report_fields(primary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """把单条迭代实验映射为报告 agent 入参（历史 ed/sv 形状）。"""

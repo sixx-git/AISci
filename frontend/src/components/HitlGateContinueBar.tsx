@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lightbulb, Play } from 'lucide-react';
+import { ArrowRight, Lightbulb, Play } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { getHitlGateReviewTarget } from '@/config/hitlGateReview';
 import { humanLoopService } from '@/services/humanLoopService';
@@ -73,7 +73,15 @@ export function HitlGateContinueBar({
   }, [resolvedRunId, revalidateKey]);
 
   const handleContinue = useCallback(async () => {
-    if (!resolvedRunId) return;
+    if (!resolvedRunId || !gate?.stage) return;
+    const target = getHitlGateReviewTarget(gate.stage);
+
+    // 可行性评估后：只跳转迭代实验页，不恢复 Pipeline 自动跑实验/报告
+    if (target.continueAction === 'navigate') {
+      navigateToProjectTab(navigate, projectId, target.tab);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -98,12 +106,13 @@ export function HitlGateContinueBar({
     } finally {
       setLoading(false);
     }
-  }, [projectId, resolvedRunId, navigate]);
+  }, [projectId, resolvedRunId, navigate, gate?.stage]);
 
   if (!gate?.paused) return null;
   if (stages?.length && gate.stage && !stages.includes(gate.stage)) return null;
 
   const target = getHitlGateReviewTarget(gate.stage);
+  const isNavigate = target.continueAction === 'navigate';
 
   return (
     <div className="mb-6 p-4 bg-bp-cyan-tint border border-bp-cyan/25 rounded-bp flex items-start gap-3">
@@ -120,10 +129,10 @@ export function HitlGateContinueBar({
         variant="primary"
         disabled={loading}
         isLoading={loading}
-        onClick={handleContinue}
+        onClick={() => void handleContinue()}
         className="gap-1.5 shrink-0"
       >
-        <Play className="w-3.5 h-3.5" />
+        {isNavigate ? <ArrowRight className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
         {target.continueButtonLabel}
       </Button>
     </div>

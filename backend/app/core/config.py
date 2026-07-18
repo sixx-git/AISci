@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     QWEN_MODEL: str = "qwen3.7-max"
     # 已废弃：与 QWEN_MODEL 合并，仅保留以兼容旧 .env
     QWEN_VL_MODEL: str = "qwen3.7-max"
+    # 强制 IPv4 访问百炼（部分网络 IPv6 SSL 会 UNEXPECTED_EOF）
+    QWEN_FORCE_IPV4: bool = True
     
     # Mock LLM 模式：无需真实 QWEN_API_KEY 即可跑通 Pipeline
     USE_MOCK_LLM: bool = False

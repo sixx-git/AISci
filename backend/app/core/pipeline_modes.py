@@ -28,7 +28,9 @@ DEFAULT_DISCOVERY_MAX_ROUNDS = 3
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
-# 人工审阅改走「候选假设」页操作 +「迭代实验」(shaxiang) 页；Pipeline 默认不再门控暂停
+# 可行性评估后默认暂停：迭代实验 / 报告改由「迭代实验」页人工完成
+DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW = True
+# 其它 HITL 阶段门控仍默认关闭（假设生成等）
 DEFAULT_HITL_GATE_STAGES: tuple[str, ...] = ()
 DEFAULT_GATE_STAGNANT_ROUNDS = 2
 DEFAULT_COVERAGE_GAP_THRESHOLD = 70.0
@@ -219,4 +221,10 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "literature_max_papers": literature_max,
         "evidence_reasoning_max_rounds": evidence_max_rounds,
         "enable_science_iteration_observe": opts.get("enable_science_iteration_observe", True),
+        # discovery_auto 保持全自动；其余模式默认在可行性评估后暂停
+        "pause_after_hypothesis_review": (
+            False
+            if iteration_mode == IterationMode.DISCOVERY_AUTO.value
+            else bool(opts.get("pause_after_hypothesis_review", DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW))
+        ),
     }

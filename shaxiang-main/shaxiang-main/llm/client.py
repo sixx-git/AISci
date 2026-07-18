@@ -15,9 +15,11 @@ class LLMClient:
     """统一的 LLM 客户端，支持 OpenAI 兼容 API（包括 DashScope）"""
 
     def __init__(self, config: LLMConfig):
+        # 单次 LLM 调用最长 60 分钟（设计脚本 / 修补轮次可能很长）
         self.client = OpenAI(
             base_url=config.base_url,
             api_key=config.api_key,
+            timeout=3600.0,
         )
         self.model = config.model
         self.default_temperature = config.temperature

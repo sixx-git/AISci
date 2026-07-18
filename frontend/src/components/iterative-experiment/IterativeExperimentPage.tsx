@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import iterativeExperimentService from '@/services/iterativeExperimentService';
 import hypothesisService from '@/services/hypothesisService';
-import { selectedHypothesisKey } from '@/lib/storageKeys';
+import { humanLoopService } from '@/services/humanLoopService';
+import { pipelineService } from '@/services/pipelineService';
+import { selectedHypothesisKey, activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import { getErrorMessage } from '@/lib/errors';
+import { navigateToProjectTab } from '@/lib/projectNavigation';
 import type { DataConfig, IterativeExperiment, RunMode } from '@/types/iterativeExperiment';
 import { ExperimentList } from './ExperimentList';
 import { NewExperimentForm } from './NewExperimentForm';
@@ -21,12 +25,14 @@ export function IterativeExperimentPage({
   projectId,
   hypothesisId,
 }: IterativeExperimentPageProps) {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('list');
   const [experiments, setExperiments] = useState<IterativeExperiment[]>([]);
   const [reportIds, setReportIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [primaryHypothesisText, setPrimaryHypothesisText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newFormKey, setNewFormKey] = useState(0);
   const [draftHypothesis, setDraftHypothesis] = useState('');
@@ -83,6 +89,45 @@ export function IterativeExperimentPage({
       setBusy(false);
     }
   };
+
+  const handleGenerateReport = useCallback(async () => {
+    if (reportIds.length === 0) {
+      setError('请先勾选至少一个用于报告的实验');
+      return;
+    }
+    setGeneratingReport(true);
+    setError(null);
+    try {
+      const runsRes = await pipelineService.getRuns(projectId);
+      const runId = runsRes.code === 200 && runsRes.data?.length
+        ? runsRes.data[0].run_id
+        : null;
+      if (!runId) {
+        throw new Error('未找到可用的 Pipeline 运行记录，请先在工作流中完成可行性评估');
+      }
+      const res = await humanLoopService.rerunFromStage({
+        project_id: projectId,
+        run_id: runId,
+        stage: 'report_generation',
+        use_human_modified_output: true,
+        rerun_mode: 'single_stage',
+        human_feedback: `基于迭代实验页勾选实验生成报告：${reportIds.join(', ')}`,
+      });
+      if (res.code !== 200 || !res.data?.run_id) {
+        throw new Error(res.message || '提交报告生成失败');
+      }
+      const pollRunId = res.data.run_id;
+      try {
+        localStorage.setItem(activeRunKey(projectId), pollRunId);
+        localStorage.setItem(activeRunStatusKey(projectId), 'running');
+      } catch { /* ignore */ }
+      navigateToProjectTab(navigate, projectId, 'reports');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, '生成报告失败'));
+    } finally {
+      setGeneratingReport(false);
+    }
+  }, [projectId, reportIds, navigate]);
 
   if (view === 'new') {
     return (
@@ -216,6 +261,7 @@ export function IterativeExperimentPage({
       <ExperimentList
         experiments={experiments}
         reportIds={reportIds}
+        generatingReport={generatingReport}
         onNew={() => {
           setError(null);
           setDraftHypothesis(primaryHypothesisText);
@@ -237,6 +283,9 @@ export function IterativeExperimentPage({
             const ids = await iterativeExperimentService.toggleReport(projectId, id);
             setReportIds(ids);
           });
+        }}
+        onGenerateReport={() => {
+          void handleGenerateReport();
         }}
       />
     </div>

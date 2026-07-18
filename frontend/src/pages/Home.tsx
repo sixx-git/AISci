@@ -390,7 +390,7 @@ export function Home() {
                     <tr className="border-b border-bp-cyan-dim bg-bp-panel/50">
                       <th className="py-3 px-4 text-xs text-bp-muted font-medium">项目名称</th>
                       <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden md:table-cell">领域</th>
-                      <th className="py-3 px-4 text-xs text-bp-muted font-medium">状态</th>
+                      <th className="py-3 px-4 text-xs text-bp-muted font-medium min-w-[5.5rem]">状态</th>
                       <th className="py-3 px-4 text-xs text-bp-muted font-medium hidden sm:table-cell">创建时间</th>
                       <th className="py-3 px-4 text-xs text-bp-muted font-medium w-36">操作</th>
                     </tr>
@@ -422,12 +422,15 @@ export function Home() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 hidden md:table-cell">
-                          <span className="bp-chip bp-chip-cyan text-xs">
+                        <td className="py-3 px-4 hidden md:table-cell max-w-[14rem] align-top">
+                          <span
+                            className="bp-chip-cyan text-xs inline-block max-w-full px-2.5 py-1 border rounded-bp leading-snug line-clamp-2 break-words"
+                            title={resolveResearchField(project, project.id)}
+                          >
                             {resolveResearchField(project, project.id)}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 min-w-[5.5rem]">
                           <StatusBadge
                             status={getDisplayStatus(project)}
                             label={statusBadgeLabel(

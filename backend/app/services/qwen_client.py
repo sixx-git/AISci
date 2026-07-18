@@ -15,7 +15,7 @@ from functools import wraps
 from dataclasses import dataclass, field
 from datetime import datetime
 
-
+import httpx
 import openai
 from openai import APIError, APIConnectionError, APIStatusError, APITimeoutError
 
@@ -28,6 +28,17 @@ from app.core.llm_runtime import (
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def build_dashscope_http_client(timeout: float = 180.0) -> httpx.Client:
+    """构建访问百炼的 httpx Client；默认强制 IPv4，规避 IPv6 SSL EOF。"""
+    timeout_cfg = httpx.Timeout(timeout)
+    force_ipv4 = bool(getattr(settings, "QWEN_FORCE_IPV4", True))
+    if force_ipv4:
+        transport = httpx.HTTPTransport(local_address="0.0.0.0")
+        logger.info("Qwen HTTP client: force IPv4 (QWEN_FORCE_IPV4=true)")
+        return httpx.Client(timeout=timeout_cfg, transport=transport)
+    return httpx.Client(timeout=timeout_cfg)
 
 
 # ==================== 自定义异常 ====================
@@ -307,6 +318,7 @@ class QwenClient:
                 api_key=self.api_key,
                 base_url=self.base_url,
                 timeout=self.timeout,
+                http_client=build_dashscope_http_client(timeout=float(self.timeout)),
             )
             return client
         except Exception as e:
@@ -369,9 +381,14 @@ class QwenClient:
                     raise QwenAPIError(_format_api_status_error(e.status_code, str(e.message))) from e
                 except APIConnectionError as e:
                     _shutdown_executor(wait=False)
-                    last_error = QwenAPIError(f"Connection Error: {str(e)}")
+                    cause = e.__cause__ or e.__context__
+                    detail = str(cause).strip() if cause else str(e).strip()
+                    last_error = QwenAPIError(
+                        f"Connection Error: {detail or str(e)} "
+                        f"[base_url={self.base_url}]"
+                    )
                     logger.warning(
-                        f"Qwen API Connection Error: {str(e)} "
+                        f"Qwen API Connection Error: {detail or str(e)} "
                         f"(attempt {attempt}/{max_attempts})"
                     )
                     if attempt < max_attempts:
