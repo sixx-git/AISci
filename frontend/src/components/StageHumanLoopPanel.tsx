@@ -20,15 +20,31 @@ const NODE_ID_TO_STAGE: Record<string, string> = {
   report: 'report_generation',
 };
 
+/** 重跑智能体可选起点（不含迭代实验/报告生成，二者请走「从此阶段继续」或专用页） */
 const STAGE_RERUN_OPTIONS: { key: string; label: string }[] = [
   { key: 'problem_understanding', label: '问题理解' },
   { key: 'literature_mining', label: '文献挖掘' },
   { key: 'knowledge_gap', label: '知识缺口' },
   { key: 'hypothesis_generation', label: '假设生成' },
   { key: 'hypothesis_review', label: '假设评审' },
-  { key: 'iterative_experiment', label: '迭代实验' },
-  { key: 'report_generation', label: '报告生成' },
 ];
+
+const RERUN_OPTION_KEYS = new Set(STAGE_RERUN_OPTIONS.map((o) => o.key));
+
+const STAGE_LABELS: Record<string, string> = {
+  ...Object.fromEntries(STAGE_RERUN_OPTIONS.map((o) => [o.key, o.label])),
+  iterative_experiment: '迭代实验',
+  report_generation: '报告生成',
+};
+
+function resolveRerunTargetStage(stageKey: string): string {
+  if (RERUN_OPTION_KEYS.has(stageKey)) return stageKey;
+  return 'hypothesis_review';
+}
+
+function stageLabel(stageKey: string): string {
+  return STAGE_LABELS[stageKey] || stageKey;
+}
 
 interface ChatTurn {
   id?: string;
@@ -90,14 +106,19 @@ export function StageHumanLoopPanel({
 }: StageHumanLoopPanelProps) {
   const navigate = useNavigate();
   const stage = NODE_ID_TO_STAGE[nodeId] || nodeId;
-  const currentStageLabel = STAGE_RERUN_OPTIONS.find((s) => s.key === stage)?.label || stage;
-  const effectiveOutput = humanModifiedOutput || outputData || {};
+  const currentStageLabel = stageLabel(stage);
+  const [localInput, setLocalInput] = useState<Record<string, unknown> | null>(inputData ?? null);
+  const [localOutput, setLocalOutput] = useState<Record<string, unknown> | null>(outputData ?? null);
+  const [localHumanModified, setLocalHumanModified] = useState<Record<string, unknown> | null>(
+    humanModifiedOutput ?? null,
+  );
+  const [localRevisionHistory, setLocalRevisionHistory] = useState(revisionHistory);
   const [editJson, setEditJson] = useState('');
   const [feedback, setFeedback] = useState(humanFeedback || '');
   const [chatMessage, setChatMessage] = useState('');
   const [interactionMode, setInteractionMode] = useState<HitlInteractionMode>('advisory');
   const [rerunScope, setRerunScope] = useState<RerunMode>('single_stage');
-  const [rerunTargetStage, setRerunTargetStage] = useState(stage);
+  const [rerunTargetStage, setRerunTargetStage] = useState(() => resolveRerunTargetStage(stage));
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>(chatHistoryProp);
   const [latestReply, setLatestReply] = useState('');
   const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
@@ -110,15 +131,17 @@ export function StageHumanLoopPanel({
   const userChattingRef = useRef(false);
 
   useEffect(() => {
-    setRerunTargetStage(stage);
+    setRerunTargetStage(resolveRerunTargetStage(stage));
   }, [stage]);
 
-  const loadChatHistory = useCallback(async () => {
+  const loadStageDetail = useCallback(async () => {
     if (!runId || !stage) return;
     try {
       const res = await humanLoopService.getStageDetail(runId, stage);
-      if (res.code === 200 && Array.isArray(res.data?.chat_history)) {
-        const history = res.data.chat_history as ChatTurn[];
+      if (res.code !== 200 || !res.data) return;
+      const d = res.data;
+      if (Array.isArray(d.chat_history)) {
+        const history = d.chat_history as ChatTurn[];
         setChatHistory(history);
         const last = [...history].reverse().find(
           (t) => t.assistant_explanation && !PENDING_LABELS.has(t.assistant_explanation),
@@ -127,23 +150,45 @@ export function StageHumanLoopPanel({
           setLatestReply(last.assistant_explanation);
         }
       }
-      if (res.code === 200 && res.data) {
-        setGlobalConstraints(res.data.global_constraints || []);
-        setRecentFeedbackEntries(res.data.recent_feedback_entries || []);
+      setGlobalConstraints(d.global_constraints || []);
+      setRecentFeedbackEntries(d.recent_feedback_entries || []);
+      // 以服务端阶段详情为准，避免仅靠父组件 props 造成 input/output 不全
+      if (d.input_data && typeof d.input_data === 'object') {
+        setLocalInput(d.input_data as Record<string, unknown>);
       }
+      if (d.output_data && typeof d.output_data === 'object') {
+        setLocalOutput(d.output_data as Record<string, unknown>);
+      }
+      if (d.human_modified_output && typeof d.human_modified_output === 'object') {
+        setLocalHumanModified(d.human_modified_output as Record<string, unknown>);
+      } else if (d.human_modified_output == null) {
+        setLocalHumanModified(null);
+      }
+      if (Array.isArray(d.revision_history)) {
+        setLocalRevisionHistory(d.revision_history as Array<Record<string, unknown>>);
+      }
+      if (typeof d.human_feedback === 'string') {
+        setFeedback(d.human_feedback);
+      }
+      const work = (d.human_modified_output || d.output_data || {}) as Record<string, unknown>;
+      setEditJson(JSON.stringify(work, null, 2));
     } catch {
       /* 忽略加载失败 */
     }
   }, [runId, stage]);
 
   useEffect(() => {
-    setEditJson(JSON.stringify(effectiveOutput, null, 2));
+    setLocalInput(inputData ?? null);
+    setLocalOutput(outputData ?? null);
+    setLocalHumanModified(humanModifiedOutput ?? null);
+    setLocalRevisionHistory(revisionHistory);
+    setEditJson(JSON.stringify(humanModifiedOutput || outputData || {}, null, 2));
     setFeedback(humanFeedback || '');
-  }, [effectiveOutput, humanFeedback, nodeId]);
+  }, [inputData, outputData, humanModifiedOutput, humanFeedback, revisionHistory, nodeId, runId]);
 
   useEffect(() => {
-    loadChatHistory();
-  }, [loadChatHistory, nodeId]);
+    void loadStageDetail();
+  }, [loadStageDetail, nodeId]);
 
   useEffect(() => {
     if (chatHistoryProp.length > 0) {
@@ -183,8 +228,11 @@ export function StageHumanLoopPanel({
         mark_reviewed: true,
       });
       if (res.code === 200) {
+        setLocalHumanModified(parsed);
         onUpdated?.();
-        await loadChatHistory();
+        await loadStageDetail();
+      } else {
+        setError(res.message || '保存失败');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败，请检查 JSON 格式');
@@ -228,15 +276,16 @@ export function StageHumanLoopPanel({
 
     try {
       if (interactionMode === 'rerun_agent') {
+        const targetStage = resolveRerunTargetStage(rerunTargetStage);
         const res = await humanLoopService.rerunFromStage({
           project_id: projectId,
           run_id: runId,
-          stage: rerunTargetStage,
+          stage: targetStage,
           use_human_modified_output: true,
           rerun_mode: rerunScope,
           human_feedback: userMsg,
         });
-        const targetLabel = STAGE_RERUN_OPTIONS.find((s) => s.key === rerunTargetStage)?.label || rerunTargetStage;
+        const targetLabel = stageLabel(targetStage);
         const scopeLabel = rerunScope === 'single_stage' ? '仅重跑本阶段' : '从此阶段继续后续流程';
         const explanation = res.code === 200 && res.data?.run_id
           ? (res.data.in_place ?? res.data.run_id === runId)
@@ -292,12 +341,13 @@ export function StageHumanLoopPanel({
         setLatestReply(res.data.explanation);
       }
       if (res.data.applied && res.data.revised_output) {
+        setLocalHumanModified(res.data.revised_output);
         setEditJson(JSON.stringify(res.data.revised_output, null, 2));
       } else if (res.data.explanation?.startsWith('自动修改失败') || res.data.explanation?.startsWith('咨询回答失败')) {
         setError(res.data.explanation);
       }
       onUpdated?.();
-      await loadChatHistory();
+      await loadStageDetail();
     } catch (e) {
       setError(e instanceof Error ? e.message : '对话失败');
       setChatHistory((prev) => prev.slice(0, -1));
@@ -334,16 +384,25 @@ export function StageHumanLoopPanel({
     setBusy('rerun');
     setError(null);
     try {
+      // 「从此阶段继续」：当前节点若为迭代实验/报告，则落到假设评审再继续
+      const fromStage = resolveRerunTargetStage(stage);
       const res = await humanLoopService.rerunFromStage({
         project_id: projectId,
         run_id: runId,
-        stage: rerunTargetStage,
+        stage: fromStage,
         use_human_modified_output: true,
         rerun_mode: 'from_stage_onward',
         human_feedback: feedback.trim() || undefined,
       });
       if (res.code === 200 && res.data?.run_id) {
+        if (!RERUN_OPTION_KEYS.has(stage)) {
+          setLatestReply(
+            `当前节点为「${currentStageLabel}」，已从「${stageLabel(fromStage)}」继续后续流程。新 run: ${res.data.run_id.slice(0, 8)}…`,
+          );
+        }
         onRerunStarted?.(res.data.run_id);
+      } else {
+        setError(res.message || '重跑失败');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '重跑失败');
@@ -379,13 +438,13 @@ export function StageHumanLoopPanel({
         {humanReviewed && (
           <p className="text-xs text-bp-yellow mb-2">
             已人工审阅 {editedAt ? `· ${editedAt}` : ''}
-            {humanModifiedOutput ? ' · 当前为对话/人工修订版本' : ''}
+            {localHumanModified ? ' · 当前为对话/人工修订版本' : ''}
           </p>
         )}
         {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
 
-        <CollapsibleBlock title="原始 input_data（阶段生成时的输入）" data={inputData} defaultOpen={false} />
-        <CollapsibleBlock title="原始 output_data（Pipeline 首次输出，不会被覆盖）" data={outputData} defaultOpen={false} />
+        <CollapsibleBlock title="原始 input_data（阶段生成时的输入）" data={localInput} defaultOpen={false} />
+        <CollapsibleBlock title="原始 output_data（Pipeline 首次输出，不会被覆盖）" data={localOutput} defaultOpen={false} />
 
         <div className="mt-4 pt-4 border-t border-bp-border">
           <div className="flex items-center gap-2 mb-2 text-xs text-bp-muted">
@@ -427,12 +486,12 @@ export function StageHumanLoopPanel({
                 </select>
                 {rerunTargetStage !== stage && (
                   <span className="text-xs text-bp-yellow">
-                    从「{STAGE_RERUN_OPTIONS.find((s) => s.key === rerunTargetStage)?.label}」重跑（当前查看：{currentStageLabel}）
+                    从「{stageLabel(rerunTargetStage)}」重跑（当前查看：{currentStageLabel}）
                   </span>
                 )}
               </div>
               <p className="text-xs text-bp-muted/80">
-                跨阶段重跑会保留起点之前的阶段结果，并将你在对话中的问题与下游进展摘要注入目标智能体。
+                可选起点不含迭代实验/报告生成（请在对应页面操作）。跨阶段重跑会保留起点之前结果，并将对话意见注入目标智能体。
               </p>
               <div className="flex flex-wrap gap-2">
                 <label className="flex items-center gap-1.5 text-xs text-bp-muted cursor-pointer">
@@ -462,7 +521,7 @@ export function StageHumanLoopPanel({
             <button
               type="button"
               className="text-xs text-bp-cyan hover:underline"
-              onClick={() => loadChatHistory()}
+              onClick={() => void loadStageDetail()}
               disabled={!!busy}
             >
               刷新记录
@@ -592,13 +651,13 @@ export function StageHumanLoopPanel({
           </div>
         )}
 
-        {revisionHistory.length > 0 && (
+        {localRevisionHistory.length > 0 && (
           <div className="mt-4 pt-4 border-t border-bp-border">
             <div className="flex items-center gap-2 text-xs text-bp-muted mb-2">
-              <History className="w-3.5 h-3.5" /> 修订快照 ({revisionHistory.length})
+              <History className="w-3.5 h-3.5" /> 修订快照 ({localRevisionHistory.length})
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
-              {revisionHistory.slice().reverse().slice(0, 5).map((h) => (
+              {localRevisionHistory.slice().reverse().slice(0, 5).map((h) => (
                 <div key={String(h.id || h.at)} className="text-xs text-bp-muted border border-bp-border rounded p-2">
                   <span className="text-bp-muted">{String(h.at || '')}</span>
                   {h.action ? ` · ${String(h.action)}` : ''}

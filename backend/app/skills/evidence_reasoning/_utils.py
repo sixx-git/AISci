@@ -26,7 +26,18 @@ def normalize_text(text: str) -> str:
 
 
 def tokenize(text: str) -> Set[str]:
-    return {t for t in re.findall(r"[\w\u4e00-\u9fff]+", normalize_text(text)) if len(t) >= 2}
+    """英文按词；中文按字二元组，避免整段无空格 CJK 变成单一超长 token 导致相关度恒为 0。"""
+    normalized = normalize_text(text)
+    tokens: Set[str] = {
+        t for t in re.findall(r"[a-z0-9_]+", normalized) if len(t) >= 2
+    }
+    for run in re.findall(r"[\u4e00-\u9fff]+", normalized):
+        if len(run) == 1:
+            tokens.add(run)
+        else:
+            for i in range(len(run) - 1):
+                tokens.add(run[i : i + 2])
+    return tokens
 
 
 def score_relevance(query: str, text: str) -> float:
@@ -37,7 +48,12 @@ def score_relevance(query: str, text: str) -> float:
     if not t_tokens:
         return 0.0
     overlap = len(q_tokens & t_tokens)
-    return round(min(1.0, overlap / max(len(q_tokens), 1) * 1.2), 4)
+    # Jaccard 更适合中英混合；保底给有重叠的证据非零分
+    union = len(q_tokens | t_tokens) or 1
+    jaccard = overlap / union
+    coverage = overlap / max(len(q_tokens), 1)
+    score = max(jaccard * 1.4, coverage * 0.9)
+    return round(min(1.0, score), 4)
 
 
 def is_verifiable_source(fact: Dict[str, Any], citation_map: List[Dict[str, Any]]) -> bool:

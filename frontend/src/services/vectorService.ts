@@ -28,16 +28,4 @@ export const vectorService = {
     const { data } = await api.get(`/vector-search/index/${projectId}/stats`);
     return data;
   },
-
-  /** POST /api/v1/vector-search/search */
-  async search(
-    projectId: string,
-    query: string,
-    topK = 5,
-  ): Promise<ApiResponse<{ results: unknown[]; total: number }>> {
-    const { data } = await api.post('/vector-search/search', { query, top_k: topK }, {
-      params: { project_id: projectId },
-    });
-    return data;
-  },
 };

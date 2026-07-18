@@ -45,9 +45,6 @@ function ChainEvidenceBlock({ title, items, emptyHint }: { title: string; items:
             <div key={ev.evidence_id} className="p-3 rounded-bp border border-bp-border bg-bp-panel-glass">
               <div className="flex items-center justify-between mb-2">
                 <StanceBadge stance={ev.stance} />
-                <span className="text-xs font-mono text-bp-cyan">
-                  {Math.round((ev.relevance_score || 0) * 100)}%
-                </span>
               </div>
               <p className="text-sm text-bp-text mb-2">{ev.claim}</p>
               {ev.quote_or_summary && ev.quote_or_summary !== ev.claim && (
@@ -135,14 +132,12 @@ function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance 
         )}
       </section>
 
-      <section>
-        <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
-          <Database className="w-4 h-4" />
-          数据依据 ({grounding.data?.length || 0})
-        </h4>
-        {(grounding.data?.length || 0) === 0 ? (
-          <p className="text-xs text-bp-muted">暂无抽取表格/CSV 证据</p>
-        ) : (
+      {(grounding.data?.length || 0) > 0 && (
+        <section>
+          <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
+            <Database className="w-4 h-4" />
+            数据依据 ({grounding.data?.length || 0})
+          </h4>
           <div className="space-y-2">
             {grounding.data?.slice(0, 8).map((d) => (
               <div key={d.table_id || d.source_title} className="p-2 rounded border border-bp-border text-xs text-bp-muted">
@@ -152,8 +147,8 @@ function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance 
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {(grounding.knowledge_gaps?.length || 0) > 0 && (
         <section>
@@ -238,7 +233,9 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
           沙箱验证:{' '}
           {v.sandbox_success === true && <span className="text-bp-green">成功</span>}
           {v.sandbox_success === false && <span className="text-danger-400">失败</span>}
-          {v.sandbox_success == null && '—'}
+          {v.sandbox_success == null && (
+            <span title="迭代实验通常只验证主假设">未运行（非主假设或尚未实验）</span>
+          )}
         </p>
         {scores.ensemble_overall != null && (
           <p className="mt-1">评审分: {String(scores.ensemble_overall)}</p>
@@ -400,10 +397,6 @@ export function EvidenceChainDrawer({
                           <span className="text-xs font-mono text-bp-muted">#{idx + 1}</span>
                           <div className="flex items-center gap-1.5">
                             {ev.stance && <StanceBadge stance={ev.stance} />}
-                            <Gauge className="w-3.5 h-3.5 text-bp-cyan" />
-                            <span className="text-xs font-mono text-bp-cyan">
-                              {Math.round(ev.relevance_score * 100)}%
-                            </span>
                           </div>
                         </div>
                         <p className="text-sm text-bp-text leading-relaxed mb-3">{ev.fact_text}</p>

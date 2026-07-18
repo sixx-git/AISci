@@ -90,6 +90,8 @@ const hypothesisService = {
   async iterateEvidenceChain(hypothesisId: string): Promise<ApiResponse<{ evidence_chain: EvidenceChain; hypothesis: Record<string, unknown> }>> {
     const { data } = await api.post(
       `/agents/hypotheses/${hypothesisId}/evidence-chain/iterate`,
+      null,
+      { timeout: 300000 },
     );
     return data;
   },

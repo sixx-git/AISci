@@ -14,7 +14,6 @@ from app.services.vector_store import (
     search_vector_store,
     SearchResult,
     get_vector_store,
-    build_vector_index,
 )
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader

@@ -89,9 +89,10 @@ export interface LiteratureItem {
   title: string;
   authors: string;
   type: '论文' | '综述' | '会议' | '预印本';
-  parseStatus: 'pending' | 'parsing' | 'completed' | 'error';
+  /** metadata = 仅导入元数据、尚未下载/解析 PDF */
+  parseStatus: 'pending' | 'parsing' | 'completed' | 'error' | 'metadata';
   snippetCount: number;
-  factCount: number;
+  doi: string;
   fileSize: string;
   uploadDate: string;
 }
@@ -100,7 +101,7 @@ export interface LiteratureStats {
   uploaded: number;
   parsed: number;
   snippets: number;
-  facts: number;
+  withDoi: number;
 }
 
 export interface LiteratureEvidence {

@@ -104,22 +104,34 @@ def match_literature_facts(all_facts: List[dict], target_ids: List[str]) -> List
 
 def build_minimal_evidence_chain(hypothesis_text: str, facts: List[dict]) -> dict:
     """由文献 facts 构建最小可展示证据链（无 evidence_reasoning 阶段时使用）。"""
+    from app.skills.evidence_reasoning._utils import score_relevance
+
     supporting = []
     for idx, fact in enumerate(facts):
         claim = (fact.get("fact_text") or fact.get("content") or "").strip()
         if not claim:
             continue
+        title = fact.get("source_paper_title") or fact.get("source_title") or ""
+        raw_rel = fact.get("relevance_score")
+        try:
+            rel = float(raw_rel) if raw_rel is not None else 0.0
+        except (TypeError, ValueError):
+            rel = 0.0
+        if rel <= 0:
+            rel = score_relevance(hypothesis_text or "", f"{claim} {title}")
+        if rel <= 0:
+            rel = 0.35  # 已绑定事实至少给可读的非零展示分
         supporting.append(
             {
                 "evidence_id": fact.get("fact_id") or f"fact_{idx + 1:03d}",
                 "claim": claim,
                 "quote_or_summary": (fact.get("quote_text") or claim).strip(),
-                "source_title": fact.get("source_paper_title") or fact.get("source_title") or "",
+                "source_title": title,
                 "paper_id": fact.get("document_id") or fact.get("source_document_id"),
                 "document_id": fact.get("document_id") or fact.get("source_document_id"),
                 "stance": "support",
                 "stance_reason": "来自假设 supporting_fact_ids 绑定的文献事实",
-                "relevance_score": float(fact.get("relevance_score") or 0.7),
+                "relevance_score": round(min(1.0, rel), 4),
                 "reliability_score": 0.65,
             }
         )

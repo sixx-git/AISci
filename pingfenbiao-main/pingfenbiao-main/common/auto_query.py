@@ -84,7 +84,7 @@ def auto_generate_query(
 
         client = config.get_client()
         model = getattr(config, "extract_model", None) or getattr(
-            config, "rubric_model", "deepseek-v4-flash"
+            config, "rubric_model", "qwen3.7-max"
         )
         summaries = _summarize_sources(sources)
         prompt = PROMPT_AUTO_QUERY.format(task_type_label=label, summaries=summaries)

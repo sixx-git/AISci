@@ -86,7 +86,10 @@ export const humanLoopService = {
     revision_mode?: string;
     mode?: string;
   }>> {
-    const { data } = await api.post('/human-loop/stage-chat', payload);
+    const { data } = await api.post('/human-loop/stage-chat', payload, {
+      // 轻量修订可能触发完整 JSON 再生成
+      timeout: 1_200_000,
+    });
     return data;
   },
 

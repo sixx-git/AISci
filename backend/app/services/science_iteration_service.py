@@ -126,10 +126,35 @@ def build_hypothesis_provenance(
         "verifiable_spec": {},
     }
 
-    for h in hg.get("hypotheses") or []:
-        if isinstance(h, dict) and h.get("hypothesis") == hypo.hypothesis:
-            hypo_dict.update(h)
+    pipeline_hypos = [h for h in (hg.get("hypotheses") or []) if isinstance(h, dict)]
+    matched_pipeline: Optional[Dict[str, Any]] = None
+    for h in pipeline_hypos:
+        if h.get("id") == hypothesis_id or h.get("hypothesis_id") == hypothesis_id:
+            matched_pipeline = h
             break
+    if matched_pipeline is None:
+        hypo_text = (hypo.hypothesis or "").strip()
+        for h in pipeline_hypos:
+            if (h.get("hypothesis") or "").strip() == hypo_text:
+                matched_pipeline = h
+                break
+    if matched_pipeline:
+        hypo_dict.update(matched_pipeline)
+
+    primary_idx = int(hg.get("primary_index") or 0)
+    if pipeline_hypos:
+        primary_idx = min(max(0, primary_idx), len(pipeline_hypos) - 1)
+    primary_pipeline = pipeline_hypos[primary_idx] if pipeline_hypos else None
+    is_primary = bool(
+        matched_pipeline is not None
+        and primary_pipeline is not None
+        and (
+            matched_pipeline is primary_pipeline
+            or matched_pipeline.get("id") == primary_pipeline.get("id")
+            or (matched_pipeline.get("hypothesis") or "").strip()
+            == (primary_pipeline.get("hypothesis") or "").strip()
+        )
+    ) or (getattr(hypo, "priority", None) == 1 and matched_pipeline is None)
 
     sufficiency = assess_evidence_sufficiency(hypo_dict)
     facts = list(lm.get("facts") or [])
@@ -147,12 +172,22 @@ def build_hypothesis_provenance(
             relevance_score=f.get("relevance_score"),
         ))
 
+    # 仅绑定到本假设的数据证据；不再把项目全部表格塞给每条假设
     data_items: List[DataGroundingItem] = []
-    for tbl in (df_results.get("extracted_tables") or [])[:12]:
+    bound_data_ids = {
+        str(x) for x in (hypo_dict.get("data_evidence_ids") or []) if x
+    }
+    for tbl in (df_results.get("extracted_tables") or [])[:24]:
         if not isinstance(tbl, dict):
             continue
+        tid = str(tbl.get("table_id") or "")
+        if bound_data_ids and tid not in bound_data_ids and str(tbl.get("source_title") or "") not in bound_data_ids:
+            continue
+        if not bound_data_ids:
+            # 无绑定则不展示「数据依据」，避免所有假设显示同一批空/全局表
+            continue
         data_items.append(DataGroundingItem(
-            table_id=str(tbl.get("table_id") or ""),
+            table_id=tid,
             source_title=str(tbl.get("source_title") or ""),
             source_type=str(tbl.get("source_type") or "paper_table"),
             csv_path=str(tbl.get("csv_path") or ""),
@@ -164,13 +199,30 @@ def build_hypothesis_provenance(
     chain = er_service.load_evidence_chain(hypo.project_id, hypothesis_id) or {}
     counter = list(chain.get("counter_evidence") or [])
 
-    vspec = (
-        hypo_dict.get("verifiable_spec")
-        or hg.get("primary_verifiable_spec")
-        or ed.get("verifiable_hypothesis")
-        or {}
-    )
-    checks = evaluate_verifiable_spec_against_validation(sv, vspec) if sv else []
+    # 每条假设只用自己的 verifiable_spec；禁止非主假设回退到 primary（会导致验证页内容完全一样）
+    vspec = hypo_dict.get("verifiable_spec") if isinstance(hypo_dict.get("verifiable_spec"), dict) else {}
+    if not vspec:
+        from app.core.iterative_science import build_verifiable_hypothesis_spec_for_mode
+
+        vspec = build_verifiable_hypothesis_spec_for_mode(
+            hypo.hypothesis or "",
+            project_mode="general",
+            hypo_meta=hypo_dict,
+            experiment_design=ed if isinstance(ed, dict) else None,
+        )
+    # 沙箱/迭代实验结果属于主假设验证；非主假设不复用同一套 checks
+    checks = evaluate_verifiable_spec_against_validation(sv, vspec) if (sv and is_primary) else []
+    if not is_primary and vspec:
+        # 仍给出基于本假设证据的轻量检查，避免空白但内容雷同
+        fact_count = len(hypo_dict.get("supporting_fact_ids") or [])
+        checks = [{
+            "check_id": "own_evidence_sufficiency",
+            "description": "本假设文献证据支撑",
+            "expected": "supporting_fact_ids ≥ 1",
+            "actual": f"facts={fact_count}, level={hypo_dict.get('evidence_level')}",
+            "passed": fact_count > 0 and hypo_dict.get("evidence_level") != "low",
+            "source": "hypothesis_provenance",
+        }]
 
     ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
     tree = hg.get("hypothesis_tree") or {}
@@ -209,7 +261,11 @@ def build_hypothesis_provenance(
             validation_target=str(hypo_dict.get("validation_target") or ""),
             expected_measurable_effect=str(hypo_dict.get("expected_measurable_effect") or ""),
             verification_checks=checks,
-            sandbox_success=(sv.get("sandbox_execution") or {}).get("success") if sv else None,
+            sandbox_success=(
+                (sv.get("sandbox_execution") or {}).get("success")
+                if (sv and is_primary)
+                else None
+            ),
         ),
         evidence_sufficiency=str(sufficiency.get("evidence_sufficiency") or ""),
         evidence_level=str(hypo_dict.get("evidence_level") or "medium"),

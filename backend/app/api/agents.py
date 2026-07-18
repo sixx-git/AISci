@@ -322,6 +322,11 @@ async def get_hypothesis_evidence_chain(
         if not chain:
             return success(None, message="暂无结构化证据链，请先运行 Pipeline 或迭代修正")
 
+        chain = er_service.refresh_stale_relevance_scores(
+            chain,
+            hypothesis_text=hypo.hypothesis or "",
+            persist_path=er_service._chain_path(hypo.project_id, hypothesis_id),
+        )
         return success(chain, message="获取证据链成功")
     except Exception as e:
         return error(str(e))
@@ -334,8 +339,6 @@ async def iterate_hypothesis_evidence_chain(
 ):
     """对单条假设重新运行证据链迭代验证"""
     try:
-        import asyncio
-
         from app.core.json_fields import parse_json_list
         from app.services._utils.pipeline_queries import get_literature_mining_output
         from app.services.evidence_reasoning_service import get_evidence_reasoning_service
@@ -345,29 +348,51 @@ async def iterate_hypothesis_evidence_chain(
         if not hypo:
             return error("假设不存在", code=404)
 
-        literature_mining = get_literature_mining_output(db, hypo.project_id)
+        literature_mining = get_literature_mining_output(db, hypo.project_id) or {}
+        if not literature_mining.get("facts") and not literature_mining.get("citation_map"):
+            return error(
+                "项目尚无文献挖掘结果，请先运行 Pipeline 的文献挖掘阶段后再迭代修正",
+                code=400,
+            )
+
+        supporting_ids = list(hypo.supporting_fact_ids or [])
+        if isinstance(supporting_ids, str):
+            supporting_ids = parse_json_list(supporting_ids) or []
 
         hypo_dict = {
             "hypothesis": hypo.hypothesis,
-            "rationale": hypo.rationale,
-            "supporting_fact_ids": [],
+            "rationale": hypo.rationale or "",
+            "supporting_fact_ids": supporting_ids,
         }
 
         er_service = get_evidence_reasoning_service()
-        output = asyncio.run(
-            er_service.run_for_hypothesis(
-                hypo_dict,
-                hypo.research_question,
-                literature_mining,
-            )
+        # FastAPI 路由已在事件循环内，不可再用 asyncio.run
+        output = await er_service.run_for_hypothesis(
+            hypo_dict,
+            hypo.research_question or "",
+            literature_mining,
         )
 
         chain = output.get("evidence_chain", {})
+        if not chain:
+            warn = output.get("warnings")
+            detail = ("；".join(str(w) for w in warn) if isinstance(warn, list) and warn else "")
+            return error(
+                detail or "证据链迭代未产出结果，请检查文献挖掘 facts 是否充足",
+                code=500,
+            )
         er_service.save_evidence_chain(hypo.project_id, hypothesis_id, chain)
 
-        enriched = output.get("hypothesis", {})
+        enriched = output.get("hypothesis") or {}
+        update_payload: dict = {}
         if enriched.get("hypothesis"):
-            hypo_service.update_hypothesis(hypothesis_id, {"hypothesis": enriched["hypothesis"]})
+            update_payload["hypothesis"] = enriched["hypothesis"]
+        if enriched.get("supporting_fact_ids") is not None:
+            update_payload["supporting_fact_ids"] = enriched["supporting_fact_ids"]
+        if enriched.get("evidence_level"):
+            update_payload["evidence_level"] = enriched["evidence_level"]
+        if update_payload:
+            hypo_service.update_hypothesis(hypothesis_id, update_payload)
 
         facts_for_db = []
         for ev in (chain.get("supporting_evidence") or []) + (chain.get("counter_evidence") or []):

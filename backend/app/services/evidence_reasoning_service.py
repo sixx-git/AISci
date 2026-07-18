@@ -41,6 +41,49 @@ class EvidenceReasoningService:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def refresh_stale_relevance_scores(
+        self,
+        chain: Dict[str, Any],
+        *,
+        hypothesis_text: str = "",
+        persist_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """修复历史链路中因中文分词缺陷导致的 relevance_score≈0。"""
+        from app.skills.evidence_reasoning._utils import score_relevance
+
+        if not isinstance(chain, dict):
+            return chain
+        hypo = (hypothesis_text or chain.get("final_version") or chain.get("hypothesis") or "").strip()
+        changed = False
+        for key in ("supporting_evidence", "counter_evidence"):
+            items = chain.get(key) or []
+            if not isinstance(items, list):
+                continue
+            for ev in items:
+                if not isinstance(ev, dict):
+                    continue
+                try:
+                    rel = float(ev.get("relevance_score") or 0)
+                except (TypeError, ValueError):
+                    rel = 0.0
+                if rel > 0.02:
+                    continue
+                claim = str(ev.get("claim") or ev.get("quote_or_summary") or "")
+                title = str(ev.get("source_title") or "")
+                new_rel = score_relevance(hypo, f"{claim} {title}")
+                if new_rel <= 0 and claim:
+                    new_rel = 0.35
+                if new_rel > rel:
+                    ev["relevance_score"] = new_rel
+                    changed = True
+        if changed and persist_path:
+            try:
+                with open(persist_path, "w", encoding="utf-8") as f:
+                    json.dump(chain, f, ensure_ascii=False, indent=2, default=str)
+            except OSError as exc:
+                logger.warning("写回证据链相关度失败: %s", exc)
+        return chain
+
     async def run_for_hypothesis(
         self,
         hypothesis: Dict[str, Any],

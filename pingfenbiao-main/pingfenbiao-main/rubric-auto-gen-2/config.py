@@ -20,9 +20,9 @@ from typing import Optional
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 默认模型选择
-DEFAULT_RUBRIC_MODEL = "deepseek-v4-flash"       # 评分表生成
-DEFAULT_SCORING_MODEL = "deepseek-v4-flash"      # 自动评分
-DEFAULT_EXTRACT_MODEL = "deepseek-v4-flash"       # 要点提取
+DEFAULT_RUBRIC_MODEL = "qwen3.7-max"       # 评分表生成
+DEFAULT_SCORING_MODEL = "qwen3.7-max"      # 自动评分
+DEFAULT_EXTRACT_MODEL = "qwen3.7-max"      # 要点提取
 
 
 @dataclass

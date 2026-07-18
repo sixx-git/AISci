@@ -443,7 +443,7 @@ class Calibrator:
             try:
                 result = call_llm_json(
                     self.client,
-                    self.config.rubric_model if self.config else "deepseek-v4-flash",
+                    self.config.rubric_model if self.config else "qwen3.7-max",
                     prompt,
                     system="You are a strict academic rubric evaluator. Be critical and thorough. Output JSON only.",
                     temperature=0.2,

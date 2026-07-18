@@ -21,9 +21,9 @@ DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 默认模型选择
 # 评分表生成需要高质量输出，建议使用更强的模型
-DEFAULT_RUBRIC_MODEL = "deepseek-v4-flash"       # 评分表生成（可改为 qwen-max 等更强模型）
-DEFAULT_SCORING_MODEL = "deepseek-v4-flash"      # 自动评分
-DEFAULT_EXTRACT_MODEL = "deepseek-v4-flash"      # 要点提取
+DEFAULT_RUBRIC_MODEL = "qwen3.7-max"       # 评分表生成
+DEFAULT_SCORING_MODEL = "qwen3.7-max"      # 自动评分
+DEFAULT_EXTRACT_MODEL = "qwen3.7-max"      # 要点提取
 
 # 评分表生成参数（基于人工样例统计优化）
 # 参考 claim_verification 样例: IA=15, SR=25, Synth=10

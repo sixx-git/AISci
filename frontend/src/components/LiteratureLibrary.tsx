@@ -29,15 +29,43 @@ function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
   return '论文';
 }
 
-// ============ 后端 parse_status → LiteratureItem.parseStatus ============
-function mapStatus(status: DocumentInfo['status']): LiteratureItem['parseStatus'] {
-  switch (status) {
-    case 'uploaded': return 'pending';
+// ============ 后端 status → LiteratureItem.parseStatus ============
+function mapStatus(doc: Pick<DocumentInfo, 'status' | 'file_size' | 'source_type' | 'pdf_url' | 'import_status'>): LiteratureItem['parseStatus'] {
+  switch (doc.status) {
+    case 'uploaded': {
+      // arXiv / OpenAlex / BibTeX 等默认只入库元数据，尚未下载本地 PDF
+      const noLocalPdf = !doc.file_size || doc.file_size <= 0;
+      const externalSource = ['arxiv', 'openalex', 'bibtex', 'google_scholar_import', 'manual'].includes(
+        (doc.source_type || '').toLowerCase(),
+      );
+      if (noLocalPdf && (externalSource || Boolean(doc.pdf_url))) {
+        return 'metadata';
+      }
+      return 'pending';
+    }
     case 'processing': return 'parsing';
     case 'processed': return 'completed';
     case 'failed': return 'error';
     default: return 'pending';
   }
+}
+
+function resolveDocumentDoi(doc: DocumentInfo): string {
+  const direct = (doc.doi || '').trim();
+  if (direct) return direct;
+  const meta = doc.metadata_json;
+  if (meta && typeof meta === 'object') {
+    for (const key of ['doi', 'DOI', 'DOI_id']) {
+      const v = meta[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+  }
+  return '';
+}
+
+function doiHref(doi: string): string {
+  const cleaned = doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim();
+  return `https://doi.org/${cleaned}`;
 }
 
 // ============ DocumentInfo → LiteratureItem ============
@@ -50,9 +78,9 @@ function docInfoToLiterature(doc: DocumentInfo): LiteratureItem {
     title: doc.title || doc.filename.replace(/\.\w+$/, ''),
     authors: doc.authors || '—',
     type,
-    parseStatus: mapStatus(doc.status),
+    parseStatus: mapStatus(doc),
     snippetCount: doc.chunk_count ?? 0,
-    factCount: 0,
+    doi: resolveDocumentDoi(doc),
     fileSize: formatFileSize(doc.file_size),
     uploadDate: doc.created_at ? doc.created_at.slice(0, 10) : '—',
   };
@@ -68,6 +96,7 @@ const typeConfig: Record<LiteratureItem['type'], { label: string; className: str
 
 // ============ 解析状态映射 ============
 const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; className: string }> = {
+  metadata:  { label: '仅元数据', className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
   pending:   { label: '待解析', className: 'bg-bp-panel text-bp-muted border-bp-border' },
   parsing:   { label: '解析中', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
   completed: { label: '已解析', className: 'bg-bp-green/15 text-bp-green border-bp-green/25' },
@@ -101,7 +130,7 @@ const TABLE_COLUMNS = [
   { key: 'type', label: '类型', className: 'text-center' },
   { key: 'parseStatus', label: '解析状态', className: 'text-center' },
   { key: 'snippetCount', label: '切片', className: 'text-center' },
-  { key: 'factCount', label: '事实', className: 'text-center' },
+  { key: 'doi', label: 'DOI', className: 'text-left' },
   { key: 'actions', label: '操作', className: 'text-right' },
 ] as const;
 
@@ -119,7 +148,7 @@ function computeStats(items: LiteratureItem[]): LiteratureStats {
     uploaded: items.length,
     parsed: items.filter((i) => i.parseStatus === 'completed').length,
     snippets: items.reduce((s, i) => s + i.snippetCount, 0),
-    facts: items.reduce((s, i) => s + i.factCount, 0),
+    withDoi: items.filter((i) => Boolean(i.doi)).length,
   };
 }
 
@@ -495,7 +524,10 @@ export function LiteratureLibrary({
     if (!search.trim()) return literature;
     const kw = search.trim().toLowerCase();
     return literature.filter(
-      (l) => l.title.toLowerCase().includes(kw) || l.authors.toLowerCase().includes(kw),
+      (l) =>
+        l.title.toLowerCase().includes(kw)
+        || l.authors.toLowerCase().includes(kw)
+        || l.doi.toLowerCase().includes(kw),
     );
   }, [literature, search]);
 
@@ -620,26 +652,38 @@ export function LiteratureLibrary({
                 <button
                   disabled={buildingIndex}
                   onClick={handleBuildIndex}
+                  title="文献挖掘前需先有向量索引：解析 PDF → 同步索引 → 流水线检索事实"
                   className={cn(
                     'flex items-start gap-3 p-4 rounded-lg border text-left transition-all duration-200',
-                    buildingIndex ? 'border-bp-cyan bg-bp-cyan-tint' : 'border-bp-border bg-bp-panel/40 hover-accent-left hover:bg-bp-panel',
+                    buildingIndex
+                      ? 'border-bp-cyan bg-bp-cyan-tint'
+                      : indexStats && indexStats.in_sync === false
+                        ? 'border-bp-yellow/40 bg-bp-yellow/5 hover-accent-left hover:bg-bp-yellow/10'
+                        : 'border-bp-border bg-bp-panel/40 hover-accent-left hover:bg-bp-panel',
                   )}
                 >
-                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', buildingIndex ? 'bg-bp-cyan-tint' : 'bg-bp-surface')}>
-                    {buildingIndex ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" /> : <BrainCircuit className="w-4 h-4 text-bp-text" />}
+                  <div className={cn(
+                    'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+                    buildingIndex ? 'bg-bp-cyan-tint' : indexStats && indexStats.in_sync === false ? 'bg-bp-yellow/15' : 'bg-bp-surface',
+                  )}>
+                    {buildingIndex
+                      ? <Loader2 className="w-4 h-4 text-bp-cyan animate-spin" />
+                      : <BrainCircuit className={cn('w-4 h-4', indexStats && indexStats.in_sync === false ? 'text-bp-yellow' : 'text-bp-text')} />}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-bp-text">{buildingIndex ? '同步中…' : '同步向量索引'}</div>
+                    <div className="text-sm font-medium text-bp-text">
+                      {buildingIndex ? '同步中…' : '同步向量索引'}
+                    </div>
                     <div className="text-xs text-bp-muted mt-0.5">
                       {indexStatsLoading
                         ? '加载索引状态…'
                         : indexStats
                           ? indexStats.in_sync === false
-                            ? `索引 ${indexStats.chunk_count}/${indexStats.db_chunk_count ?? '?'} 条，需同步`
+                            ? `索引 ${indexStats.chunk_count}/${indexStats.db_chunk_count ?? '?'} 条未就绪 — 文献挖掘依赖此索引，请先同步`
                             : indexStats.exists
-                              ? `已索引 ${indexStats.chunk_count} 条切片`
-                              : '尚未建立索引，上传 PDF 后自动索引'
-                          : '为文献构建语义检索索引'}
+                              ? `已就绪 ${indexStats.chunk_count} 条，可供文献挖掘检索`
+                              : '尚无索引：先解析 PDF，再同步（解析后通常会自动建）'
+                          : '把已解析切片写入向量库，供文献挖掘语义检索'}
                     </div>
                   </div>
                 </button>
@@ -651,7 +695,7 @@ export function LiteratureLibrary({
               <StatCard label="已上传文献" value={stats.uploaded} icon={<Database className="w-5 h-5" />} colorClass="text-bp-cyan" />
               <StatCard label="已解析文献" value={stats.parsed} icon={<FileText className="w-5 h-5" />} colorClass="text-bp-green" />
               <StatCard label="知识片段" value={stats.snippets} icon={<Layers className="w-5 h-5" />} colorClass="text-bp-purple" />
-              <StatCard label="已提取事实" value={stats.facts} icon={<Sparkles className="w-5 h-5" />} colorClass="text-bp-yellow" />
+              <StatCard label="有 DOI" value={stats.withDoi} icon={<ExternalLink className="w-5 h-5" />} colorClass="text-bp-yellow" />
             </div>
 
             {/* 搜索 + 结果 */}
@@ -659,7 +703,7 @@ export function LiteratureLibrary({
               <div className="relative flex-1 max-w-sm">
                 <FileSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bp-muted" />
                 <input
-                  type="text" placeholder="搜索论文标题或作者…" value={search}
+                  type="text" placeholder="搜索论文标题、作者或 DOI…" value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 input-field"
                 />
@@ -1298,14 +1342,27 @@ function LiteratureTable({
                     <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border', psConf.className)}>
                       {item.parseStatus === 'parsing' && <Loader2 className="w-3 h-3 animate-spin" />}
                       {item.parseStatus === 'completed' && <CheckCircle className="w-3 h-3" />}
-                      {item.parseStatus === 'pending' && <Clock className="w-3 h-3" />}
+                      {(item.parseStatus === 'pending' || item.parseStatus === 'metadata') && <Clock className="w-3 h-3" />}
                       {item.parseStatus === 'error' && <AlertCircle className="w-3 h-3" />}
                       {psConf.label}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center text-bp-text">{item.snippetCount}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={item.factCount > 0 ? 'text-bp-yellow font-medium' : 'text-bp-muted'}>{item.factCount}</span>
+                  <td className="px-4 py-3">
+                    {item.doi ? (
+                      <a
+                        href={doiHref(item.doi)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block font-mono text-xs text-bp-cyan hover:underline truncate"
+                        title={item.doi}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {item.doi}
+                      </a>
+                    ) : (
+                      <span className="text-bp-muted text-xs">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -1313,10 +1370,6 @@ function LiteratureTable({
                               onClick={() => onViewDetail(item.id)}
                               className="p-1.5 rounded-md text-bp-muted hover:text-bp-text hover:bg-bp-surface transition-colors">
                         <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button title="提取事实" disabled
-                              className="p-1.5 rounded-md text-bp-muted cursor-not-allowed transition-colors">
-                        <Sparkles className="w-3.5 h-3.5" />
                       </button>
                       <button title="删除" disabled={isDeleting} onClick={() => onDelete(item.id)}
                               className={cn('p-1.5 rounded-md transition-colors',
@@ -1362,7 +1415,7 @@ function LiteratureDetailModal({
 
   const sourceConf = sourceTypeConfig[doc?.source_type ?? ''] ?? null;
   const importConf = doc?.import_status ? importStatusConfig[doc.import_status] : null;
-  const parseConf = doc?.status ? parseStatusConfig[mapStatus(doc.status)] : null;
+  const parseConf = doc?.status ? parseStatusConfig[mapStatus(doc)] : null;
 
   return (
     <div
@@ -1444,12 +1497,25 @@ function LiteratureDetailModal({
                     <dd className="text-bp-text">{doc.journal}</dd>
                   </div>
                 )}
-                {doc.doi && (
-                  <div className="sm:col-span-2">
-                    <dt className="text-bp-muted text-xs">DOI</dt>
-                    <dd className="text-bp-text font-mono text-xs break-all">{doc.doi}</dd>
-                  </div>
-                )}
+                {(() => {
+                  const doi = resolveDocumentDoi(doc);
+                  if (!doi) return null;
+                  return (
+                    <div className="sm:col-span-2">
+                      <dt className="text-bp-muted text-xs">DOI</dt>
+                      <dd className="text-bp-text font-mono text-xs break-all">
+                        <a
+                          href={doiHref(doi)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-bp-cyan hover:underline"
+                        >
+                          {doi}
+                        </a>
+                      </dd>
+                    </div>
+                  );
+                })()}
                 {doc.external_id && (
                   <div>
                     <dt className="text-bp-muted text-xs">外部 ID</dt>
