@@ -104,6 +104,15 @@ class Settings(BaseSettings):
     HYPOTHESIS_EVOLUTION_TOP_K: int = 5
     HYPOTHESIS_EVOLUTION_STRATEGIES: str = "simplify,out_of_box"
 
+    # 跨会话实验记忆（InternAgent 风格；独立 mem_store，不读写 iterative_experiments 投影）
+    EXPERIMENT_MEMORY_SAVE_ENABLED: bool = True
+    EXPERIMENT_MEMORY_RETRIEVE_ENABLED: bool = True
+    EXPERIMENT_MEMORY_DIR: str = "./storage/experiment_memory"
+    EXPERIMENT_MEMORY_TOP_K: int = 5
+    EXPERIMENT_MEMORY_ALPHA: float = 0.5  # 1=关键词, 0=语义
+    EXPERIMENT_MEMORY_AGGREGATION: str = "best"  # best | avg | last
+    EXPERIMENT_MEMORY_IMPROVE_THRESHOLD: float = 0.05
+
     # arXiv 配置
     ARXIV_TIMEOUT: int = 15
     ARXIV_MAX_RETRIES: int = 2

@@ -77,6 +77,11 @@ dataset_field_refs 中的字段必须存在于数据上下文的"可用字段"�
 研究问题：
 {{research_question}}
 
+{% if experiment_memory_guidance %}
+## 跨会话实验记忆（历史结果，请参考）
+{{experiment_memory_guidance}}
+{% endif %}
+
 已知事实（文献）：
 {{formatted_facts}}
 

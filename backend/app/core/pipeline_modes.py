@@ -229,6 +229,8 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "con_challenge_max_rounds": con_max_rounds,
         "enable_hypothesis_evolution": bool(opts.get("enable_hypothesis_evolution", True)),
         "enable_hypothesis_post_evolution": _resolve_post_evolution_enabled(opts),
+        "enable_experiment_memory_save": bool(opts.get("enable_experiment_memory_save", True)),
+        "enable_experiment_memory_retrieve": bool(opts.get("enable_experiment_memory_retrieve", True)),
         "enable_counterfactual_preview": bool(opts.get("enable_counterfactual_preview", False)),
         "literature_max_papers": literature_max,
         "evidence_reasoning_max_rounds": evidence_max_rounds,

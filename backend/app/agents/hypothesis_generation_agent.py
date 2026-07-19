@@ -132,6 +132,7 @@ class HypothesisGenerationAgent:
         ideation_context: Optional[Dict[str, Any]] = None,
         extra_constraints: Optional[List[str]] = None,
         multimodal_evidence: Optional[List[Dict[str, Any]]] = None,
+        experiment_memory_guidance: str = "",
     ) -> HypothesisGenerationResult:
         """
         生成科学假设
@@ -188,6 +189,11 @@ class HypothesisGenerationAgent:
                         f"[Ideation] 外部新颖性评分 {ideation_context.get('novelty_score')} "
                         f"(risk={ideation_context.get('novelty_risk', 'unknown')})"
                     )
+            if (experiment_memory_guidance or "").strip():
+                constraint_list.append(
+                    "[ExperimentMemory] 以下为跨会话历史实验结果，请避免重复失败方向：\n"
+                    + experiment_memory_guidance.strip()[:2000]
+                )
             constraint_list.append(
                 f"[Ideation] 请生成 {num_ideas} 条互不重复、可独立验证的候选假设（research directions）。"
             )
@@ -210,6 +216,7 @@ class HypothesisGenerationAgent:
                     "facts_empty": "true" if not facts else "false",
                     "data_context_empty": "true" if not data_context and not multimodal_datasets else "false",
                     "num_ideas": str(num_ideas),
+                    "experiment_memory_guidance": (experiment_memory_guidance or "").strip(),
                 },
             )
 

@@ -374,6 +374,13 @@ class IterativeExperimentService:
         except Exception as exc:
             logger.exception("执行迭代失败")
             raise RuntimeError(f"执行迭代失败: {exc}") from exc
+        # 独立实验记忆：直写 mem_store，不依赖/不修改投影语义
+        try:
+            from app.services.experiment_memory import maybe_save_from_shaxiang
+
+            maybe_save_from_shaxiang(out.get("experiment") or {}, scope_key=project_id)
+        except Exception:
+            logger.debug("实验记忆保存跳过", exc_info=True)
         self._persist_projection(project_id, out["experiment"])
         return out["record"]
 
@@ -392,6 +399,12 @@ class IterativeExperimentService:
         except Exception as exc:
             logger.exception("自动运行至完成失败")
             raise RuntimeError(f"自动运行至完成失败: {exc}") from exc
+        try:
+            from app.services.experiment_memory import maybe_save_from_shaxiang
+
+            maybe_save_from_shaxiang(projected or {}, scope_key=project_id)
+        except Exception:
+            logger.debug("实验记忆保存跳过", exc_info=True)
         return self._persist_projection(project_id, projected)
 
     def submit_feedback(self, project_id: str, experiment_id: str, feedback: str) -> Dict[str, Any]:

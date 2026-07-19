@@ -2730,6 +2730,17 @@ class PipelineService:
         multimodal_facts = list(data_context.get("multimodal_evidence") or [])
         merged_facts = literature_facts + multimodal_facts
 
+        memory_pack: Dict[str, Any] = {}
+        experiment_memory_guidance = ""
+        if self._run_options.get("enable_experiment_memory_retrieve", True) and project_id:
+            try:
+                from app.services.experiment_memory import retrieve_guidance
+
+                memory_pack = retrieve_guidance(project_id, research_question)
+                experiment_memory_guidance = str(memory_pack.get("guidance") or "")
+            except Exception as mem_err:
+                logger.warning(f"实验记忆检索跳过: {mem_err}")
+
         result = agent.generate(
             research_question=research_question,
             facts=merged_facts,
@@ -2742,8 +2753,22 @@ class PipelineService:
             ideation_context=ideation_novelty,
             extra_constraints=extra_constraints,
             multimodal_evidence=multimodal_facts,
+            experiment_memory_guidance=experiment_memory_guidance,
         )
         result_dict = self._safe_model_dump(result)
+        if memory_pack:
+            skill_outputs = dict(result_dict.get("skill_outputs") or {})
+            skill_outputs["experiment_memory"] = {
+                "enabled": memory_pack.get("enabled", True),
+                "count": memory_pack.get("count", 0),
+                "guidance": experiment_memory_guidance[:2000],
+                "record_ids": [
+                    r.get("record_id")
+                    for r in (memory_pack.get("records") or [])
+                    if isinstance(r, dict)
+                ],
+            }
+            result_dict["skill_outputs"] = skill_outputs
         if multimodal_facts:
             result_dict["multimodal_evidence"] = multimodal_facts
             result_dict["input_data"] = result_dict.get("input_data") or {}
@@ -2775,6 +2800,7 @@ class PipelineService:
                         ideation_context=ideation_novelty,
                         extra_constraints=extra_constraints,
                         multimodal_evidence=multimodal_facts,
+                        experiment_memory_guidance=experiment_memory_guidance,
                     )
                     result_dict = self._safe_model_dump(retry)
                     # 重试后再做一次对齐检查
