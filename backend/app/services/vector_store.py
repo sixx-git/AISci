@@ -75,6 +75,9 @@ class SearchResult:
     external_id: Optional[str] = None
     source_url: Optional[str] = None
     fallback: bool = False
+    # PaperQA 风格 RCS（可选；由 LiteratureChunkRerank 填充）
+    relevance_score: Optional[float] = None
+    context_summary: Optional[str] = None
 
 
 class BaseEmbedding:

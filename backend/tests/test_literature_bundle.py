@@ -1,4 +1,6 @@
 """文献 bundle 归并测试。"""
+from unittest.mock import MagicMock, patch
+
 from app.services.literature_bundle_service import enrich_literature_mining, normalize_literature_bundle
 
 
@@ -13,6 +15,8 @@ def test_normalize_retrieved_papers_to_facts_and_citations():
                 "year": 2024,
                 "abstract": "Nanorobots show targeted delivery in blood models.",
                 "arxiv_id": "2401.00001",
+                "gate_passed": True,
+                "relevance_score": 8,
             }
         ],
     }
@@ -23,6 +27,29 @@ def test_normalize_retrieved_papers_to_facts_and_citations():
     assert len(citation_map) == 1
     assert citation_map[0]["title"] == "DNA Origami Nanorobots"
     assert len(verified) == 1
+
+
+def test_low_score_abstract_not_promoted_to_fact():
+    lm = {
+        "facts": [],
+        "citation_map": [],
+        "retrieved_papers": [
+            {
+                "title": "Unrelated Paper",
+                "abstract": "Something about baking bread.",
+                "relevance_score": 2,
+                "gate_passed": False,
+            }
+        ],
+    }
+    with patch("app.core.config.get_settings") as mock_gs:
+        mock_gs.return_value = MagicMock(
+            LIT_RELEVANCE_GATE_ENABLED=True,
+            LIT_PAPER_SCORE_CUTOFF=6,
+        )
+        facts, citation_map, _ = normalize_literature_bundle(lm)
+    assert facts == []
+    assert len(citation_map) == 1
 
 
 def test_normalize_pdf_skill_facts():
@@ -57,14 +84,41 @@ def test_enrich_updates_counts():
         {
             "facts": [],
             "retrieved_papers": [
-                {"title": "Paper A", "abstract": "Finding A about nanorobots."},
-                {"title": "Paper B", "abstract": "Finding B about drug delivery."},
+                {
+                    "title": "Paper A",
+                    "abstract": "Finding A about nanorobots.",
+                    "gate_passed": True,
+                    "relevance_score": 8,
+                },
+                {
+                    "title": "Paper B",
+                    "abstract": "Finding B about drug delivery.",
+                    "gate_passed": True,
+                    "relevance_score": 7,
+                },
             ],
         }
     )
     assert lm["evidence_facts"] == 2
     assert lm["verified_references_count"] == 2
     assert len(lm["facts"]) == 2
+
+
+def test_enrich_gate_disabled_keeps_legacy_abstract_facts():
+    with patch("app.core.config.get_settings") as mock_gs:
+        mock_gs.return_value = MagicMock(
+            LIT_RELEVANCE_GATE_ENABLED=False,
+            LIT_PAPER_SCORE_CUTOFF=6,
+        )
+        lm = enrich_literature_mining(
+            {
+                "facts": [],
+                "retrieved_papers": [
+                    {"title": "Paper A", "abstract": "Finding A about nanorobots."},
+                ],
+            }
+        )
+    assert lm["evidence_facts"] == 1
 
 
 def test_source_papers_string_titles():

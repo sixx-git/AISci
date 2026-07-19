@@ -34,7 +34,7 @@ CONSUMER_SKILL_MAP: Dict[str, List[str]] = {
     "文献挖掘 Agent": [
         "SearchPapers", "PaperFullTextRAG", "LiteratureEvidenceRetrieval",
         "PdfEvidenceExtraction", "ArxivSearch", "ClaimExtraction",
-        "CitationGrounding", "MultimodalDataLinking",
+        "CitationGrounding", "MultimodalDataLinking", "LiteratureChunkRerank",
     ],
     "假设评审 Agent": ["HypothesisNoveltyReview", "HypothesisTournament"],
     "实验设计 Agent": [

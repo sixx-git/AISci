@@ -4,6 +4,38 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 
+def _abstract_fact_cutoff() -> Optional[float]:
+    """门控开启时返回摘要→fact 所需最低 relevance_score（0–10）；关闭则 None（保持旧行为）。"""
+    try:
+        from app.core.config import get_settings
+
+        s = get_settings()
+        if not bool(getattr(s, "LIT_RELEVANCE_GATE_ENABLED", True)):
+            return None
+        return float(getattr(s, "LIT_PAPER_SCORE_CUTOFF", 6) or 6)
+    except Exception:
+        return 6.0
+
+
+def _can_promote_abstract_to_fact(item: Dict[str, Any]) -> bool:
+    """摘要兜底进 facts 的门槛：须显式通过门控或分数达标。"""
+    cutoff = _abstract_fact_cutoff()
+    if cutoff is None:
+        return True
+    if item.get("gate_passed") is True:
+        return True
+    if item.get("gate_passed") is False:
+        return False
+    score = item.get("relevance_score")
+    if score is None:
+        # 未打分的摘要不得直接变 fact（避免无关 retrieved_papers 污染）
+        return False
+    try:
+        return float(score) >= cutoff
+    except (TypeError, ValueError):
+        return False
+
+
 def _as_dict_list(items: Any) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for item in items or []:
@@ -149,7 +181,7 @@ def normalize_literature_bundle(
         _append_citation(citation_map, entry)
 
         abstract = (paper.get("abstract") or "").strip()
-        if abstract:
+        if abstract and _can_promote_abstract_to_fact(paper):
             _append_fact(
                 facts,
                 seen_fact_ids,
@@ -162,6 +194,7 @@ def normalize_literature_bundle(
                     "source_paper_title": title,
                     "quote_text": abstract[:240],
                     "confidence": 0.75,
+                    "relevance_score": paper.get("relevance_score"),
                     "source": paper.get("source") or "retrieved_paper",
                     "document_id": paper.get("document_id") or paper.get("paper_id"),
                     "year": paper.get("year"),
@@ -187,7 +220,7 @@ def normalize_literature_bundle(
             continue
         _append_citation(citation_map, paper)
         abstract = (paper.get("abstract") or "").strip()
-        if abstract:
+        if abstract and _can_promote_abstract_to_fact(paper):
             _append_fact(
                 facts,
                 seen_fact_ids,
@@ -199,17 +232,20 @@ def normalize_literature_bundle(
                     "source_chunk_id": paper.get("source_chunk_id") or f"source_paper_{i + 1}",
                     "source_paper_title": title,
                     "quote_text": abstract[:240],
+                    "relevance_score": paper.get("relevance_score"),
                     "source": paper.get("source") or "source_paper",
                 },
             )
 
-    # citation_map 中已有文献但无 fact 时，用摘要补一条
+    # citation_map 中已有文献但无 fact 时，用摘要补一条（须过相关性门槛）
     for i, cit in enumerate(citation_map):
         title = (cit.get("title") or cit.get("paper_title") or "").strip()
         abstract = (cit.get("abstract") or "").strip()
         if not title or not abstract:
             continue
         if any((f.get("source_paper_title") or "").strip().lower() == title.lower() for f in facts):
+            continue
+        if not _can_promote_abstract_to_fact(cit):
             continue
         _append_fact(
             facts,
@@ -223,6 +259,7 @@ def normalize_literature_bundle(
                 "source_paper_title": title,
                 "document_id": cit.get("document_id"),
                 "quote_text": abstract[:240],
+                "relevance_score": cit.get("relevance_score"),
                 "source": cit.get("source_type") or "citation_map",
             },
         )

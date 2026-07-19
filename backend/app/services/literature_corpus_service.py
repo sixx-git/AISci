@@ -75,18 +75,35 @@ def ensure_corpora_from_recommendations(
 ) -> Dict[str, Any]:
     """将 LLM 推荐 + API 校验后的论文导入文献库并索引。"""
     from app.services.literature_ingestion_service import LiteratureIngestionService
+    from app.services.literature_relevance_gate import apply_relevance_gate
     from app.services.vector_store import build_vector_index
 
     default_max, import_unverified = _literature_import_settings()
     max_import = max_import if max_import is not None else default_max
 
-    papers = (recommendation_output or {}).get("papers") or []
+    # 入库前论文级相关性门控 + 查询改写（可配置关闭）
+    gated = apply_relevance_gate(
+        research_question,
+        recommendation_output,
+        research_domain=str((recommendation_output or {}).get("research_domain") or ""),
+    )
+    if recommendation_output is not None and isinstance(recommendation_output, dict):
+        recommendation_output.clear()
+        recommendation_output.update(gated)
+
+    papers = gated.get("papers") or []
+    gate_stats = gated.get("gate_stats") or {}
     if not papers:
         return {
             "imported": 0,
             "skipped": True,
-            "reason": "无推荐论文",
-            "candidate_count": 0,
+            "reason": (
+                "相关性门控后无通过论文"
+                if gate_stats.get("enabled") and gate_stats.get("candidate_count")
+                else "无推荐论文"
+            ),
+            "candidate_count": int(gate_stats.get("candidate_count") or 0),
+            "gate_stats": gate_stats,
         }
 
     to_import = _importable_papers(papers, import_unverified=import_unverified)[:max_import]
@@ -96,8 +113,9 @@ def ensure_corpora_from_recommendations(
             "skipped": True,
             "reason": "无通过校验的论文可入库",
             "candidate_count": len(papers),
-            "verified_count": (recommendation_output or {}).get("verified_count", 0),
-            "unverified_count": (recommendation_output or {}).get("unverified_count", 0),
+            "verified_count": gated.get("verified_count", 0),
+            "unverified_count": gated.get("unverified_count", 0),
+            "gate_stats": gate_stats,
         }
 
     service = LiteratureIngestionService(db)
@@ -126,17 +144,19 @@ def ensure_corpora_from_recommendations(
         except Exception as idx_err:
             logger.warning("自动索引失败: %s", idx_err)
 
-    rec = recommendation_output or {}
+    rec = gated
+    pre_gate = int(gate_stats.get("candidate_count") or len(papers))
     return {
         "imported": len(imported_ids),
         "parsed": parsed,
         "pdf_downloaded": pdf_downloaded,
-        "candidate_count": len(papers),
+        "candidate_count": pre_gate,
         "selected_count": len(to_import),
         "import_results": import_results[:10],
         "verified_count": rec.get("verified_count", 0),
         "partial_count": rec.get("partial_count", 0),
         "unverified_count": rec.get("unverified_count", 0),
+        "gate_stats": gate_stats,
         "retrieval_provenance": {
             "query": research_question[:200],
             "research_domain": rec.get("research_domain") or "",
@@ -144,9 +164,11 @@ def ensure_corpora_from_recommendations(
             "subtopics": rec.get("subtopics") or [],
             "rationale": (rec.get("rationale") or "")[:500],
             "search_queries": rec.get("search_queries") or [],
+            "rewritten_queries": rec.get("rewritten_queries") or [],
             "supplement_used": rec.get("supplement_used", False),
             "imported_ids": imported_ids,
             "auto_parse": auto_parse,
+            "gate_stats": gate_stats,
         },
         "discovery": {
             "subtopics": rec.get("subtopics") or [],
@@ -155,6 +177,7 @@ def ensure_corpora_from_recommendations(
             "supplement_used": rec.get("supplement_used"),
             "search_queries": rec.get("search_queries") or [],
             "warnings": rec.get("warnings"),
+            "gate_stats": gate_stats,
         },
     }
 

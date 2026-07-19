@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     LITERATURE_SUPPLEMENT_API: bool = True
     LITERATURE_IMPORT_UNVERIFIED: bool = False
 
+    # 文献相关性门控（PaperQA 风格：论文门控 + chunk RCS；关闭则回退旧行为）
+    LIT_RELEVANCE_GATE_ENABLED: bool = True
+    LIT_PAPER_SCORE_CUTOFF: int = 6  # 论文 0–10，>= 才入库
+    LIT_CHUNK_SCORE_CUTOFF: int = 5  # chunk RCS 0–10，>= 才进 facts 抽取
+    LIT_RETRIEVE_CANDIDATE_K: int = 20  # 向量检索候选数（再经 RCS 截断）
+
     # arXiv 配置
     ARXIV_TIMEOUT: int = 15
     ARXIV_MAX_RETRIES: int = 2

@@ -160,36 +160,26 @@ class LiteratureMiningAgent:
                     corpus_meta=corpus_meta,
                 )
 
-            # ── 1. Zvec 向量检索 ──
+            # ── 1. Zvec 向量检索（候选 K，再经 RCS 截断）──
+            candidate_k = self._resolve_retrieve_candidate_k(top_k)
             logger.info(
                 f"开始检索文献片段: project_id={project_id}, "
-                f"query='{research_question[:60]}...', top_k={top_k}"
+                f"query='{research_question[:60]}...', candidate_k={candidate_k}, top_k={top_k}"
             )
             search_results = search_vector_store(
                 project_id=project_id,
                 query=research_question,
-                top_k=top_k,
+                top_k=candidate_k,
             )
 
             if not search_results:
-                fallback_queries: List[str] = []
-                for st in discovery_output.get("subtopics") or []:
-                    if not isinstance(st, dict):
-                        continue
-                    for key in ("summary", "label"):
-                        text = str(st.get(key) or "").strip()
-                        if text:
-                            fallback_queries.append(text)
-                            break
-                for q in discovery_output.get("search_queries") or []:
-                    if str(q).strip():
-                        fallback_queries.append(str(q).strip())
-                for fallback_query in fallback_queries[:3]:
-                    logger.info(f"[文献挖掘] 主 query 无结果，尝试子主题 query: {fallback_query[:80]}")
+                fallback_queries = self._fallback_queries(discovery_output, research_question)
+                for fallback_query in fallback_queries[:5]:
+                    logger.info(f"[文献挖掘] 主 query 无结果，尝试改写 query: {fallback_query[:80]}")
                     search_results = search_vector_store(
                         project_id=project_id,
                         query=fallback_query,
-                        top_k=top_k,
+                        top_k=candidate_k,
                     )
                     if search_results:
                         break
@@ -207,7 +197,7 @@ class LiteratureMiningAgent:
                     search_results = search_vector_store(
                         project_id=project_id,
                         query=research_question,
-                        top_k=top_k,
+                        top_k=candidate_k,
                     )
 
             if not search_results:
@@ -215,6 +205,21 @@ class LiteratureMiningAgent:
                     warning=(
                         "已检索并尝试导入外部文献，但未能从文献库中匹配到相关片段。"
                         "请检查研究问题关键词，或手动上传更相关的 PDF。"
+                    ),
+                    discovery_output=discovery_output,
+                    corpus_meta=corpus_meta,
+                    retrieved_papers=discovery_output.get("papers") or [],
+                )
+
+            # ── 1b. Chunk RCS：情境摘要打分 + 硬截断 ──
+            search_results, rerank_stats = self._rerank_chunks(
+                research_question, search_results, keep_top_k=top_k
+            )
+            if not search_results:
+                return self._empty_response(
+                    warning=(
+                        "已检索到文献片段，但均未通过相关性截断（RCS）。"
+                        "请调整研究问题或补充更相关 PDF。"
                     ),
                     discovery_output=discovery_output,
                     corpus_meta=corpus_meta,
@@ -235,6 +240,11 @@ class LiteratureMiningAgent:
             response.skill_outputs = self._run_skills_sync(
                 project_id, research_question, top_k, search_results, keywords=keywords
             )
+            if rerank_stats:
+                response.skill_outputs["chunk_rerank"] = {
+                    "success": True,
+                    "data": rerank_stats,
+                }
             response = self._merge_supplementary_facts(response, search_results)
 
             if discovery_output:
@@ -351,16 +361,17 @@ class LiteratureMiningAgent:
                 return LiteratureMiningResponse(**merged_empty)
             return self._empty_response(warning="Discovery 刷新：项目仍无可检索文献")
 
+        candidate_k = self._resolve_retrieve_candidate_k(top_k)
         search_results = search_vector_store(
             project_id=project_id,
             query=search_query,
-            top_k=top_k,
+            top_k=candidate_k,
         )
         if not search_results and search_query != research_question.strip():
             search_results = search_vector_store(
                 project_id=project_id,
                 query=research_question.strip(),
-                top_k=top_k,
+                top_k=candidate_k,
             )
 
         if not search_results:
@@ -377,6 +388,25 @@ class LiteratureMiningAgent:
                 return LiteratureMiningResponse(**merged_empty)
             return self._empty_response(warning="Discovery 刷新未检索到相关文献片段")
 
+        search_results, rerank_stats = self._rerank_chunks(
+            search_query, search_results, keep_top_k=top_k
+        )
+        if not search_results:
+            if previous:
+                merged_empty = self._merge_mining_dicts(
+                    previous,
+                    self._empty_response(
+                        warning="Discovery 刷新：新片段未通过 RCS 相关性截断，保留上一轮文献"
+                    ).model_dump(),
+                    discovery_round=discovery_round,
+                    search_query=search_query,
+                    supplementary_import=True,
+                )
+                return LiteratureMiningResponse(**merged_empty)
+            return self._empty_response(
+                warning="Discovery 刷新：检索片段均未通过 RCS 相关性截断"
+            )
+
         formatted_chunks = self._format_chunks(search_results)
         result = self._extract_facts(search_query, formatted_chunks, search_results)
         response = self._validate_and_normalize(result, search_results)
@@ -387,6 +417,11 @@ class LiteratureMiningAgent:
             search_results,
             keywords=list(keywords or [])[:8],
         )
+        if rerank_stats:
+            response.skill_outputs["chunk_rerank"] = {
+                "success": True,
+                "data": rerank_stats,
+            }
         response = self._merge_supplementary_facts(response, search_results)
 
         if discovery_output.get("papers"):
@@ -560,6 +595,12 @@ class LiteratureMiningAgent:
             url = f" URL: {r.source_url}" if r.source_url else ""
             fb = " [FALLBACK: 本地缓存文献]" if r.fallback else ""
 
+            rcs = ""
+            if r.relevance_score is not None:
+                rcs = f"\nRCS相关性: {r.relevance_score:.1f}/10"
+            if r.context_summary:
+                rcs += f"\n情境摘要: {r.context_summary}"
+
             chunk_text = (
                 f"--- 片段 {i} ---\n"
                 f"Chunk ID: {r.chunk_id}\n"
@@ -567,7 +608,7 @@ class LiteratureMiningAgent:
                 f"标题: {r.source_title or '未知'}\n"
                 f"作者: {authors}{year_str}\n"
                 f"来源: {source}{page_str}{doi}{ext_id}{url}{fb}\n"
-                f"相似度: {r.similarity_score:.4f}\n"
+                f"相似度: {r.similarity_score:.4f}{rcs}\n"
                 f"原文内容:\n{r.content}"
             )
             chunks_text.append(chunk_text)
@@ -904,6 +945,63 @@ class LiteratureMiningAgent:
 
         cap = int(getattr(get_settings(), "LITERATURE_IMPORT_MAX", 16) or 16)
         return min(max(top_k, 6), cap)
+
+    @staticmethod
+    def _resolve_retrieve_candidate_k(top_k: int) -> int:
+        from app.core.config import get_settings
+
+        s = get_settings()
+        if not bool(getattr(s, "LIT_RELEVANCE_GATE_ENABLED", True)):
+            return top_k
+        candidate_k = int(getattr(s, "LIT_RETRIEVE_CANDIDATE_K", 20) or 20)
+        return max(top_k, candidate_k)
+
+    @staticmethod
+    def _fallback_queries(
+        discovery_output: Optional[Dict[str, Any]],
+        research_question: str,
+    ) -> List[str]:
+        fallback_queries: List[str] = []
+        discovery = discovery_output or {}
+        for q in discovery.get("rewritten_queries") or discovery.get("search_queries") or []:
+            if str(q).strip():
+                fallback_queries.append(str(q).strip())
+        for st in discovery.get("subtopics") or []:
+            if not isinstance(st, dict):
+                continue
+            for key in ("summary", "label"):
+                text = str(st.get(key) or "").strip()
+                if text:
+                    fallback_queries.append(text)
+                    break
+        if research_question.strip() and research_question.strip() not in fallback_queries:
+            fallback_queries.append(research_question.strip())
+        # 去重保序
+        seen: Set[str] = set()
+        out: List[str] = []
+        for q in fallback_queries:
+            key = q.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(q)
+        return out
+
+    @staticmethod
+    def _rerank_chunks(
+        research_question: str,
+        search_results: List[SearchResult],
+        *,
+        keep_top_k: int,
+    ) -> tuple[List[SearchResult], Dict[str, Any]]:
+        from app.skills.literature.literature_chunk_rerank_skill import rerank_search_results
+
+        kept, stats = rerank_search_results(
+            research_question,
+            search_results,
+            keep_top_k=keep_top_k,
+        )
+        return list(kept), stats
 
     @staticmethod
     def _apply_import_stats(
