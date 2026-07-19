@@ -523,6 +523,7 @@ def _format_results(value: Any, *, include_scaffold: bool = False) -> str:
         ("actual_results", "实际结果"),
         ("simulated_results", "模拟结果"),
         ("expected_results", "预期结果"),
+        ("discussion", "结果分析与讨论"),
         ("limitations", "局限性"),
     ]
     for key, label in mapping:

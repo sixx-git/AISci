@@ -39,7 +39,13 @@ def build_experiment_dataset_search_query(input_data: Dict[str, Any]) -> str:
 
 
 def _map_candidate_to_dataset(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    url = str(candidate.get("url") or candidate.get("download_url") or "").strip()
+    from app.core.dataset_urls import normalize_dataset_download_url
+
+    url = normalize_dataset_download_url(
+        str(candidate.get("url") or candidate.get("download_url") or "").strip(),
+        name=str(candidate.get("dataset_name") or candidate.get("name") or ""),
+        source_type=str(candidate.get("source_platform") or candidate.get("source") or ""),
+    )
     return {
         "dataset_name": candidate.get("dataset_name") or candidate.get("name") or "未命名数据集",
         "source_platform": candidate.get("source_platform") or candidate.get("source") or "",

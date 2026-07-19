@@ -207,20 +207,28 @@ def _dump_plan(plan: Any) -> Optional[Dict[str, Any]]:
 
 
 def _normalize_recs(raw: Any) -> List[Dict[str, Any]]:
+    from app.core.dataset_urls import normalize_dataset_rec_dict
+
+    items: List[Any] = []
     if raw is None:
         return []
     if hasattr(raw, "recommended_datasets"):
-        items = raw.recommended_datasets or []
-        out = []
-        for it in items:
-            if hasattr(it, "model_dump"):
-                out.append(it.model_dump())
-            elif isinstance(it, dict):
-                out.append(it)
-        return out
-    if isinstance(raw, list):
-        return [x if isinstance(x, dict) else {} for x in raw]
-    return []
+        items = list(raw.recommended_datasets or [])
+    elif isinstance(raw, list):
+        items = list(raw)
+    else:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        if hasattr(it, "model_dump"):
+            d = it.model_dump()
+        elif isinstance(it, dict):
+            d = dict(it)
+        else:
+            continue
+        out.append(normalize_dataset_rec_dict(d))
+    return out
 
 
 def _extract_chart_entries(result: Dict[str, Any], analysis: Dict[str, Any]) -> List[Dict[str, Any]]:

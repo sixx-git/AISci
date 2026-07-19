@@ -1807,6 +1807,171 @@ class ReportGenerationAgent:
         return result
 
     @staticmethod
+    def _build_paper_style_discussion(
+        *,
+        hypothesis: str,
+        metrics: Dict[str, Any],
+        plots: List[Any],
+        successful_iters: List[Dict[str, Any]],
+        failed_iters: List[Dict[str, Any]],
+        progress: Dict[str, Any],
+        partial_run: bool,
+        modeling_result: Optional[Dict[str, Any]],
+        actual_summary: str,
+        existing_results: Any,
+    ) -> str:
+        """基于已有实验证据生成论文风格的「结果分析与讨论」（不编造数值）。"""
+        lines: List[str] = ["### 结果分析与讨论\n"]
+
+        hyp = (hypothesis or "").strip()
+        metric_items = [
+            (k, v)
+            for k, v in (metrics or {}).items()
+            if k not in ("stdout_preview", "note", "dataset_rows", "dataset_columns", "error")
+            and not str(k).startswith("failed_iter")
+        ][:10]
+        plot_n = len(plots) if isinstance(plots, list) else 0
+        findings: List[str] = []
+        for r in successful_iters[:6]:
+            if not isinstance(r, dict):
+                continue
+            for f in (r.get("findings") or [])[:3]:
+                if f and str(f).strip():
+                    findings.append(str(f).strip())
+            summ = (r.get("summary") or "").strip()
+            if summ:
+                findings.append(summ[:220])
+        # 去重保序
+        seen_f: set[str] = set()
+        uniq_findings: List[str] = []
+        for f in findings:
+            if f not in seen_f:
+                seen_f.add(f)
+                uniq_findings.append(f)
+        findings = uniq_findings[:8]
+
+        # —— 主要发现 ——
+        lines.append("**主要发现。** ")
+        if metric_items or plot_n or findings:
+            parts = []
+            if metric_items:
+                metric_txt = "；".join(f"{k}={v}" for k, v in metric_items[:6])
+                parts.append(f"已观测到关键指标（{metric_txt}）")
+            if plot_n:
+                parts.append(f"并形成 {plot_n} 张实验图供对照")
+            if findings:
+                parts.append("迭代分析指出：" + "；".join(findings[:4]))
+            lines.append("".join(parts) + "。")
+            lines.append(
+                "上述结果来自已执行轮次的记录，用于说明当前设置下的可观测行为，"
+                "而非对总体分布的统计推断。\n"
+            )
+        elif failed_iters:
+            lines.append(
+                "本阶段尚未形成稳定的正向指标，但失败轮次提供了可复核的负向证据，"
+                "有助于界定方法边界。\n"
+            )
+        else:
+            lines.append("当前缺少可引用的实测指标或图表，本节仅能作方法可行性层面的讨论。\n")
+
+        # —— 与假设对照 ——
+        lines.append("\n**与科学假设的对照。** ")
+        if hyp:
+            lines.append(f"目标假设可概括为：「{hyp[:280]}」。")
+        else:
+            lines.append("报告输入中未给出完整假设文本。")
+        if metric_items and not failed_iters:
+            lines.append(
+                "现有正向指标与实验图表明，在当前数据与协议下假设具有一定可检验性；"
+                "但尚不足以在未声明显著性检验的前提下宣称假设已被证实或证伪。"
+            )
+        elif metric_items and failed_iters:
+            lines.append(
+                "同时存在正向观测与失败轮次：说明假设在部分条件下可被探测，"
+                "但验证管线或数据设定仍不稳定，结论应限定为阶段性支持而非最终确认。"
+            )
+        elif failed_iters and not metric_items:
+            lines.append(
+                "以失败轮次为主的证据更支持如下解读：在现行方法/数据配置下，"
+                "假设难以被可靠验证，或该方法对该假设不适用；宜调整协议、特征或评价口径后再验。"
+            )
+        else:
+            lines.append("因实测证据不足，暂不能对假设给出支持或否定判断。")
+        lines.append("\n")
+
+        # —— 反例含义 ——
+        if failed_iters:
+            lines.append("\n**失败轮次与反例含义。** ")
+            detail_bits = []
+            for r in failed_iters[:5]:
+                if not isinstance(r, dict):
+                    continue
+                n = r.get("iteration_number", "?")
+                err = (r.get("error_message") or "").strip()
+                issues = r.get("identified_issues") or r.get("weaknesses") or []
+                issue_txt = "；".join(str(x) for x in issues[:3]) if isinstance(issues, list) else ""
+                bit = f"第{n}轮"
+                if err:
+                    bit += f"出现「{err[:160]}」"
+                if issue_txt:
+                    bit += f"（问题：{issue_txt[:160]}）"
+                detail_bits.append(bit)
+            if detail_bits:
+                lines.append("具体而言，" + "；".join(detail_bits) + "。")
+            lines.append(
+                "将这些失败如实写入，相当于论文中的 negative result / failure case："
+                "它们约束了方法的适用范围，避免把偶然成功外推为一般结论。\n"
+            )
+
+        # —— 建模结果（若有）——
+        if modeling_result and isinstance(modeling_result, dict):
+            lines.append("\n**建模评估的含义。** ")
+            lines.append(
+                f"任务类型为 {modeling_result.get('task_type', 'unknown')}，"
+                f"目标变量为 {modeling_result.get('target_column', '-')}，"
+                f"相对较优模型为 {modeling_result.get('best_model', '-')}。"
+            )
+            if modeling_result.get("is_pilot_validation"):
+                lines.append("该评估属 pilot validation，只宜作为可行性旁证。")
+            lines.append("\n")
+
+        # —— 局限与后续 ——
+        lines.append("\n**局限与后续工作。** ")
+        lims = []
+        if partial_run:
+            cur = progress.get("current_iteration")
+            mx = progress.get("max_iterations")
+            lims.append(
+                f"实验未跑满计划轮次（约 {cur or '?'}/{mx or '?'}），结论仅为阶段性结果"
+            )
+        if failed_iters:
+            lims.append("存在执行失败或协议不匹配，需先修复数据/脚本再谈效应量")
+        if not metric_items:
+            lims.append("正向定量指标不足，尚难给出可重复的效应描述")
+        if plot_n == 0:
+            lims.append("缺少可复核实验图时，读者难以独立核对趋势")
+        if not lims:
+            lims.append("样本与协议覆盖范围仍有限，外推需谨慎")
+        lines.append("；".join(lims) + "。")
+        lines.append(
+            "后续建议：（1）在固定协议下补齐关键轮次与对照；（2）对失败根因做消融或诊断实验；"
+            "（3）明确主指标、不确定性与可重复脚本，再形成更强的支持/否定结论。\n"
+        )
+
+        if actual_summary and str(actual_summary).strip():
+            lines.append(f"\n> 实验侧摘要：{str(actual_summary).strip()[:400]}\n")
+
+        # 若 LLM 原文已含讨论段落，摘出作为补充论述（避免丢弃）
+        if isinstance(existing_results, str) and "结果分析与讨论" in existing_results:
+            idx = existing_results.find("结果分析与讨论")
+            tail = existing_results[idx: idx + 1200].strip()
+            if len(tail) > 60:
+                lines.append("\n**模型生成的补充论述（需与上文实测对齐）。**\n\n")
+                lines.append(tail[:800] + ("…\n" if len(tail) > 800 else "\n"))
+
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
     def _enrich_results_with_categorized(
         result: Dict[str, Any],
         small_validation: Optional[Dict[str, Any]],
@@ -1847,6 +2012,31 @@ class ReportGenerationAgent:
             or (isinstance(metrics, dict) and metrics)
             or (isinstance(plots, list) and plots)
         )
+        failed_iters = (
+            actual.get("failed_iterations")
+            or actual.get("counterexamples")
+            or (actual.get("iteration_evidence") or {}).get("failed_rounds")
+            or []
+        )
+        if not isinstance(failed_iters, list):
+            failed_iters = []
+        successful_iters = actual.get("successful_iterations") or (
+            (actual.get("iteration_evidence") or {}).get("successful_rounds") or []
+        )
+        if not isinstance(successful_iters, list):
+            successful_iters = []
+        progress = (
+            sandbox_exec.get("iteration_progress")
+            or (actual.get("iteration_evidence") or {}).get("progress")
+            or {}
+        )
+        has_negative = bool(failed_iters)
+        has_usable_evidence = sandbox_success or has_negative or bool(successful_iters)
+        partial_run = bool(
+            sandbox_exec.get("partial_run")
+            or sandbox_exec.get("sandbox_incomplete")
+            or (progress and not progress.get("completed_full_plan"))
+        )
 
         if sandbox_success and "sandbox_execution" not in actual:
             actual = {
@@ -1862,15 +2052,20 @@ class ReportGenerationAgent:
                 "data_source": actual.get("data_source") or "sandbox_execution",
             }
 
+        if has_usable_evidence:
+            result_type_summary = (
+                "has_actual_results"
+                if sandbox_success
+                else ("has_negative_evidence" if has_negative else sv_results.get("result_type_summary", "none"))
+            )
+        else:
+            result_type_summary = sv_results.get("result_type_summary", "none")
+
         result["results"] = {
             "actual_results": actual,
             "simulated_results": sv_results.get("simulated_results", {}),
             "expected_results": sv_results.get("expected_results", {}),
-            "result_type_summary": (
-                "has_actual_results"
-                if sandbox_success
-                else sv_results.get("result_type_summary", "none")
-            ),
+            "result_type_summary": result_type_summary,
             "warnings": sv_results.get("warnings", []),
         }
 
@@ -1882,14 +2077,23 @@ class ReportGenerationAgent:
 
         existing_results = chapters.get("results", "")
         _, existing_type = assess_result_type(existing_results)
-        # 有沙箱实测时：始终写入/前置 Actual Results，即使 LLM 已写了长段预期结果
-        if sandbox_success or existing_type in ("none", "expected_result"):
+        # 有实测、失败反例或仅有预期时：写入 Actual Results（未跑满轮次也可）
+        if has_usable_evidence or existing_type in ("none", "expected_result"):
             enriched = "### Actual Results（实际分析结果）\n\n"
             modeling_result = None
 
+            if partial_run and (sandbox_success or has_negative or successful_iters):
+                cur = progress.get("current_iteration")
+                mx = progress.get("max_iterations")
+                if cur is not None or mx is not None:
+                    enriched += (
+                        f"> **阶段性结果**：实验计划 {mx or '?'} 轮，当前已跑约 {cur or '?'} 轮；"
+                        "以下基于已完成轮次，不要求跑满全部轮次即可写入报告。\n\n"
+                    )
+
             if sandbox_success:
                 enriched += "### Experiment Run（初步实验验证）\n\n"
-                enriched += "- 执行状态: 成功\n"
+                enriched += "- 执行状态: 成功（含部分成功轮次）\n" if partial_run else "- 执行状态: 成功\n"
                 if sandbox_exec.get("duration_ms"):
                     enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
                 if isinstance(metrics, dict) and metrics:
@@ -1901,6 +2105,48 @@ class ReportGenerationAgent:
                     enriched += f"- 沙箱图表: {len(plots)} 张（见报告图表区）\n"
                 enriched += "\n"
                 enriched += "> 以下 Results 以迭代实验/沙箱验证为准；模拟/预期结果仅作参考。\n\n"
+            elif successful_iters and not sandbox_success:
+                enriched += "### Experiment Run（已跑轮次记录）\n\n"
+                enriched += f"- 已记录成功/部分轮次: {len(successful_iters)} 轮\n"
+                for r in successful_iters[:5]:
+                    if not isinstance(r, dict):
+                        continue
+                    enriched += (
+                        f"- 第 {r.get('iteration_number', '?')} 轮"
+                        f"（{r.get('status', 'partial')}）"
+                    )
+                    if r.get("summary"):
+                        enriched += f": {str(r.get('summary'))[:200]}"
+                    enriched += "\n"
+                enriched += "\n"
+
+            if has_negative:
+                enriched += "### Counterexamples（失败轮次 / 反例证据）\n\n"
+                enriched += (
+                    "以下轮次未成功或未达成功标准，可作为「当前方法难以充分验证该假设」的反例；"
+                    "应如实写局限，勿编造成功指标。\n\n"
+                )
+                for r in failed_iters[:8]:
+                    if not isinstance(r, dict):
+                        continue
+                    n = r.get("iteration_number", "?")
+                    enriched += f"- **第 {n} 轮**（{r.get('status') or 'failed'}）\n"
+                    err = (r.get("error_message") or "").strip()
+                    if err:
+                        enriched += f"  - 错误/失败信息: {err[:400]}\n"
+                    summ = (r.get("summary") or r.get("overall_assessment") or "").strip()
+                    if summ:
+                        enriched += f"  - 分析摘要: {summ[:300]}\n"
+                    issues = r.get("identified_issues") or r.get("weaknesses") or []
+                    if isinstance(issues, list) and issues:
+                        enriched += f"  - 问题: {'; '.join(str(x) for x in issues[:4])}\n"
+                    if r.get("chart_count"):
+                        enriched += f"  - 关联图表: {r.get('chart_count')} 张\n"
+                note = (actual.get("iteration_evidence") or {}).get("counterexample_note") or ""
+                if note:
+                    enriched += f"\n> {note}\n\n"
+                else:
+                    enriched += "\n"
 
             modeling_result = actual.get("modeling_result")
             if modeling_result and isinstance(modeling_result, dict):
@@ -1923,25 +2169,55 @@ class ReportGenerationAgent:
                         enriched += f"  - {key}: {val}\n"
                 enriched += "\n"
 
-            if not sandbox_success and actual.get("summary_statistics"):
+            if not sandbox_success and not has_negative and actual.get("summary_statistics"):
                 enriched += "- 基于真实数据的统计分析已完成\n"
                 enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
                 enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
 
             simulated = sv_results.get("simulated_results", {})
-            if not sandbox_success and simulated and isinstance(simulated, dict) and simulated.get("data"):
+            if (
+                not sandbox_success
+                and not has_negative
+                and simulated
+                and isinstance(simulated, dict)
+                and simulated.get("data")
+            ):
                 enriched += "### Simulated Results（模拟结果）\n\n"
                 enriched += f"- 模拟数据已生成\n"
                 enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
 
-            # 保留 LLM 原文作为补充（若非空且不是纯占位）
+            # 论文式结果分析与讨论（基于已注入证据，不编造数值）
+            discussion_md = ReportGenerationAgent._build_paper_style_discussion(
+                hypothesis=str(sv.get("hypothesis") or actual.get("hypothesis") or ""),
+                metrics=metrics if isinstance(metrics, dict) else {},
+                plots=plots if isinstance(plots, list) else [],
+                successful_iters=successful_iters,
+                failed_iters=failed_iters,
+                progress=progress if isinstance(progress, dict) else {},
+                partial_run=partial_run,
+                modeling_result=modeling_result if isinstance(modeling_result, dict) else None,
+                actual_summary=str(actual.get("summary") or ""),
+                existing_results=existing_results,
+            )
+            enriched += discussion_md
+            if isinstance(result.get("results"), dict):
+                result["results"]["discussion"] = discussion_md
+
+            # 保留 LLM 原文作为补充（若非空且不是纯占位；已含讨论标题则不再整段重复）
             if isinstance(existing_results, str) and len(existing_results.strip()) >= 40:
-                if "Experiment Run" not in existing_results and "实测指标" not in existing_results:
+                if (
+                    "Experiment Run" not in existing_results
+                    and "实测指标" not in existing_results
+                    and "结果分析与讨论" not in existing_results
+                ):
                     enriched += "### 报告叙述补充\n\n"
                     enriched += existing_results.strip() + "\n"
 
-            if not sandbox_success and not modeling_result and existing_type == "none":
-                enriched += "⚠️ 当前缺少真实数据，未生成实际分析结果。请在「迭代实验」完成至少一轮验证。\n"
+            if not has_usable_evidence and not modeling_result and existing_type == "none":
+                enriched += (
+                    "⚠️ 当前缺少可引用的迭代结果。请在「迭代实验」至少跑若干轮并勾选「用于报告」；"
+                    "无需跑满全部计划轮次；失败轮次也可作为反例写入。\n"
+                )
 
             chapters["results"] = enriched
 

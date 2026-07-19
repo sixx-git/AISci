@@ -536,8 +536,33 @@ class IterativeExperimentService:
             "provider": primary.get("provider") or "shaxiang",
         }
 
+    @staticmethod
+    def _iteration_evidence_score(exp: Dict[str, Any]) -> int:
+        """按已有轮次/指标/图/失败反例丰富度打分，用于挑选报告主实验。"""
+        iterations = [it for it in (exp.get("iterations") or []) if isinstance(it, dict)]
+        score = 10 * len(iterations)
+        if exp.get("phase") == "completed":
+            score += 5
+        for it in iterations:
+            status = str(it.get("status") or "").lower()
+            metrics = it.get("metrics") or (it.get("result") or {}).get("metrics") or {}
+            charts = (it.get("result") or {}).get("charts") or []
+            if isinstance(metrics, dict) and metrics:
+                score += 50
+            if isinstance(charts, list) and charts:
+                score += 30 * len(charts)
+            if status in {"failed", "error"} or it.get("error_message"):
+                score += 20  # 失败轮次也可作反例
+            elif status in {"success", "partial", "ok", "completed"}:
+                score += 15
+        return score
+
     def snapshot_for_report(self, project_id: str) -> Dict[str, Any]:
-        """汇总「用于报告」勾选实验；不自动设计脚本或跑迭代。"""
+        """汇总「用于报告」勾选实验；不自动设计脚本或跑迭代。
+
+        未跑满 max_iterations 也可：只要勾选，即用当前已有轮次的指标/图表；
+        失败轮次一并纳入，可作为方法无法验证假设的反例证据。
+        """
         report_ids = self.get_report_ids(project_id)
         experiments = self.list(project_id)
         selected: List[Dict[str, Any]] = []
@@ -545,33 +570,115 @@ class IterativeExperimentService:
             id_set = set(report_ids)
             selected = [e for e in experiments if e.get("id") in id_set]
         if not selected:
-            selected = [e for e in experiments if e.get("phase") == "completed"]
+            # 无勾选时：优先有轮次证据的实验，再退回已完成
+            with_iters = [
+                e for e in experiments
+                if isinstance(e, dict) and (e.get("iterations") or e.get("current_iteration"))
+            ]
+            selected = with_iters or [e for e in experiments if e.get("phase") == "completed"]
         if not selected:
             return {
                 "status": "blocked_need_data",
-                "warning": "请先在「迭代实验」页完成实验并勾选「用于报告」",
+                "warning": "请先在「迭代实验」页至少跑若干轮并勾选「用于报告」",
                 "experiments": [],
                 "report_experiment_ids": report_ids,
             }
 
-        completed = [e for e in selected if e.get("phase") == "completed"]
-        use = completed or selected
-        primary = use[0]
+        # 勾选即用：不要求 phase=completed；按证据丰富度选主实验
+        use = list(selected)
+        primary = max(use, key=self._iteration_evidence_score)
         synth = self.synthesize_report_fields(primary)
+        completed = [e for e in use if e.get("phase") == "completed"]
+        cur = int(primary.get("current_iteration") or 0)
+        mx = int(primary.get("max_iterations") or 0)
+        partial = not completed or (mx > 0 and cur < mx)
+        warning = None
+        if partial:
+            warning = (
+                f"所选实验未跑满计划轮次（当前约 {cur}/{mx or '?'}），"
+                "将基于已完成轮次的指标/图表生成报告；失败轮次将作为反例写入。"
+            )
         return {
-            "status": "completed" if completed else "partial",
+            "status": "completed" if completed and not partial else "partial",
             "experiments": use,
             "report_experiment_ids": [e.get("id") for e in use],
             "primary_experiment_id": primary.get("id"),
             "experiment_design": synth["experiment_design"],
             "small_validation": synth["small_validation"],
             "provider": primary.get("provider") or "shaxiang",
-            "warning": None if completed else "所选实验尚未全部完成，将基于当前进度生成报告",
+            "warning": warning,
         }
 
     @staticmethod
-    def _resolve_iteration_charts(primary: Dict[str, Any]) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
-        """汇总成功轮次的指标与图表，并把相对路径解析为 shaxiang 绝对路径。"""
+    def _append_chart_rows(
+        *,
+        primary: Dict[str, Any],
+        charts_root: Path,
+        chart_items: Any,
+        chart_rows: List[Dict[str, Any]],
+        seen: set,
+        iteration_number: int,
+        iteration_status: str,
+    ) -> int:
+        """解析一轮图表并追加；返回新增张数。"""
+        added = 0
+        if not isinstance(chart_items, list):
+            return 0
+        for c in chart_items:
+            if not isinstance(c, dict):
+                continue
+            rel = str(c.get("path") or c.get("file_path") or c.get("name") or "").strip()
+            name = str(c.get("name") or Path(rel).name or "").strip()
+            if not name and not rel:
+                continue
+            abs_path = None
+            if rel:
+                candidate = Path(rel)
+                if not candidate.is_absolute():
+                    candidate = (charts_root / rel).resolve()
+                if candidate.is_file():
+                    abs_path = candidate
+            if abs_path is None and name:
+                candidate = (charts_root / name).resolve()
+                if candidate.is_file():
+                    abs_path = candidate
+                    rel = name
+            key = str(abs_path) if abs_path else (c.get("url") or name or rel)
+            if key in seen:
+                continue
+            seen.add(key)
+            plot_id = Path(name or rel or key).stem
+            title = (c.get("note") or name or plot_id).strip()
+            if iteration_status in {"failed", "error"}:
+                title = f"[失败轮次{iteration_number}] {title}"
+            entry = {
+                "plot_id": plot_id,
+                "title": title,
+                "path": str(abs_path) if abs_path else rel,
+                "file_path": str(abs_path) if abs_path else rel,
+                "url": c.get("url"),
+                "source": "sandbox_execution",
+                "type": "sandbox_plot",
+                "chart_kind": "experiment_result",
+                "iteration_number": iteration_number,
+                "iteration_status": iteration_status,
+                "is_generated_from_real_data": True,
+                "source_dataset_id": (primary.get("data_config") or {}).get("source_path")
+                or (primary.get("data_config") or {}).get("file_name")
+                or primary.get("id"),
+            }
+            chart_rows.append(entry)
+            added += 1
+        return added
+
+    @staticmethod
+    def _resolve_iteration_evidence(
+        primary: Dict[str, Any],
+    ) -> tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+        """汇总全部已跑轮次（含失败）的指标、图表与反例证据。
+
+        不要求跑满 max_iterations；失败轮次也纳入（可作方法不适用之反例）。
+        """
         from app.integrations.shaxiang.bridge import shaxiang_root
 
         charts_root = (shaxiang_root() / "data" / "charts").resolve()
@@ -579,61 +686,107 @@ class IterativeExperimentService:
         metrics: Dict[str, Any] = {}
         chart_rows: List[Dict[str, Any]] = []
         seen: set[str] = set()
+        successful_rounds: List[Dict[str, Any]] = []
+        failed_rounds: List[Dict[str, Any]] = []
 
         for it in iterations:
             if not isinstance(it, dict):
                 continue
             status = str(it.get("status") or "").lower()
-            if status in {"failed", "error"}:
-                continue
+            if status in {"ok", "completed"}:
+                status = "success"
+            it_num = int(it.get("iteration_number") or 0)
             it_metrics = it.get("metrics") or (it.get("result") or {}).get("metrics") or {}
-            if isinstance(it_metrics, dict) and it_metrics:
-                metrics = {**metrics, **it_metrics}
-            for c in (it.get("result") or {}).get("charts") or []:
-                if not isinstance(c, dict):
-                    continue
-                rel = str(c.get("path") or c.get("file_path") or c.get("name") or "").strip()
-                name = str(c.get("name") or Path(rel).name or "").strip()
-                if not name and not rel:
-                    continue
-                abs_path = None
-                if rel:
-                    candidate = Path(rel)
-                    if not candidate.is_absolute():
-                        candidate = (charts_root / rel).resolve()
-                    if candidate.is_file():
-                        abs_path = candidate
-                if abs_path is None and name:
-                    candidate = (charts_root / name).resolve()
-                    if candidate.is_file():
-                        abs_path = candidate
-                        rel = name
-                key = str(abs_path) if abs_path else (c.get("url") or name or rel)
-                if key in seen:
-                    continue
-                seen.add(key)
-                plot_id = Path(name or rel or key).stem
-                entry = {
-                    "plot_id": plot_id,
-                    "title": (c.get("note") or name or plot_id).strip(),
-                    "path": str(abs_path) if abs_path else rel,
-                    "file_path": str(abs_path) if abs_path else rel,
-                    "url": c.get("url"),
-                    "source": "sandbox_execution",
-                    "type": "sandbox_plot",
-                    "chart_kind": "experiment_result",
-                    "is_generated_from_real_data": True,
-                    "source_dataset_id": (primary.get("data_config") or {}).get("source_path")
-                    or (primary.get("data_config") or {}).get("file_name")
-                    or primary.get("id"),
-                }
-                chart_rows.append(entry)
-        return metrics, chart_rows
+            if not isinstance(it_metrics, dict):
+                it_metrics = {}
+            analysis = it.get("analysis") if isinstance(it.get("analysis"), dict) else {}
+            result = it.get("result") if isinstance(it.get("result"), dict) else {}
+            charts = result.get("charts") or []
+            n_charts = IterativeExperimentService._append_chart_rows(
+                primary=primary,
+                charts_root=charts_root,
+                chart_items=charts,
+                chart_rows=chart_rows,
+                seen=seen,
+                iteration_number=it_num,
+                iteration_status=status,
+            )
+            # 成功/部分成功：合并指标；失败但有指标也保留（标明来源）
+            if it_metrics:
+                if status in {"failed", "error"}:
+                    for k, v in it_metrics.items():
+                        metrics[f"failed_iter{it_num}_{k}"] = v
+                else:
+                    metrics = {**metrics, **it_metrics}
+
+            round_summary = {
+                "iteration_number": it_num,
+                "status": status,
+                "metrics": it_metrics,
+                "chart_count": n_charts,
+                "summary": (result.get("summary") or analysis.get("summary") or "")[:500],
+                "error_message": str(it.get("error_message") or "")[:800],
+                "findings": list(analysis.get("findings") or [])[:8],
+                "identified_issues": list(analysis.get("identified_issues") or [])[:8],
+                "weaknesses": list(analysis.get("weaknesses") or [])[:6],
+                "overall_assessment": str(analysis.get("overall_assessment") or "")[:400],
+            }
+            is_failed = status in {"failed", "error"} or bool(it.get("error_message"))
+            if is_failed:
+                failed_rounds.append(round_summary)
+            else:
+                successful_rounds.append(round_summary)
+
+        cur = int(primary.get("current_iteration") or len(iterations) or 0)
+        mx = int(primary.get("max_iterations") or 0)
+        evidence = {
+            "progress": {
+                "current_iteration": cur,
+                "max_iterations": mx,
+                "phase": primary.get("phase") or "",
+                "ran_rounds": len(iterations),
+                "completed_full_plan": bool(
+                    primary.get("phase") == "completed" or (mx > 0 and cur >= mx)
+                ),
+            },
+            "successful_rounds": successful_rounds,
+            "failed_rounds": failed_rounds,
+            "has_positive_evidence": bool(
+                any(
+                    (isinstance(r.get("metrics"), dict) and r.get("metrics"))
+                    or int(r.get("chart_count") or 0) > 0
+                    for r in successful_rounds
+                )
+                or (metrics and not all(str(k).startswith("failed_iter") for k in metrics))
+                or any(
+                    str(p.get("iteration_status") or "").lower() not in {"failed", "error"}
+                    for p in chart_rows
+                    if isinstance(p, dict)
+                )
+            ),
+            "has_negative_evidence": bool(failed_rounds),
+            "counterexample_note": (
+                "部分迭代失败或未达成功标准，可作为「当前方法难以充分验证该假设」的反例证据；"
+                "报告中应如实描述失败原因与局限，勿编造成功指标。"
+                if failed_rounds
+                else ""
+            ),
+        }
+        return metrics, chart_rows, evidence
+
+    @staticmethod
+    def _resolve_iteration_charts(primary: Dict[str, Any]) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """兼容旧调用：返回 (metrics, plots)。"""
+        metrics, plots, _ = IterativeExperimentService._resolve_iteration_evidence(primary)
+        return metrics, plots
 
     @staticmethod
     def synthesize_report_fields(primary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        """把单条迭代实验映射为报告 agent 入参（历史 ed/sv 形状）。"""
-        metrics, plots = IterativeExperimentService._resolve_iteration_charts(primary)
+        """把单条迭代实验映射为报告 agent 入参（历史 ed/sv 形状）。
+
+        未跑满计划轮次时仍注入已有结果；失败轮次写入 counterexamples。
+        """
+        metrics, plots, evidence = IterativeExperimentService._resolve_iteration_evidence(primary)
         plan = primary.get("initial_plan") or {}
         data_config = primary.get("data_config") or {}
         source_path = data_config.get("source_path") or data_config.get("file_name") or ""
@@ -642,6 +795,14 @@ class IterativeExperimentService:
         target_cols = data_config.get("target_columns") or []
         if isinstance(target_cols, str):
             target_cols = [target_cols]
+
+        progress = evidence.get("progress") or {}
+        failed_rounds = evidence.get("failed_rounds") or []
+        successful_rounds = evidence.get("successful_rounds") or []
+        has_positive = bool(metrics or plots) or bool(successful_rounds)
+        has_negative = bool(failed_rounds)
+        has_usable = has_positive or has_negative
+        partial_run = not progress.get("completed_full_plan")
 
         dataset_desc = (
             (
@@ -669,6 +830,15 @@ class IterativeExperimentService:
                 f"用于二分类或指定标签验证；特征列示例: {', '.join(str(c) for c in list(columns)[:8])}。"
             )
 
+        limitations = "迭代实验引擎产出；详见 iterations。"
+        if partial_run:
+            limitations += (
+                f" 当前仅完成 {progress.get('current_iteration')}/{progress.get('max_iterations') or '?'} 轮，"
+                "报告基于已跑轮次，非最终全量结论。"
+            )
+        if has_negative:
+            limitations += " 含失败轮次，可作为方法验证失败或假设不适用之反例。"
+
         experiment_design = {
             "hypothesis": primary.get("hypothesis"),
             "methods": plan.get("methodology") or "",
@@ -676,10 +846,11 @@ class IterativeExperimentService:
             "metrics": str(metrics.get("primary_metric") or metrics.get("accuracy") or "accuracy"),
             "experimental_steps": plan.get("description") or "",
             "expected_results": "; ".join(plan.get("success_criteria") or []),
-            "limitations": "迭代实验引擎产出；详见 iterations",
+            "limitations": limitations,
             "datasets": dataset_desc or source_path or "",
             "source_data": source_desc or source_type or "",
-            "target_data": target_desc,            "experiment_spec": {
+            "target_data": target_desc,
+            "experiment_spec": {
                 "primary_metric": metrics.get("primary_metric") or "accuracy",
                 "task_type": "classification",
                 "feature_columns": columns,
@@ -696,34 +867,70 @@ class IterativeExperimentService:
         }
 
         sandbox_execution = {
-            "success": bool(metrics or plots),
-            "output_complete": bool(metrics or plots),
+            "success": has_positive,
+            "output_complete": bool(progress.get("completed_full_plan")) and has_positive,
+            "sandbox_incomplete": partial_run,
+            "partial_run": partial_run,
             "metrics": metrics,
             "plots": plots,
+            "iteration_progress": progress,
         }
+        if has_positive and has_negative:
+            summary = (
+                f"已跑 {progress.get('ran_rounds', 0)} 轮（计划 {progress.get('max_iterations') or '?'}）："
+                f"产出 {len(metrics)} 项指标、{len(plots)} 张图表；"
+                f"另有 {len(failed_rounds)} 轮失败可作反例。"
+            )
+        elif has_positive:
+            summary = (
+                f"已跑 {progress.get('ran_rounds', 0)} 轮（计划 {progress.get('max_iterations') or '?'}），"
+                f"产出 {len(metrics)} 项指标、{len(plots)} 张图表。"
+                + ("（未跑满计划轮次，以下为阶段性结果。）" if partial_run else "")
+            )
+        elif has_negative:
+            summary = (
+                f"已跑 {progress.get('ran_rounds', 0)} 轮，暂无成功指标/图表，"
+                f"但有 {len(failed_rounds)} 轮失败记录，可作为该方法难以验证假设的反例。"
+            )
+        else:
+            summary = "迭代实验尚未产出可引用的指标、图表或失败反例。"
+
+        if has_positive:
+            result_type = "has_actual_results"
+        elif has_negative:
+            result_type = "has_negative_evidence"
+        else:
+            result_type = "none"
+
         actual_results = {
             "data_source": "sandbox_execution",
             "sandbox_execution": sandbox_execution,
             "sandbox_metrics": metrics,
             "sandbox_plots": plots,
-            "summary": (
-                f"迭代实验沙箱已执行，产出 {len(metrics)} 项指标、{len(plots)} 张图表。"
-                if (metrics or plots)
-                else "迭代实验尚未产出可验证指标/图表。"
-            ),
+            "iteration_evidence": evidence,
+            "failed_iterations": failed_rounds,
+            "successful_iterations": successful_rounds,
+            "counterexamples": failed_rounds,
+            "summary": summary,
         }
         small_validation = {
             "hypothesis": primary.get("hypothesis"),
-            "validation_status": "completed" if primary.get("phase") == "completed" else "partial",
+            "validation_status": "completed" if progress.get("completed_full_plan") else "partial",
             "has_real_data": 1 if data_config else 0,
             "sandbox_execution": sandbox_execution,
             "artifacts": {"metrics": metrics, "plots": plots},
             "results": {
                 "actual_results": actual_results,
-                "result_type_summary": "has_actual_results" if (metrics or plots) else "none",
+                "result_type_summary": result_type,
+                "warnings": (
+                    [evidence.get("counterexample_note")]
+                    if evidence.get("counterexample_note")
+                    else []
+                ),
             },
             "_provider": "iterative_experiment",
             "_experiment_id": primary.get("id"),
+            "_has_usable_evidence": has_usable,
         }
         return {"experiment_design": experiment_design, "small_validation": small_validation}
 

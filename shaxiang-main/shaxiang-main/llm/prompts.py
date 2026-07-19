@@ -155,7 +155,7 @@ DATASET_ADVISOR_SYSTEM_PROMPT = """你是一位数据科学领域的专家，精
    - name: 数据集名称
    - description: 简短描述
    - source_type: uploaded（需用户手动上传）或 huggingface（可通过API加载）
-   - download_url: 下载链接（HuggingFace用格式 "org/dataset_name"，其他用完整URL）
+   - download_url: 必须是可在浏览器打开的完整 https URL（例如 https://huggingface.co/datasets/org/name 或 https://hf-mirror.com/datasets/org/name）；禁止只写 org/name 相对 ID
    - file_format: csv, json, parquet
    - is_required: true（必须上传）或 false（可选补充）
    - reason: 为什么这个数据集能帮助验证假设

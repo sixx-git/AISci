@@ -40,11 +40,13 @@
 **字段结构（撰写 `results` 章节时须遵守）：**
 - `has_real_data`：是否使用真实 CSV
 - `artifacts.plots[]`：沙箱/pilot 实验图（`plot_id`、`title`、`source`: `sandbox_execution` | `pilot_analysis`）
-- `sandbox_execution`：`success`、`output_complete`、`sandbox_incomplete`、`metrics`（含 `primary_metric`）、`plots`
+- `sandbox_execution`：`success`、`output_complete`、`sandbox_incomplete` / `partial_run`、`metrics`（含 `primary_metric`）、`plots`、`iteration_progress`
 - `results.actual_results` / `simulated_results` / `expected_results`：须区分真实、模拟与预期
+- `actual_results.failed_iterations` / `counterexamples`：失败轮次（错误信息、问题列表），须作为**反例**写入，说明当前方法难以充分验证假设
+- **`results` 章节必须含「结果分析与讨论」**：在罗列指标/图表之外，用论文体写清主要发现、与假设对照、失败反例含义、局限与后续工作；只依据 `small_validation` 中已有事实，禁止编造未出现的数值或显著性结论
 - `pilot_analysis`（可选）：沙箱不完整时的 CSV 对比补偿
 
-**红线：** 仅引用 `artifacts.plots` 或 `sandbox_execution.plots` / `pilot_analysis.plots` 作为实验图；**禁止**用 preliminary EDA 描述统计图冒充实验结果。若 `sandbox_incomplete=true` 且无 pilot 图，在 `results` 中写明「实验图待补全」而非编造数值。
+**红线：** 仅引用 `artifacts.plots` 或 `sandbox_execution.plots` / `pilot_analysis.plots` 作为实验图；**禁止**用 preliminary EDA 描述统计图冒充实验结果。若 `sandbox_incomplete=true` / `partial_run=true`，写明「阶段性结果（未跑满计划轮次）」并如实引用已有指标/图，**禁止**因未跑满而整节留空。失败轮次不得删改，应写成局限或反例。若无任何轮次记录，再写「实验图待补全」而非编造数值。
 
 ### 已验证的引用列表
 {{verified_references}}
@@ -98,7 +100,7 @@
 - **datasets / source / target**：分开写；缺真实数据须明确说明，禁止伪造。
 - **methods**：可执行、**可验证**的实验步骤，须与假设及 `research_object` 对应；**禁止**写 Pipeline 内部阶段。
 - **experiments**：JSON 对象含 baselines、metrics、experimental_setup、ablation_study、validation_protocol。
-- **results**：JSON 或文本区分 actual_results / simulated_results / expected_results / limitations；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`，区分 pilot_fallback 与完整沙箱产出
+- **results**：须含（1）实际/模拟/预期结果区分；（2）**结果分析与讨论**（论文体：主要发现 → 与假设对照 → 反例含义 → 局限与后续）；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`；未跑满计划轮次时写阶段性结果；失败轮次写入反例/局限；区分 pilot_fallback 与完整沙箱产出
 - **references**：仅 citation_map / literature_facts 可验证条目；禁止编造。
 
 **VFL 场景**：experiments 的 baselines/metrics 须符合 vertical_fl 要求（见原赛题规范）。

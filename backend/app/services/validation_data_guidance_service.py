@@ -389,8 +389,14 @@ def build_validation_data_guidance(
         })
 
     required_with_url = 0
+    from app.core.dataset_urls import normalize_dataset_download_url
+
     for idx, rec in enumerate(recommended[:8]):
-        url = str(rec.get("download_url") or rec.get("url") or "").strip()
+        url = normalize_dataset_download_url(
+            str(rec.get("download_url") or rec.get("url") or "").strip(),
+            name=str(rec.get("dataset_name") or rec.get("name") or ""),
+            source_type=str(rec.get("source_platform") or rec.get("source") or ""),
+        )
         preset_req = rec.get("upload_requirement")
         if preset_req in (UPLOAD_REQUIRED, UPLOAD_OPTIONAL):
             upload_req = preset_req

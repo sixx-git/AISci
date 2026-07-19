@@ -6,6 +6,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { cn } from '@/lib/utils';
+import { toAbsoluteDatasetUrl } from '@/lib/datasetUrls';
 import type {
   DataConfig,
   DataSourceType,
@@ -234,11 +235,14 @@ export function ExperimentDetail({
                   <div className="text-sm font-medium text-bp-text">{d.name}</div>
                   <p className="text-xs text-bp-muted mt-1">{d.description}</p>
                   <p className="text-xs text-bp-cyan/80 mt-1">推荐理由: {d.reason}</p>
-                  {d.download_url && (
-                    <a href={d.download_url} className="text-xs text-bp-cyan underline mt-1 inline-block" target="_blank" rel="noreferrer">
-                      下载链接
-                    </a>
-                  )}
+                  {(() => {
+                    const href = toAbsoluteDatasetUrl(d.download_url, d.name);
+                    return href ? (
+                      <a href={href} className="text-xs text-bp-cyan underline mt-1 inline-block" target="_blank" rel="noreferrer">
+                        下载链接
+                      </a>
+                    ) : null;
+                  })()}
                   {d.expected_columns && (
                     <p className="text-[11px] text-bp-muted mt-1">
                       预期字段: {d.expected_columns.join(', ')}

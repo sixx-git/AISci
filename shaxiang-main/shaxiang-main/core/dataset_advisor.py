@@ -50,6 +50,14 @@ class DatasetAdvisor:
             system_prompt=DATASET_ADVISOR_SYSTEM_PROMPT,
             model_class=DatasetRecommendationReport,
         )
+        from core.dataset_urls import normalize_dataset_download_url
+
+        for ds in report.recommended_datasets or []:
+            ds.download_url = normalize_dataset_download_url(
+                ds.download_url,
+                name=ds.name or "",
+                source_type=ds.source_type or "",
+            )
         logger.info(f"推荐了 {len(report.recommended_datasets)} 个数据集")
         return report
 

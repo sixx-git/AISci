@@ -1,6 +1,7 @@
 import { ExternalLink, AlertCircle, Database, CheckCircle2, Circle } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { cn } from '@/lib/utils';
+import { toAbsoluteDatasetUrl } from '@/lib/datasetUrls';
 import type { ValidationDataGuidance, UploadRequirement } from '@/lib/validationDataGuidance';
 
 const REQUIREMENT_STYLES: Record<UploadRequirement, { cls: string; icon: typeof AlertCircle }> = {
@@ -115,7 +116,7 @@ export function ValidationDataGuidanceCard({
                 const req = (item.upload_requirement || 'optional') as UploadRequirement;
                 const style = REQUIREMENT_STYLES[req] || REQUIREMENT_STYLES.optional;
                 const ReqIcon = style.icon;
-                const url = (item.download_url || '').trim();
+                const url = toAbsoluteDatasetUrl(item.download_url, item.name);
                 const key = `${item.name}-${req}-${url}`;
                 return (
                   <tr key={key} className="border-t border-bp-border/60">

@@ -468,7 +468,7 @@ export function ReportPage({
                 当前仅有预期结果，建议补充公式推导、模拟验证或小样实验
               </p>
               <p className="text-xs text-bp-yellow/70 leading-relaxed">
-                Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议在「迭代实验」完成至少一轮 smoke/full 推演以增强报告可信度。
+                Results 中未检测到实际执行结果（Actual Results）或模拟结果（Simulated Results）。建议在「迭代实验」至少跑若干轮（不必跑满全部计划轮次）并勾选「用于报告」；失败轮次也可作为反例写入。
               </p>
             </div>
           </div>
