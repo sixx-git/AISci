@@ -191,3 +191,21 @@ class HitlGateResumeResponse(BaseModel):
     run_id: str
     rerun_from_stage: Optional[str] = None
     feedback_constraints_count: Optional[int] = None
+
+
+class SelectEvolvedHypothesisRequest(BaseModel):
+    project_id: str
+    run_id: str
+    candidate_id: Optional[str] = Field(None, description="演化候选 ID，如 evo_simplify_0")
+    hypothesis_text: Optional[str] = Field(None, description="也可直接传入要采用的假设文本")
+    strategy: Optional[str] = None
+
+
+class SelectEvolvedHypothesisResponse(BaseModel):
+    run_id: str
+    stage: str = "hypothesis_review"
+    selected_candidate_id: Optional[str] = None
+    strategy: Optional[str] = None
+    primary_index: int = 0
+    hypothesis: str = ""
+    previous_hypothesis: str = ""

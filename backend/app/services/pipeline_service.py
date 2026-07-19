@@ -2948,6 +2948,28 @@ class PipelineService:
             except Exception as adv_err:
                 logger.warning(f"红蓝对抗包装失败（已跳过，不影响后续阶段）: {adv_err}")
 
+        # 红蓝对抗后：simplify / out_of_box 候选池（1B，不覆盖主假设）
+        if self._run_options.get("enable_hypothesis_post_evolution", True):
+            try:
+                from app.skills.reasoning.hypothesis_evolution_skill import (
+                    attach_evolution_to_review,
+                    evolve_hypothesis_candidates,
+                )
+
+                skill_out = result_dict.get("skill_outputs") or {}
+                pro_con = skill_out.get("pro_con_adversarial") or {}
+                evo = evolve_hypothesis_candidates(
+                    research_question=(
+                        self.db_pipeline_run.research_question if self.db_pipeline_run else ""
+                    ),
+                    reviews=list(result_dict.get("reviews") or []),
+                    primary_index=int(result_dict.get("primary_index") or 0),
+                    pro_con_evolution=(pro_con.get("evolution") if isinstance(pro_con, dict) else None),
+                )
+                result_dict = attach_evolution_to_review(result_dict, evo)
+            except Exception as evo_err:
+                logger.warning(f"假设演化候选生成失败（已跳过，不影响后续阶段）: {evo_err}")
+
         return result_dict
     
     def _apply_hypothesis_review_scores(

@@ -1,5 +1,6 @@
 import type {
   EnsembleReviewData,
+  HypothesisEvolutionData,
   PipelineStageExecutionSummary,
   ProConAdversarialData,
 } from '@/types';
@@ -9,6 +10,7 @@ type StageLike = Pick<PipelineStageExecutionSummary, 'stage' | 'output_data' | '
 export interface HypothesisReviewExtras {
   proCon: ProConAdversarialData | null;
   ensemble: EnsembleReviewData | null;
+  evolution: HypothesisEvolutionData | null;
   adversarialMode: string | null;
   stageStatus: string | null;
 }
@@ -25,12 +27,18 @@ export function findHypothesisReviewStage(
   return stages.find((st) => isHypothesisReviewStage(String(st.stage || '')));
 }
 
-/** 从 hypothesis_review 阶段 output 解析红蓝对抗与集成评审。 */
+/** 从 hypothesis_review 阶段 output 解析红蓝对抗、集成评审与演化候选。 */
 export function parseHypothesisReviewOutput(
   output: Record<string, unknown> | null | undefined,
 ): HypothesisReviewExtras {
   if (!output || typeof output !== 'object') {
-    return { proCon: null, ensemble: null, adversarialMode: null, stageStatus: null };
+    return {
+      proCon: null,
+      ensemble: null,
+      evolution: null,
+      adversarialMode: null,
+      stageStatus: null,
+    };
   }
 
   const skillOutputs = output.skill_outputs as Record<string, unknown> | undefined;
@@ -49,12 +57,23 @@ export function parseHypothesisReviewOutput(
       }
     : null;
 
+  const evolutionRaw = skillOutputs?.hypothesis_evolution as HypothesisEvolutionData | undefined;
+  const evolution =
+    evolutionRaw &&
+    evolutionRaw.enabled !== false &&
+    !evolutionRaw.skipped &&
+    (evolutionRaw.candidates?.length ?? 0) > 0
+      ? evolutionRaw
+      : evolutionRaw?.enabled === false || evolutionRaw?.skipped
+        ? evolutionRaw
+        : null;
+
   const adversarialMode =
     (output.adversarial_mode as string | undefined) ||
     proCon?.mode ||
     null;
 
-  return { proCon, ensemble, adversarialMode, stageStatus: null };
+  return { proCon, ensemble, evolution, adversarialMode, stageStatus: null };
 }
 
 export function extractHypothesisReviewExtras(
@@ -62,7 +81,13 @@ export function extractHypothesisReviewExtras(
 ): HypothesisReviewExtras {
   const stage = findHypothesisReviewStage(stages);
   if (!stage?.output_data || typeof stage.output_data !== 'object') {
-    return { proCon: null, ensemble: null, adversarialMode: null, stageStatus: null };
+    return {
+      proCon: null,
+      ensemble: null,
+      evolution: null,
+      adversarialMode: null,
+      stageStatus: null,
+    };
   }
   const parsed = parseHypothesisReviewOutput(stage.output_data as Record<string, unknown>);
   return { ...parsed, stageStatus: String(stage.status || '') || null };

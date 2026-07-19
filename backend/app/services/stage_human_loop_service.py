@@ -530,6 +530,121 @@ class StageHumanLoopService:
             "feedback_constraints_count": len(constraints),
         }
 
+    def select_evolved_hypothesis(
+        self,
+        run_id: str,
+        *,
+        candidate_id: Optional[str] = None,
+        hypothesis_text: Optional[str] = None,
+        strategy: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """HITL 选用演化候选：写回 reviews[primary].hypothesis，并同步 checkpoint。"""
+        run = self._get_run(run_id)
+        stage_enum = PipelineStage.HYPOTHESIS_REVIEW
+        stage_exec = (
+            self.db.query(PipelineStageExecution)
+            .filter(
+                PipelineStageExecution.pipeline_run_id == run.id,
+                PipelineStageExecution.stage == stage_enum,
+            )
+            .first()
+        )
+        if not stage_exec or not isinstance(stage_exec.output_data, dict):
+            raise ValueError("假设评审阶段输出不存在")
+
+        output = copy.deepcopy(stage_exec.output_data)
+        skill_outputs = dict(output.get("skill_outputs") or {})
+        evo = dict(skill_outputs.get("hypothesis_evolution") or {})
+        candidates = list(evo.get("candidates") or [])
+
+        chosen: Optional[Dict[str, Any]] = None
+        if candidate_id:
+            for c in candidates:
+                if isinstance(c, dict) and c.get("candidate_id") == candidate_id:
+                    chosen = c
+                    break
+            if not chosen:
+                raise ValueError(f"未找到演化候选: {candidate_id}")
+        elif hypothesis_text and str(hypothesis_text).strip():
+            chosen = {
+                "candidate_id": candidate_id or "evo_manual",
+                "strategy": strategy or "manual",
+                "hypothesis": str(hypothesis_text).strip(),
+            }
+        else:
+            raise ValueError("请提供 candidate_id 或 hypothesis_text")
+
+        new_text = str(chosen.get("hypothesis") or "").strip()
+        if not new_text:
+            raise ValueError("候选假设文本为空")
+
+        reviews = list(output.get("reviews") or [])
+        if not reviews:
+            raise ValueError("评审结果中无 reviews")
+        try:
+            primary_idx = int(output.get("primary_index") or 0)
+        except (TypeError, ValueError):
+            primary_idx = 0
+        primary_idx = min(max(0, primary_idx), len(reviews) - 1)
+        prev = ""
+        if isinstance(reviews[primary_idx], dict):
+            prev = str(reviews[primary_idx].get("hypothesis") or "")
+            reviews[primary_idx] = dict(reviews[primary_idx])
+            reviews[primary_idx]["hypothesis"] = new_text
+        else:
+            reviews[primary_idx] = {"hypothesis": new_text}
+        output["reviews"] = reviews
+
+        evo["selected_candidate_id"] = chosen.get("candidate_id")
+        evo["selected_strategy"] = chosen.get("strategy") or strategy
+        evo["selected_at"] = _now_iso()
+        evo["default_unchanged"] = False
+        evo["previous_primary_hypothesis"] = prev
+        skill_outputs["hypothesis_evolution"] = evo
+        output["skill_outputs"] = skill_outputs
+
+        # 写入人工修订版本（get_effective_output 优先）并同步 stage output
+        self.save_human_edit(
+            run_id=run.run_id,
+            stage=PipelineStage.HYPOTHESIS_REVIEW.value,
+            output_data=output,
+            human_feedback=f"采用演化候选 {chosen.get('candidate_id')}（{chosen.get('strategy')}）",
+            mark_reviewed=True,
+            editor="user",
+            action="select_evolved_hypothesis",
+        )
+        stage_exec = (
+            self.db.query(PipelineStageExecution)
+            .filter(
+                PipelineStageExecution.pipeline_run_id == run.id,
+                PipelineStageExecution.stage == stage_enum,
+            )
+            .first()
+        )
+        if stage_exec:
+            stage_exec.output_data = output
+            self.db.commit()
+
+        # 同步 pipeline_checkpoint.results
+        meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+        checkpoint = dict(meta.get("pipeline_checkpoint") or {})
+        results = dict(checkpoint.get("results") or {})
+        results["hypothesis_review"] = output
+        checkpoint["results"] = results
+        meta["pipeline_checkpoint"] = checkpoint
+        run.extra_metadata = meta
+        self.db.commit()
+
+        return {
+            "run_id": run.run_id,
+            "stage": PipelineStage.HYPOTHESIS_REVIEW.value,
+            "selected_candidate_id": chosen.get("candidate_id"),
+            "strategy": chosen.get("strategy") or strategy,
+            "primary_index": primary_idx,
+            "hypothesis": new_text,
+            "previous_hypothesis": prev,
+        }
+
     def _get_run(self, run_id: str) -> PipelineRun:
         run = self.db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         if not run:

@@ -710,6 +710,28 @@ export interface ProConAdversarialData {
   primary_index_override?: { from?: number; to?: number; reason?: string };
 }
 
+export interface HypothesisEvolutionCandidate {
+  candidate_id: string;
+  strategy?: string;
+  strategy_label?: string;
+  hypothesis: string;
+  rationale?: string;
+  parent_indices?: number[];
+  source_primary_index?: number;
+}
+
+export interface HypothesisEvolutionData {
+  enabled?: boolean;
+  skipped?: boolean;
+  reason?: string;
+  strategies_used?: string[];
+  candidates?: HypothesisEvolutionCandidate[];
+  default_unchanged?: boolean;
+  selected_candidate_id?: string | null;
+  selected_strategy?: string | null;
+  primary_index?: number;
+}
+
 export interface IdeationNoveltyData {
   research_question?: string;
   novelty_score?: number;

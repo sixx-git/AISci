@@ -109,6 +109,25 @@ export const humanLoopService = {
     return data;
   },
 
+  async selectEvolvedHypothesis(payload: {
+    project_id: string;
+    run_id: string;
+    candidate_id?: string;
+    hypothesis_text?: string;
+    strategy?: string;
+  }): Promise<ApiResponse<{
+    run_id: string;
+    stage: string;
+    selected_candidate_id?: string;
+    strategy?: string;
+    primary_index: number;
+    hypothesis: string;
+    previous_hypothesis: string;
+  }>> {
+    const { data } = await api.post('/human-loop/select-evolved-hypothesis', payload);
+    return data;
+  },
+
   async mentorReview(payload: {
     project_id: string;
     run_id?: string;

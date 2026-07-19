@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     LIT_CHUNK_SCORE_CUTOFF: int = 5  # chunk RCS 0–10，>= 才进 facts 抽取
     LIT_RETRIEVE_CANDIDATE_K: int = 20  # 向量检索候选数（再经 RCS 截断）
 
+    # 红蓝对抗后假设演化（Co-Scientist simplify/out_of_box；仅候选池，默认不覆盖主假设）
+    HYPOTHESIS_EVOLUTION_ENABLED: bool = True
+    HYPOTHESIS_EVOLUTION_TOP_K: int = 5
+    HYPOTHESIS_EVOLUTION_STRATEGIES: str = "simplify,out_of_box"
+
     # arXiv 配置
     ARXIV_TIMEOUT: int = 15
     ARXIV_MAX_RETRIES: int = 2

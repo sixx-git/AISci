@@ -8,6 +8,7 @@ import {
 const EMPTY: HypothesisReviewExtras = {
   proCon: null,
   ensemble: null,
+  evolution: null,
   adversarialMode: null,
   stageStatus: null,
 };
@@ -21,7 +22,10 @@ async function resolveRunId(
     const res = await pipelineService.getRuns(projectId);
     if (res.code === 200 && res.data?.length) {
       const completed = res.data.find((r) => r.status === 'completed');
-      return completed?.run_id ?? res.data[0].run_id ?? null;
+      const paused = res.data.find(
+        (r) => r.status === 'human_review_required' || r.status === 'running',
+      );
+      return paused?.run_id ?? completed?.run_id ?? res.data[0].run_id ?? null;
     }
   } catch {
     return null;
@@ -29,18 +33,20 @@ async function resolveRunId(
   return null;
 }
 
-/** 从最新 Pipeline run 加载假设评估阶段的红蓝对抗 / 集成评审数据。 */
+/** 从最新 Pipeline run 加载假设评估阶段的红蓝对抗 / 集成评审 / 演化候选。 */
 export function useHypothesisReviewExtras(
   projectId?: string,
   latestRunId?: string | null,
   revalidateKey?: number,
-): HypothesisReviewExtras & { loading: boolean } {
+): HypothesisReviewExtras & { loading: boolean; runId: string | null } {
   const [extras, setExtras] = useState<HypothesisReviewExtras>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [runId, setRunId] = useState<string | null>(latestRunId ?? null);
 
   useEffect(() => {
     if (!projectId) {
       setExtras(EMPTY);
+      setRunId(null);
       return;
     }
 
@@ -49,12 +55,16 @@ export function useHypothesisReviewExtras(
     (async () => {
       setLoading(true);
       try {
-        const runId = await resolveRunId(projectId, latestRunId);
-        if (!runId || cancelled) {
-          if (!cancelled) setExtras(EMPTY);
+        const resolved = await resolveRunId(projectId, latestRunId);
+        if (!resolved || cancelled) {
+          if (!cancelled) {
+            setExtras(EMPTY);
+            setRunId(null);
+          }
           return;
         }
-        const detail = await pipelineService.getRunDetail(runId);
+        if (!cancelled) setRunId(resolved);
+        const detail = await pipelineService.getRunDetail(resolved);
         if (cancelled) return;
         if (detail.code === 200 && detail.data?.stages) {
           setExtras(extractHypothesisReviewExtras(detail.data.stages));
@@ -62,7 +72,10 @@ export function useHypothesisReviewExtras(
           setExtras(EMPTY);
         }
       } catch {
-        if (!cancelled) setExtras(EMPTY);
+        if (!cancelled) {
+          setExtras(EMPTY);
+          setRunId(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -73,5 +86,5 @@ export function useHypothesisReviewExtras(
     };
   }, [projectId, latestRunId, revalidateKey]);
 
-  return { ...extras, loading };
+  return { ...extras, loading, runId };
 }

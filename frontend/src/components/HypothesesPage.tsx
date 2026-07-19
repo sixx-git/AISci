@@ -19,6 +19,7 @@ import { HypothesisTreePanel } from '@/components/HypothesisTreePanel';
 import { HitlGateContinueBar } from '@/components/HitlGateContinueBar';
 import { ProConAdversarialPanel } from '@/components/ProConAdversarialPanel';
 import { EnsembleReviewPanel } from '@/components/EnsembleReviewPanel';
+import { HypothesisEvolutionPanel } from '@/components/HypothesisEvolutionPanel';
 import { CounterfactualPreviewPanel } from '@/components/CounterfactualPreviewPanel';
 import { useHypothesisReviewExtras } from '@/hooks/useHypothesisReviewExtras';
 import { useCounterfactualPreview } from '@/hooks/useCounterfactualPreview';
@@ -83,9 +84,15 @@ export function HypothesesPage({
   const {
     proCon: proConAdversarial,
     ensemble: ensembleReview,
+    evolution: hypothesisEvolution,
     adversarialMode,
     loading: reviewExtrasLoading,
-  } = useHypothesisReviewExtras(_projectId, _latestRunId, _revalidateKey);
+    runId: reviewRunId,
+  } = useHypothesisReviewExtras(
+    _projectId,
+    _latestRunId,
+    (_revalidateKey ?? 0) + retryTick,
+  );
 
   const { preview: counterfactualPreview, loading: counterfactualLoading } =
     useCounterfactualPreview(_projectId, _latestRunId, _revalidateKey);
@@ -356,7 +363,7 @@ export function HypothesesPage({
         </div>
       )}
 
-      {!reviewExtrasLoading && (proConAdversarial || ensembleReview) && (
+      {!reviewExtrasLoading && (proConAdversarial || ensembleReview || hypothesisEvolution) && (
         <div className="space-y-4 mb-6">
           {proConAdversarial && (
             <Card
@@ -373,6 +380,22 @@ export function HypothesesPage({
           {ensembleReview && (
             <Card title="集成评审" subtitle="含反方质疑智能体权重（con_challenger）">
               <EnsembleReviewPanel review={ensembleReview} />
+            </Card>
+          )}
+          {hypothesisEvolution && (hypothesisEvolution.candidates?.length ?? 0) > 0 && (
+            <Card
+              title="假设演化候选"
+              subtitle="简化 / 跳出固有思维 · 未采用则保持原主假设"
+            >
+              <HypothesisEvolutionPanel
+                data={hypothesisEvolution}
+                projectId={_projectId}
+                runId={reviewRunId}
+                onSelected={() => {
+                  showAlert('已采用演化候选；后续迭代实验将使用该假设');
+                  setRetryTick((t) => t + 1);
+                }}
+              />
             </Card>
           )}
         </div>

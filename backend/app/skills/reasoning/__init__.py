@@ -2,9 +2,11 @@
 from app.skills.reasoning.hypothesis_novelty_review_skill import HypothesisNoveltyReviewSkill
 from app.skills.reasoning.question_alignment_skill import QuestionAlignmentSkill
 from app.skills.reasoning.hypothesis_tournament_skill import HypothesisTournamentSkill
+from app.skills.reasoning.hypothesis_evolution_skill import HypothesisEvolutionSkill
 
 __all__ = [
     "HypothesisNoveltyReviewSkill",
     "QuestionAlignmentSkill",
     "HypothesisTournamentSkill",
+    "HypothesisEvolutionSkill",
 ]

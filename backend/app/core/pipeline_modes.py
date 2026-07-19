@@ -114,6 +114,17 @@ def apply_iteration_mode(opts: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _resolve_post_evolution_enabled(opts: Dict[str, Any]) -> bool:
+    if "enable_hypothesis_post_evolution" in opts:
+        return bool(opts.get("enable_hypothesis_post_evolution"))
+    try:
+        from app.core.config import get_settings
+
+        return bool(getattr(get_settings(), "HYPOTHESIS_EVOLUTION_ENABLED", True))
+    except Exception:
+        return True
+
+
 def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     opts = apply_iteration_mode(dict(options or {}))
     mode = normalize_pipeline_mode(opts.get("pipeline_mode"))
@@ -217,6 +228,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "adversarial_mode": adversarial_mode,
         "con_challenge_max_rounds": con_max_rounds,
         "enable_hypothesis_evolution": bool(opts.get("enable_hypothesis_evolution", True)),
+        "enable_hypothesis_post_evolution": _resolve_post_evolution_enabled(opts),
         "enable_counterfactual_preview": bool(opts.get("enable_counterfactual_preview", False)),
         "literature_max_papers": literature_max,
         "evidence_reasoning_max_rounds": evidence_max_rounds,

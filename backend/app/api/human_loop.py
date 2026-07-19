@@ -21,6 +21,8 @@ from app.schemas.human_loop import (
     HitlGateResumeRequest,
     HitlGateStatusResponse,
     HitlGateResumeResponse,
+    SelectEvolvedHypothesisRequest,
+    SelectEvolvedHypothesisResponse,
 )
 from app.services.stage_human_loop_service import (
     StageHumanLoopService,
@@ -203,6 +205,34 @@ async def mentor_review(body: MentorReviewRequest, db: Session = Depends(get_db)
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/select-evolved-hypothesis",
+    response_model=ResponseModel[SelectEvolvedHypothesisResponse],
+)
+async def select_evolved_hypothesis(
+    body: SelectEvolvedHypothesisRequest,
+    db: Session = Depends(get_db),
+):
+    """HITL：采用红蓝对抗后的演化候选，写回主假设文本（未调用则保持原主假设）。"""
+    try:
+        svc = get_stage_human_loop_service(db)
+        data = svc.select_evolved_hypothesis(
+            run_id=body.run_id,
+            candidate_id=body.candidate_id,
+            hypothesis_text=body.hypothesis_text,
+            strategy=body.strategy,
+        )
+        return ResponseModel(
+            code=200,
+            message="已采用演化候选假设",
+            data=SelectEvolvedHypothesisResponse(**data),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
