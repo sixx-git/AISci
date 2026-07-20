@@ -15,11 +15,11 @@
 
 ```
 研究问题 → 文献挖掘 → 知识缺口 → 假设生成 → 假设评估 → 迭代实验 → 报告生成
-                              ↑_________________________________________|
-                                    科研闭环（Discovery 迭代 / HITL / CQS）
+                             
+                                    
 ```
 
-标准 Pipeline 为 **7 阶段**（`iterative_experiment` 取代原实验设计 + 小样验证）。系统另支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）**、**完整审计链导出**，以及顶栏 **预测**（基于 pingfenbiao 的评分表 / 科学影响力预测）。
+标准 Pipeline 为 **7 阶段**。系统另支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）**、**完整审计链导出**，以及顶栏 **预测**（基于 pingfenbiao 的评分表 / 科学影响力预测）。
 
 ### 8 条设计原则
 
@@ -194,38 +194,38 @@ AISci/
 │   │   │   ├── documents.py, iterative_experiments.py, pingfenbiao_proxy.py
 │   │   │   ├── feedback.py, human_loop.py, prompts.py, skills.py
 │   │   │   ├── science_iteration.py, vector_search.py, diagnose.py, llm_config.py
-│   │   │   # 未挂载（保留文件）：research.py / chat.py / datasets.py / data_finder.py 等
+│   │   │   # 另有 research.py / chat.py（未挂入主 OpenAPI 面）
 │   │   ├── core/                 # 配置、闭环控制、质量评分、溯源
 │   │   │   ├── quality_scoring.py, iterative_science.py, data_cleaning.py
 │   │   │   ├── closed_loop_decisions.py, hypothesis_provenance.py, data_citation.py
 │   │   ├── models/               # SQLAlchemy 模型（project / core / pipeline 等）
 │   │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   │   ├── services/             # 业务逻辑 + Qwen 客户端 + 向量存储
-│   │   │   ├── pipeline_service.py, iterative_experiment_service.py
+│   │   │   ├── pipeline_service.py, iterative_experiment_service.py, fl_pack_service.py
 │   │   │   ├── evidence_reasoning_service.py, data_finder_service.py
 │   │   │   ├── feedback_hub_service.py, audit_chain_service.py
 │   │   ├── integrations/         # 外部系统桥接（如 shaxiang）
-│   │   ├── skills/               # 科研 Skill 工具层（40+）
+│   │   ├── skills/               # 科研 Skill 工具层
 │   │   │   ├── literature/       # 论文搜索、引用验证、PDF 证据提取
 │   │   │   ├── data_finder/      # 表格抽取、Schema 对齐、Merge、Entity 对齐
 │   │   │   ├── evidence_reasoning/ # 证据链迭代、假设修订、引用完整性
 │   │   │   ├── multimodal/       # VLM 图像理解、多模态证据构建
-│   │   │   ├── knowledge_graph/  # KG 构建、推理、增量更新
 │   │   │   ├── data/             # 数据清洗、数据集发现
 │   │   │   ├── report/           # 图表生成、VLM 评审、质量检查
 │   │   │   ├── reasoning/        # 新颖性审查、问题对齐、Ideation
 │   │   │   ├── counterfactual/   # 反事实预演（L0）
+│   │   │   ├── academic/ / chinese_writing/ / modeling/
 │   │   │   └── experiment/       # 实验合理性检查
 │   │   └── main.py               # FastAPI 入口 + /health + /health/llm
 │   ├── prompts/                  # 阶段 Prompt 模板 + presets/ 范式预设库（见 prompts/README.md）
 │   ├── scripts/                  # generate_prompt_presets.py 等工具脚本
 │   ├── tests/                    # pytest 测试
-│   ├── data/                     # arXiv fallback + reference/fl（联邦学习 Starter Pack）
+│   ├── data/                     # arXiv fallback + reference/fl（联邦 Starter Pack v1.4+）
 │   └── storage/                  # 运行时数据（见 storage/README.md）
 ├── pingfenbiao-main/              # 评分表 / 科学影响力预测（独立 Web :8765，顶栏「预测」）
 ├── shaxiang-main/                # 迭代实验上游实现（桥接用，通常 gitignore）
 ├── storage/                      # 项目级持久化（audit / catalog / evidence_chains 等）
-├── docs/                         # 专题文档（如 DATA_ACQUISITION.md）
+├── docs/                         # 专题文档（DATA_ACQUISITION、FL_STARTER_PACK、FL_EXPERIMENT_PARADIGMS 等）
 ├── designs/                      # Pencil UI 设计稿（*.pen，与前端代码同仓版本管理）
 ├── frontend/
 │   └── src/
@@ -302,8 +302,6 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 | **IterativeExperiment** | 主假设 + 数据集绑定 | 脚本设计、smoke/full 迭代、图表与反馈重设计 | 对接 shaxiang；嵌套投影 `experiment_design` / `small_validation` 供报告与溯源 |
 | **ReportGeneration** | 全流程中间产物（只读迭代实验投影） | 12 字段最终报告 + 合规检查 | 聚合各阶段输出，生成完整报告 |
 
-> 历史阶段 `experiment_design` / `small_validation` / `data_acquisition` 已淘汰出主链路；新 run 以 `iterative_experiment` 为准。观测/溯源/Feedback 重跑经 `resolve_ed_sv_from_results` 优先读新格式、兼容旧顶层键。
-
 每个 Agent 的特点：
 - **独立类** — 可单独实例化和测试
 - **Prompt 模板** — `backend/prompts/*.md`，独立于代码，方便调优
@@ -318,8 +316,8 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 |-------|------|
 | `pack_a` | AI Scientist v1：想法 → 代码 → 运行 → 评审 |
 | `pack_b` | AI Scientist v2：树搜索、剪枝、pilot 门禁 |
-| `pack_c` | AISci 默认：证据溯源 + 可验证假设（**推荐新项目**） |
-| `pack_d` | 联邦学习 Starter Pack（仅 `federated_learning` 项目可见；资源包+提示词，非多机 runtime） |
+| `pack_c` | AISci 默认：证据溯源 + 可验证假设（**推荐通用新项目**） |
+| `pack_d` | 联邦学习：Starter Pack + 实验范式（默认标准 Non-IID）；仅 `federated_learning` 项目可见 |
 
 API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/apply`  
 前端：项目工作台 **Prompt 管理** Tab + 工作流阶段 **PromptPresetBar**
@@ -337,11 +335,11 @@ API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/appl
 | Skills | `/skills` | Skill 启用与目录 |
 | 项目工作台 | `/projects/:id` | 多 Tab 科研全流程 |
 
-`/projects`、`/workflow`、`/settings` 已重定向至 `/`。LLM 配置在顶栏 **DeveloperMenu**（不再单独 Settings 页）。
+`/projects`、`/workflow`、`/settings` 已重定向至 `/`。LLM 配置在顶栏 **DeveloperMenu**。
 
 **项目工作台主 Tab**（`frontend/src/config/projectTabs.ts`）：项目概览 · 研究问题 · 文献库 · 智能体工作流 · 候选假设 · **迭代实验** · 研究报告  
 
-高级深链：Prompt 管理 · 运行日志（数据绑定仅在「迭代实验」内完成）
+高级深链：Prompt 管理 · 运行日志（数据绑定在「迭代实验」内完成）
 
 ---
 
@@ -355,12 +353,36 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | **Data Finder** | pdf_table_extraction_skill, dataset_merge_skill, entity_resolution_skill | PDF 表格抽取、Merge + provenance、跨表实体对齐 |
 | **证据推理** | iterative_hypothesis_loop_skill, hypothesis_revision_skill | 多轮证据检索、LLM 假设修订（fact 白名单） |
 | **多模态** | qwen_vl_image_understanding_skill, multimodal_evidence_builder_skill | VLM 图像理解、多模态 fact 构建 |
-| **知识图谱** | evidence_graph_builder_skill, graph_reasoning_skill | 证据图构建与推理 |
-| **联邦学习（Starter Pack）** | `backend/data/reference/fl/` + pack_d | 预解析文献 / 数据集元数据 / 本地 pilot 脚本；**不**再提供 `federated_experiment` 多机仿真技能栈 |
+| **联邦学习（Starter Pack）** | `backend/data/reference/fl/` + pack_d | 预解析文献 / 数据集 / 实验范式 / 本地 pilot；单机模拟，非多机 Flower/FATE runtime |
 | **数据** | data_juicer_lite_skill, preliminary_analysis_skill | 数据质量分析与统计描述 |
 | **推理** | hypothesis_novelty_review_skill, ideation_novelty_skill | 新颖性审查、Ideation 合成 |
 | **报告** | scientific_plot_skill, plot_vlm_critique_skill, report_quality_check_skill | 图表生成、VLM 评审、12 字段合规检查 |
 | **实验** | experiment_sanity_check_skill | 实验方案合理性检查 |
+
+---
+
+## 🔗 联邦学习模式（Starter Pack）
+
+创建项目时选择 **联邦学习（资源包）**，Pipeline 阶段与通用模式相同，差异来自内容注入：
+
+| 能力 | 说明 |
+|------|------|
+| 资源包 | `backend/data/reference/fl/`（当前 **v1.4+**）：seed facts、数据集 YAML、checklists、failure cases、实验范式 |
+| 默认实验档位 | **标准 Non-IID**：Dirichlet α=0.1 + Local / Centralized / FedAvg / FedProx |
+| 可选档位 | 快速验证（IID + 三基线） |
+| 领域种子 | 金融 / 医疗康养 / 边缘 / 工业 / 交通，以及 DP、CV、NLP、多语言、FedLLM、LoRA 异构等 |
+| pack_d | 自动应用联邦专用假设 / 实验设计 / 小样验证 Prompt |
+| 迭代实验 | 详情页 **FL 参考脚本模板** → 一键写入 `analysis_script`（优先 Dirichlet 划分与 baseline 对比脚本） |
+
+环境开关：`AISCI_FL_PACK_ENABLED=true`（默认开启）。重新生成资源：
+
+```bash
+cd backend
+python scripts/generate_fl_starter_pack.py
+pytest tests/test_fl_starter_pack.py -q
+```
+
+详细说明：[docs/FL_STARTER_PACK.md](./docs/FL_STARTER_PACK.md)、[docs/FL_EXPERIMENT_PARADIGMS.md](./docs/FL_EXPERIMENT_PARADIGMS.md)。
 
 ---
 
@@ -377,6 +399,7 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | **5** | 图表分层 + 文献自动入库 | 图表 VLM 抽取/复核、Zenodo/NCBI GEO 检索、文献库 ↔ Data Finder |
 | **6** | Feedback Hub + Catalog | 全局约束注入、Multimodal → 证据链、Data Catalog、Entity 对齐 |
 | **7** | 溯源 + 审计链 | 假设溯源时间线 Tab、LLM 深度假设修订、审计链 jsonl 导出、`data_citation_id` 追溯 |
+| **FL** | 联邦学习 Starter Pack | 内容注入（非多机 runtime）：seed facts、领域标签、**实验范式**（默认 Dirichlet + FedProx）、迭代实验一键套用脚本；见 [docs/FL_STARTER_PACK.md](./docs/FL_STARTER_PACK.md) |
 | **8** | 数据获取增强 | 外部数据源连接器、补充材料/图表抽取、Release Gate、分阶段集成测试（见 [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md)） |
 | **9** | Prompt 范式预设 | pack_a/b/c/d 多套预设、项目内 Prompt 管理 Tab、一键应用 API |
 
@@ -390,8 +413,8 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | POST | `/api/v1/feedback/submit` | Feedback Hub 提交全局约束（实验类重跑目标为 `iterative_experiment`） |
 | GET/POST | `/api/v1/pingfenbiao/*` | 预测服务 BFF 代理（转发至本机 :8765） |
 | * | `/api/v1/iterative-experiments/*` | 项目级迭代实验 CRUD / 运行 / 报告勾选 |
-
-> `datasets` / `data_finder` / `research` / `chat` HTTP 面已下线（服务层可能仍被 Pipeline 内部调用）。单阶段 Agent POST（如 `/agents/problem-understanding`）仍可调用，但默认不出现在 OpenAPI schema。
+| GET | `/api/v1/projects/{id}/fl-pack/scripts` | 列出 FL 参考脚本模板（按档位排序） |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 一键将 FL 模板写入 `analysis_script` |
 
 审计链持久化路径：`storage/audit/{run_id}.jsonl`。
 
@@ -511,17 +534,17 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 项目：AISci — Qwen 多智能体科研系统（d:\Workplace\AISci）
 栈：FastAPI + React/Vite/Tailwind + FAISS + SQLite
 Pipeline 7 阶段：问题理解→文献→知识缺口→假设→评估→迭代实验→报告
-ed/sv：优先 iterative_experiment 嵌套，resolve_ed_sv_from_results 兼容旧键
 闭环：Discovery 迭代 / HITL / CQS / 审计链 storage/audit/{run_id}.jsonl
 前端：/ 首页 | /predict 预测(BFF) | /documents 文献 | /reports 报告 | /projects/:id 工作台
 关键路径：pipeline_service.py | iterative_experiment_service.py | pingfenbiao_proxy.py | predict/
 原则：最小改动、中文回复、禁止虚构引用、不擅自 git commit
+联邦：project_mode=federated_learning → fl_pack v1.4+ / pack_d / 默认 standard_non_iid；docs/FL_STARTER_PACK.md
 任务：（在此填写）
 ```
 
 **Pencil 设计任务**（需安装 Pencil 扩展并连接 MCP）：设计稿 `designs/aisci-ui.pen`，须用 Pencil MCP 读写（勿直接 Read `.pen` 文件）；风格对齐深色 Tailwind UI（参考 `Home.tsx`、工作流相关组件）。
 
-**建议 Agent 按任务选读**：`README.md` → `backend/DATABASE.md` → `docs/DATA_ACQUISITION.md` → 相关组件/服务源码。
+**建议 Agent 按任务选读**：`README.md` → `backend/DATABASE.md` → `docs/DATA_ACQUISITION.md` / `docs/FL_STARTER_PACK.md` → 相关组件/服务源码。
 
 ---
 
@@ -530,9 +553,11 @@ ed/sv：优先 iterative_experiment 嵌套，resolve_ed_sv_from_results 兼容�
 | 文档 | 说明 |
 |------|------|
 | [QUICKSTART.md](./QUICKSTART.md) | 5 分钟快速入门 |
-| [backend/README.md](./backend/README.md) | 后端架构、API、测试 |
+| [backend/README.md](./backend/README.md) | 后端架构、API、测试、联邦 Pack |
 | [backend/DATABASE.md](./backend/DATABASE.md) | 数据库表结构与闭环 metadata |
 | [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md) | 领域数据集发现（默认）与完整数据整合（可选） |
+| [docs/FL_STARTER_PACK.md](./docs/FL_STARTER_PACK.md) | 联邦学习资源包：领域、挂载、重新生成 |
+| [docs/FL_EXPERIMENT_PARADIGMS.md](./docs/FL_EXPERIMENT_PARADIGMS.md) | FL 实验范式（标准 Non-IID / 快速 IID）与脚本注入 |
 | [backend/prompts/README.md](./backend/prompts/README.md) | Prompt 模板与范式预设索引 |
 | [backend/tests/README.md](./backend/tests/README.md) | pytest 与 batch 回归 |
 | [frontend/README.md](./frontend/README.md) | 前端组件与页面 |

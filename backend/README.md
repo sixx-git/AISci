@@ -1,54 +1,34 @@
 # AI Scientist Backend
 
-基于 FastAPI 的后端服务，包含 8 个智能体（Agent）、40+ 科研 Skill、8 阶段 Pipeline，以及科研闭环（Discovery 迭代 / CQS / HITL / 审计链）。
+基于 FastAPI 的后端服务：多智能体 Pipeline、科研 Skill、Discovery/CQS/HITL/审计链，以及联邦学习 Starter Pack（内容注入）。
+
+主链路为 **7 阶段**（含 `iterative_experiment`，取代独立实验设计 + 小样验证 HTTP 面）。
 
 ## 目录结构
 
 ```
 backend/
 ├── app/
-│   ├── api/              # API 路由层
-│   │   ├── projects.py   # 项目管理
-│   │   ├── agents.py     # 智能体 + 假设证据链 + 溯源时间线
-│   │   ├── pipeline.py   # Pipeline 运行 + 审计链导出
-│   │   ├── data_finder.py # 多源数据查找 + citation 追溯 + Bundle 下载
-│   │   ├── feedback.py   # Feedback Hub 全局约束
-│   │   ├── human_loop.py # HITL Gate 暂停/恢复
-│   │   ├── datasets.py   # 数据集 + Data Catalog
-│   │   ├── multimodal.py # 多模态资产
-│   │   ├── kg.py         # 知识图谱
-│   │   ├── literature.py, documents.py, reports.py, chat.py
-│   │   └── v1.py         # v1 路由整合
-│   ├── agents/           # 8 个智能体
-│   ├── core/             # 核心模块
-│   │   ├── config.py, database.py
-│   │   ├── quality_scoring.py      # CQS 综合质量分
-│   │   ├── iterative_science.py    # verifiable spec、证据 Diff
-│   │   ├── closed_loop_decisions.py # 闭环决策记录
-│   │   ├── iteration_control.py    # CQS 停滞检测
-│   │   ├── hypothesis_provenance.py # 假设溯源时间线
-│   │   ├── data_citation.py        # data_citation_id 追溯
-│   │   ├── data_cleaning.py        # CSV 清洗
-│   │   ├── execution_metadata.py   # execution_tier 标注
-│   │   └── plan_executability.py   # 实验计划可执行性 Gate
-│   ├── models/           # SQLAlchemy 数据模型
-│   ├── schemas/          # Pydantic 请求/响应 Schema
-│   ├── services/         # 业务逻辑层
-│   │   ├── pipeline_service.py          # Pipeline 编排 + 闭环事件
-│   │   ├── evidence_reasoning_service.py # 证据链迭代
-│   │   ├── data_finder_service.py       # Data Finder 全流程
-│   │   ├── feedback_hub_service.py      # Feedback Hub
-│   │   ├── audit_chain_service.py       # 审计链 jsonl 持久化
-│   │   ├── data_catalog_service.py      # Data Catalog
-│   │   ├── literature_corpus_service.py # 文献自动入库
-│   │   ├── closed_loop_quality_service.py
-│   │   └── qwen_client.py               # Qwen 客户端
-│   ├── skills/           # 科研 Skill 工具层（见下方分类）
-│   └── main.py           # FastAPI 入口
-├── prompts/              # Markdown Prompt 模板
-├── tests/                # pytest 测试（含 test_batch1–7 回归）
-├── data/                 # arXiv fallback 数据
-└── storage/              # 运行时数据（Zvec 向量库、报告、上传文件）
+│   ├── api/              # API 路由（由 v1.py 汇总挂载）
+│   │   ├── projects.py, literature.py, documents.py, agents.py
+│   │   ├── pipeline.py, iterative_experiments.py, reports.py
+│   │   ├── feedback.py, human_loop.py, prompts.py, skills.py
+│   │   ├── pingfenbiao_proxy.py, science_iteration.py
+│   │   ├── vector_search.py, diagnose.py, llm_config.py
+│   │   ├── research.py, chat.py   # 保留文件，默认未挂入对外 OpenAPI 主面
+│   │   └── v1.py
+│   ├── agents/           # 问题理解 / 文献 / 缺口 / 假设生成与评审 / 报告等
+│   ├── core/             # 配置、CQS、verifiable spec、溯源、可执行性 Gate 等
+│   ├── models/ / schemas/
+│   ├── services/         # pipeline、iterative_experiment、fl_pack、evidence、feedback…
+│   ├── integrations/     # shaxiang 桥接等
+│   ├── skills/           # 科研 Skill（见下方）
+│   └── main.py
+├── prompts/              # 阶段 Prompt + presets/（见 prompts/README.md）
+├── scripts/              # generate_fl_starter_pack.py、generate_prompt_presets.py 等
+├── tests/                # pytest（含 test_batch*、test_fl_starter_pack）
+├── data/                 # DB / arXiv fallback / reference/fl（FL Pack）
+└── storage/              # 运行时向量、上传、报告等
 ```
 
 ## Skill 分类
@@ -56,32 +36,36 @@ backend/
 | 目录 | 说明 |
 |------|------|
 | `skills/literature/` | 论文搜索、引用验证、PDF 证据提取 |
-| `skills/data_finder/` | PDF 表格抽取、Schema 对齐、Merge、Entity 对齐、外部数据集搜索 |
-| `skills/evidence_reasoning/` | 证据检索、立场分类、假设修订（LLM + fact 白名单）、证据链构建 |
-| `skills/multimodal/` | VLM 图像理解、音频转写、多模态 evidence 构建 |
-| `skills/knowledge_graph/` | KG Schema、关系抽取、图推理、增量更新 |
+| `skills/data_finder/` | PDF 表格抽取、Schema 对齐、Merge、Entity 对齐（服务层；对外 Data Finder HTTP 已下线） |
+| `skills/evidence_reasoning/` | 证据检索、假设修订、证据链构建 |
+| `skills/multimodal/` | VLM 图像理解、多模态 evidence |
 | `skills/data/` | 数据清洗、统计描述、数据集发现 |
-| `data/reference/fl/` | **联邦学习 Starter Pack**（预解析文献、数据集元数据、本地 pilot 脚本；旧 `federated_experiment/` 技能栈已退役） |
 | `skills/report/` | 科学图表、VLM 图表评审、报告质量检查 |
 | `skills/reasoning/` | 新颖性审查、问题对齐、Ideation |
 | `skills/experiment/` | 实验合理性检查 |
+| `skills/counterfactual/` | 反事实预演（L0） |
+| `skills/academic/` / `chinese_writing/` / `modeling/` | 学术写作与建模辅助 |
+| `data/reference/fl/` | **联邦学习 Starter Pack v1.4+**（非 skill；非多机 runtime） |
+
+> 已移除：`skills/federated_experiment/`、`skills/knowledge_graph/` 目录。旧联邦能力改为 Pack 内容注入。
 
 ## 闭环相关 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/v1/pipeline/run` | 启动 Pipeline |
-| GET | `/api/v1/pipeline/audit-export/{run_id}` | 导出审计链（events / decisions / quality_trend / jsonl） |
+| GET | `/api/v1/pipeline/audit-export/{run_id}` | 导出审计链 |
 | POST | `/api/v1/pipeline/rerun-from-stage` | 从指定阶段重跑 |
-| GET | `/api/v1/agents/hypotheses/{id}/evidence-chain` | 获取结构化证据链 |
+| GET | `/api/v1/agents/hypotheses/{id}/evidence-chain` | 结构化证据链 |
 | POST | `/api/v1/agents/hypotheses/{id}/evidence-chain/iterate` | 证据链迭代修正 |
 | GET | `/api/v1/agents/hypotheses/{id}/provenance-timeline` | 假设溯源时间线 |
-| POST | `/api/v1/data-finder/search` | Data Finder 搜索 |
-| POST | `/api/v1/data-finder/merge` | 合并表格 + provenance + 清洗 + Bundle |
-| GET | `/api/v1/data-finder/citation/{citation_id}` | 追溯 data_citation |
-| GET | `/api/v1/data-finder/bundle/download` | 下载 Analysis-Ready Bundle |
-| POST | `/api/v1/feedback/submit` | 提交 Feedback Hub 约束 |
-| GET | `/api/v1/datasets/catalog` | 项目 Data Catalog |
+| * | `/api/v1/iterative-experiments/*` | 迭代实验 CRUD / 运行 |
+| GET | `/api/v1/projects/{id}/fl-pack/scripts` | FL 参考脚本模板 |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 一键写入 analysis_script |
+| POST | `/api/v1/feedback/submit` | Feedback Hub 约束 |
+| GET/POST | `/api/v1/pingfenbiao/*` | 预测服务 BFF |
+
+> `datasets` / `data_finder` / `kg` / `multimodal` 独立路由文件已删除；相关逻辑若仍存在，多在 `services/` 与 Pipeline 内部调用。
 
 ## 持久化目录
 
@@ -91,8 +75,8 @@ backend/
 |------|------|
 | `storage/audit/{run_id}.jsonl` | Pipeline 闭环审计链 |
 | `storage/evidence_chains/{project_id}/` | 假设证据链 JSON |
-| `storage/catalog/{project_id}/` | Data Catalog |
-| `storage/data_finder/{project_id}/` | Data Finder 结果与 Bundle |
+| `storage/catalog/{project_id}/` | Data Catalog（若使用） |
+| `storage/data_finder/{project_id}/` | Data Finder 结果与 Bundle（若使用） |
 
 详见 [storage/README.md](../storage/README.md)。
 
@@ -134,6 +118,7 @@ VECTOR_BACKEND=zvec
 HF_ENDPOINT=https://hf-mirror.com
 EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 UPLOAD_DIR=./storage/uploads
+AISCI_FL_PACK_ENABLED=true
 ```
 
 ### 4. 启动服务
@@ -149,7 +134,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Pipeline
 
-8 个阶段顺序执行，每个阶段记录 input/output、Prompt、模型参数、Token 用量与耗时。Discovery 模式下支持多轮迭代，并写入：
+阶段顺序执行，每个阶段记录 input/output、Prompt、模型参数、Token 用量与耗时。Discovery 模式下支持多轮迭代，并写入：
 
 - `extra_metadata.quality_trend` — CQS 质量趋势
 - `extra_metadata.closed_loop_events` — 闭环事件
@@ -164,6 +149,9 @@ pytest tests/ -v
 
 # A 级优化批次回归
 pytest tests/test_batch*.py -v
+
+# 联邦 Pack
+pytest tests/test_fl_starter_pack.py -q
 ```
 
 | 测试文件 | 覆盖 |
@@ -172,11 +160,40 @@ pytest tests/test_batch*.py -v
 | `test_batch2_verifiable_spec.py` | verifiable spec、证据 Diff |
 | `test_batch3_data_finder.py` | 清洗、Coverage、Bundle |
 | `test_batch4_closed_loop.py` | Decision Log、停滞停止、因果链 |
-| `test_batch5_literature_figures.py` | 图表抽取、文献入库、live API |
+| `test_batch5_literature_figures.py` | 图表抽取、文献入库 |
 | `test_batch6_feedback_catalog.py` | Feedback Hub、Catalog、Entity 对齐 |
 | `test_batch7_provenance_audit.py` | 溯源时间线、审计链、citation 追溯 |
+| `test_fl_starter_pack.py` | FL Pack 挂载、领域过滤、标准 Non-IID、Dirichlet/baseline 脚本 |
 
 详见 [tests/README.md](./tests/README.md)。
+
+## 联邦学习 Starter Pack
+
+定位：**内容注入**（文献种子 / 数据集元数据 / 实验范式 / 单机 pilot），**不是** Flower/FATE 多机部署。
+
+| 路径 | 说明 |
+|------|------|
+| `data/reference/fl/` | Pack 根目录（manifest v1.4+） |
+| `data/reference/fl/experiment_paradigms/` | 默认档位 `standard_non_iid`（Dirichlet + FedProx） |
+| `data/reference/fl/scripts/` | 含 `hfl_dirichlet_partition.py`、`hfl_baseline_compare_pilot.py` |
+| `app/services/fl_pack_service.py` | 加载、挂载、`experiment_paradigm_context` |
+| `prompts/presets/pack_d/` | 联邦专用三阶段 Prompt |
+
+**使用方式**
+
+1. 前端创建项目 → 模式「联邦学习」→ 实验档位默认「标准 Non-IID」
+2. 系统写入 `project.config.fl_pack` 并自动应用 pack_d
+3. 迭代实验详情 → **FL 参考脚本模板** → 一键写入 `analysis_script`
+
+```bash
+# 重新生成 Pack
+python scripts/generate_fl_starter_pack.py
+
+# 摘要
+python -c "from app.services.fl_pack_service import get_fl_pack_service; print(get_fl_pack_service().summary())"
+```
+
+文档：[FL_STARTER_PACK.md](../docs/FL_STARTER_PACK.md)、[FL_EXPERIMENT_PARADIGMS.md](../docs/FL_EXPERIMENT_PARADIGMS.md)。
 
 ## 更多信息
 

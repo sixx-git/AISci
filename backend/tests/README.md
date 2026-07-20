@@ -49,10 +49,12 @@ pytest tests/ --cov=app --cov-report=html
 
 ### 其他专项测试
 
+- `test_fl_starter_pack.py` — FL Pack 挂载、领域、标准 Non-IID、Dirichlet/baseline 脚本
 - `test_closed_loop_quality.py` — 闭环质量验收
 - `test_hypothesis_tree.py` — 假设树剪枝
 - `test_ensemble_review.py` — 集成评审
 - `test_validation_feedback.py` — 验证反馈回灌
+- `test_prompt_presets.py` — Prompt 范式预设 catalog / pack_d
 
 ## Mock 测试说明
 
