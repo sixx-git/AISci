@@ -1,0 +1,45 @@
+{
+  "metrics": {
+    "hfl_classification": {
+      "id": "hfl_classification",
+      "performance": [
+        "global_accuracy",
+        "loss"
+      ],
+      "efficiency": [
+        "communication_rounds",
+        "communication_cost_mb"
+      ],
+      "robustness": [
+        "client_drift",
+        "non_iid_degree"
+      ],
+      "partition_meta": [
+        "partition_method",
+        "alpha",
+        "num_clients",
+        "participation_rate"
+      ],
+      "stability_note": "建议 ≥3 个随机种子报告 mean±std"
+    },
+    "vfl_tabular": {
+      "id": "vfl_tabular",
+      "performance": [
+        "auc",
+        "f1_score",
+        "accuracy"
+      ],
+      "efficiency": [
+        "aligned_sample_rate",
+        "communication_cost_mb"
+      ],
+      "robustness": [
+        "alignment_success_rate"
+      ],
+      "partition_meta": [
+        "alignment_key",
+        "num_parties"
+      ]
+    }
+  }
+}

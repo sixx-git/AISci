@@ -3652,7 +3652,48 @@ class PipelineService:
                 "warnings": [f"获取数据上下文失败: {str(e)}"],
             }
 
-        return slim_data_context(data_context)
+        data_context = slim_data_context(data_context)
+        # FL 模式：注入实验范式上下文（不改 Pipeline 阶段）
+        try:
+            from app.models.project import Project
+            from app.services.fl_pack_service import (
+                FlPackService,
+                fl_pack_enabled,
+                get_fl_pack_service,
+            )
+
+            if fl_pack_enabled():
+                proj = self.db.query(Project).filter(Project.id == project_id).first()
+                if proj and getattr(proj, "project_mode", None) == "federated_learning":
+                    cfg = proj.config if isinstance(proj.config, dict) else {}
+                    pack = cfg.get("fl_pack") or {}
+                    paradigm = FlPackService.get_experiment_paradigm_context_from_config(cfg)
+                    if not paradigm:
+                        paradigm = get_fl_pack_service().build_experiment_paradigm_context(
+                            fl_setting=FlPackService.get_fl_setting_from_config(cfg),
+                            profile_id=FlPackService.get_experiment_profile_id_from_config(cfg),
+                        )
+                    data_context = {
+                        **data_context,
+                        "fl_experiment_profile": FlPackService.get_experiment_profile_id_from_config(
+                            cfg
+                        ),
+                        "fl_experiment_context": paradigm,
+                        "fl_pack_checklists_excerpt": pack.get("checklists_excerpt") or "",
+                        "fl_pack_failure_cases": pack.get("failure_cases") or [],
+                    }
+                    if not data_context.get("fl_context"):
+                        setting = FlPackService.get_fl_setting_from_config(cfg)
+                        data_context["fl_context"] = {
+                            "fl_setting": (
+                                "vertical_fl" if setting == "vfl" else "horizontal_fl"
+                            ),
+                            "project_mode": "federated_learning",
+                            "experiment_profile": data_context["fl_experiment_profile"],
+                        }
+        except Exception as exc:
+            logger.debug("注入 FL 实验范式上下文失败: %s", exc)
+        return data_context
 
     @staticmethod
     def _run_alignment_skill(research_question: str, hypotheses: List[Dict]) -> Dict[str, Any]:

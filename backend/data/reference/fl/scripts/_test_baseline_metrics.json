@@ -1,0 +1,67 @@
+{
+  "primary_metric": 0.78,
+  "global_accuracy": 0.78,
+  "methods": {
+    "local_only": {
+      "global_accuracy": 0.7366666666666667
+    },
+    "centralized": {
+      "global_accuracy": 0.965
+    },
+    "FedAvg": {
+      "global_accuracy": 0.885,
+      "communication_rounds": 3,
+      "history": [
+        {
+          "round": 1,
+          "global_accuracy": 0.625
+        },
+        {
+          "round": 2,
+          "global_accuracy": 0.88
+        },
+        {
+          "round": 3,
+          "global_accuracy": 0.885
+        }
+      ]
+    },
+    "FedProx": {
+      "global_accuracy": 0.78,
+      "communication_rounds": 3,
+      "mu": 0.01,
+      "history": [
+        {
+          "round": 1,
+          "global_accuracy": 0.53
+        },
+        {
+          "round": 2,
+          "global_accuracy": 0.53
+        },
+        {
+          "round": 3,
+          "global_accuracy": 0.78
+        }
+      ]
+    }
+  },
+  "partition_method": "dirichlet",
+  "non_iid_type": "dirichlet",
+  "non_iid_degree": 10.0,
+  "alpha": 0.1,
+  "num_clients": 5,
+  "participation_rate": 0.2,
+  "local_epochs": 5,
+  "communication_rounds": 3,
+  "client_drift": 0.05068941625125059,
+  "fedprox_mu": 0.01,
+  "seed": 42,
+  "baselines": [
+    "local_only",
+    "centralized",
+    "FedAvg",
+    "FedProx"
+  ],
+  "note": "standard Non-IID baseline compare; local simulation only"
+}

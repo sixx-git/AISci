@@ -1,0 +1,105 @@
+{
+  "default_profile": "standard_non_iid",
+  "profiles": {
+    "standard_non_iid": {
+      "id": "standard_non_iid",
+      "label": "标准 Non-IID（Dirichlet + FedProx 对比）",
+      "is_default": true,
+      "setting": "hfl",
+      "partition": {
+        "id": "dirichlet_non_iid",
+        "method": "dirichlet",
+        "alpha": 0.1,
+        "paired_baseline_partition": "iid_uniform",
+        "num_clients": 20,
+        "script": "scripts/hfl_dirichlet_partition.py"
+      },
+      "baselines": {
+        "id": "hfl_noniid_ablation",
+        "required": [
+          "local_only",
+          "centralized",
+          "FedAvg",
+          "FedProx"
+        ],
+        "system_defaults": {
+          "num_clients": 20,
+          "participation_rate": 0.2,
+          "local_epochs": 5,
+          "batch_size": 32,
+          "rounds": 30,
+          "fedprox_mu": 0.01,
+          "seed": 42
+        },
+        "compare_script": "scripts/hfl_baseline_compare_pilot.py"
+      },
+      "metrics": {
+        "id": "hfl_classification",
+        "required": [
+          "global_accuracy",
+          "communication_rounds",
+          "non_iid_type",
+          "non_iid_degree",
+          "client_drift",
+          "partition_method"
+        ],
+        "optional": [
+          "local_accuracy",
+          "communication_cost_mb",
+          "participation_rate"
+        ],
+        "stability": "mean_std_over_seeds_recommended"
+      },
+      "report_must_include": [
+        "partition_method=dirichlet 与 alpha",
+        "IID 对照或说明为何省略",
+        "Local / Centralized / FedAvg / FedProx 对比",
+        "communication_rounds 与 client_drift",
+        "声明单机模拟、非多机部署"
+      ]
+    },
+    "quick_iid": {
+      "id": "quick_iid",
+      "label": "快速验证（IID + 三基线）",
+      "is_default": false,
+      "setting": "hfl",
+      "partition": {
+        "id": "iid_uniform",
+        "method": "iid",
+        "alpha": null,
+        "num_clients": 10,
+        "script": "scripts/hfl_non_iid_partition.py"
+      },
+      "baselines": {
+        "id": "hfl_quick",
+        "required": [
+          "local_only",
+          "centralized",
+          "FedAvg"
+        ],
+        "system_defaults": {
+          "num_clients": 10,
+          "participation_rate": 1.0,
+          "local_epochs": 3,
+          "batch_size": 32,
+          "rounds": 10,
+          "seed": 42
+        },
+        "compare_script": "scripts/hfl_baseline_compare_pilot.py"
+      },
+      "metrics": {
+        "id": "hfl_classification_lite",
+        "required": [
+          "global_accuracy",
+          "communication_rounds",
+          "partition_method"
+        ]
+      },
+      "report_must_include": [
+        "IID 划分",
+        "三基线对比",
+        "通信轮次"
+      ]
+    }
+  }
+}

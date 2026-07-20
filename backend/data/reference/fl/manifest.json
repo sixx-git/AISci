@@ -1,11 +1,12 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "name": "fl_starter_pack",
   "settings": [
     "hfl",
     "vfl",
     "both"
   ],
+  "default_experiment_profile": "standard_non_iid",
   "domains": [
     "fl_core",
     "finance_risk",
@@ -23,7 +24,7 @@
     "llm_ft",
     "fl_lora_hetero"
   ],
-  "description": "FL starter pack v1.3: + multilingual FL + heterogeneous client LoRA",
+  "description": "FL starter pack v1.4: experiment paradigms (default standard Non-IID Dirichlet+FedProx)",
   "runtime": "local_simulation_only",
   "papers": [
     "papers/mcmahan2017fedavg.facts.json",
@@ -75,6 +76,12 @@
     "datasets/synthetic_multilingual_shards.yaml",
     "datasets/synthetic_hetero_lora_configs.yaml"
   ],
+  "experiment_paradigms": {
+    "profiles": "experiment_paradigms/profiles.json",
+    "partitions": "experiment_paradigms/partitions.json",
+    "baselines": "experiment_paradigms/baselines.json",
+    "metrics": "experiment_paradigms/metrics.json"
+  },
   "scripts": [
     {
       "path": "scripts/hfl_fedavg_pilot.py",
@@ -84,7 +91,19 @@
     {
       "path": "scripts/hfl_non_iid_partition.py",
       "setting": "hfl",
-      "recommended_when": "HFL + Non-IID partition"
+      "recommended_when": "HFL + label-skew Non-IID partition"
+    },
+    {
+      "path": "scripts/hfl_dirichlet_partition.py",
+      "setting": "hfl",
+      "recommended_when": "标准 Non-IID：Dirichlet/pathological 划分",
+      "profile": "standard_non_iid"
+    },
+    {
+      "path": "scripts/hfl_baseline_compare_pilot.py",
+      "setting": "hfl",
+      "recommended_when": "标准 Non-IID：Local/Centralized/FedAvg/FedProx 对比",
+      "profile": "standard_non_iid"
     },
     {
       "path": "scripts/vfl_aligned_logistic_pilot.py",
@@ -130,6 +149,13 @@
       "schema",
       "pilot_subset",
       "upload_requirement"
+    ],
+    "experiment_profile": [
+      "id",
+      "partition",
+      "baselines",
+      "metrics",
+      "report_must_include"
     ]
   }
 }

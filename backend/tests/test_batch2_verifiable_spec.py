@@ -50,6 +50,8 @@ class TestBatch2VerifiableSpec(unittest.TestCase):
             fl_context={"fl_setting": "horizontal_fl"},
         )
         self.assertEqual(spec.get("fl_setting"), "horizontal_fl")
+        self.assertEqual(spec.get("mode"), "federated_learning")
+        self.assertIn("FedAvg", str(spec.get("comparison_baselines") or []))
 
     def test_evaluate_validation_sandbox(self):
         spec = build_general_verifiable_hypothesis_spec("H", {"supporting_fact_ids": ["f1"]})

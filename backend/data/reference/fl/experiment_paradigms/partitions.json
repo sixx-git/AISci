@@ -1,0 +1,83 @@
+{
+  "partitions": {
+    "iid_uniform": {
+      "id": "iid_uniform",
+      "name": "IID 均匀划分",
+      "control_variable": "data_heterogeneity",
+      "description": "数据随机均匀打乱后分配，作为理想对照。",
+      "params": {},
+      "script": "scripts/hfl_non_iid_partition.py",
+      "metrics_keys": [
+        "partition_method",
+        "global_accuracy"
+      ]
+    },
+    "dirichlet_non_iid": {
+      "id": "dirichlet_non_iid",
+      "name": "Dirichlet Non-IID",
+      "control_variable": "data_heterogeneity",
+      "description": "用 Dirichlet(α) 控制类别偏斜；α 越小越 Non-IID。默认 α=0.1。",
+      "params": {
+        "alpha": [
+          0.1,
+          0.5,
+          1.0
+        ]
+      },
+      "script": "scripts/hfl_dirichlet_partition.py",
+      "metrics_keys": [
+        "partition_method",
+        "non_iid_degree",
+        "alpha",
+        "client_drift"
+      ],
+      "default_for_profile": "standard_non_iid"
+    },
+    "pathological_k_classes": {
+      "id": "pathological_k_classes",
+      "name": "Pathological Non-IID（每客户端 K 类）",
+      "control_variable": "data_heterogeneity",
+      "description": "每客户端仅少量类别，极端异构。",
+      "params": {
+        "classes_per_client": 2
+      },
+      "script": "scripts/hfl_dirichlet_partition.py",
+      "metrics_keys": [
+        "partition_method",
+        "classes_per_client",
+        "global_accuracy"
+      ]
+    },
+    "quantity_skew": {
+      "id": "quantity_skew",
+      "name": "数量偏斜",
+      "control_variable": "sample_size_heterogeneity",
+      "description": "客户端样本量差异大（Dirichlet 或长尾）。",
+      "params": {
+        "quantity_alpha": 0.5
+      },
+      "script": "scripts/hfl_dirichlet_partition.py",
+      "metrics_keys": [
+        "partition_method",
+        "sample_size_cv"
+      ]
+    },
+    "natural_user_id": {
+      "id": "natural_user_id",
+      "name": "真实用户天然 Non-IID",
+      "control_variable": "natural_heterogeneity",
+      "description": "FEMNIST/Shakespeare 等按用户/角色划分。",
+      "params": {},
+      "datasets": [
+        "leaf_femnist",
+        "leaf_shakespeare",
+        "leaf_shakespeare_nlp"
+      ],
+      "metrics_keys": [
+        "partition_method",
+        "num_clients",
+        "global_accuracy"
+      ]
+    }
+  }
+}

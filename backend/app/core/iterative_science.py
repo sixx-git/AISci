@@ -173,8 +173,35 @@ def build_verifiable_hypothesis_spec_for_mode(
     fl_context: Optional[Dict[str, Any]] = None,
     experiment_design: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """按项目模式构建 verifiable spec（仅通用模式）。"""
-    _ = (project_mode, plan, fl_context)
+    """按项目模式构建 verifiable spec。"""
+    mode = (project_mode or "general").strip().lower()
+    if mode in ("federated_learning", "federated", "fl"):
+        plan_blob = dict(plan or {})
+        ed = experiment_design or {}
+        if not plan_blob.get("baselines") and ed.get("baselines"):
+            plan_blob["baselines"] = ed.get("baselines")
+        if not plan_blob.get("metrics") and ed.get("metrics"):
+            raw = ed.get("metrics")
+            plan_blob["metrics"] = (
+                [m.strip() for m in str(raw).split(",") if m.strip()]
+                if not isinstance(raw, list)
+                else raw
+            )
+        # 标准 Non-IID 档位默认基线
+        if not plan_blob.get("baselines"):
+            plan_blob["baselines"] = ["local_only", "centralized", "FedAvg", "FedProx"]
+        fl_ctx = dict(fl_context or {})
+        if not fl_ctx.get("fl_setting"):
+            fl_ctx["fl_setting"] = "horizontal_fl"
+        spec = build_verifiable_hypothesis_spec(hypothesis, plan_blob, fl_ctx)
+        spec["mode"] = "federated_learning"
+        spec["experiment_profile"] = fl_ctx.get("experiment_profile") or "standard_non_iid"
+        if "partition_method" not in str(spec.get("success_criteria")):
+            spec["success_criteria"] = list(spec.get("success_criteria") or []) + [
+                "在 Dirichlet Non-IID（或声明的划分）下报告 FedAvg vs FedProx",
+                "metrics 含 communication_rounds 与 partition_method",
+            ]
+        return spec
     return build_general_verifiable_hypothesis_spec(
         hypothesis, hypo_meta, experiment_design
     )
@@ -198,6 +225,8 @@ def attach_verifiable_specs_to_hypotheses(
             h.get("hypothesis", ""),
             project_mode=project_mode,
             hypo_meta=h,
+            plan=experiment_design,
+            fl_context=fl_context,
             experiment_design=experiment_design,
         )
         h["verifiable_spec"] = spec

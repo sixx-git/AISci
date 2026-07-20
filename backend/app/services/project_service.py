@@ -55,8 +55,15 @@ class ProjectService:
                     if svc.available():
                         fl_setting = getattr(data, "fl_setting", None) or "hfl"
                         fl_domains = getattr(data, "fl_domains", None)
+                        fl_profile = (
+                            getattr(data, "fl_experiment_profile", None)
+                            or "standard_non_iid"
+                        )
                         config = svc.mount_to_project_config(
-                            config, fl_setting=fl_setting, domains=fl_domains
+                            config,
+                            fl_setting=fl_setting,
+                            domains=fl_domains,
+                            profile_id=fl_profile,
                         )
                         # 研究问题模板兜底
                         if not data.research_question:

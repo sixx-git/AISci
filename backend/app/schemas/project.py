@@ -88,6 +88,12 @@ class ProjectCreate(BaseModel):
             "llm_ft, fl_lora_hetero, fl_blockchain, fl_rl, fl_continual；fl_core 始终保留"
         ),
     )
+    fl_experiment_profile: Optional[str] = Field(
+        None,
+        description=(
+            "实验范式档位: standard_non_iid（默认，Dirichlet+FedProx）| quick_iid"
+        ),
+    )
 
 
 class ProjectUpdate(BaseModel):

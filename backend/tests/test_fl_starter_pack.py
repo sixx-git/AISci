@@ -112,3 +112,79 @@ def test_mount_respects_fl_setting():
     for f in cfg["fl_pack"]["seed_facts"]:
         assert f.get("content")
         assert f.get("source_chunk_id")
+
+
+def test_standard_non_iid_experiment_profile():
+    svc = get_fl_pack_service()
+    profile = svc.get_experiment_profile("standard_non_iid")
+    assert profile.get("id") == "standard_non_iid"
+    assert (profile.get("partition") or {}).get("method") == "dirichlet"
+    assert "FedProx" in ((profile.get("baselines") or {}).get("required") or [])
+    ctx = svc.build_experiment_paradigm_context(fl_setting="hfl", profile_id="standard_non_iid")
+    assert "dirichlet" in ctx.lower() or "Dirichlet" in ctx
+    assert "FedProx" in ctx
+    cfg = svc.mount_to_project_config({}, fl_setting="hfl", profile_id="standard_non_iid")
+    assert cfg["fl_experiment_profile"] == "standard_non_iid"
+    assert cfg["fl_pack"].get("experiment_paradigm_context")
+    templates = svc.list_script_templates(fl_setting="hfl", limit=3, profile_id="standard_non_iid")
+    ids = " ".join(str(t.get("id") or "") for t in templates)
+    assert "dirichlet" in ids or "baseline_compare" in ids
+
+
+def test_dirichlet_and_baseline_scripts_exist_and_run():
+    import json
+    import subprocess
+    import sys
+
+    root = get_fl_pack_service().root / "scripts"
+    dirichlet = root / "hfl_dirichlet_partition.py"
+    compare = root / "hfl_baseline_compare_pilot.py"
+    assert dirichlet.is_file() and compare.is_file()
+    csv_path = root / "_test_dirichlet.csv"
+    metrics_path = root / "_test_dirichlet_metrics.json"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(dirichlet),
+            "--alpha",
+            "0.1",
+            "--clients",
+            "5",
+            "--rows",
+            "200",
+            "--out_csv",
+            str(csv_path),
+            "--out_metrics",
+            str(metrics_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    data = json.loads(metrics_path.read_text(encoding="utf-8"))
+    assert data.get("partition_method") == "dirichlet"
+    compare_out = root / "_test_baseline_metrics.json"
+    proc2 = subprocess.run(
+        [
+            sys.executable,
+            str(compare),
+            "--clients",
+            "5",
+            "--rows",
+            "200",
+            "--rounds",
+            "3",
+            "--out",
+            str(compare_out),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=90,
+    )
+    assert proc2.returncode == 0, proc2.stderr
+    m2 = json.loads(compare_out.read_text(encoding="utf-8"))
+    assert "FedProx" in (m2.get("baselines") or [])
+    assert "methods" in m2

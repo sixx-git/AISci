@@ -106,8 +106,17 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
               <div className="text-xs text-bp-muted mt-1">子场景</div>
             </div>
           </div>
+          <p className="text-xs text-bp-muted mt-3">
+            实验档位：
+            {String(
+              project.config?.fl_pack?.experiment_profile?.label
+                || project.config?.fl_experiment_profile
+                || fl?.experiment_profile_label
+                || 'standard_non_iid',
+            )}
+          </p>
           {project.config?.fl_pack_d_applied && (
-            <p className="text-xs text-bp-muted mt-3">
+            <p className="text-xs text-bp-muted mt-1">
               已自动应用 pack_d（{project.config.fl_pack_d_applied.count ?? 0} 个阶段）
             </p>
           )}

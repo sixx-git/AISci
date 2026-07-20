@@ -216,6 +216,7 @@ class IterativeExperimentService:
 
             if fl_pack_enabled():
                 setting = "both"
+                profile_id = None
                 if SessionLocal is None:
                     init_db()
                 db = SessionLocal()
@@ -223,10 +224,16 @@ class IterativeExperimentService:
                     proj = db.query(Project).filter(Project.id == project_id).first()
                     if proj and isinstance(proj.config, dict):
                         setting = FlPackService.get_fl_setting_from_config(proj.config)
+                        profile_id = FlPackService.get_experiment_profile_id_from_config(
+                            proj.config
+                        )
                 finally:
                     db.close()
-                ctx = get_fl_pack_service().scripts_context_for_llm(fl_setting=setting)
-                pack_hints = get_fl_pack_service().dataset_guidance_hints(fl_setting=setting)[:5]
+                svc = get_fl_pack_service()
+                ctx = svc.scripts_context_for_llm(
+                    fl_setting=setting, profile_id=profile_id
+                )
+                pack_hints = svc.dataset_guidance_hints(fl_setting=setting)[:5]
                 hint_lines = [
                     f"- {h.get('name')}: {h.get('download_url')} ({h.get('description', '')[:80]})"
                     for h in pack_hints
@@ -369,6 +376,7 @@ class IterativeExperimentService:
 
                 if fl_pack_enabled():
                     setting = "both"
+                    profile_id = None
                     from app.core.database import SessionLocal, init_db
                     if SessionLocal is None:
                         init_db()
@@ -377,9 +385,14 @@ class IterativeExperimentService:
                         proj = db.query(Project).filter(Project.id == project_id).first()
                         if proj and isinstance(proj.config, dict):
                             setting = FlPackService.get_fl_setting_from_config(proj.config)
+                            profile_id = FlPackService.get_experiment_profile_id_from_config(
+                                proj.config
+                            )
                     finally:
                         db.close()
-                    fl_feedback = get_fl_pack_service().scripts_context_for_llm(fl_setting=setting)
+                    fl_feedback = get_fl_pack_service().scripts_context_for_llm(
+                        fl_setting=setting, profile_id=profile_id
+                    )
             except Exception:
                 fl_feedback = None
             projected = bridge.design_script(
@@ -403,6 +416,7 @@ class IterativeExperimentService:
         if not fl_pack_enabled():
             return []
         setting = "both"
+        profile_id = None
         if SessionLocal is None:
             init_db()
         db = SessionLocal()
@@ -410,14 +424,16 @@ class IterativeExperimentService:
             proj = db.query(Project).filter(Project.id == project_id).first()
             if proj and isinstance(proj.config, dict):
                 setting = FlPackService.get_fl_setting_from_config(proj.config)
-                # 优先用挂载时的 templates（已按 setting 裁剪）
+                profile_id = FlPackService.get_experiment_profile_id_from_config(proj.config)
                 pack = (proj.config.get("fl_pack") or {})
                 cached = pack.get("script_templates")
                 if isinstance(cached, list) and cached:
                     return cached[:3]
         finally:
             db.close()
-        return get_fl_pack_service().list_script_templates(fl_setting=setting, limit=3)
+        return get_fl_pack_service().list_script_templates(
+            fl_setting=setting, limit=3, profile_id=profile_id
+        )
 
     def apply_fl_script_template(
         self, project_id: str, experiment_id: str, script_id: str

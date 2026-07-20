@@ -15,6 +15,9 @@ export function CreateProject() {
   const [projectMode, setProjectMode] = useState<ProjectMode>('general');
   const [flSetting, setFlSetting] = useState<'hfl' | 'vfl'>('hfl');
   const [flDomains, setFlDomains] = useState<string[]>([]);
+  const [flExperimentProfile, setFlExperimentProfile] = useState<
+    'standard_non_iid' | 'quick_iid'
+  >('standard_non_iid');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -59,6 +62,7 @@ export function CreateProject() {
       };
       if (projectMode === 'federated_learning') {
         payload.fl_setting = flSetting;
+        payload.fl_experiment_profile = flExperimentProfile;
         // 空数组表示不过滤（挂载全部领域）
         if (flDomains.length > 0) {
           payload.fl_domains = flDomains;
@@ -155,6 +159,41 @@ export function CreateProject() {
               <p className="text-xs text-bp-muted">
                 将自动写入 FL Starter Pack 种子文献，并开放 pack_d 提示词预设。
               </p>
+              <div className="pt-2 space-y-2">
+                <p className="text-sm font-medium text-bp-text">实验范式档位</p>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-start gap-2 text-sm text-bp-text cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fl_experiment_profile"
+                      className="mt-1"
+                      checked={flExperimentProfile === 'standard_non_iid'}
+                      onChange={() => setFlExperimentProfile('standard_non_iid')}
+                    />
+                    <span>
+                      <span className="font-medium">标准 Non-IID（推荐）</span>
+                      <span className="block text-xs text-bp-muted">
+                        Dirichlet α=0.1 + Local / Centralized / FedAvg / FedProx 对比
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm text-bp-text cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fl_experiment_profile"
+                      className="mt-1"
+                      checked={flExperimentProfile === 'quick_iid'}
+                      onChange={() => setFlExperimentProfile('quick_iid')}
+                    />
+                    <span>
+                      <span className="font-medium">快速验证</span>
+                      <span className="block text-xs text-bp-muted">
+                        IID + Local / Centralized / FedAvg
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
               <div className="pt-2 space-y-3">
                 <div>
                   <p className="text-sm font-medium text-bp-text">领域种子（可选）</p>

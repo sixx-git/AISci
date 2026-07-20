@@ -1,0 +1,26 @@
+{
+  "baselines": {
+    "hfl_noniid_ablation": {
+      "id": "hfl_noniid_ablation",
+      "tiers": {
+        "upper_bound": [
+          "centralized"
+        ],
+        "lower_bound": [
+          "local_only"
+        ],
+        "core": [
+          "FedAvg"
+        ],
+        "heterogeneity": [
+          "FedProx"
+        ]
+      },
+      "fair_comparison_rules": [
+        "固定 E、B、client 划分种子",
+        "同一 Dirichlet 划分上对比 FedAvg 与 FedProx",
+        "报告 communication_rounds 至收敛或固定 rounds"
+      ]
+    }
+  }
+}

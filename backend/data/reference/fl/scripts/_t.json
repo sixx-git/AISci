@@ -1,0 +1,13 @@
+{
+  "primary_metric": 0.855510453531073,
+  "partition_method": "dirichlet",
+  "non_iid_type": "dirichlet",
+  "non_iid_degree": 10.0,
+  "alpha": 0.1,
+  "num_clients": 5,
+  "rows": 200,
+  "client_drift": 0.855510453531073,
+  "classes_per_client": null,
+  "seed": 42,
+  "note": "partition helper for standard Non-IID FL pilots"
+}

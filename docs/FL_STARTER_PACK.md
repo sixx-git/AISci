@@ -46,12 +46,16 @@
 | `fl_rl` | 联邦强化学习（策略/价值网络参数共享） |
 | `fl_continual` | 持续 / 增量学习（Non-IID + 概念漂移） |
 
+## 实验范式（v1.4+）
+
+默认档位 **标准 Non-IID（Dirichlet α=0.1 + FedAvg/FedProx）**。详见 [FL_EXPERIMENT_PARADIGMS.md](./FL_EXPERIMENT_PARADIGMS.md)。
+
 ## 启用方式
 
 1. 创建项目时选择模式 **联邦学习（资源包）**，并选 HFL / VFL。
-2. 可选勾选经典应用 / 交叉融合领域；**不勾选 = 挂载全部**。
-3. 系统写入 `project.config.fl_pack`（按子场景 + 领域裁剪），并**自动应用 pack_d**。
-4. 项目概览显示「已挂载 FL Pack」版本与 counts；迭代实验可一键把参考脚本写入 `analysis_script`。
+2. 选择实验范式档位（默认标准 Non-IID）；可选勾选经典应用 / 交叉融合领域。
+3. 系统写入 `project.config.fl_pack`（按子场景 + 领域 + 档位裁剪），并**自动应用 pack_d**。
+4. 项目概览显示「已挂载 FL Pack」版本、档位与 counts；迭代实验可一键把参考脚本写入 `analysis_script`。
 
 环境开关：`AISCI_FL_PACK_ENABLED=true`（默认开启）。
 

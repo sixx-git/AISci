@@ -111,6 +111,8 @@ FL_DOMAIN_ALIASES = {
 }
 ALWAYS_INCLUDE_DOMAINS = frozenset({"fl_core", ""})
 
+DEFAULT_FL_EXPERIMENT_PROFILE = "standard_non_iid"
+
 DEFAULT_FL_DOMAINS = [
     "fl_core",
     "finance_risk",
@@ -128,6 +130,22 @@ DEFAULT_FL_DOMAINS = [
     "llm_ft",
     "fl_lora_hetero",
 ]
+
+
+def normalize_fl_experiment_profile(profile: Optional[str]) -> str:
+    raw = (profile or "").strip().lower().replace("-", "_")
+    aliases = {
+        "": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "default": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "standard": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "non_iid": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "dirichlet": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "fedprox": DEFAULT_FL_EXPERIMENT_PROFILE,
+        "quick": "quick_iid",
+        "iid": "quick_iid",
+        "fast": "quick_iid",
+    }
+    return aliases.get(raw, raw or DEFAULT_FL_EXPERIMENT_PROFILE)
 
 
 def normalize_fl_domain(domain: Optional[str]) -> str:
@@ -190,6 +208,7 @@ class FlPackService:
         facts = self.load_seed_facts(fl_setting=setting, domains=dom)
         scripts = self.load_scripts(fl_setting=setting)
         datasets = self.load_datasets(fl_setting=setting, domains=dom)
+        profile = self.get_experiment_profile()
         return {
             "available": self.available(),
             "enabled": fl_pack_enabled(),
@@ -197,6 +216,10 @@ class FlPackService:
             "root": str(self.root),
             "fl_setting": setting,
             "domains": dom or m.get("domains") or DEFAULT_FL_DOMAINS,
+            "default_experiment_profile": m.get("default_experiment_profile")
+            or DEFAULT_FL_EXPERIMENT_PROFILE,
+            "experiment_profile": profile.get("id"),
+            "experiment_profile_label": profile.get("label"),
             "papers": len(m.get("papers") or []),
             "seed_facts_count": len(facts),
             "datasets_count": len(datasets),
@@ -204,7 +227,10 @@ class FlPackService:
             "datasets": len(datasets),
             "scripts": len(scripts),
             "runtime": m.get("runtime"),
-            "mounted_label": f"FL Pack v{m.get('version') or '?'} · {setting.upper()}",
+            "mounted_label": (
+                f"FL Pack v{m.get('version') or '?'} · {setting.upper()} · "
+                f"{profile.get('id') or DEFAULT_FL_EXPERIMENT_PROFILE}"
+            ),
         }
 
     @staticmethod
@@ -331,35 +357,6 @@ class FlPackService:
             )
         return scripts
 
-    def list_script_templates(
-        self, *, fl_setting: Optional[str] = None, limit: int = 3
-    ) -> List[Dict[str, Any]]:
-        """UI 可选模板：含脚本正文预览。"""
-        out = []
-        for s in self.load_scripts(fl_setting=fl_setting):
-            rel = str(s.get("path") or "")
-            if "run_fedavg_pilot" in rel:
-                continue  # 服务入口，不对用户展示为模板
-            path = Path(s.get("abs_path") or (self.root / rel))
-            content = ""
-            if path.is_file():
-                content = path.read_text(encoding="utf-8")
-            out.append(
-                {
-                    "id": s.get("id") or Path(rel).stem,
-                    "path": rel,
-                    "abs_path": str(path),
-                    "setting": s.get("setting"),
-                    "recommended_when": s.get("recommended_when") or "",
-                    "exists": path.is_file(),
-                    "content": content,
-                    "preview": content[:600],
-                }
-            )
-            if len(out) >= limit:
-                break
-        return out
-
     def read_script_content(self, script_id_or_path: str) -> Dict[str, Any]:
         key = (script_id_or_path or "").strip().replace("\\", "/")
         for s in self.load_scripts(fl_setting="both"):
@@ -408,6 +405,147 @@ class FlPackService:
                 parts.append(path.read_text(encoding="utf-8"))
         return "\n\n".join(parts)
 
+    def _load_json_rel(self, rel: str) -> Dict[str, Any]:
+        path = self.root / rel
+        if not path.is_file():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def load_experiment_profiles(self) -> Dict[str, Any]:
+        m = self.load_manifest() or {}
+        rel = (m.get("experiment_paradigms") or {}).get("profiles") or "experiment_paradigms/profiles.json"
+        return self._load_json_rel(rel)
+
+    def get_experiment_profile(self, profile_id: Optional[str] = None) -> Dict[str, Any]:
+        data = self.load_experiment_profiles()
+        profiles = data.get("profiles") or {}
+        pid = normalize_fl_experiment_profile(
+            profile_id or data.get("default_profile") or DEFAULT_FL_EXPERIMENT_PROFILE
+        )
+        profile = profiles.get(pid) or profiles.get(DEFAULT_FL_EXPERIMENT_PROFILE) or {}
+        if isinstance(profile, dict) and profile:
+            out = dict(profile)
+            out["id"] = out.get("id") or pid
+            return out
+        # 内置兜底（pack 未生成时）
+        return {
+            "id": DEFAULT_FL_EXPERIMENT_PROFILE,
+            "label": "标准 Non-IID（Dirichlet + FedProx 对比）",
+            "partition": {
+                "method": "dirichlet",
+                "alpha": 0.1,
+                "num_clients": 20,
+                "script": "scripts/hfl_dirichlet_partition.py",
+            },
+            "baselines": {
+                "required": ["local_only", "centralized", "FedAvg", "FedProx"],
+                "system_defaults": {
+                    "participation_rate": 0.2,
+                    "local_epochs": 5,
+                    "rounds": 30,
+                    "fedprox_mu": 0.01,
+                },
+                "compare_script": "scripts/hfl_baseline_compare_pilot.py",
+            },
+            "metrics": {
+                "required": [
+                    "global_accuracy",
+                    "communication_rounds",
+                    "partition_method",
+                    "non_iid_degree",
+                    "client_drift",
+                ]
+            },
+            "report_must_include": [
+                "Dirichlet α",
+                "FedAvg vs FedProx",
+                "communication_rounds",
+            ],
+        }
+
+    def build_experiment_paradigm_context(
+        self,
+        *,
+        fl_setting: Optional[str] = None,
+        profile_id: Optional[str] = None,
+    ) -> str:
+        """供 LLM / 报告注入的实验范式 Markdown 块。"""
+        setting = normalize_fl_setting(fl_setting) if fl_setting else "both"
+        profile = self.get_experiment_profile(profile_id)
+        part = profile.get("partition") or {}
+        base = profile.get("baselines") or {}
+        mets = profile.get("metrics") or {}
+        sysd = base.get("system_defaults") or {}
+        lines = [
+            "[FL 实验范式 — 内容注入，非多机 runtime]",
+            f"- 档位: {profile.get('label') or profile.get('id')} (`{profile.get('id')}`)",
+            f"- 子场景: {setting.upper()}",
+            f"- 数据划分: method={part.get('method')} alpha={part.get('alpha')} "
+            f"num_clients={part.get('num_clients') or sysd.get('num_clients')}",
+            f"- 划分脚本: `{part.get('script') or ''}`",
+            f"- 必跑基线: {', '.join(base.get('required') or [])}",
+            f"- 系统设定: C={sysd.get('participation_rate')} E={sysd.get('local_epochs')} "
+            f"B={sysd.get('batch_size')} rounds={sysd.get('rounds')} "
+            f"FedProx μ={sysd.get('fedprox_mu')}",
+            f"- 对比脚本: `{base.get('compare_script') or ''}`",
+            f"- 必报指标: {', '.join(mets.get('required') or [])}",
+        ]
+        must = profile.get("report_must_include") or []
+        if must:
+            lines.append("- 报告必须包含: " + "；".join(str(x) for x in must))
+        check = self.load_checklists_text(fl_setting=setting)
+        if check:
+            lines.append("[指标清单摘要]")
+            lines.append(check[:1200])
+        fails = self.load_failure_cases(fl_setting=setting)[:3]
+        if fails:
+            lines.append("[失败/反例提示]")
+            for f in fails:
+                lines.append(f"- {f.get('id')}: {f.get('summary')}")
+        return "\n".join(lines)
+
+    def list_script_templates(
+        self, *, fl_setting: Optional[str] = None, limit: int = 3, profile_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """UI 可选模板：标准 Non-IID 档位优先 Dirichlet + baseline compare。"""
+        profile = self.get_experiment_profile(profile_id)
+        prefer = {
+            Path(str((profile.get("partition") or {}).get("script") or "")).stem,
+            Path(str((profile.get("baselines") or {}).get("compare_script") or "")).stem,
+        }
+        prefer.discard("")
+        out: List[Dict[str, Any]] = []
+        rest: List[Dict[str, Any]] = []
+        for s in self.load_scripts(fl_setting=fl_setting):
+            rel = str(s.get("path") or "")
+            if "run_fedavg_pilot" in rel:
+                continue
+            path = Path(s.get("abs_path") or (self.root / rel))
+            content = path.read_text(encoding="utf-8") if path.is_file() else ""
+            item = {
+                "id": s.get("id") or Path(rel).stem,
+                "path": rel,
+                "abs_path": str(path),
+                "setting": s.get("setting"),
+                "recommended_when": s.get("recommended_when") or "",
+                "exists": path.is_file(),
+                "content": content,
+                "preview": content[:600],
+                "content_preview": content[:800],
+                "content_chars": len(content),
+            }
+            stem = Path(rel).stem
+            if stem in prefer:
+                out.append(item)
+            else:
+                rest.append(item)
+        ordered = out + rest
+        return ordered[:limit]
+
     def dataset_guidance_hints(
         self, *, fl_setting: Optional[str] = None, domains: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
@@ -434,34 +572,65 @@ class FlPackService:
             )
         return hints
 
-    def scripts_context_for_llm(self, limit: int = 6, *, fl_setting: Optional[str] = None) -> str:
-        lines = ["[FL Starter Pack 参考脚本 — 单机模拟，可复制到 analysis_script]"]
-        for s in self.load_scripts(fl_setting=fl_setting)[:limit]:
+    def scripts_context_for_llm(
+        self,
+        limit: int = 6,
+        *,
+        fl_setting: Optional[str] = None,
+        profile_id: Optional[str] = None,
+    ) -> str:
+        paradigm = self.build_experiment_paradigm_context(
+            fl_setting=fl_setting, profile_id=profile_id
+        )
+        lines = [paradigm, "", "[FL Starter Pack 参考脚本 — 单机模拟，可复制到 analysis_script]"]
+        # 优先列出当前档位推荐脚本
+        templates = self.list_script_templates(
+            fl_setting=fl_setting, limit=limit, profile_id=profile_id
+        )
+        for s in templates:
             lines.append(
                 f"- {s.get('recommended_when')}: `{s.get('abs_path') or s.get('path')}`"
                 f" (setting={s.get('setting')})"
             )
-        fails = self.load_failure_cases(fl_setting=fl_setting)[:3]
-        if fails:
-            lines.append("[常见失败/反例]")
-            for f in fails:
-                lines.append(f"- {f.get('id')}: {f.get('summary')}")
+        if len(templates) < limit:
+            seen = {t.get("path") for t in templates}
+            for s in self.load_scripts(fl_setting=fl_setting):
+                if s.get("path") in seen or "run_fedavg" in str(s.get("path") or ""):
+                    continue
+                lines.append(
+                    f"- {s.get('recommended_when')}: `{s.get('abs_path') or s.get('path')}`"
+                    f" (setting={s.get('setting')})"
+                )
+                if len(lines) > limit + 5:
+                    break
         return "\n".join(lines)
 
     def build_project_config_blob(
-        self, *, fl_setting: Optional[str] = None, domains: Optional[List[str]] = None
+        self,
+        *,
+        fl_setting: Optional[str] = None,
+        domains: Optional[List[str]] = None,
+        profile_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         setting = normalize_fl_setting(fl_setting or "both")
         dom = normalize_fl_domains(domains)
+        pid = normalize_fl_experiment_profile(profile_id)
+        profile = self.get_experiment_profile(pid)
         facts = self.load_seed_facts(fl_setting=setting, domains=dom)
         scripts = self.load_scripts(fl_setting=setting)
         datasets = self.dataset_guidance_hints(fl_setting=setting, domains=dom)
+        paradigm_ctx = self.build_experiment_paradigm_context(
+            fl_setting=setting, profile_id=pid
+        )
         return {
             "enabled": True,
             "version": (self.load_manifest() or {}).get("version"),
             "pack_root": str(self.root),
             "fl_setting": setting,
             "domains": dom or (self.load_manifest() or {}).get("domains") or DEFAULT_FL_DOMAINS,
+            "experiment_profile_id": pid,
+            "experiment_profile": profile,
+            "experiment_paradigm_context": paradigm_ctx,
             "seed_facts": facts,
             "seed_facts_count": len(facts),
             "dataset_hints": datasets,
@@ -478,7 +647,9 @@ class FlPackService:
                 for s in scripts
             ],
             "scripts_count": len(scripts),
-            "script_templates": self.list_script_templates(fl_setting=setting, limit=3),
+            "script_templates": self.list_script_templates(
+                fl_setting=setting, limit=3, profile_id=pid
+            ),
             "failure_cases": self.load_failure_cases(fl_setting=setting),
             "checklists_excerpt": self.load_checklists_text(fl_setting=setting)[:4000],
             "runtime": "local_simulation_only",
@@ -491,14 +662,21 @@ class FlPackService:
         *,
         fl_setting: Optional[str] = None,
         domains: Optional[List[str]] = None,
+        profile_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         cfg = dict(existing or {})
         setting = normalize_fl_setting(fl_setting or cfg.get("fl_setting") or "both")
         dom = normalize_fl_domains(domains if domains is not None else cfg.get("fl_domains"))
+        pid = normalize_fl_experiment_profile(
+            profile_id or cfg.get("fl_experiment_profile") or DEFAULT_FL_EXPERIMENT_PROFILE
+        )
         cfg["fl_setting"] = setting
+        cfg["fl_experiment_profile"] = pid
         if dom is not None:
             cfg["fl_domains"] = dom
-        cfg["fl_pack"] = self.build_project_config_blob(fl_setting=setting, domains=dom)
+        cfg["fl_pack"] = self.build_project_config_blob(
+            fl_setting=setting, domains=dom, profile_id=pid
+        )
         cfg["fl_pack_mounted"] = True
         return cfg
 
@@ -517,6 +695,25 @@ class FlPackService:
         return normalize_fl_setting(
             config.get("fl_setting") or (config.get("fl_pack") or {}).get("fl_setting")
         )
+
+    @staticmethod
+    def get_experiment_profile_id_from_config(config: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(config, dict):
+            return DEFAULT_FL_EXPERIMENT_PROFILE
+        pack = config.get("fl_pack") or {}
+        return normalize_fl_experiment_profile(
+            config.get("fl_experiment_profile")
+            or pack.get("experiment_profile_id")
+            or DEFAULT_FL_EXPERIMENT_PROFILE
+        )
+
+    @staticmethod
+    def get_experiment_paradigm_context_from_config(config: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(config, dict):
+            return ""
+        pack = config.get("fl_pack") or {}
+        ctx = pack.get("experiment_paradigm_context")
+        return str(ctx) if ctx else ""
 
     @staticmethod
     def infer_fl_context_from_columns(

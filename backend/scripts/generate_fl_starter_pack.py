@@ -1471,6 +1471,174 @@ description: 客户端 LoRA 异构配置表（秩/模块/算力），供 FedLoRA
 }
 
 
+# —— 实验范式（v1.4+）：默认标准 Non-IID = Dirichlet α=0.1 + FedAvg/FedProx ——
+EXPERIMENT_PROFILES = {
+    "standard_non_iid": {
+        "id": "standard_non_iid",
+        "label": "标准 Non-IID（Dirichlet + FedProx 对比）",
+        "is_default": True,
+        "setting": "hfl",
+        "partition": {
+            "id": "dirichlet_non_iid",
+            "method": "dirichlet",
+            "alpha": 0.1,
+            "paired_baseline_partition": "iid_uniform",
+            "num_clients": 20,
+            "script": "scripts/hfl_dirichlet_partition.py",
+        },
+        "baselines": {
+            "id": "hfl_noniid_ablation",
+            "required": ["local_only", "centralized", "FedAvg", "FedProx"],
+            "system_defaults": {
+                "num_clients": 20,
+                "participation_rate": 0.2,
+                "local_epochs": 5,
+                "batch_size": 32,
+                "rounds": 30,
+                "fedprox_mu": 0.01,
+                "seed": 42,
+            },
+            "compare_script": "scripts/hfl_baseline_compare_pilot.py",
+        },
+        "metrics": {
+            "id": "hfl_classification",
+            "required": [
+                "global_accuracy",
+                "communication_rounds",
+                "non_iid_type",
+                "non_iid_degree",
+                "client_drift",
+                "partition_method",
+            ],
+            "optional": ["local_accuracy", "communication_cost_mb", "participation_rate"],
+            "stability": "mean_std_over_seeds_recommended",
+        },
+        "report_must_include": [
+            "partition_method=dirichlet 与 alpha",
+            "IID 对照或说明为何省略",
+            "Local / Centralized / FedAvg / FedProx 对比",
+            "communication_rounds 与 client_drift",
+            "声明单机模拟、非多机部署",
+        ],
+    },
+    "quick_iid": {
+        "id": "quick_iid",
+        "label": "快速验证（IID + 三基线）",
+        "is_default": False,
+        "setting": "hfl",
+        "partition": {
+            "id": "iid_uniform",
+            "method": "iid",
+            "alpha": None,
+            "num_clients": 10,
+            "script": "scripts/hfl_non_iid_partition.py",
+        },
+        "baselines": {
+            "id": "hfl_quick",
+            "required": ["local_only", "centralized", "FedAvg"],
+            "system_defaults": {
+                "num_clients": 10,
+                "participation_rate": 1.0,
+                "local_epochs": 3,
+                "batch_size": 32,
+                "rounds": 10,
+                "seed": 42,
+            },
+            "compare_script": "scripts/hfl_baseline_compare_pilot.py",
+        },
+        "metrics": {
+            "id": "hfl_classification_lite",
+            "required": ["global_accuracy", "communication_rounds", "partition_method"],
+        },
+        "report_must_include": ["IID 划分", "三基线对比", "通信轮次"],
+    },
+}
+
+PARTITIONS_CATALOG = {
+    "iid_uniform": {
+        "id": "iid_uniform",
+        "name": "IID 均匀划分",
+        "control_variable": "data_heterogeneity",
+        "description": "数据随机均匀打乱后分配，作为理想对照。",
+        "params": {},
+        "script": "scripts/hfl_non_iid_partition.py",
+        "metrics_keys": ["partition_method", "global_accuracy"],
+    },
+    "dirichlet_non_iid": {
+        "id": "dirichlet_non_iid",
+        "name": "Dirichlet Non-IID",
+        "control_variable": "data_heterogeneity",
+        "description": "用 Dirichlet(α) 控制类别偏斜；α 越小越 Non-IID。默认 α=0.1。",
+        "params": {"alpha": [0.1, 0.5, 1.0]},
+        "script": "scripts/hfl_dirichlet_partition.py",
+        "metrics_keys": ["partition_method", "non_iid_degree", "alpha", "client_drift"],
+        "default_for_profile": "standard_non_iid",
+    },
+    "pathological_k_classes": {
+        "id": "pathological_k_classes",
+        "name": "Pathological Non-IID（每客户端 K 类）",
+        "control_variable": "data_heterogeneity",
+        "description": "每客户端仅少量类别，极端异构。",
+        "params": {"classes_per_client": 2},
+        "script": "scripts/hfl_dirichlet_partition.py",
+        "metrics_keys": ["partition_method", "classes_per_client", "global_accuracy"],
+    },
+    "quantity_skew": {
+        "id": "quantity_skew",
+        "name": "数量偏斜",
+        "control_variable": "sample_size_heterogeneity",
+        "description": "客户端样本量差异大（Dirichlet 或长尾）。",
+        "params": {"quantity_alpha": 0.5},
+        "script": "scripts/hfl_dirichlet_partition.py",
+        "metrics_keys": ["partition_method", "sample_size_cv"],
+    },
+    "natural_user_id": {
+        "id": "natural_user_id",
+        "name": "真实用户天然 Non-IID",
+        "control_variable": "natural_heterogeneity",
+        "description": "FEMNIST/Shakespeare 等按用户/角色划分。",
+        "params": {},
+        "datasets": ["leaf_femnist", "leaf_shakespeare", "leaf_shakespeare_nlp"],
+        "metrics_keys": ["partition_method", "num_clients", "global_accuracy"],
+    },
+}
+
+BASELINES_CATALOG = {
+    "hfl_noniid_ablation": {
+        "id": "hfl_noniid_ablation",
+        "tiers": {
+            "upper_bound": ["centralized"],
+            "lower_bound": ["local_only"],
+            "core": ["FedAvg"],
+            "heterogeneity": ["FedProx"],
+        },
+        "fair_comparison_rules": [
+            "固定 E、B、client 划分种子",
+            "同一 Dirichlet 划分上对比 FedAvg 与 FedProx",
+            "报告 communication_rounds 至收敛或固定 rounds",
+        ],
+    }
+}
+
+METRICS_CATALOG = {
+    "hfl_classification": {
+        "id": "hfl_classification",
+        "performance": ["global_accuracy", "loss"],
+        "efficiency": ["communication_rounds", "communication_cost_mb"],
+        "robustness": ["client_drift", "non_iid_degree"],
+        "partition_meta": ["partition_method", "alpha", "num_clients", "participation_rate"],
+        "stability_note": "建议 ≥3 个随机种子报告 mean±std",
+    },
+    "vfl_tabular": {
+        "id": "vfl_tabular",
+        "performance": ["auc", "f1_score", "accuracy"],
+        "efficiency": ["aligned_sample_rate", "communication_cost_mb"],
+        "robustness": ["alignment_success_rate"],
+        "partition_meta": ["alignment_key", "num_parties"],
+    },
+}
+
+
 SCRIPTS_README = """# FL 参考脚本
 
 纯本地可跑（numpy / sklearn），**无 Flower/FATE 依赖**。
@@ -1478,10 +1646,13 @@ SCRIPTS_README = """# FL 参考脚本
 | 脚本 | 场景 | 输出 |
 |------|------|------|
 | `hfl_fedavg_pilot.py` | HFL FedAvg | `metrics.json` |
-| `hfl_non_iid_partition.py` | 生成 Non-IID CSV | `synthetic_hfl.csv` + metrics |
+| `hfl_non_iid_partition.py` | 生成 label-skew Non-IID CSV | `synthetic_hfl.csv` + metrics |
+| `hfl_dirichlet_partition.py` | Dirichlet / pathological 划分 | CSV + metrics |
+| `hfl_baseline_compare_pilot.py` | Local / Centralized / FedAvg / FedProx | `metrics.json` 对比表 |
 | `vfl_aligned_logistic_pilot.py` | VFL 对齐+logistic | `metrics.json` |
 | `run_fedavg_pilot.py` | 供服务调用的统一入口 | stdout JSON |
 
+默认实验档位：**标准 Non-IID（Dirichlet α=0.1 + FedAvg/FedProx）**。
 在迭代实验中：将脚本路径与注释中的成功标准复制到 `analysis_script`，按数据路径改参。
 """
 
@@ -1685,6 +1856,307 @@ if __name__ == "__main__":
     main()
 '''
 
+HFL_DIRICHLET = r'''#!/usr/bin/env python3
+"""Dirichlet / pathological Non-IID partition for HFL pilots (local only).
+
+默认档位: Dirichlet α=0.1，20 clients。
+成功标准: 写出 partition_method / alpha / non_iid_degree 与 CSV。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+
+def _dirichlet_partition(y: np.ndarray, n_clients: int, alpha: float, rng: np.random.Generator):
+    labels = np.unique(y)
+    client_indices = [[] for _ in range(n_clients)]
+    for lab in labels:
+        idx = np.where(y == lab)[0]
+        rng.shuffle(idx)
+        props = rng.dirichlet([alpha] * n_clients)
+        cuts = (np.cumsum(props) * len(idx)).astype(int)[:-1]
+        splits = np.split(idx, cuts)
+        for c, part in enumerate(splits):
+            client_indices[c].extend(part.tolist())
+    return client_indices
+
+
+def _pathological_partition(y: np.ndarray, n_clients: int, k: int, rng: np.random.Generator):
+    labels = list(np.unique(y))
+    rng.shuffle(labels)
+    client_indices = [[] for _ in range(n_clients)]
+    for c in range(n_clients):
+        labs = labels[(c * k) % len(labels) : (c * k) % len(labels) + k]
+        if len(labs) < k:
+            labs = (labels + labels)[:k]
+        for lab in labs:
+            idx = np.where(y == lab)[0]
+            take = idx[rng.choice(len(idx), size=max(1, len(idx) // n_clients), replace=False)]
+            client_indices[c].extend(take.tolist())
+    return client_indices
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mode", choices=["dirichlet", "pathological", "quantity"], default="dirichlet")
+    ap.add_argument("--alpha", type=float, default=0.1)
+    ap.add_argument("--clients", type=int, default=20)
+    ap.add_argument("--rows", type=int, default=800)
+    ap.add_argument("--n_classes", type=int, default=4)
+    ap.add_argument("--classes_per_client", type=int, default=2)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--out_csv", default="synthetic_dirichlet_hfl.csv")
+    ap.add_argument("--out_metrics", default="metrics.json")
+    args = ap.parse_args()
+
+    rng = np.random.default_rng(args.seed)
+    X = rng.normal(size=(args.rows, 4))
+    # synthetic multi-class labels correlated with first feature
+    y = np.clip(((X[:, 0] + 2) * args.n_classes / 4).astype(int), 0, args.n_classes - 1)
+
+    if args.mode == "pathological":
+        parts = _pathological_partition(y, args.clients, args.classes_per_client, rng)
+        partition_method = "pathological"
+        non_iid_degree = 1.0
+    else:
+        parts = _dirichlet_partition(y, args.clients, args.alpha, rng)
+        partition_method = "dirichlet"
+        non_iid_degree = float(1.0 / max(args.alpha, 1e-6))
+
+    # quantity skew: resample client sizes via Dirichlet
+    if args.mode == "quantity":
+        sizes = rng.dirichlet([args.alpha] * args.clients)
+        sizes = (sizes * args.rows).astype(int)
+        sizes[-1] = args.rows - sizes[:-1].sum()
+        order = rng.permutation(args.rows)
+        parts = []
+        start = 0
+        for s in sizes:
+            parts.append(order[start : start + max(s, 0)].tolist())
+            start += max(s, 0)
+        partition_method = "quantity_skew"
+        non_iid_degree = float(np.std([len(p) for p in parts]) / max(np.mean([len(p) for p in parts]), 1))
+
+    rows = []
+    for c, idxs in enumerate(parts):
+        for i in idxs:
+            rows.append(
+                {
+                    "client_id": f"c{c}",
+                    "sample_id": f"s{i}",
+                    "x1": float(X[i, 0]),
+                    "x2": float(X[i, 1]),
+                    "x3": float(X[i, 2]),
+                    "x4": float(X[i, 3]),
+                    "label": int(y[i]),
+                }
+            )
+    df = pd.DataFrame(rows)
+    if args.mode == "quantity":
+        pass
+    df.to_csv(args.out_csv, index=False)
+
+    # crude client_drift: variance of per-client label means
+    drifts = []
+    for c in range(args.clients):
+        sub = df[df["client_id"] == f"c{c}"]["label"]
+        if len(sub):
+            drifts.append(float(sub.mean()))
+    client_drift = float(np.std(drifts)) if drifts else 0.0
+
+    metrics = {
+        "primary_metric": client_drift,
+        "partition_method": partition_method,
+        "non_iid_type": partition_method,
+        "non_iid_degree": non_iid_degree,
+        "alpha": args.alpha if partition_method == "dirichlet" else None,
+        "num_clients": args.clients,
+        "rows": len(df),
+        "client_drift": client_drift,
+        "classes_per_client": args.classes_per_client if partition_method == "pathological" else None,
+        "seed": args.seed,
+        "note": "partition helper for standard Non-IID FL pilots",
+    }
+    Path(args.out_metrics).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(json.dumps(metrics))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+HFL_BASELINE_COMPARE = r'''#!/usr/bin/env python3
+"""Compare Local / Centralized / FedAvg / FedProx on Dirichlet-partitioned tabular data.
+
+默认档位: 标准 Non-IID（Dirichlet α=0.1）+ FedProx μ 对比。
+成功标准: metrics.json 含 methods 对比表、partition_method、communication_rounds。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+
+
+def _logistic_sgd(X, y, w=None, b=0.0, steps=20, lr=0.1, prox_mu=0.0, w_global=None, b_global=0.0):
+    w = np.zeros(X.shape[1]) if w is None else w.copy()
+    b = float(b)
+    wg = w_global if w_global is not None else w
+    for _ in range(steps):
+        z = X @ w + b
+        p = 1 / (1 + np.exp(-np.clip(z, -20, 20)))
+        err = p - y
+        grad_w = (X.T @ err) / max(len(y), 1) + prox_mu * (w - wg)
+        grad_b = float(np.mean(err)) + prox_mu * (b - b_global)
+        w -= lr * grad_w
+        b -= lr * grad_b
+    return w, b
+
+
+def _acc(X, y, w, b):
+    pred = (X @ w + b > 0).astype(float)
+    return float(np.mean(pred == y))
+
+
+def _make_dirichlet_data(n_clients, n_rows, alpha, seed, n_classes=2):
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(n_rows, 4))
+    y = (X[:, 0] + 0.3 * X[:, 1] > 0).astype(float)
+    # binary dirichlet by soft assignment via alpha-skewed client preference
+    client_ids = np.zeros(n_rows, dtype=int)
+    for lab in (0, 1):
+        idx = np.where(y == lab)[0]
+        rng.shuffle(idx)
+        props = rng.dirichlet([alpha] * n_clients)
+        cuts = (np.cumsum(props) * len(idx)).astype(int)[:-1]
+        for c, part in enumerate(np.split(idx, cuts)):
+            client_ids[part] = c
+    return X, y, client_ids
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--clients", type=int, default=20)
+    ap.add_argument("--rows", type=int, default=800)
+    ap.add_argument("--alpha", type=float, default=0.1)
+    ap.add_argument("--rounds", type=int, default=15)
+    ap.add_argument("--local_epochs", type=int, default=5)
+    ap.add_argument("--participation", type=float, default=0.2)
+    ap.add_argument("--mu", type=float, default=0.01, help="FedProx proximal coefficient")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--out", default="metrics.json")
+    args = ap.parse_args()
+
+    X, y, client_ids = _make_dirichlet_data(args.clients, args.rows, args.alpha, args.seed)
+    rng = np.random.default_rng(args.seed)
+
+    # Centralized
+    w_c, b_c = _logistic_sgd(X, y, steps=args.local_epochs * 10)
+    acc_central = _acc(X, y, w_c, b_c)
+
+    # Local-only: average of per-client models evaluated globally
+    local_accs = []
+    for c in range(args.clients):
+        mask = client_ids == c
+        if not np.any(mask):
+            continue
+        w_l, b_l = _logistic_sgd(X[mask], y[mask], steps=args.local_epochs * 5)
+        local_accs.append(_acc(X, y, w_l, b_l))
+    acc_local = float(np.mean(local_accs)) if local_accs else 0.0
+
+    def run_federated(prox_mu: float):
+        gw = np.zeros(X.shape[1])
+        gb = 0.0
+        hist = []
+        k = max(1, int(args.clients * args.participation))
+        for r in range(args.rounds):
+            chosen = rng.choice(args.clients, size=min(k, args.clients), replace=False)
+            ws, bs, ns = [], [], []
+            for c in chosen:
+                mask = client_ids == c
+                if not np.any(mask):
+                    continue
+                w, b = _logistic_sgd(
+                    X[mask],
+                    y[mask],
+                    w=gw,
+                    b=gb,
+                    steps=args.local_epochs,
+                    prox_mu=prox_mu,
+                    w_global=gw,
+                    b_global=gb,
+                )
+                ws.append(w)
+                bs.append(b)
+                ns.append(int(mask.sum()))
+            if ws:
+                tot = sum(ns) or 1
+                gw = sum(w * n for w, n in zip(ws, ns)) / tot
+                gb = sum(b * n for b, n in zip(bs, ns)) / tot
+            hist.append({"round": r + 1, "global_accuracy": _acc(X, y, gw, gb)})
+        return hist, gw, gb
+
+    hist_avg, gw_a, gb_a = run_federated(0.0)
+    hist_prox, gw_p, gb_p = run_federated(args.mu)
+
+    # client_drift on final FedAvg
+    drifts = []
+    for c in range(args.clients):
+        mask = client_ids == c
+        if np.any(mask):
+            drifts.append(_acc(X[mask], y[mask], gw_a, gb_a))
+    client_drift = float(np.std(drifts)) if drifts else 0.0
+
+    methods = {
+        "local_only": {"global_accuracy": acc_local},
+        "centralized": {"global_accuracy": acc_central},
+        "FedAvg": {
+            "global_accuracy": hist_avg[-1]["global_accuracy"] if hist_avg else 0.0,
+            "communication_rounds": args.rounds,
+            "history": hist_avg,
+        },
+        "FedProx": {
+            "global_accuracy": hist_prox[-1]["global_accuracy"] if hist_prox else 0.0,
+            "communication_rounds": args.rounds,
+            "mu": args.mu,
+            "history": hist_prox,
+        },
+    }
+    primary = methods["FedProx"]["global_accuracy"]
+    metrics = {
+        "primary_metric": primary,
+        "global_accuracy": primary,
+        "methods": methods,
+        "partition_method": "dirichlet",
+        "non_iid_type": "dirichlet",
+        "non_iid_degree": float(1.0 / max(args.alpha, 1e-6)),
+        "alpha": args.alpha,
+        "num_clients": args.clients,
+        "participation_rate": args.participation,
+        "local_epochs": args.local_epochs,
+        "communication_rounds": args.rounds,
+        "client_drift": client_drift,
+        "fedprox_mu": args.mu,
+        "seed": args.seed,
+        "baselines": ["local_only", "centralized", "FedAvg", "FedProx"],
+        "note": "standard Non-IID baseline compare; local simulation only",
+    }
+    Path(args.out).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(json.dumps({k: metrics[k] for k in metrics if k != "methods"}))
+    print(json.dumps({"methods_summary": {m: methods[m].get("global_accuracy") for m in methods}}))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
 RUN_FEDAVG = r'''#!/usr/bin/env python3
 """Unified entry used by fl_pack_service.run_local_fedavg_pilot()."""
 from __future__ import annotations
@@ -1757,8 +2229,32 @@ def main() -> None:
     w("scripts/README.md", SCRIPTS_README)
     w("scripts/hfl_fedavg_pilot.py", HFL_FEDAVG)
     w("scripts/hfl_non_iid_partition.py", HFL_NONIID)
+    w("scripts/hfl_dirichlet_partition.py", HFL_DIRICHLET)
+    w("scripts/hfl_baseline_compare_pilot.py", HFL_BASELINE_COMPARE)
     w("scripts/vfl_aligned_logistic_pilot.py", VFL_PILOT)
     w("scripts/run_fedavg_pilot.py", RUN_FEDAVG)
+
+    # 实验范式资源（默认 standard_non_iid）
+    w(
+        "experiment_paradigms/profiles.json",
+        json.dumps(
+            {"default_profile": "standard_non_iid", "profiles": EXPERIMENT_PROFILES},
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+    w(
+        "experiment_paradigms/partitions.json",
+        json.dumps({"partitions": PARTITIONS_CATALOG}, ensure_ascii=False, indent=2),
+    )
+    w(
+        "experiment_paradigms/baselines.json",
+        json.dumps({"baselines": BASELINES_CATALOG}, ensure_ascii=False, indent=2),
+    )
+    w(
+        "experiment_paradigms/metrics.json",
+        json.dumps({"metrics": METRICS_CATALOG}, ensure_ascii=False, indent=2),
+    )
 
     w(
         "checklists/hfl_metrics.md",
@@ -1767,8 +2263,10 @@ def main() -> None:
 - global_accuracy / local_accuracy
 - communication_rounds / communication_cost_mb
 - num_clients / participation_rate
-- non_iid_type / non_iid_degree / client_drift
-- 报告须写明：划分方式、是否小样、是否单机模拟
+- partition_method / non_iid_type / non_iid_degree / alpha（Dirichlet）
+- client_drift
+- 基线对比：Local Only、Centralized、FedAvg、FedProx（标准 Non-IID 档位必报）
+- 报告须写明：划分方式、α、是否小样、是否单机模拟
 """,
     )
     w(
@@ -1827,9 +2325,10 @@ def main() -> None:
     )
 
     manifest = {
-        "version": "1.3.0",
+        "version": "1.4.0",
         "name": "fl_starter_pack",
         "settings": ["hfl", "vfl", "both"],
+        "default_experiment_profile": "standard_non_iid",
         "domains": [
             "fl_core",
             "finance_risk",
@@ -1847,11 +2346,17 @@ def main() -> None:
             "llm_ft",
             "fl_lora_hetero",
         ],
-        "description": "FL starter pack v1.3: + multilingual FL + heterogeneous client LoRA",
+        "description": "FL starter pack v1.4: experiment paradigms (default standard Non-IID Dirichlet+FedProx)",
         "runtime": "local_simulation_only",
         "papers": [p["file"] for p in index],
         "seed_facts_file": "papers/seed_facts.json",
         "datasets": [f"datasets/{k}" for k in DATASETS],
+        "experiment_paradigms": {
+            "profiles": "experiment_paradigms/profiles.json",
+            "partitions": "experiment_paradigms/partitions.json",
+            "baselines": "experiment_paradigms/baselines.json",
+            "metrics": "experiment_paradigms/metrics.json",
+        },
         "scripts": [
             {
                 "path": "scripts/hfl_fedavg_pilot.py",
@@ -1861,7 +2366,19 @@ def main() -> None:
             {
                 "path": "scripts/hfl_non_iid_partition.py",
                 "setting": "hfl",
-                "recommended_when": "HFL + Non-IID partition",
+                "recommended_when": "HFL + label-skew Non-IID partition",
+            },
+            {
+                "path": "scripts/hfl_dirichlet_partition.py",
+                "setting": "hfl",
+                "recommended_when": "标准 Non-IID：Dirichlet/pathological 划分",
+                "profile": "standard_non_iid",
+            },
+            {
+                "path": "scripts/hfl_baseline_compare_pilot.py",
+                "setting": "hfl",
+                "recommended_when": "标准 Non-IID：Local/Centralized/FedAvg/FedProx 对比",
+                "profile": "standard_non_iid",
             },
             {
                 "path": "scripts/vfl_aligned_logistic_pilot.py",
@@ -1904,6 +2421,13 @@ def main() -> None:
                 "schema",
                 "pilot_subset",
                 "upload_requirement",
+            ],
+            "experiment_profile": [
+                "id",
+                "partition",
+                "baselines",
+                "metrics",
+                "report_must_include",
             ],
         },
     }
