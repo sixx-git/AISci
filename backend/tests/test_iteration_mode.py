@@ -53,8 +53,14 @@ def test_legacy_pipeline_mode_discovery_maps_to_discovery_auto():
     assert opts["pipeline_mode"] == "discovery"
 
 
-def test_pro_con_adversarial_defaults_on():
+def test_pro_con_adversarial_defaults_off():
     opts = resolve_run_options({})
+    assert opts["enable_pro_con_adversarial"] is False
+    assert opts["adversarial_mode"] == "off"
+
+
+def test_pro_con_adversarial_can_enable():
+    opts = resolve_run_options({"enable_pro_con_adversarial": True})
     assert opts["enable_pro_con_adversarial"] is True
     assert opts["adversarial_mode"] == "single_group"
 

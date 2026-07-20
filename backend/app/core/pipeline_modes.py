@@ -171,12 +171,15 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     except (TypeError, ValueError):
         max_gap_rounds = DEFAULT_MAX_GAP_ROUNDS
 
-    enable_pro_con = opts.get("enable_pro_con_adversarial", True)
-    adversarial_mode = opts.get("adversarial_mode", "single_group")
+    enable_pro_con = opts.get("enable_pro_con_adversarial", False)
+    adversarial_mode = opts.get("adversarial_mode", "off")
     if adversarial_mode not in VALID_ADVERSARIAL_MODES:
-        adversarial_mode = "single_group"
+        adversarial_mode = "off" if not enable_pro_con else "single_group"
     if not enable_pro_con:
         adversarial_mode = "off"
+    elif adversarial_mode == "off":
+        # 显式开启对抗但未指定模式时，回落到单研究组
+        adversarial_mode = "single_group"
     if adversarial_mode == "multi_group" and num_ideas < 2:
         adversarial_mode = "single_group"
 

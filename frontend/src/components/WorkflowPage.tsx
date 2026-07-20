@@ -8,7 +8,14 @@ import { WorkflowActionBar } from '@/components/WorkflowActionBar';
 import { StageHumanLoopPanel } from '@/components/StageHumanLoopPanel';
 import { IterationHistoryPanel } from '@/components/IterationHistoryPanel';
 import { CollapsiblePanel } from '@/components/workspace/CollapsiblePanel';
-import { LoopConfigPanel, DEFAULT_LOOP_CONFIG, loopConfigToRunOptions, ITERATION_MODE_HINTS, type LoopConfigState } from '@/components/LoopConfigPanel';
+import {
+  LoopConfigPanel,
+  loadLoopConfig,
+  saveLoopConfig,
+  loopConfigToRunOptions,
+  ITERATION_MODE_HINTS,
+  type LoopConfigState,
+} from '@/components/LoopConfigPanel';
 import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
 import { RunHistoryPanel } from '@/components/RunHistoryPanel';
 import { HitlGateModal } from '@/components/HitlGateModal';
@@ -623,7 +630,20 @@ export function WorkflowPage({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
   const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
-  const [loopConfig, setLoopConfig] = useState<LoopConfigState>(DEFAULT_LOOP_CONFIG);
+  // 按项目持久化：切换 Tab 会卸载本页，若不落盘会回到默认（红蓝对抗开启）
+  const [loopConfig, setLoopConfig] = useState<LoopConfigState>(() => loadLoopConfig(projectId));
+
+  useEffect(() => {
+    setLoopConfig(loadLoopConfig(projectId));
+  }, [projectId]);
+
+  const handleLoopConfigChange = useCallback(
+    (next: LoopConfigState) => {
+      setLoopConfig(next);
+      saveLoopConfig(projectId, next);
+    },
+    [projectId],
+  );
   const [showHitlModal, setShowHitlModal] = useState(false);
   const [hitlGateInfo, setHitlGateInfo] = useState<HitlGateInfo | null>(null);
   const [hitlGateRunId, setHitlGateRunId] = useState<string | null>(null);
@@ -1319,7 +1339,7 @@ export function WorkflowPage({
         <div className="mt-4">
           <LoopConfigPanel
             value={loopConfig}
-            onChange={setLoopConfig}
+            onChange={handleLoopConfigChange}
             disabled={runState !== 'idle'}
           />
           <p className="text-xs text-bp-muted mt-2">

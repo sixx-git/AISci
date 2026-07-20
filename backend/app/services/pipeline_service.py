@@ -2999,8 +2999,8 @@ class PipelineService:
                 rev["evidence_sufficiency"] = suff.get("evidence_sufficiency")
                 rev["missing_evidence_types"] = suff.get("missing_evidence_types")
 
-        adv_mode = self._run_options.get("adversarial_mode", "single_group")
-        if self._run_options.get("enable_pro_con_adversarial", True) and adv_mode != "off":
+        adv_mode = self._run_options.get("adversarial_mode", "off")
+        if self._run_options.get("enable_pro_con_adversarial", False) and adv_mode != "off":
             try:
                 from app.services.pro_con_adversarial_service import get_pro_con_adversarial_service
 

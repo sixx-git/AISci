@@ -1,6 +1,7 @@
 ﻿import type { ReactNode } from 'react';
 import { Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { loopConfigKey } from '@/lib/storageKeys';
 import type { AdversarialMode, IterationMode } from '@/types';
 
 export interface LoopConfigState {
@@ -22,23 +23,89 @@ export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   literatureMaxPapers: 10,
   maxRounds: 3,
   gateStagnantRounds: 2,
-  enableProConAdversarial: true,
-  adversarialMode: 'single_group',
+  enableProConAdversarial: false,
+  adversarialMode: 'off',
   conChallengeMaxRounds: 2,
 };
 
-export function loopConfigToRunOptions(config: LoopConfigState): Record<string, unknown> {
+const VALID_ITERATION_MODES = new Set<IterationMode>(['human', 'teaching_auto', 'discovery_auto']);
+const VALID_ADVERSARIAL_MODES = new Set<AdversarialMode>(['off', 'single_group', 'multi_group']);
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+/** 校验并合并本地存储 / 外部传入的 Loop 配置。 */
+export function normalizeLoopConfig(raw: unknown): LoopConfigState {
+  const src = raw && typeof raw === 'object' ? (raw as Partial<LoopConfigState>) : {};
+  const iterationMode = VALID_ITERATION_MODES.has(src.iterationMode as IterationMode)
+    ? (src.iterationMode as IterationMode)
+    : DEFAULT_LOOP_CONFIG.iterationMode;
+  const enableProConAdversarial =
+    typeof src.enableProConAdversarial === 'boolean'
+      ? src.enableProConAdversarial
+      : DEFAULT_LOOP_CONFIG.enableProConAdversarial;
+  let adversarialMode = VALID_ADVERSARIAL_MODES.has(src.adversarialMode as AdversarialMode)
+    ? (src.adversarialMode as AdversarialMode)
+    : DEFAULT_LOOP_CONFIG.adversarialMode;
+  if (!enableProConAdversarial) {
+    adversarialMode = 'off';
+  } else if (adversarialMode === 'off') {
+    adversarialMode = 'single_group';
+  }
   return {
-    iteration_mode: config.iterationMode,
-    num_ideas: config.numIdeas,
-    literature_max_papers: config.literatureMaxPapers,
-    discovery_max_rounds: config.maxRounds,
-    gate_stagnant_rounds: config.gateStagnantRounds,
+    iterationMode,
+    enableHitl: typeof src.enableHitl === 'boolean' ? src.enableHitl : DEFAULT_LOOP_CONFIG.enableHitl,
+    numIdeas: clampInt(src.numIdeas, 1, 8, DEFAULT_LOOP_CONFIG.numIdeas),
+    literatureMaxPapers: clampInt(src.literatureMaxPapers, 5, 30, DEFAULT_LOOP_CONFIG.literatureMaxPapers),
+    maxRounds: clampInt(src.maxRounds, 1, 5, DEFAULT_LOOP_CONFIG.maxRounds),
+    gateStagnantRounds: clampInt(src.gateStagnantRounds, 1, 4, DEFAULT_LOOP_CONFIG.gateStagnantRounds),
+    enableProConAdversarial,
+    adversarialMode,
+    conChallengeMaxRounds: clampInt(
+      src.conChallengeMaxRounds,
+      1,
+      4,
+      DEFAULT_LOOP_CONFIG.conChallengeMaxRounds,
+    ),
+  };
+}
+
+export function loadLoopConfig(projectId: string | undefined | null): LoopConfigState {
+  if (!projectId || typeof window === 'undefined') return { ...DEFAULT_LOOP_CONFIG };
+  try {
+    const raw = localStorage.getItem(loopConfigKey(projectId));
+    if (!raw) return { ...DEFAULT_LOOP_CONFIG };
+    return normalizeLoopConfig(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_LOOP_CONFIG };
+  }
+}
+
+export function saveLoopConfig(projectId: string | undefined | null, config: LoopConfigState): void {
+  if (!projectId || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(loopConfigKey(projectId), JSON.stringify(normalizeLoopConfig(config)));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function loopConfigToRunOptions(config: LoopConfigState): Record<string, unknown> {
+  const normalized = normalizeLoopConfig(config);
+  return {
+    iteration_mode: normalized.iterationMode,
+    num_ideas: normalized.numIdeas,
+    literature_max_papers: normalized.literatureMaxPapers,
+    discovery_max_rounds: normalized.maxRounds,
+    gate_stagnant_rounds: normalized.gateStagnantRounds,
     // 假设生成门控可选；可行性评估后由后端强制 handoff，不再经此开关自动跑迭代实验/报告
     enable_hitl_gate: false,
-    enable_pro_con_adversarial: config.enableProConAdversarial,
-    adversarial_mode: config.adversarialMode,
-    con_challenge_max_rounds: config.conChallengeMaxRounds,
+    enable_pro_con_adversarial: normalized.enableProConAdversarial,
+    adversarial_mode: normalized.adversarialMode,
+    con_challenge_max_rounds: normalized.conChallengeMaxRounds,
     enable_science_iteration_observe: true,
   };
 }
@@ -150,7 +217,11 @@ export function LoopConfigPanel({
             onChange={(e) =>
               patch({
                 enableProConAdversarial: e.target.checked,
-                adversarialMode: e.target.checked ? value.adversarialMode : 'off',
+                adversarialMode: e.target.checked
+                  ? value.adversarialMode === 'off'
+                    ? 'single_group'
+                    : value.adversarialMode
+                  : 'off',
               })
             }
             disabled={disabled}
