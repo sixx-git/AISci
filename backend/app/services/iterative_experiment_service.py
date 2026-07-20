@@ -44,6 +44,35 @@ def require_shaxiang_enabled() -> None:
         )
 
 
+def _resolve_project_fl_gate(project_id: str) -> Tuple[bool, str, Optional[str]]:
+    """返回 (is_federated_learning, fl_setting, profile_id)。
+
+    通用项目一律 is_fl=False，避免 FL Pack 文案/模板泄漏进 general 模式。
+    """
+    from app.core.database import SessionLocal, init_db
+    from app.core.project_modes import is_federated_learning_mode
+    from app.models.project import Project
+    from app.services.fl_pack_service import FlPackService
+
+    if SessionLocal is None:
+        init_db()
+    db = SessionLocal()
+    try:
+        proj = db.query(Project).filter(Project.id == project_id).first()
+        if not proj:
+            return False, "both", None
+        if not is_federated_learning_mode(getattr(proj, "project_mode", None)):
+            return False, "both", None
+        setting = "both"
+        profile_id = None
+        if isinstance(proj.config, dict):
+            setting = FlPackService.get_fl_setting_from_config(proj.config)
+            profile_id = FlPackService.get_experiment_profile_id_from_config(proj.config)
+        return True, setting, profile_id
+    finally:
+        db.close()
+
+
 def _empty_store() -> Dict[str, Any]:
     return {"experiments": [], "report_experiment_ids": []}
 
@@ -210,25 +239,10 @@ class IterativeExperimentService:
             raise ValueError("模拟实验无需推荐数据集")
         feedback = human_feedback or ""
         try:
-            from app.core.database import SessionLocal, init_db
-            from app.models.project import Project
-            from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+            from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
 
-            if fl_pack_enabled():
-                setting = "both"
-                profile_id = None
-                if SessionLocal is None:
-                    init_db()
-                db = SessionLocal()
-                try:
-                    proj = db.query(Project).filter(Project.id == project_id).first()
-                    if proj and isinstance(proj.config, dict):
-                        setting = FlPackService.get_fl_setting_from_config(proj.config)
-                        profile_id = FlPackService.get_experiment_profile_id_from_config(
-                            proj.config
-                        )
-                finally:
-                    db.close()
+            is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
+            if fl_pack_enabled() and is_fl:
                 svc = get_fl_pack_service()
                 ctx = svc.scripts_context_for_llm(
                     fl_setting=setting, profile_id=profile_id
@@ -370,31 +384,18 @@ class IterativeExperimentService:
         try:
             fl_feedback = None
             try:
-                from app.core.database import SessionLocal
-                from app.models.project import Project
-                from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+                from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
 
-                if fl_pack_enabled():
-                    setting = "both"
-                    profile_id = None
-                    from app.core.database import SessionLocal, init_db
-                    if SessionLocal is None:
-                        init_db()
-                    db = SessionLocal()
-                    try:
-                        proj = db.query(Project).filter(Project.id == project_id).first()
-                        if proj and isinstance(proj.config, dict):
-                            setting = FlPackService.get_fl_setting_from_config(proj.config)
-                            profile_id = FlPackService.get_experiment_profile_id_from_config(
-                                proj.config
-                            )
-                    finally:
-                        db.close()
+                is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
+                if fl_pack_enabled() and is_fl:
                     fl_feedback = get_fl_pack_service().scripts_context_for_llm(
                         fl_setting=setting, profile_id=profile_id
                     )
+                else:
+                    # 通用模式显式传空串，清空历史误注入的 FL Pack 反馈，避免再次污染脚本
+                    fl_feedback = ""
             except Exception:
-                fl_feedback = None
+                fl_feedback = ""
             projected = bridge.design_script(
                 project_id, self._sx_id(exp), cfg, human_feedback=fl_feedback
             )
@@ -409,22 +410,22 @@ class IterativeExperimentService:
         return self._persist_projection(project_id, projected)
 
     def list_fl_script_templates(self, project_id: str) -> List[Dict[str, Any]]:
-        from app.core.database import SessionLocal, init_db
-        from app.models.project import Project
-        from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+        from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
 
         if not fl_pack_enabled():
             return []
-        setting = "both"
-        profile_id = None
+        is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
+        if not is_fl:
+            return []
+        from app.core.database import SessionLocal, init_db
+        from app.models.project import Project
+
         if SessionLocal is None:
             init_db()
         db = SessionLocal()
         try:
             proj = db.query(Project).filter(Project.id == project_id).first()
             if proj and isinstance(proj.config, dict):
-                setting = FlPackService.get_fl_setting_from_config(proj.config)
-                profile_id = FlPackService.get_experiment_profile_id_from_config(proj.config)
                 pack = (proj.config.get("fl_pack") or {})
                 cached = pack.get("script_templates")
                 if isinstance(cached, list) and cached:
@@ -438,8 +439,11 @@ class IterativeExperimentService:
     def apply_fl_script_template(
         self, project_id: str, experiment_id: str, script_id: str
     ) -> Dict[str, Any]:
-        """将 FL Pack 参考脚本写入实验 analysis_script。"""
+        """将 FL Pack 参考脚本写入实验 analysis_script（仅联邦项目）。"""
         require_shaxiang_enabled()
+        is_fl, _, _ = _resolve_project_fl_gate(project_id)
+        if not is_fl:
+            raise ValueError("当前项目为通用模式，不可应用 FL 参考脚本模板")
         from app.integrations.shaxiang import bridge
         from app.services.fl_pack_service import get_fl_pack_service
 
@@ -1046,21 +1050,22 @@ class IterativeExperimentService:
             "_has_usable_evidence": has_usable,
         }
 
-        # Phase4：FL 资源包本地 pilot + VFL alignment gate（可选，失败不阻断）
+        # Phase4：仅联邦学习项目可挂 FL 本地 pilot / VFL gate（通用模式禁止混入）
         try:
             from app.core.config import get_settings
+            from app.core.project_modes import is_federated_learning_mode
             from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
 
             settings = get_settings()
-            hyp = str(primary.get("hypothesis") or "")
-            looks_fl = any(
-                k in hyp.lower()
-                for k in ("federat", "fedavg", "fedprox", "联邦", "vfl", "non-iid", "client")
-            ) or any(
-                str(c).lower() in ("client_id", "party_id", "entity_id", "aligned_id")
-                for c in columns
-            )
-            if fl_pack_enabled() and looks_fl:
+            project_id = str(primary.get("project_id") or "")
+            is_fl = False
+            if project_id:
+                is_fl, _, _ = _resolve_project_fl_gate(project_id)
+            else:
+                # 无 project_id 时不以关键词猜测为联邦，避免污染通用报告
+                is_fl = is_federated_learning_mode(primary.get("project_mode"))
+
+            if fl_pack_enabled() and is_fl:
                 fl_svc = get_fl_pack_service()
                 fl_ctx = FlPackService.infer_fl_context_from_columns(
                     [str(c) for c in columns],

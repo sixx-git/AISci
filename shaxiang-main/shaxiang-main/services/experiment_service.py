@@ -143,15 +143,22 @@ class ExperimentService:
         return self.engine.run_data_iteration(experiment, phase="recommend")
 
     def design_script(self, experiment_id: str, data_config: dict, human_feedback: str = None):
-        """Phase 2: 根据上传数据设计分析脚本；可附带人工反馈做高自由度重设计。"""
+        """Phase 2: 根据上传数据设计分析脚本；可附带人工反馈做高自由度重设计。
+
+        human_feedback:
+          - None: 不改动已有 feedback（兼容旧调用）
+          - "" / 空白: 清空 feedback（用于通用模式去掉误注入的 FL 上下文）
+          - 非空: 写入并标记 submitted
+        """
         experiment = self.repository.get_experiment(experiment_id)
         if not experiment:
             raise ValueError(f"实验不存在: {experiment_id}")
         experiment.current_data_config = data_config
         experiment.phase = "data_uploaded"
-        if human_feedback and human_feedback.strip():
-            experiment.human_feedback = human_feedback.strip()
-            experiment.feedback_status = "submitted"
+        if human_feedback is not None:
+            text = human_feedback.strip()
+            experiment.human_feedback = text or None
+            experiment.feedback_status = "submitted" if text else "none"
         self.repository.update_experiment(experiment)
         return self.engine.run_data_iteration(experiment, phase="design")
 

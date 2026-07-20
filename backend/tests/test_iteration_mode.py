@@ -59,6 +59,12 @@ def test_pro_con_adversarial_defaults_off():
     assert opts["adversarial_mode"] == "off"
 
 
+def test_pro_con_adversarial_string_false_stays_off():
+    opts = resolve_run_options({"enable_pro_con_adversarial": "false", "adversarial_mode": "single_group"})
+    assert opts["enable_pro_con_adversarial"] is False
+    assert opts["adversarial_mode"] == "off"
+
+
 def test_pro_con_adversarial_can_enable():
     opts = resolve_run_options({"enable_pro_con_adversarial": True})
     assert opts["enable_pro_con_adversarial"] is True

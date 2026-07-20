@@ -242,6 +242,7 @@ class PipelineService:
         use_human_modified_output: bool = True,
         rerun_mode: str = "single_stage",
         human_feedback: str = "",
+        run_options: Optional[Dict[str, Any]] = None,
     ) -> str:
         """从指定阶段重新运行：single_stage 原地更新同一 run；from_stage_onward 分叉新 run。"""
         if rerun_mode not in ("single_stage", "from_stage_onward"):
@@ -253,6 +254,7 @@ class PipelineService:
                 from_stage=from_stage,
                 use_human_modified_output=use_human_modified_output,
                 human_feedback=human_feedback,
+                run_options=run_options,
             )
         return self._prepare_fork_rerun_from_stage(
             project_id=project_id,
@@ -260,6 +262,7 @@ class PipelineService:
             from_stage=from_stage,
             use_human_modified_output=use_human_modified_output,
             human_feedback=human_feedback,
+            run_options=run_options,
         )
 
     @staticmethod
@@ -281,6 +284,19 @@ class PipelineService:
         stage_exec.extra_metadata = meta
         flag_modified(stage_exec, "extra_metadata")
 
+    @staticmethod
+    def _merge_run_input_options(
+        input_data: Optional[Dict[str, Any]],
+        run_options: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """合并 / 覆盖 Pipeline input_data.options（用于重跑时关闭红蓝对抗等）。"""
+        merged = dict(input_data or {})
+        if run_options is None:
+            return merged
+        prev = merged.get("options") if isinstance(merged.get("options"), dict) else {}
+        merged["options"] = {**prev, **dict(run_options)}
+        return merged
+
     def _prepare_in_place_single_stage_rerun(
         self,
         project_id: str,
@@ -288,6 +304,7 @@ class PipelineService:
         from_stage: str,
         use_human_modified_output: bool = True,
         human_feedback: str = "",
+        run_options: Optional[Dict[str, Any]] = None,
     ) -> str:
         stage_aliases = {"data_acquisition": "knowledge_gap"}
         from_stage = stage_aliases.get(from_stage, from_stage)
@@ -299,6 +316,13 @@ class PipelineService:
             raise ValueError(f"run 未找到: {run_id}")
         if run.project_id != project_id:
             raise ValueError("project_id 与 run 不匹配")
+
+        if run_options is not None:
+            run.input_data = self._merge_run_input_options(
+                run.input_data if isinstance(run.input_data, dict) else {},
+                run_options,
+            )
+            flag_modified(run, "input_data")
 
         start_idx = STAGE_KEY_ORDER.index(from_stage)
         human_loop = StageHumanLoopService(self.db)
@@ -407,6 +431,7 @@ class PipelineService:
         from_stage: str,
         use_human_modified_output: bool = True,
         human_feedback: str = "",
+        run_options: Optional[Dict[str, Any]] = None,
     ) -> str:
         stage_aliases = {"data_acquisition": "knowledge_gap"}
         from_stage = stage_aliases.get(from_stage, from_stage)
@@ -453,13 +478,22 @@ class PipelineService:
                 )
             except Exception as fb_err:
                 logger.warning("[Rerun] Feedback Hub 记录失败: %s", fb_err)
+
+        parent_input = parent.input_data if isinstance(parent.input_data, dict) else {}
+        child_input = {
+            **parent_input,
+            "rerun_from": from_stage,
+            "parent_run_id": parent_run_id,
+        }
+        child_input = self._merge_run_input_options(child_input, run_options)
+
         self.db_pipeline_run = DB_PipelineRun(
             id=str(uuid.uuid4()),
             run_id=self.run_id,
             project_id=project_id,
             research_question=parent.research_question,
             status=DB_PipelineStatus.PENDING,
-            input_data={"rerun_from": from_stage, "parent_run_id": parent_run_id},
+            input_data=child_input,
             version=version,
             extra_metadata={
                 "parent_run_id": parent_run_id,
@@ -1704,7 +1738,10 @@ class PipelineService:
         logger.info(
             f"[Pipeline] ====== 开始执行 Pipeline run_id={self.run_id} "
             f"project_id={project_id} mode={project_mode} pipeline_mode={self._run_options.get('pipeline_mode')} "
-            f"num_ideas={self._run_options.get('num_ideas')} start_idx={start_idx} ======"
+            f"num_ideas={self._run_options.get('num_ideas')} "
+            f"pro_con={self._run_options.get('enable_pro_con_adversarial')} "
+            f"adv_mode={self._run_options.get('adversarial_mode')} "
+            f"start_idx={start_idx} ======"
         )
 
         stages: List[PipelineStageLog] = [

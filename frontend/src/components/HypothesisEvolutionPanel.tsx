@@ -66,7 +66,7 @@ export function HypothesisEvolutionPanel({
         假设演化候选
       </h3>
       <p className="text-xs text-bp-muted">
-        红蓝对抗后生成的简化 / 跳出固有思维版本。未采用则继续使用原主假设进入实验。
+        基于评审反馈生成的简化 / 跳出固有思维版本。未采用则继续使用原主假设进入实验。
       </p>
       {error && (
         <p className="text-xs text-danger-400">{error}</p>

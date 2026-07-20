@@ -70,7 +70,7 @@ class ScriptDesigner:
             model_class=ExperimentPlan,
         )
 
-        from core.script_repair import normalize_column_params
+        from core.script_repair import infer_experiment_paradigm, normalize_column_params
 
         params = dict(plan.parameters or {})
         params["data_config"] = dict(data_config)
@@ -79,6 +79,16 @@ class ScriptDesigner:
         script_params = dict(plan.script_params or {})
         if isinstance(params.get("script_params"), dict):
             script_params.update(params["script_params"])
+
+        # 设计完成后写入推断范式，供 smoke 修复分治使用（可被 LLM 显式字段覆盖）
+        if not script_params.get("experiment_paradigm") and not script_params.get("_experiment_paradigm"):
+            paradigm = infer_experiment_paradigm(
+                research_goal=hypothesis or "",
+                human_feedback=feedback or "",
+                script=script,
+            )
+            script_params["experiment_paradigm"] = paradigm
+
         params["script_params"] = script_params
         plan.parameters = params
         plan.script_params = script_params
@@ -86,10 +96,11 @@ class ScriptDesigner:
         plan = normalize_column_params(plan, dataset_metadata or {})
 
         logger.info(
-            "设计分析方案: %s (full_rewrite=%s, feedback=%s)",
+            "设计分析方案: %s (full_rewrite=%s, feedback=%s, paradigm=%s)",
             plan.title,
             full_rewrite,
             bool(feedback),
+            script_params.get("experiment_paradigm"),
         )
         return plan
 

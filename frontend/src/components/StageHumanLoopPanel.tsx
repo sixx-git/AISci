@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import humanLoopService, { type HitlInteractionMode, type MentorReview, type RerunMode } from '@/services/humanLoopService';
 import { PromptConsole } from '@/components/PromptConsole';
+import { loadLoopConfig, loopConfigToRunOptions } from '@/components/LoopConfigPanel';
 
 const NODE_ID_TO_STAGE: Record<string, string> = {
   problem: 'problem_understanding',
@@ -284,6 +285,7 @@ export function StageHumanLoopPanel({
           use_human_modified_output: true,
           rerun_mode: rerunScope,
           human_feedback: userMsg,
+          run_options: loopConfigToRunOptions(loadLoopConfig(projectId)),
         });
         const targetLabel = stageLabel(targetStage);
         const scopeLabel = rerunScope === 'single_stage' ? '仅重跑本阶段' : '从此阶段继续后续流程';
@@ -393,6 +395,7 @@ export function StageHumanLoopPanel({
         use_human_modified_output: true,
         rerun_mode: 'from_stage_onward',
         human_feedback: feedback.trim() || undefined,
+        run_options: loopConfigToRunOptions(loadLoopConfig(projectId)),
       });
       if (res.code === 200 && res.data?.run_id) {
         if (!RERUN_OPTION_KEYS.has(stage)) {

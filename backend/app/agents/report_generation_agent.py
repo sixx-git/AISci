@@ -2073,14 +2073,37 @@ class ReportGenerationAgent:
         if not isinstance(chapters, dict):
             return result
 
-        from app.services.report_compliance_service import assess_result_type
-
         existing_results = chapters.get("results", "")
-        _, existing_type = assess_result_type(existing_results)
-        # 有实测、失败反例或仅有预期时：写入 Actual Results（未跑满轮次也可）
-        if has_usable_evidence or existing_type in ("none", "expected_result"):
-            enriched = "### Actual Results（实际分析结果）\n\n"
-            modeling_result = None
+        modeling_result = actual.get("modeling_result")
+        has_modeling = isinstance(modeling_result, dict) and bool(modeling_result)
+        has_summary_stats = bool(actual.get("summary_statistics"))
+        simulated = sv_results.get("simulated_results", {})
+        has_simulated = (
+            not sandbox_success
+            and not has_negative
+            and isinstance(simulated, dict)
+            and bool(simulated.get("data"))
+        )
+        # 无实测/建模/模拟时不写空的 Actual Results 小节，保留 LLM 的 Expected Results
+        if not (has_usable_evidence or has_modeling or has_summary_stats or has_simulated):
+            from app.services.report_content_sanitizer import strip_empty_actual_results_section
+
+            if isinstance(existing_results, str):
+                chapters["results"] = strip_empty_actual_results_section(existing_results)
+            elif isinstance(existing_results, dict):
+                actual_payload = existing_results.get("actual_results")
+                if actual_payload in (None, "", [], {}):
+                    existing_results = {
+                        k: v for k, v in existing_results.items() if k != "actual_results"
+                    }
+                    chapters["results"] = existing_results
+            result["chapters"] = chapters
+            return result
+
+        enriched = ""
+        # 仅在确有可写入内容时输出 Actual Results（未跑满轮次也可）
+        if has_usable_evidence or has_modeling or has_summary_stats:
+            enriched += "### Actual Results（实际分析结果）\n\n"
 
             if partial_run and (sandbox_success or has_negative or successful_iters):
                 cur = progress.get("current_iteration")
@@ -2148,8 +2171,7 @@ class ReportGenerationAgent:
                 else:
                     enriched += "\n"
 
-            modeling_result = actual.get("modeling_result")
-            if modeling_result and isinstance(modeling_result, dict):
+            if has_modeling:
                 enriched += "### Modeling Results（数据建模评估）\n\n"
                 if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
                     enriched += "> **Pilot Validation**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
@@ -2169,24 +2191,18 @@ class ReportGenerationAgent:
                         enriched += f"  - {key}: {val}\n"
                 enriched += "\n"
 
-            if not sandbox_success and not has_negative and actual.get("summary_statistics"):
+            if not sandbox_success and not has_negative and has_summary_stats:
                 enriched += "- 基于真实数据的统计分析已完成\n"
                 enriched += f"- 分析数据源数量: {actual.get('n_datasets_analyzed', 0)}\n"
                 enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
 
-            simulated = sv_results.get("simulated_results", {})
-            if (
-                not sandbox_success
-                and not has_negative
-                and simulated
-                and isinstance(simulated, dict)
-                and simulated.get("data")
-            ):
-                enriched += "### Simulated Results（模拟结果）\n\n"
-                enriched += f"- 模拟数据已生成\n"
-                enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
+        if has_simulated:
+            enriched += "### Simulated Results（模拟结果）\n\n"
+            enriched += "- 模拟数据已生成\n"
+            enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
 
-            # 论文式结果分析与讨论（基于已注入证据，不编造数值）
+        # 论文式结果分析与讨论（仅在有实测/建模时；基于已注入证据，不编造数值）
+        if has_usable_evidence or has_modeling:
             discussion_md = ReportGenerationAgent._build_paper_style_discussion(
                 hypothesis=str(sv.get("hypothesis") or actual.get("hypothesis") or ""),
                 metrics=metrics if isinstance(metrics, dict) else {},
@@ -2203,24 +2219,17 @@ class ReportGenerationAgent:
             if isinstance(result.get("results"), dict):
                 result["results"]["discussion"] = discussion_md
 
-            # 保留 LLM 原文作为补充（若非空且不是纯占位；已含讨论标题则不再整段重复）
-            if isinstance(existing_results, str) and len(existing_results.strip()) >= 40:
-                if (
-                    "Experiment Run" not in existing_results
-                    and "实测指标" not in existing_results
-                    and "结果分析与讨论" not in existing_results
-                ):
-                    enriched += "### 报告叙述补充\n\n"
-                    enriched += existing_results.strip() + "\n"
+        # 保留 LLM 原文作为补充（若非空且不是纯占位；已含讨论标题则不再整段重复）
+        if isinstance(existing_results, str) and len(existing_results.strip()) >= 40:
+            if (
+                "Experiment Run" not in existing_results
+                and "实测指标" not in existing_results
+                and "结果分析与讨论" not in existing_results
+            ):
+                enriched += "### 报告叙述补充\n\n"
+                enriched += existing_results.strip() + "\n"
 
-            if not has_usable_evidence and not modeling_result and existing_type == "none":
-                enriched += (
-                    "⚠️ 当前缺少可引用的迭代结果。请在「迭代实验」至少跑若干轮并勾选「用于报告」；"
-                    "无需跑满全部计划轮次；失败轮次也可作为反例写入。\n"
-                )
-
-            chapters["results"] = enriched
-
+        chapters["results"] = enriched
         result["chapters"] = chapters
         return result
 

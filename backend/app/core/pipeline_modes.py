@@ -114,6 +114,24 @@ def apply_iteration_mode(opts: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    """严格解析布尔：避免字符串 \"false\" 被 bool() 当成 True。"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("1", "true", "yes", "on"):
+            return True
+        if s in ("0", "false", "no", "off", ""):
+            return False
+        return default
+    return bool(value)
+
+
 def _resolve_post_evolution_enabled(opts: Dict[str, Any]) -> bool:
     if "enable_hypothesis_post_evolution" in opts:
         return bool(opts.get("enable_hypothesis_post_evolution"))
@@ -171,7 +189,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     except (TypeError, ValueError):
         max_gap_rounds = DEFAULT_MAX_GAP_ROUNDS
 
-    enable_pro_con = opts.get("enable_pro_con_adversarial", False)
+    enable_pro_con = _coerce_bool(opts.get("enable_pro_con_adversarial"), False)
     adversarial_mode = opts.get("adversarial_mode", "off")
     if adversarial_mode not in VALID_ADVERSARIAL_MODES:
         adversarial_mode = "off" if not enable_pro_con else "single_group"
@@ -227,7 +245,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "coverage_gap_threshold": coverage_threshold,
         "data_spec_gap_threshold": data_spec_threshold,
         "max_gap_rounds": max_gap_rounds,
-        "enable_pro_con_adversarial": bool(enable_pro_con),
+        "enable_pro_con_adversarial": enable_pro_con,
         "adversarial_mode": adversarial_mode,
         "con_challenge_max_rounds": con_max_rounds,
         "enable_hypothesis_evolution": bool(opts.get("enable_hypothesis_evolution", True)),

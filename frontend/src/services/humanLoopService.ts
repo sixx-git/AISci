@@ -65,6 +65,7 @@ export const humanLoopService = {
     use_human_modified_output?: boolean;
     rerun_mode?: RerunMode;
     human_feedback?: string;
+    run_options?: Record<string, unknown>;
   }): Promise<ApiResponse<{ run_id: string; parent_run_id: string; rerun_from_stage: string; rerun_mode?: string; status: string; in_place?: boolean }>> {
     const { data } = await api.post('/human-loop/rerun-from-stage', payload);
     return data;

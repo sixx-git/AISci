@@ -62,15 +62,28 @@ def _detect_hypothesis_domains(text: str) -> set[str]:
     return domains
 
 
-def _domain_hint_datasets(hypothesis: str, methods: str, metrics: str) -> List[Dict[str, Any]]:
+def _domain_hint_datasets(
+    hypothesis: str,
+    methods: str,
+    metrics: str,
+    *,
+    project_mode: str = "general",
+) -> List[Dict[str, Any]]:
+    from app.core.project_modes import is_federated_learning_mode
+
+    is_fl = is_federated_learning_mode(project_mode)
     domains = _detect_hypothesis_domains(f"{hypothesis} {methods} {metrics}")
+    # 通用项目：即使文案里出现 client/联邦字样，也不注入 FL Pack / federated 领域库
+    if not is_fl:
+        domains.discard("federated")
+
     out: List[Dict[str, Any]] = []
     seen: set[str] = set()
-    # FL Starter Pack 结构化元数据优先
+    # FL Starter Pack 仅联邦项目可见
     try:
         from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
 
-        if fl_pack_enabled() and (
+        if fl_pack_enabled() and is_fl and (
             "federated" in domains
             or any(k in f"{hypothesis} {methods}".lower() for k in ("联邦", "federated", "fedavg", "vfl"))
         ):
@@ -155,7 +168,8 @@ def _llm_suggest_public_datasets_sync(
     prompt = (
         "推荐 3–5 个真实存在、可公开检索的数据集，帮助用户完成小样验证。\n"
         "不要编造 Zenodo record ID；使用 search_url（官方页或搜索页）。\n"
-        "若假设是联邦学习而用户上传的是 FHIR/合规表，应推荐联邦 benchmark，不要只推荐 carcinoma 医学集。\n"
+        "请按任务类型推荐：通用分类/回归用表格或领域公开集；"
+        "仅当假设明确是联邦学习时才推荐联邦 benchmark。\n"
         f"已上传字段：{col_hint}\n"
         f"假设：{hypothesis[:800]}\n方法：{(methods or '')[:400]}\n指标：{(metrics or '')[:200]}\n"
         f"所需数据：{(required_data or '')[:400]}\n"
@@ -281,9 +295,12 @@ def build_validation_data_guidance(
     hypothesis: str = "",
     blockers: Optional[List[str]] = None,
     fetch_downloads: bool = True,
+    project_mode: str = "general",
 ) -> Dict[str, Any]:
     """构建小样验证阻塞时的数据需求、下载地址与上传优先级说明。"""
     ed = experiment_design or {}
+    # 允许从 experiment_design 透传项目模式
+    mode = project_mode or ed.get("project_mode") or "general"
     dr = ed.get("data_requirements") if isinstance(ed.get("data_requirements"), dict) else {}
     adequacy = dr.get("adequacy") if isinstance(dr.get("adequacy"), dict) else ed.get("data_adequacy") or {}
     if not isinstance(adequacy, dict):
@@ -373,6 +390,7 @@ def build_validation_data_guidance(
             hypothesis or ed.get("hypothesis") or "",
             ed.get("methods") or "",
             ed.get("metrics") or "",
+            project_mode=mode,
         ):
             key = (hint.get("dataset_name") or "").lower()
             if key not in seen_rec:

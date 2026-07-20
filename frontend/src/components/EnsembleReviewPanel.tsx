@@ -13,12 +13,15 @@ export function EnsembleReviewPanel({ review, onRerunFromReview }: EnsembleRevie
   const needsHuman = review.aggregated?.needs_human_review;
   const flags = review.aggregated?.disagreement_flags ?? [];
   const members = review.ensemble_reviews ?? [];
+  const hasProCon =
+    Boolean(review.pro_con_adversarial) ||
+    members.some((m) => String(m.reviewer_id || '') === 'con_challenger');
 
   return (
     <div className="p-4 rounded-lg border border-bp-border bg-bp-panel/30">
       <h3 className="text-sm font-semibold text-bp-text mb-3 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-bp-cyan" />
-        集成评审（含红蓝反方权重）
+        {hasProCon ? '集成评审（含红蓝反方权重）' : '集成评审'}
       </h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">

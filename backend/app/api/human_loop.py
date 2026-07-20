@@ -101,6 +101,7 @@ async def rerun_from_stage(
             use_human_modified_output=body.use_human_modified_output,
             rerun_mode=body.rerun_mode,
             human_feedback=body.human_feedback,
+            run_options=body.run_options,
         )
 
         def _bg():

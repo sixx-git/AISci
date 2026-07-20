@@ -35,6 +35,10 @@ class RerunFromStageRequest(BaseModel):
         default="",
         description="重跑时注入该阶段的额外约束/修改意见",
     )
+    run_options: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="可选：覆盖本 run 的 Pipeline options（如关闭红蓝对抗）",
+    )
 
 
 class RerunFromStageResponse(BaseModel):

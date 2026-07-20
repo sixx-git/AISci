@@ -136,9 +136,68 @@ def strip_operational_bracket_sections(text: str) -> str:
     return "\n".join(collapsed).strip()
 
 
+_ACTUAL_RESULTS_HEADING = re.compile(
+    r"(?im)^#{2,3}\s*(?:Actual\s*Results(?:\s*[（(]实际分析结果[）)])?|实际分析结果)\s*$"
+)
+_ACTUAL_PLACEHOLDER_LINE = re.compile(
+    r"(?i)^(暂无|待补充|信息不足|无实测|无实际|尚未|待完成|n/?a|none|null|"
+    r"实验图待补全|待完成实验后补充).*"
+)
+
+
+def strip_empty_actual_results_section(text: Any) -> str:
+    """无实测内容时删除空的 Actual Results / 实际分析结果 小节标题。"""
+    if text is None:
+        return ""
+    raw = str(text).replace("\\n", "\n")
+    if not raw.strip():
+        return ""
+    if not _ACTUAL_RESULTS_HEADING.search(raw):
+        return raw
+
+    lines = raw.splitlines()
+    out: List[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if _ACTUAL_RESULTS_HEADING.match(line.strip()):
+            j = i + 1
+            body_lines: List[str] = []
+            while j < len(lines):
+                nxt = lines[j]
+                if re.match(r"^#{2,3}\s+\S", nxt.strip()):
+                    break
+                body_lines.append(nxt)
+                j += 1
+            substantial = [
+                ln.strip()
+                for ln in body_lines
+                if ln.strip() and not _ACTUAL_PLACEHOLDER_LINE.match(ln.strip())
+            ]
+            if substantial:
+                out.append(line)
+                out.extend(body_lines)
+            # 空小节：丢弃标题与占位正文
+            i = j
+            continue
+        out.append(line)
+        i += 1
+
+    collapsed: List[str] = []
+    prev_blank = False
+    for line in out:
+        blank = not line.strip()
+        if blank and prev_blank:
+            continue
+        collapsed.append(line)
+        prev_blank = blank
+    return "\n".join(collapsed).strip()
+
+
 def _sanitize_results_chapter(results: Any) -> Any:
     if not isinstance(results, dict):
-        return strip_operational_bracket_sections(sanitize_text(results))
+        text = strip_operational_bracket_sections(sanitize_text(results))
+        return strip_empty_actual_results_section(text)
 
     cleaned: Dict[str, Any] = {}
     for key, val in results.items():
@@ -155,13 +214,22 @@ def _sanitize_results_chapter(results: Any) -> Any:
                     continue
                 seen.add(text)
                 items.append(text)
+            # 无实测条目时不保留空的 actual_results，避免导出空小节
+            if key == "actual_results" and not items:
+                continue
             cleaned[key] = items
         elif isinstance(val, str):
             text = strip_operational_bracket_sections(
                 sanitize_text(val, preserve_platform_terms=False)
             ).strip()
+            if key == "actual_results":
+                text = strip_empty_actual_results_section(text)
+                if not text:
+                    continue
             cleaned[key] = text if text and not _is_operational_line(text) else []
         else:
+            if key == "actual_results" and val in (None, "", {}, []):
+                continue
             cleaned[key] = val
     return cleaned
 

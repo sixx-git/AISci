@@ -405,6 +405,7 @@ class IterationEngine:
                 require_charts=True,
                 on_exhausted="raise",
                 rollback_plan=None,
+                human_feedback=(experiment.human_feedback or "").strip(),
             )
             plan = prepare_sandbox_plan(plan, data_config, fallback_plan=last_success_plan)
             smoke_n = resolve_smoke_sample_size(plan, self.config, column_contract)
@@ -662,6 +663,7 @@ class IterationEngine:
                 max_attempts=self.config.max_script_repair_attempts,
                 require_charts=True,
                 on_exhausted="raise",
+                human_feedback=feedback or "",
             )
             smoke_n = resolve_smoke_sample_size(plan, self.config, metadata)
             plan = _inject_smoke_sample_size(plan, smoke_n, metadata)

@@ -224,6 +224,7 @@ class ExperimentPlanner:
             column_contract=column_contract or {},
             error_message=error_message,
             analysis_summary=analysis_summary,
+            human_feedback=(getattr(experiment, "human_feedback", None) or ""),
         )
         if len(get_plan_script(plan)) < 80:
             logger.warning("修补脚本无效，回退基线脚本正文")

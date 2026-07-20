@@ -54,6 +54,79 @@ _LATEX_SPECIAL_CHARS = {
     "^": r"\textasciicircum{}",
 }
 
+# 允许在正文中保留的「无参数」LaTeX 命令（避免把 Windows 路径 \Users \allgaps 当命令）
+_SAFE_BARE_LATEX_CMDS = frozenset(
+    {
+        "Omega",
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "epsilon",
+        "theta",
+        "lambda",
+        "mu",
+        "nu",
+        "pi",
+        "rho",
+        "sigma",
+        "tau",
+        "phi",
+        "chi",
+        "psi",
+        "omega",
+        "Delta",
+        "Gamma",
+        "Lambda",
+        "Sigma",
+        "Phi",
+        "Psi",
+        "ldots",
+        "cdots",
+        "dots",
+        "times",
+        "cdot",
+        "pm",
+        "mp",
+        "infty",
+        "leq",
+        "geq",
+        "neq",
+        "approx",
+        "equiv",
+        "rightarrow",
+        "leftarrow",
+        "Rightarrow",
+        "to",
+        "partial",
+        "nabla",
+        "sum",
+        "int",
+        "prod",
+        "sqrt",
+        "frac",
+    }
+)
+
+
+def _is_ascii_letter(ch: str) -> bool:
+    return ("a" <= ch <= "z") or ("A" <= ch <= "Z")
+
+
+def _normalize_windows_paths_for_latex(s: str) -> str:
+    """把正文中的 Windows 路径反斜杠改为正斜杠，避免被 TeX 当成控制序列。"""
+    if not s or "\\" not in s:
+        return s
+
+    def _repl(match: re.Match[str]) -> str:
+        return match.group(0).replace("\\", "/")
+
+    # D:\foo\bar 或 \\server\share\path
+    s = re.sub(r"(?i)\b[A-Z]:\\(?:[^\\/:*?\"<>|\r\n]+\\)*[^\\/:*?\"<>|\r\n]*", _repl, s)
+    s = re.sub(r"\\\\[^\\/:*?\"<>|\r\n]+(?:\\[^\\/:*?\"<>|\r\n]+)+", _repl, s)
+    return s
+
+
 
 def get_latex_template_dir() -> Path:
     env_path = os.environ.get("LATEX_TEMPLATE_DIR", "").strip()
@@ -110,10 +183,12 @@ def _escape_plain_latex(s: str) -> str:
     i = 0
     while i < len(s):
         ch = s[i]
-        if ch == "\\" and i + 1 < len(s) and s[i + 1].isalpha():
+        # 仅保留 ASCII 命令名，避免中文路径「\浏览器」被当成控制序列
+        if ch == "\\" and i + 1 < len(s) and _is_ascii_letter(s[i + 1]):
             j = i + 1
-            while j < len(s) and s[j].isalpha():
+            while j < len(s) and _is_ascii_letter(s[j]):
                 j += 1
+            cmd = s[i + 1 : j]
             if j < len(s) and s[j] == "{":
                 depth = 0
                 k = j
@@ -129,8 +204,13 @@ def _escape_plain_latex(s: str) -> str:
                 out.append(s[i:k])
                 i = k
                 continue
-            out.append(s[i:j])
-            i = j
+            # 无参数命令：仅白名单保留（防止 \Users \allgaps 等路径片段）
+            if cmd in _SAFE_BARE_LATEX_CMDS:
+                out.append(s[i:j])
+                i = j
+                continue
+            out.append(_LATEX_SPECIAL_CHARS["\\"])
+            i += 1
             continue
         out.append(_LATEX_SPECIAL_CHARS.get(ch, ch))
         i += 1
@@ -147,24 +227,25 @@ def _unescape_math_inner(inner: str) -> str:
 
 
 def escape_latex(text: Any) -> str:
-    """转义 LaTeX 特殊字符，保留 $...$ 行内公式与已有 LaTeX 命令。"""
+    """转义 LaTeX 特殊字符，保留 $...$ 行内公式与已有安全 LaTeX 命令。"""
     if text is None:
         return ""
     s = str(text).replace("\\$", "$")
     if not s.strip():
         return ""
-
+    s = _normalize_windows_paths_for_latex(s)
     s = _promote_inline_math(s)
-
-    if "$" in s:
-        parts = re.split(r"(\$[^$\n]+\$)", s)
-        return "".join(
+    if "$" not in s:
+        return _escape_plain_latex(s)
+    parts = re.split(r"(\$[^$\n]+\$)", s)
+    return "".join(
+        (
             f"${_unescape_math_inner(part[1:-1])}$"
             if part.startswith("$") and part.endswith("$")
             else _escape_plain_latex(part)
-            for part in parts
         )
-    return _escape_plain_latex(s)
+        for part in parts
+    )
 
 
 def _normalize_lines(value: Any) -> List[str]:
@@ -190,7 +271,12 @@ def _normalize_lines(value: Any) -> List[str]:
                 lines.append(f"{key}: {val}")
         return lines
     text = str(value).strip() if value is not None else ""
-    return [text] if text else []
+    if not text:
+        return []
+    # 多行 markdown / 纯文本需按行拆分，才能识别 - / 1. 列表
+    if "\n" in text:
+        return [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return [text]
 
 
 def _is_valid_reference_text(ref: str) -> bool:
@@ -393,6 +479,24 @@ def _format_paragraph(value: Any) -> str:
     return _format_chapter_body(value)
 
 
+def _format_text_block(text: str) -> str:
+    """将一段纯文本格式化为段落 / itemize / enumerate。"""
+    lines = _normalize_lines(text)
+    if not lines:
+        return ""
+    if _is_numbered_list_lines(lines):
+        return _format_enumerate(lines)
+    bulletish = [
+        ln[2:].strip() if ln.startswith(("- ", "* ")) else ln
+        for ln in lines
+    ]
+    if len(lines) > 1 or any(ln.startswith(("- ", "* ")) for ln in lines):
+        return _format_itemize(bulletish)
+    line = lines[0]
+    body = _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
+    return f"{body}\n\n"
+
+
 def _format_chapter_body(value: Any) -> str:
     """章节正文：支持 ### 小节标题 → LaTeX \\subsection（不改变主 section 结构）。"""
     if value is None:
@@ -415,22 +519,14 @@ def _format_chapter_body(value: Any) -> str:
         return ""
 
     if "###" not in text:
-        lines = _normalize_lines(text)
-        if _is_numbered_list_lines(lines):
-            return _format_enumerate(lines)
-        if len(lines) == 1:
-            line = lines[0]
-            body = _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
-            return f"{body}\n\n"
-        return _format_itemize(lines)
+        return _format_text_block(text)
 
     parts: List[str] = []
     blocks = re.split(r"(?m)^###\s+", text)
     if blocks and blocks[0].strip():
         intro = blocks[0].strip()
         if intro:
-            intro_body = _markdown_to_latex_body(intro) if "**" in intro else escape_latex(intro)
-            parts.append(f"{intro_body}\n\n")
+            parts.append(_format_text_block(intro))
     for block in blocks[1:]:
         if not block.strip():
             continue
@@ -439,23 +535,7 @@ def _format_chapter_body(value: Any) -> str:
         body = lines[1].strip() if len(lines) > 1 else ""
         parts.append(f"\\subsection{{{escape_latex(title)}}}\n\n")
         if body:
-            body_lines = [ln.strip() for ln in body.split("\n") if ln.strip()]
-            if len(body_lines) == 1 and not body_lines[0].startswith("- "):
-                line = body_lines[0]
-                parts.append(
-                    f"{_markdown_to_latex_body(line) if '**' in line else escape_latex(line)}\n\n"
-                )
-            else:
-                items = []
-                for ln in body_lines:
-                    if ln.startswith("- "):
-                        items.append(ln[2:].strip())
-                    else:
-                        items.append(ln)
-                if all(ln.startswith("**") or ":" in ln for ln in items):
-                    parts.append(_format_itemize(items))
-                else:
-                    parts.append(_format_itemize(items))
+            parts.append(_format_text_block(body))
     return "".join(parts)
 
 

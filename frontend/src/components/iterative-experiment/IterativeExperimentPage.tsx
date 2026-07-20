@@ -23,6 +23,7 @@ interface IterativeExperimentPageProps {
 
 export function IterativeExperimentPage({
   projectId,
+  projectMode = 'general',
   hypothesisId,
 }: IterativeExperimentPageProps) {
   const navigate = useNavigate();
@@ -160,6 +161,7 @@ export function IterativeExperimentPage({
     return (
       <ExperimentDetail
         projectId={projectId}
+        projectMode={projectMode}
         experiment={selected}
         busy={busy}
         error={error}

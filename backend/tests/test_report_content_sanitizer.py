@@ -2,6 +2,7 @@
 from app.services.report_content_sanitizer import (
     sanitize_chapters,
     sanitize_report_result,
+    strip_empty_actual_results_section,
     strip_operational_bracket_sections,
 )
 
@@ -76,3 +77,45 @@ def test_sanitize_results_removes_pipeline_notes():
     assert len(results["expected_results"]) == 1
     assert "MCMC" in results["expected_results"][0]
     assert "小样验证未执行" not in str(results)
+    assert "actual_results" not in results
+
+
+def test_strip_empty_actual_results_section():
+    text = (
+        "### Actual Results（实际分析结果）\n\n"
+        "### Expected Results（预期结果）\n\n"
+        "预期通过对照实验验证假设。"
+    )
+    cleaned = strip_empty_actual_results_section(text)
+    assert "Actual Results" not in cleaned
+    assert "实际分析结果" not in cleaned
+    assert "Expected Results" in cleaned
+    assert "对照实验" in cleaned
+
+
+def test_keep_nonempty_actual_results_section():
+    text = (
+        "### Actual Results（实际分析结果）\n\n"
+        "- accuracy: 0.82\n\n"
+        "### Expected Results（预期结果）\n\n"
+        "预期提升。"
+    )
+    cleaned = strip_empty_actual_results_section(text)
+    assert "Actual Results" in cleaned
+    assert "0.82" in cleaned
+
+
+def test_sanitize_chapters_drops_empty_actual_heading():
+    chapters = sanitize_chapters(
+        {
+            "results": (
+                "### Actual Results（实际分析结果）\n\n"
+                "暂无实测结果。\n\n"
+                "### Expected Results（预期结果）\n\n"
+                "预期在固定协议下得到可重复指标。"
+            )
+        }
+    )
+    results = chapters["results"]
+    assert "Actual Results" not in results
+    assert "Expected Results" in results

@@ -88,7 +88,7 @@
 | `target` | 目标数据 | 验证实验拟采集特征与成功标准 |
 | `methods` | 方法论 | 可执行的实验/分析步骤（禁止写智能体流程） |
 | `experiments` | 实验设计 | Baselines、Metrics、Setup、Ablation、Validation |
-| `results` | 实验结果 | 区分 actual / simulated / expected |
+| `results` | 实验结果 | 有实测才写 Actual；否则只写 Expected（及可选 Simulated） |
 | `references` | 参考文献 | 仅真实可验证文献 |
 
 各字段写作要求（摘要）：
@@ -100,7 +100,7 @@
 - **datasets / source / target**：分开写；缺真实数据须明确说明，禁止伪造。
 - **methods**：可执行、**可验证**的实验步骤，须与假设及 `research_object` 对应；**禁止**写 Pipeline 内部阶段。
 - **experiments**：JSON 对象含 baselines、metrics、experimental_setup、ablation_study、validation_protocol。
-- **results**：须含（1）实际/模拟/预期结果区分；（2）**结果分析与讨论**（论文体：主要发现 → 与假设对照 → 反例含义 → 局限与后续）；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`；未跑满计划轮次时写阶段性结果；失败轮次写入反例/局限；区分 pilot_fallback 与完整沙箱产出
+- **results**：有实测时写 Actual Results + **结果分析与讨论**（主要发现 → 与假设对照 → 反例含义 → 局限与后续）；无实测时**不要**写 Actual Results 标题，只写 Expected Results（及有数据时的 Simulated）；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`；未跑满计划轮次时写阶段性结果；失败轮次写入反例/局限
 - **references**：仅 citation_map / literature_facts 可验证条目；禁止编造。
 
 **VFL / 联邦学习场景**：若项目挂载 FL Starter Pack 或 `small_validation.fl_context` / `federated_pilot` 存在，experiments/results 须写清：setting（HFL/VFL）、对齐键或 client 划分、通信轮次、global vs local 指标；失败/对齐未通过写入反例；可参考 pack checklists（alignment_rate、communication_rounds 等）。baselines/metrics 须符合 vertical_fl / horizontal_fl 表述，禁止假装已部署多机联邦。
@@ -135,7 +135,7 @@
 ## 质量红线
 1. 必须严格按 12 个章节输出，不得新增无关大章节，不得省略任何章节。
 2. References 中的每一条都必须能在 citation_map 或 literature_facts 中找到对应条目，否则不得写入。
-3. Results 必须区分 Actual Results / Simulated Results / Expected Results。
+3. Results：有实测/沙箱证据时写 Actual Results；有模拟数据时写 Simulated Results；否则只写 Expected Results。**禁止输出空的 Actual Results 小节**（无实验轮次时不要写该标题）。
 4. Datasets 必须说明真实来源或拟采集状态。
 5. Source 和 Target 必须分开写。
 6. 如果输入信息不足，写"信息不足，需要补充"，不要编造。

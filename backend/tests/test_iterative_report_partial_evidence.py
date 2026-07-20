@@ -105,6 +105,25 @@ def test_enrich_writes_discussion_section():
     assert out["results"].get("discussion")
 
 
+def test_enrich_no_evidence_omits_actual_results_heading():
+    out = ReportGenerationAgent()._enrich_results_with_categorized(
+        {
+            "chapters": {
+                "results": (
+                    "### Actual Results（实际分析结果）\n\n"
+                    "### Expected Results（预期结果）\n\n"
+                    "预期通过模拟得到后验约束。"
+                )
+            }
+        },
+        {"results": {"expected_results": {"note": "only expected"}}},
+        None,
+    )
+    text = out["chapters"]["results"]
+    assert "Actual Results" not in text
+    assert "Expected Results" in text
+
+
 def test_enrich_failure_only_still_writes_section():
     exp = {
         "id": "exp-fail",

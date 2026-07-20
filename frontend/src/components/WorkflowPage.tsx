@@ -12,6 +12,7 @@ import {
   LoopConfigPanel,
   loadLoopConfig,
   saveLoopConfig,
+  normalizeLoopConfig,
   loopConfigToRunOptions,
   ITERATION_MODE_HINTS,
   type LoopConfigState,
@@ -630,20 +631,33 @@ export function WorkflowPage({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
   const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
-  // 按项目持久化：切换 Tab 会卸载本页，若不落盘会回到默认（红蓝对抗开启）
+  // 按项目持久化：切换 Tab 会卸载本页，若不落盘会丢配置；红蓝对抗默认关闭
   const [loopConfig, setLoopConfig] = useState<LoopConfigState>(() => loadLoopConfig(projectId));
+  const loopConfigRef = useRef(loopConfig);
 
   useEffect(() => {
     setLoopConfig(loadLoopConfig(projectId));
   }, [projectId]);
 
+  useEffect(() => {
+    loopConfigRef.current = loopConfig;
+  }, [loopConfig]);
+
   const handleLoopConfigChange = useCallback(
     (next: LoopConfigState) => {
-      setLoopConfig(next);
-      saveLoopConfig(projectId, next);
+      const normalized = normalizeLoopConfig(next);
+      loopConfigRef.current = normalized;
+      setLoopConfig(normalized);
+      saveLoopConfig(projectId, normalized);
     },
     [projectId],
   );
+
+  const resolveLatestRunOptions = useCallback(() => {
+    // 优先读已同步落盘的配置，避免「刚取消勾选就点运行」时闭包仍是旧值
+    const saved = projectId ? loadLoopConfig(projectId) : loopConfigRef.current;
+    return loopConfigToRunOptions(saved);
+  }, [projectId]);
   const [showHitlModal, setShowHitlModal] = useState(false);
   const [hitlGateInfo, setHitlGateInfo] = useState<HitlGateInfo | null>(null);
   const [hitlGateRunId, setHitlGateRunId] = useState<string | null>(null);
@@ -1150,7 +1164,7 @@ export function WorkflowPage({
 
     try {
       console.log('[Pipeline] submitting POST /pipeline/run projectId=', projectId, 'question=', finalResearchQuestion?.slice(0, 50));
-      const response = await pipelineService.run(projectId, finalResearchQuestion, loopConfigToRunOptions(loopConfig));
+      const response = await pipelineService.run(projectId, finalResearchQuestion, resolveLatestRunOptions());
       const result: PipelineRunResult = response.data;
 
       if (!result || !result.run_id) {
@@ -1179,7 +1193,7 @@ export function WorkflowPage({
     projectId,
     finalResearchQuestion,
     startPolling,
-    loopConfig,
+    resolveLatestRunOptions,
     rememberLatestRunId,
   ]);
 
@@ -1254,6 +1268,7 @@ export function WorkflowPage({
           stage,
           use_human_modified_output: true,
           rerun_mode: 'single_stage',
+          run_options: resolveLatestRunOptions(),
         });
         if (res.code === 200 && res.data?.run_id) {
           const newRunId = res.data.run_id;
@@ -1277,7 +1292,7 @@ export function WorkflowPage({
         setErrorMessage(err instanceof Error ? err.message : '本阶段重跑失败');
       }
     },
-    [projectId, nodes, startPolling, resolveRunIdForActions, rememberLatestRunId],
+    [projectId, nodes, startPolling, resolveRunIdForActions, rememberLatestRunId, resolveLatestRunOptions],
   );
 
   // ========== 计算状态摘要 ==========

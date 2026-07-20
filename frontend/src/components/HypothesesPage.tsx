@@ -378,7 +378,18 @@ export function HypothesesPage({
             </Card>
           )}
           {ensembleReview && (
-            <Card title="集成评审" subtitle="含反方质疑智能体权重（con_challenger）">
+            <Card
+              title="集成评审"
+              subtitle={
+                proConAdversarial ||
+                ensembleReview.pro_con_adversarial ||
+                (ensembleReview.ensemble_reviews || []).some(
+                  (m) => String(m.reviewer_id || '') === 'con_challenger',
+                )
+                  ? '含反方质疑智能体权重（con_challenger）'
+                  : '多评审者加权聚合（未启用红蓝对抗）'
+              }
+            >
               <EnsembleReviewPanel review={ensembleReview} />
             </Card>
           )}

@@ -217,6 +217,15 @@ SCRIPT_DESIGNER_SYSTEM_PROMPT = """你是一位数据科学实验设计专家。
 8. 迭代时必须基于「当前脚本 + 修改意见」完善实现。
    允许高自由度重写划分方式、特征工程、评估协议与图表。人工反馈优先级最高。
 
+实验范式自适应（必须二选一，禁止混用）:
+- 先根据研究假设与人工反馈判定范式：
+  · federated：出现联邦学习 / FedAvg / FedProx / Non-IID / Dirichlet / 客户端划分 / 通信轮次等信号
+  · general：其余通用表格、统计学习、交叉验证、单机建模任务
+- federated：实现客户端划分→本地更新→聚合→轮次评估；Non-IID 下局部单类是预期现象，
+  训练路径须自适应处理标签支撑不足，且评估保持联邦语义；不要退化成「假装联邦的全局 CV」。
+- general：用标准划分/CV/基线对比；禁止为了“更炫”或躲错而引入联邦客户端循环。
+- 可在 script_params 写入 experiment_paradigm="federated"|"general" 供后续修复轮次复用。
+
 列契约硬约束（非常重要）:
 - 若 modality 为 image/audio/media：df 是 manifest（file_path + label），勿把路径当数值特征；
   脚本内用 PIL 或 wave 读取少量文件提取特征/训练；小样验证时限制读取文件数（如 64~256）
@@ -449,12 +458,24 @@ SANDBOX_SCRIPT_PATCH_SYSTEM_PROMPT = """你是脚本修复专家（类似 IDE �
 4. target_column 必须存在于列契约；字符串标签需 LabelEncoder（得到 1D y，勿用 df[[col]].values 造成 (n,1)）
 5. 必须返回 (metrics_dict, chart_paths_list) 且至少保存 1 张图
 6. 只输出 JSON 数据实例（可含 diagnosis / script / analysis_script / script_params），不要输出 Schema
-7. 若报错含 n_splits / groups：改用 groups=sensor(或受试者列)，并写
-   n_splits = min(5, len(np.unique(groups)))；组数太少则用 GroupShuffleSplit(n_splits=1) 或降折
-8. 修复必须能解释 traceback；不要忽略【出错代码附近】里用 >>> 标出的行"""
+7. 若报错含 n_splits / groups：按当前实验范式选择分组列（general 用 sensor/受试者；federated 优先 client_id），
+   并写 n_splits = min(5, len(np.unique(groups)))；组数太少则降折或换协议
+8. 修复必须能解释 traceback；不要忽略【出错代码附近】里用 >>> 标出的行
+9. 严格遵守系统给出的【实验范式】边界：general 与 federated 的修复策略不可混用；
+   同语义错误反复出现时，扫描全部同类调用点，勿只改一行让错误换行号再爆
+10. 自行推理具体修复手段，禁止照抄固定代码模板；diagnosis 说明根因与范式内改法"""
 
 SANDBOX_SCRIPT_PATCH_USER_TEMPLATE = Template("""## 研究目标
 {{ research_goal }}
+
+## 实验范式
+paradigm={{ experiment_paradigm }}
+（federated=联邦学习；general=通用分析。修复必须留在该范式内。）
+
+{% if human_feedback %}
+## 人工 / 系统反馈上下文（用于判定范式与约束，勿忽略）
+{{ human_feedback }}
+{% endif %}
 
 ## 列契约
 数值列: {{ numeric_columns }}
@@ -478,7 +499,9 @@ mode={{ repair_mode }}，同错连续次数={{ same_error_streak }}
 ## 分析反馈
 {{ previous_analysis_summary }}
 
-请修复脚本，保持方法意图不变。若模式为 diagnose/broader，先写 diagnosis 再给完整 script。""")
+请在 paradigm={{ experiment_paradigm }} 边界内修复脚本，保持研究意图。
+若模式为 diagnose/broader，先写 diagnosis 再给完整 script；
+可在 script_params.experiment_paradigm 写回当前范式。""")
 
 PLANNER_SANDBOX_USER_TEMPLATE = Template("""请为以下研究目标设计基于数据的实验方案。
 

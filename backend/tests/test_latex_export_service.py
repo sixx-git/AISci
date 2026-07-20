@@ -8,6 +8,7 @@ from pathlib import Path
 from app.services.latex_export_service import (
     _build_references_bib,
     _build_thebibliography_section,
+    _format_chapter_body,
     _format_reference_gbt7714,
     build_latex_document,
     copy_template_assets,
@@ -34,6 +35,27 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn("$H_0$", escaped)
         self.assertIn(r"\Omega", escaped)
         self.assertIn("$", escaped)
+
+    def test_escape_windows_path_not_treated_as_commands(self):
+        text = r"数据集路径：D:\浏览器\allgaps，共 5000 条"
+        escaped = escape_latex(text)
+        self.assertNotIn(r"\allgaps", escaped)
+        self.assertNotIn(r"\浏", escaped)
+        self.assertIn("D:/浏览器/allgaps", escaped)
+
+    def test_escape_users_path_segment(self):
+        text = r"C:\Users\demo\data.csv"
+        escaped = escape_latex(text)
+        self.assertIn("C:/Users/demo/data.csv", escaped)
+        self.assertNotIn(r"\Users", escaped)
+
+    def test_format_chapter_body_bullet_list_and_windows_path(self):
+        text = "- 实验采用本地目录（路径：D:\\浏览器\\allgaps）\n- 共 5000 条样本"
+        body = _format_chapter_body(text)
+        self.assertIn(r"\begin{itemize}", body)
+        self.assertIn(r"\item", body)
+        self.assertIn("D:/浏览器/allgaps", body)
+        self.assertNotIn(r"\allgaps", body)
 
     def test_build_latex_document_contains_sections(self):
         result = {

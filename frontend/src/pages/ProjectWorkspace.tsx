@@ -76,7 +76,11 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
 }) {
   const navigate = useNavigate();
   const fl = project.config?.fl_pack?.summary || project.config?.fl_pack;
-  const flMounted = Boolean(project.config?.fl_pack_mounted && fl);
+  const flMounted = Boolean(
+    project.project_mode === 'federated_learning'
+    && project.config?.fl_pack_mounted
+    && fl,
+  );
 
   return (
     <div className="space-y-6">
@@ -510,7 +514,11 @@ export function ProjectWorkspace() {
       ? '联邦学习（资源包）'
       : 'General AISci';
   const flPackSummary = project?.config?.fl_pack?.summary || project?.config?.fl_pack;
-  const flPackMounted = Boolean(project?.config?.fl_pack_mounted && flPackSummary);
+  const flPackMounted = Boolean(
+    resolvedProjectMode === 'federated_learning'
+    && project?.config?.fl_pack_mounted
+    && flPackSummary,
+  );
 
   const resolvedResearchField = useMemo(
     () => resolveResearchField(project, id, latestRunStages),

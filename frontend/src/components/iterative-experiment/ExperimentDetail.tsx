@@ -19,6 +19,7 @@ import { IterationTimeline } from './IterationTimeline';
 
 interface ExperimentDetailProps {
   projectId: string;
+  projectMode?: string;
   experiment: IterativeExperiment;
   busy?: boolean;
   error?: string | null;
@@ -67,6 +68,7 @@ function resolveInitialProfileName(cfg?: DataConfig | null): string {
 
 export function ExperimentDetail({
   projectId,
+  projectMode = 'general',
   experiment,
   busy,
   error,
@@ -85,6 +87,7 @@ export function ExperimentDetail({
 }: ExperimentDetailProps) {
   const phase = experiment.phase;
   const isSandbox = experiment.executor_type === 'sandbox';
+  const isFederatedProject = projectMode === 'federated_learning';
   const boundConfig = experiment.data_config ?? null;
 
   const [sourceType, setSourceType] = useState<DataSourceType>(() =>
@@ -123,6 +126,10 @@ export function ExperimentDetail({
 
   useEffect(() => {
     let cancelled = false;
+    if (!isFederatedProject) {
+      setFlScripts([]);
+      return () => { cancelled = true; };
+    }
     void iterativeExperimentService.listFlScriptTemplates(projectId)
       .then((items) => {
         if (!cancelled) setFlScripts(items.slice(0, 3));
@@ -131,7 +138,7 @@ export function ExperimentDetail({
         if (!cancelled) setFlScripts([]);
       });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, isFederatedProject]);
 
   const canShowUpload = isSandbox && phase !== 'running' && phase !== 'completed';
   const canIterate =
@@ -519,7 +526,7 @@ export function ExperimentDetail({
             </div>
           )}
 
-          {flScripts.length > 0 && (
+          {isFederatedProject && flScripts.length > 0 && (
             <div className="mb-4 rounded-lg border border-bp-cyan/25 bg-bp-cyan-tint/40 p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
                 <FileCode2 className="w-4 h-4 text-bp-cyan" />

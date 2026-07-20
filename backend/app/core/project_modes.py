@@ -23,6 +23,11 @@ def normalize_project_mode(mode: str | None) -> str:
     return ProjectMode.GENERAL.value
 
 
+def is_federated_learning_mode(mode: str | None) -> bool:
+    """是否为联邦学习（资源包）项目模式。"""
+    return normalize_project_mode(mode) == ProjectMode.FEDERATED_LEARNING.value
+
+
 PROJECT_MODE_LABELS = {
     ProjectMode.GENERAL.value: "General AI Scientist",
     ProjectMode.FEDERATED_LEARNING.value: "Federated Learning (Starter Pack)",
