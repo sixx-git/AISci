@@ -1,0 +1,31 @@
+{
+  "id": "vepakomma2018splitnn",
+  "title": "Split learning for health: Distributed deep learning without sharing raw patient data",
+  "year": 2018,
+  "venue": "arXiv",
+  "external_id": "arXiv:1812.00564",
+  "setting": "vfl",
+  "facts": [
+    {
+      "fact_id": "fl_seed_splitnn_1",
+      "claim": "SplitNN 将网络按层切开，使各方无需共享原始特征即可协作训练。",
+      "method": "SplitNN",
+      "setting": "vfl",
+      "metrics": [
+        "auc",
+        "aligned_sample_rate"
+      ],
+      "dataset": "healthcare tabular / imaging",
+      "limitations": "依赖可靠样本对齐与中间激活传输。",
+      "source": "Vepakomma et al., 2018",
+      "quote": "split learning",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized",
+    "SplitNN"
+  ],
+  "domain": "fl_core"
+}

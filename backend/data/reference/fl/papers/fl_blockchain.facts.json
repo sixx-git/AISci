@@ -1,0 +1,49 @@
+{
+  "id": "fl_blockchain",
+  "title": "Blockchain-Enabled Federated Learning: Authentication, Audit and Incentives",
+  "year": 2021,
+  "venue": "survey / systems line",
+  "external_id": "survey:fl-blockchain-2021",
+  "setting": "hfl",
+  "domain": "fl_blockchain",
+  "facts": [
+    {
+      "fact_id": "fl_seed_chain_1",
+      "claim": "区块链可用于联邦节点身份认证、参数聚合审计与激励机制，提升系统可信与可追溯性。",
+      "method": "blockchain-FL architecture",
+      "setting": "hfl",
+      "domain": "fl_blockchain",
+      "metrics": [
+        "audit_coverage",
+        "participation_rate",
+        "global_accuracy"
+      ],
+      "dataset": "permissioned chain + FL clients",
+      "limitations": "链上吞吐与隐私冲突；本 Pack 不提供链上 runtime。",
+      "source": "blockchain-FL survey literature",
+      "quote": "incentive",
+      "relevance": 0.85
+    },
+    {
+      "fact_id": "fl_seed_chain_2",
+      "claim": "若课题强调「可审计聚合」，报告应区分链上存证对象（哈希/摘要 vs 明文参数）与链下训练过程。",
+      "method": "on-chain audit design",
+      "setting": "both",
+      "domain": "fl_blockchain",
+      "metrics": [
+        "audit_coverage",
+        "communication_cost_mb"
+      ],
+      "dataset": "n/a",
+      "limitations": "存证不等于差分隐私。",
+      "source": "blockchain-FL practice",
+      "quote": "audit",
+      "relevance": 0.82
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedAvg+audit log"
+  ]
+}

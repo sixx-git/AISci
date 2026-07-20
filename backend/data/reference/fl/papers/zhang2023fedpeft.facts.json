@@ -1,0 +1,50 @@
+{
+  "id": "zhang2023fedpeft",
+  "title": "Federated Learning for Large Language Models: Towards Federated PEFT and Instruction Tuning",
+  "year": 2023,
+  "venue": "community survey / FedPEFT line",
+  "external_id": "survey:fed-llm-peft-2023",
+  "setting": "hfl",
+  "domain": "llm_ft",
+  "facts": [
+    {
+      "fact_id": "fl_seed_fedpeft_1",
+      "claim": "联邦参数高效微调（FedPEFT）以提示调优/LoRA 等适配器为聚合对象，是在通信与算力约束下做跨机构指令微调的主流路线。",
+      "method": "FedPEFT / FedIT-style",
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "metrics": [
+        "communication_cost_mb",
+        "downstream_accuracy",
+        "trainable_params"
+      ],
+      "dataset": "instruction-tuning shards",
+      "limitations": "需明确冻结层与适配器放置；安全对齐风险仍在。",
+      "source": "FedLLM PEFT literature synthesis",
+      "quote": "parameter-efficient",
+      "relevance": 0.86
+    },
+    {
+      "fact_id": "fl_seed_fedpeft_2",
+      "claim": "指令微调联邦化时，应以任务级指标（如指令遵循准确率）为主指标，并同时报告通信轮次与适配器规模，避免只报中心化 SFT 分数。",
+      "method": "Fed instruction tuning metrics",
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "metrics": [
+        "instruction_following_score",
+        "communication_rounds"
+      ],
+      "dataset": "multi-tenant prompts",
+      "limitations": "小样合成指令与真实业务指令分布可能不一致。",
+      "source": "FedLLM PEFT literature synthesis",
+      "quote": "instruction tuning",
+      "relevance": 0.84
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "LoRA SFT",
+    "FedAvg+LoRA",
+    "prompt tuning"
+  ]
+}

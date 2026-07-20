@@ -58,6 +58,10 @@ class Settings(BaseSettings):
 
     # 迭代实验：默认启用 shaxiang 引擎（失败自动回退服务端 mock）
     AISCI_USE_SHAXIANG: bool = True
+
+    # 联邦学习 Starter Pack（资源包挂载；非多机 runtime）
+    AISCI_FL_PACK_ENABLED: bool = True
+    AISCI_FL_LOCAL_PILOT_ENABLED: bool = True  # Phase4: 报告合成时可跑本地 FedAvg pilot
     
     # 向量存储配置（主路径：Zvec 嵌入式向量库，按 project_id 分 Collection）
     # Chat 专用 Zvec Collection（与会话级临时文档 RAG 相关）

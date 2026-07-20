@@ -1,0 +1,51 @@
+{
+  "id": "mcmahan2017fedavg",
+  "title": "Communication-Efficient Learning of Deep Networks from Decentralized Data",
+  "year": 2017,
+  "venue": "AISTATS",
+  "external_id": "arXiv:1602.05629",
+  "setting": "hfl",
+  "domain": "fl_core",
+  "facts": [
+    {
+      "fact_id": "fl_seed_fedavg_1",
+      "claim": "FedAvg 通过对本地 SGD 更新做加权平均，可在通信受限条件下训练深度模型。",
+      "method": "FedAvg",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "MNIST / Shakespeare (LEAF-like)",
+      "limitations": "Non-IID 与部分参与会显著影响收敛。",
+      "source": "McMahan et al., 2017",
+      "quote": "Federated Averaging",
+      "relevance": 0.95
+    },
+    {
+      "fact_id": "fl_seed_fedavg_2",
+      "claim": "联邦平均的核心权衡是本地计算量与通信轮次：增加本地 epoch 可减通信，但在 Non-IID 下可能加剧客户端漂移。",
+      "method": "FedAvg",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "communication_rounds",
+        "client_drift",
+        "global_accuracy"
+      ],
+      "dataset": "MNIST / FEMNIST",
+      "limitations": "最优本地步数依赖异构程度，不可照搬中心化超参。",
+      "source": "McMahan et al., 2017",
+      "quote": "local SGD",
+      "relevance": 0.9
+    }
+  ],
+  "data_links": [
+    "https://github.com/TalwalkarLab/leaf"
+  ],
+  "recommended_baselines": [
+    "FedAvg",
+    "local-only SGD"
+  ]
+}

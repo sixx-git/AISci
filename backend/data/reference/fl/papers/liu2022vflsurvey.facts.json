@@ -1,0 +1,32 @@
+{
+  "id": "liu2022vflsurvey",
+  "title": "A Survey on Vertical Federated Learning: From Concepts to Applications",
+  "year": 2022,
+  "venue": "survey",
+  "external_id": "survey:vfl-2022",
+  "setting": "vfl",
+  "facts": [
+    {
+      "fact_id": "fl_seed_vfl_survey_1",
+      "claim": "VFL 核心挑战包括实体对齐、特征方/标签方分工、通信与隐私预算权衡。",
+      "method": "VFL survey",
+      "setting": "vfl",
+      "metrics": [
+        "aligned_sample_rate",
+        "privacy_budget",
+        "communication_cost_mb"
+      ],
+      "dataset": "multi-party tabular",
+      "limitations": "综述结论需落到可验证小样实验。",
+      "source": "VFL survey literature",
+      "quote": "entity alignment",
+      "relevance": 0.85
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "logistic VFL",
+    "SplitNN"
+  ],
+  "domain": "fl_core"
+}

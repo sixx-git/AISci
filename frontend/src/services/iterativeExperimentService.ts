@@ -161,6 +161,44 @@ export const iterativeExperimentService = {
     return unwrap(data, '设计脚本失败');
   },
 
+  async listFlScriptTemplates(projectId: string): Promise<Array<{
+    id: string;
+    path?: string;
+    recommended_when?: string;
+    setting?: string;
+    preview?: string;
+    content?: string;
+    exists?: boolean;
+  }>> {
+    const { data } = await api.get<
+      ApiResponse<{ items: Array<Record<string, unknown>>; count: number }>
+    >(`/projects/${projectId}/fl-pack/scripts`);
+    const payload = unwrap(data);
+    return Array.isArray(payload.items)
+      ? (payload.items as Array<{
+          id: string;
+          path?: string;
+          recommended_when?: string;
+          setting?: string;
+          preview?: string;
+          content?: string;
+          exists?: boolean;
+        }>)
+      : [];
+  },
+
+  async applyFlScript(
+    projectId: string,
+    experimentId: string,
+    scriptId: string,
+  ): Promise<IterativeExperiment> {
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/apply-fl-script`,
+      { script_id: scriptId },
+    );
+    return unwrap(data, '应用 FL 脚本失败');
+  },
+
   async setRunMode(
     projectId: string,
     experimentId: string,

@@ -2521,7 +2521,54 @@ class PipelineService:
     def _enrich_literature_mining(self, literature_mining: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         from app.services.literature_bundle_service import enrich_literature_mining
 
-        return enrich_literature_mining(literature_mining)
+        lm = enrich_literature_mining(literature_mining)
+        # FL Starter Pack：合并项目挂载的 seed facts（不改 mining 算法）
+        try:
+            project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+            if project_id:
+                from app.models.project import Project
+                from app.services.fl_pack_service import FlPackService
+
+                project = self.db.query(Project).filter(Project.id == project_id).first()
+                cfg = (project.config if project and isinstance(project.config, dict) else {}) or {}
+                seeds = FlPackService.get_seed_facts_from_project_config(cfg)
+                if seeds:
+                    existing = list(lm.get("facts") or [])
+                    seen = {
+                        str(f.get("fact_id") or f.get("claim") or f.get("content") or "")[:120]
+                        for f in existing
+                        if isinstance(f, dict)
+                    }
+                    merged = list(existing)
+                    for f in seeds:
+                        key = str(f.get("fact_id") or f.get("claim") or f.get("content") or "")[:120]
+                        if key and key not in seen:
+                            fact = dict(f)
+                            fact.setdefault("source", "fl_starter_pack")
+                            # 确保 ScienceFact 关键字段齐全
+                            if not fact.get("content") and fact.get("claim"):
+                                fact["content"] = fact["claim"]
+                            fact.setdefault("source_chunk_id", f"fl_pack_chunk_{fact.get('fact_id')}")
+                            fact.setdefault("document_id", f"fl_pack_doc_{fact.get('paper_id') or fact.get('fact_id')}")
+                            merged.insert(0, fact)
+                            seen.add(key)
+                    lm["facts"] = merged
+                    lm["fl_pack_seed_fact_count"] = len(seeds)
+                    try:
+                        from app.services.fl_pack_service import get_fl_pack_service
+
+                        cmap = list(lm.get("citation_map") or [])
+                        seed_cites = get_fl_pack_service().build_seed_citation_map(seeds)
+                        existing_docs = {str(c.get("document_id")) for c in cmap if isinstance(c, dict)}
+                        for c in seed_cites:
+                            if c.get("document_id") not in existing_docs:
+                                cmap.append(c)
+                        lm["citation_map"] = cmap
+                    except Exception:
+                        pass
+        except Exception as exc:
+            logger.warning("[Literature] 合并 FL seed facts 失败: %s", exc)
+        return lm
 
     def _merge_data_acquisition_context(
         self,

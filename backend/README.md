@@ -60,8 +60,8 @@ backend/
 | `skills/evidence_reasoning/` | 证据检索、立场分类、假设修订（LLM + fact 白名单）、证据链构建 |
 | `skills/multimodal/` | VLM 图像理解、音频转写、多模态 evidence 构建 |
 | `skills/knowledge_graph/` | KG Schema、关系抽取、图推理、增量更新 |
-| `skills/federated_experiment/` | 联邦场景识别、仿真执行、重规划 |
 | `skills/data/` | 数据清洗、统计描述、数据集发现 |
+| `data/reference/fl/` | **联邦学习 Starter Pack**（预解析文献、数据集元数据、本地 pilot 脚本；旧 `federated_experiment/` 技能栈已退役） |
 | `skills/report/` | 科学图表、VLM 图表评审、报告质量检查 |
 | `skills/reasoning/` | 新颖性审查、问题对齐、Ideation |
 | `skills/experiment/` | 实验合理性检查 |

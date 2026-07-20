@@ -15,7 +15,7 @@ export interface ApiResponse<T = unknown> {
 
 // ==================== 项目 ====================
 
-export type ProjectMode = 'general';
+export type ProjectMode = 'general' | 'federated_learning';
 
 export interface Project {
   id: string;
@@ -66,6 +66,29 @@ export interface ProjectOverview {
   config?: {
     data_spec_hints?: Record<string, unknown>;
     data_acquisition?: Record<string, unknown>;
+    fl_pack_mounted?: boolean;
+    fl_setting?: string;
+    fl_pack_d_applied?: {
+      pack_id?: string;
+      count?: number;
+      stages?: string[];
+    };
+    fl_pack?: {
+      version?: string;
+      fl_setting?: string;
+      seed_facts_count?: number;
+      scripts_count?: number;
+      datasets_count?: number;
+      runtime?: string;
+      summary?: {
+        version?: string;
+        seed_facts_count?: number;
+        scripts_count?: number;
+        datasets_count?: number;
+        mounted_label?: string;
+        fl_setting?: string;
+      };
+    };
   };
   created_at: string;
   updated_at: string;

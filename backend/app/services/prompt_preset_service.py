@@ -31,10 +31,14 @@ class PromptPresetService:
         self._manifest = None
 
     def get_catalog(self, *, project_mode: str = "general") -> Dict[str, Any]:
+        from app.core.project_modes import normalize_project_mode
+
+        mode = normalize_project_mode(project_mode)
+        is_fl = mode == "federated_learning"
         manifest = self._load_manifest()
         packs: List[Dict[str, Any]] = []
         for pack in manifest.get("packs", []):
-            if pack.get("requires_federated"):
+            if pack.get("requires_federated") and not is_fl:
                 continue
             packs.append({
                 "id": pack["id"],
@@ -50,7 +54,7 @@ class PromptPresetService:
             "excluded_stages": list(manifest.get("excluded_stages", [])),
             "excluded_reason": manifest.get("excluded_reason", ""),
             "packs": packs,
-            "default_pack_id": "pack_c",
+            "default_pack_id": "pack_d" if is_fl else "pack_c",
         }
 
     def get_preset_content(self, pack_id: str, stage: str, variant_id: str) -> Dict[str, Any]:

@@ -3,10 +3,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.skills.data_finder._utils import GENERAL_STANDARD_COLUMNS
+from app.skills.data_finder._utils import FL_STANDARD_COLUMNS, GENERAL_STANDARD_COLUMNS
 
 
 def project_mode_to_scenario(project_mode: str | None) -> str:
+    mode = (project_mode or "").strip().lower()
+    if mode == "federated_learning":
+        return "federated_learning"
+    if mode in ("ml_benchmark", "ml"):
+        return "ml_benchmark"
     return "general"
 
 
@@ -23,7 +28,7 @@ def get_standard_columns_for_scenario(
                 dynamic.append(str(item))
 
     if scenario == "federated_learning":
-        return list(dict.fromkeys(GENERAL_STANDARD_COLUMNS + dynamic))
+        return list(dict.fromkeys(FL_STANDARD_COLUMNS + dynamic))
 
     if scenario == "ml_benchmark":
         return list(dict.fromkeys(GENERAL_STANDARD_COLUMNS + dynamic))

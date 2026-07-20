@@ -1,0 +1,52 @@
+{
+  "id": "hu2022lora",
+  "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+  "year": 2022,
+  "venue": "ICLR",
+  "external_id": "arXiv:2106.09685",
+  "setting": "both",
+  "domain": "llm_ft",
+  "facts": [
+    {
+      "fact_id": "fl_seed_lora_1",
+      "claim": "LoRA 通过低秩适配矩阵在冻结主干下微调大模型，显著降低可训练参数与通信载荷，是联邦大模型微调的常用基础模块。",
+      "method": "LoRA / PEFT",
+      "setting": "both",
+      "domain": "llm_ft",
+      "metrics": [
+        "trainable_params",
+        "downstream_accuracy",
+        "communication_cost_mb"
+      ],
+      "dataset": "GLUE / instruction-tuning corpora",
+      "limitations": "秩与目标模块选择影响效果；不等于已解决联邦隐私。",
+      "source": "Hu et al., 2022",
+      "quote": "low-rank adaptation",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_lora_2",
+      "claim": "在联邦场景中仅聚合 LoRA 适配器而非全量权重，可把通信成本从全参量级降到适配器量级，便于跨机构协作微调。",
+      "method": "FedLoRA-style aggregation",
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "metrics": [
+        "communication_cost_mb",
+        "communication_rounds"
+      ],
+      "dataset": "multi-client instruction shards",
+      "limitations": "客户端数据异构仍会导致适配器漂移。",
+      "source": "Hu et al., 2022 + FL PEFT practice",
+      "quote": "adapter",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [
+    "https://arxiv.org/abs/2106.09685"
+  ],
+  "recommended_baselines": [
+    "full fine-tuning",
+    "LoRA",
+    "FedAvg on adapters"
+  ]
+}

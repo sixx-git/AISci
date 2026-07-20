@@ -22,6 +22,21 @@
 6. **尽量使用原文引用**作为 quote_text，保持原句精确性
 7. **relevance_score** 必须在 0.0~1.0 之间，表示该事实与研究问题的相关程度
 
+## 挑战导向提取（必做）
+
+从研究问题中识别 3–5 个「挑战维度」，每条 fact 必须标注它支撑哪个维度（写入 `challenge_dimension`）。
+
+优先提取：
+- 文献**已揭示**的挑战、机制、风险或约束（非泛泛背景）
+- 与「生成/合成数据 + 具体应用场景 + 联邦/分布式训练」的交叉点
+
+禁止：
+- 仅介绍 FL 定义、GAN 发展史、XAI 综述背景的 background fact
+- 与研究问题无直接关系的泛领域句
+
+若某 chunk 只能支撑 background，`relevance_score` ≤ 0.4，可不输出。
+目标：输出 **4–8 条高相关 fact**，宁可少而精。
+
 ## 输入信息
 研究问题：{{research_question}}
 
@@ -41,7 +56,8 @@
       "source_paper_title": "论文标题",
       "page_number": 页码数字,
       "quote_text": "从原文中引用的关键原句（用于支撑该事实）",
-      "relevance_score": 0.85
+      "relevance_score": 0.85,
+      "challenge_dimension": "分布偏移 | 隐私风险 | 场景稀缺 | 边缘资源 | 评估方法 | 其他"
     }
   ],
   "evidence": [

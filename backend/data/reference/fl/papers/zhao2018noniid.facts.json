@@ -1,0 +1,31 @@
+{
+  "id": "zhao2018noniid",
+  "title": "Federated Learning with Non-IID Data",
+  "year": 2018,
+  "venue": "arXiv",
+  "external_id": "arXiv:1806.00582",
+  "setting": "hfl",
+  "facts": [
+    {
+      "fact_id": "fl_seed_noniid_1",
+      "claim": "高度 Non-IID 划分可导致 FedAvg 精度显著下降，需更频繁通信或更强正则。",
+      "method": "FedAvg + Non-IID analysis",
+      "setting": "hfl",
+      "metrics": [
+        "global_accuracy",
+        "non_iid_degree"
+      ],
+      "dataset": "CIFAR / MNIST partitioned",
+      "limitations": "划分方式影响结论外推。",
+      "source": "Zhao et al., 2018",
+      "quote": "non-IID",
+      "relevance": 0.9
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "data sharing"
+  ],
+  "domain": "fl_core"
+}

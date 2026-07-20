@@ -328,6 +328,40 @@
           }
         ]
       }
+    },
+    {
+      "id": "pack_d",
+      "label": "联邦学习 Scientist",
+      "description": "FL Starter Pack：VFL/横向联邦、对齐、通信与隐私约束（本地模拟，非多机 runtime）",
+      "reference": null,
+      "recommended_pipeline_mode": "teaching",
+      "requires_federated": true,
+      "stages": {
+        "hypothesis_generation": [
+          {
+            "id": "fl_vfl_claim",
+            "label": "联邦/VFL 主张",
+            "file": "pack_d/hypothesis_generation/fl_vfl_claim.md",
+            "description": "联邦/VFL 假设：多方、对齐、通信或隐私"
+          }
+        ],
+        "experiment_design": [
+          {
+            "id": "federated_plan",
+            "label": "联邦实验计划",
+            "file": "pack_d/experiment_design/federated_plan.md",
+            "description": "联邦实验计划：参与方、对齐、通信、指标"
+          }
+        ],
+        "small_validation": [
+          {
+            "id": "fl_pilot",
+            "label": "联邦 Pilot",
+            "file": "pack_d/small_validation/fl_pilot.md",
+            "description": "联邦 pilot：alignment / 通信 / 隐私"
+          }
+        ]
+      }
     }
   ]
 }

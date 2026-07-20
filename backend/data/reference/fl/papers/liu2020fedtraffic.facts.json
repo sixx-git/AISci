@@ -1,0 +1,51 @@
+{
+  "id": "liu2020fedtraffic",
+  "title": "Privacy-Preserving Traffic Flow Prediction: A Federated Learning Approach",
+  "year": 2020,
+  "venue": "IEEE IoT / ITS line",
+  "external_id": "applied:fed-traffic-flow-2020",
+  "setting": "hfl",
+  "domain": "smart_transport",
+  "facts": [
+    {
+      "fact_id": "fl_seed_traffic_1",
+      "claim": "交通流预测可将路段/路口传感器划分为客户端做横向联邦，避免把原始车流量时序汇入单一中心。",
+      "method": "FedAvg / FedGRU traffic prediction",
+      "setting": "hfl",
+      "domain": "smart_transport",
+      "metrics": [
+        "MAE",
+        "RMSE",
+        "MAPE",
+        "communication_rounds"
+      ],
+      "dataset": "PeMS / city loop detectors",
+      "limitations": "时空相关使客户端并非独立；需报告高峰/平峰分段误差。",
+      "source": "federated traffic flow prediction literature",
+      "quote": "traffic flow prediction",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_traffic_2",
+      "claim": "智慧交通联邦设定下，通信轮次与边缘算力约束往往比精度更关键，报告应同时给出误差与通信成本。",
+      "method": "edge FL for ITS",
+      "setting": "hfl",
+      "domain": "smart_transport",
+      "metrics": [
+        "communication_cost_mb",
+        "MAE"
+      ],
+      "dataset": "edge roadside units",
+      "limitations": "仿真路网与真实城市拓扑差异大。",
+      "source": "federated traffic flow prediction literature",
+      "quote": "edge",
+      "relevance": 0.86
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized GRU/LSTM",
+    "FedAvg",
+    "local-only"
+  ]
+}

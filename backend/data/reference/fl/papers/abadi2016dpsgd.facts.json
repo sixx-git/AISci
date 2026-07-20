@@ -1,0 +1,51 @@
+{
+  "id": "abadi2016dpsgd",
+  "title": "Deep Learning with Differential Privacy",
+  "year": 2016,
+  "venue": "CCS",
+  "external_id": "arXiv:1607.00133",
+  "setting": "hfl",
+  "domain": "privacy_crypto",
+  "facts": [
+    {
+      "fact_id": "fl_seed_dp_1",
+      "claim": "差分隐私（如 DP-SGD）可在联邦参数交互中加入噪声，提供可量化隐私预算 ε，增强理论隐私保障。",
+      "method": "DP-SGD / DP-FedAvg",
+      "setting": "hfl",
+      "domain": "privacy_crypto",
+      "metrics": [
+        "privacy_budget",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "MNIST / tabular classification",
+      "limitations": "噪声增大通常牺牲精度；ε 选取需可辩护。",
+      "source": "Abadi et al., 2016",
+      "quote": "differential privacy",
+      "relevance": 0.94
+    },
+    {
+      "fact_id": "fl_seed_dp_2",
+      "claim": "联邦+差分隐私实验必须同时报告效用指标与隐私预算，并说明裁剪范数与噪声倍率等关键超参。",
+      "method": "DP-FL evaluation",
+      "setting": "hfl",
+      "domain": "privacy_crypto",
+      "metrics": [
+        "privacy_budget",
+        "global_accuracy"
+      ],
+      "dataset": "FL classification",
+      "limitations": "小样噪声方差大，结论外推需谨慎。",
+      "source": "DP-FL practice",
+      "quote": "privacy budget",
+      "relevance": 0.89
+    }
+  ],
+  "data_links": [
+    "https://arxiv.org/abs/1607.00133"
+  ],
+  "recommended_baselines": [
+    "FedAvg",
+    "DP-FedAvg"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "primary_metric": 0.96,
+  "global_accuracy": 0.96,
+  "communication_rounds": 5,
+  "num_clients": 5,
+  "method": "FedAvg",
+  "history": [
+    {
+      "round": 1,
+      "global_accuracy": 0.96
+    },
+    {
+      "round": 2,
+      "global_accuracy": 0.96
+    },
+    {
+      "round": 3,
+      "global_accuracy": 0.96
+    },
+    {
+      "round": 4,
+      "global_accuracy": 0.96
+    },
+    {
+      "round": 5,
+      "global_accuracy": 0.96
+    }
+  ],
+  "note": "local HFL pilot; not multi-machine FL"
+}

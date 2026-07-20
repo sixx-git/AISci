@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Trash2, Upload, FolderOpen, Link2, Sparkles,
-  Play, RefreshCw, AlertTriangle, CheckCircle2,
+  Play, RefreshCw, AlertTriangle, CheckCircle2, FileCode2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { cn } from '@/lib/utils';
 import { toAbsoluteDatasetUrl } from '@/lib/datasetUrls';
+import iterativeExperimentService from '@/services/iterativeExperimentService';
 import type {
   DataConfig,
   DataSourceType,
@@ -17,6 +18,7 @@ import { PHASE_EMOJI, PHASE_LABEL } from './phaseLabels';
 import { IterationTimeline } from './IterationTimeline';
 
 interface ExperimentDetailProps {
+  projectId: string;
   experiment: IterativeExperiment;
   busy?: boolean;
   error?: string | null;
@@ -34,6 +36,7 @@ interface ExperimentDetailProps {
   onRunToCompletion: () => void;
   onSubmitFeedback: (text: string) => void;
   onRedesignFromFeedback: (text: string) => void;
+  onExperimentUpdated?: (exp: IterativeExperiment) => void;
 }
 
 const SOURCE_OPTIONS: Array<{ label: string; value: DataSourceType; icon: typeof Upload }> = [
@@ -63,6 +66,7 @@ function resolveInitialProfileName(cfg?: DataConfig | null): string {
 }
 
 export function ExperimentDetail({
+  projectId,
   experiment,
   busy,
   error,
@@ -77,6 +81,7 @@ export function ExperimentDetail({
   onRunToCompletion,
   onSubmitFeedback,
   onRedesignFromFeedback,
+  onExperimentUpdated,
 }: ExperimentDetailProps) {
   const phase = experiment.phase;
   const isSandbox = experiment.executor_type === 'sandbox';
@@ -107,6 +112,26 @@ export function ExperimentDetail({
   );
   const [feedback, setFeedback] = useState(experiment.human_feedback || '');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [flScripts, setFlScripts] = useState<Array<{
+    id: string;
+    path?: string;
+    recommended_when?: string;
+    setting?: string;
+    preview?: string;
+  }>>([]);
+  const [applyingScript, setApplyingScript] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void iterativeExperimentService.listFlScriptTemplates(projectId)
+      .then((items) => {
+        if (!cancelled) setFlScripts(items.slice(0, 3));
+      })
+      .catch(() => {
+        if (!cancelled) setFlScripts([]);
+      });
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const canShowUpload = isSandbox && phase !== 'running' && phase !== 'completed';
   const canIterate =
@@ -490,6 +515,58 @@ export function ExperimentDetail({
                   />
                   正式全量推演
                 </label>
+              </div>
+            </div>
+          )}
+
+          {flScripts.length > 0 && (
+            <div className="mb-4 rounded-lg border border-bp-cyan/25 bg-bp-cyan-tint/40 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
+                <FileCode2 className="w-4 h-4 text-bp-cyan" />
+                FL 参考脚本模板
+              </div>
+              <p className="text-xs text-bp-muted">
+                一点即可写入当前方案的 analysis_script（单机模拟，非多机联邦）
+              </p>
+              <div className="space-y-2">
+                {flScripts.map((s) => (
+                  <div
+                    key={s.id}
+                    className="rounded-md border border-bp-border bg-bp-base/60 px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-bp-text truncate">
+                        {s.recommended_when || s.id}
+                      </div>
+                      <div className="text-[11px] text-bp-muted truncate">
+                        {(s.setting || '').toUpperCase()} · {s.path || s.id}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy || applyingScript === s.id}
+                      onClick={async () => {
+                        setApplyingScript(s.id);
+                        setLocalError(null);
+                        try {
+                          const updated = await iterativeExperimentService.applyFlScript(
+                            projectId,
+                            experiment.id,
+                            s.id,
+                          );
+                          onExperimentUpdated?.(updated);
+                        } catch (err) {
+                          setLocalError(err instanceof Error ? err.message : '应用脚本失败');
+                        } finally {
+                          setApplyingScript(null);
+                        }
+                      }}
+                    >
+                      {applyingScript === s.id ? '写入中…' : '应用到 analysis_script'}
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
           )}

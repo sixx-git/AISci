@@ -1,0 +1,50 @@
+{
+  "id": "fl_continual",
+  "title": "Federated Continual Learning under Non-IID Data and Concept Drift",
+  "year": 2022,
+  "venue": "applied / survey line",
+  "external_id": "applied:fed-continual-2022",
+  "setting": "hfl",
+  "domain": "fl_continual",
+  "facts": [
+    {
+      "fact_id": "fl_seed_cl_1",
+      "claim": "联邦持续/增量学习在分布式场景应对 Non-IID 与概念漂移，目标是跨轮次稳定更新而不灾难性遗忘。",
+      "method": "FedContinual / replay or regularization",
+      "setting": "hfl",
+      "domain": "fl_continual",
+      "metrics": [
+        "forgetting_measure",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "class-incremental partitioned streams",
+      "limitations": "客户端数据流不同步会使全局漂移难定义。",
+      "source": "federated continual learning literature",
+      "quote": "concept drift",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_cl_2",
+      "claim": "报告联邦增量学习时，应给出任务序列、遗忘度量与新任务精度，避免只报最终一轮全局准确率。",
+      "method": "continual FL evaluation",
+      "setting": "hfl",
+      "domain": "fl_continual",
+      "metrics": [
+        "forgetting_measure",
+        "average_accuracy"
+      ],
+      "dataset": "streaming Non-IID",
+      "limitations": "公开流式联邦基准仍有限。",
+      "source": "federated continual learning literature",
+      "quote": "catastrophic forgetting",
+      "relevance": 0.87
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedProx",
+    "EWC-style regularized FL"
+  ]
+}

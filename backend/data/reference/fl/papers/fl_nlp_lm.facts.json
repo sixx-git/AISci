@@ -1,0 +1,53 @@
+{
+  "id": "fl_nlp_lm",
+  "title": "Federated Learning for NLP: Language Models and Cross-Organization Text",
+  "year": 2020,
+  "venue": "applied NLP+FL",
+  "external_id": "applied:fl-nlp-2020",
+  "setting": "hfl",
+  "domain": "fl_nlp",
+  "facts": [
+    {
+      "fact_id": "fl_seed_nlp_1",
+      "claim": "联邦 NLP 可在跨组织、跨设备场景训练对话系统、输入法预测与语言模型，兼顾语料隐私。",
+      "method": "FedAvg / FedProx on LM",
+      "setting": "hfl",
+      "domain": "fl_nlp",
+      "metrics": [
+        "perplexity",
+        "top1_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "LEAF Shakespeare / StackOverflow / private corpora shards",
+      "limitations": "词表与领域术语异构会放大 Non-IID。",
+      "source": "federated NLP practice",
+      "quote": "language model",
+      "relevance": 0.91
+    },
+    {
+      "fact_id": "fl_seed_nlp_2",
+      "claim": "相对中心化 NLP，联邦设定应额外报告通信轮次与客户端文本域差异，避免只报困惑度。",
+      "method": "FedNLP evaluation",
+      "setting": "hfl",
+      "domain": "fl_nlp",
+      "metrics": [
+        "perplexity",
+        "communication_cost_mb",
+        "client_drift"
+      ],
+      "dataset": "multi-domain text",
+      "limitations": "真实跨机构语料不可外发，公开基准仅为代理。",
+      "source": "federated NLP practice",
+      "quote": "dialogue",
+      "relevance": 0.86
+    }
+  ],
+  "data_links": [
+    "https://github.com/TalwalkarLab/leaf"
+  ],
+  "recommended_baselines": [
+    "centralized LM",
+    "FedAvg",
+    "local-only"
+  ]
+}

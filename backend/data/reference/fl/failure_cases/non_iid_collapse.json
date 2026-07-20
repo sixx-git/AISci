@@ -1,0 +1,10 @@
+{
+  "id": "non_iid_collapse",
+  "setting": "hfl",
+  "summary": "极端标签偏斜下 FedAvg 全局精度崩溃",
+  "typical_symptoms": [
+    "client_drift 升高",
+    "global_accuracy 远低于集中训练"
+  ],
+  "report_hint": "讨论 Non-IID 边界；建议 FedProx 或更频繁聚合"
+}

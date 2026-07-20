@@ -1,0 +1,135 @@
+{
+  "version": "1.3.0",
+  "name": "fl_starter_pack",
+  "settings": [
+    "hfl",
+    "vfl",
+    "both"
+  ],
+  "domains": [
+    "fl_core",
+    "finance_risk",
+    "smart_care",
+    "edge_mobile",
+    "iot_industrial",
+    "smart_transport",
+    "privacy_crypto",
+    "fl_cv",
+    "fl_nlp",
+    "fl_multilingual",
+    "fl_blockchain",
+    "fl_rl",
+    "fl_continual",
+    "llm_ft",
+    "fl_lora_hetero"
+  ],
+  "description": "FL starter pack v1.3: + multilingual FL + heterogeneous client LoRA",
+  "runtime": "local_simulation_only",
+  "papers": [
+    "papers/mcmahan2017fedavg.facts.json",
+    "papers/li2020fedprox.facts.json",
+    "papers/caldas2018leaf.facts.json",
+    "papers/zhao2018noniid.facts.json",
+    "papers/vepakomma2018splitnn.facts.json",
+    "papers/liu2022vflsurvey.facts.json",
+    "papers/bagdasaryan2020backdoor.facts.json",
+    "papers/kairouz2021advances.facts.json",
+    "papers/hu2022lora.facts.json",
+    "papers/ye2024openfedllm.facts.json",
+    "papers/zhang2023fedpeft.facts.json",
+    "papers/xu2021flhealth.facts.json",
+    "papers/sisfall_fl_care.facts.json",
+    "papers/rieke2020medicalfl.facts.json",
+    "papers/liu2020fedtraffic.facts.json",
+    "papers/its_fl_survey.facts.json",
+    "papers/elbir2022v2xfl.facts.json",
+    "papers/yang2019flfinance.facts.json",
+    "papers/hard2018nextword.facts.json",
+    "papers/lim2020edgefl.facts.json",
+    "papers/iot_industrial_fl.facts.json",
+    "papers/abadi2016dpsgd.facts.json",
+    "papers/bonawitz2017secureagg.facts.json",
+    "papers/fl_cv_detection.facts.json",
+    "papers/fl_nlp_lm.facts.json",
+    "papers/fl_blockchain.facts.json",
+    "papers/fl_rl_agents.facts.json",
+    "papers/fl_continual.facts.json",
+    "papers/fl_health_imaging.facts.json",
+    "papers/fl_multilingual_xlm.facts.json",
+    "papers/fl_hetero_lora.facts.json"
+  ],
+  "seed_facts_file": "papers/seed_facts.json",
+  "datasets": [
+    "datasets/leaf_femnist.yaml",
+    "datasets/leaf_shakespeare.yaml",
+    "datasets/synthetic_hfl_noniid.yaml",
+    "datasets/synthetic_vfl_two_party.yaml",
+    "datasets/uci_adult_vfl_split.yaml",
+    "datasets/hf_fl_search.yaml",
+    "datasets/synthetic_llm_peft_shards.yaml",
+    "datasets/sisfall_har_fl.yaml",
+    "datasets/pems_traffic_fl.yaml",
+    "datasets/vfl_care_sensor_label.yaml",
+    "datasets/synthetic_finance_vfl.yaml",
+    "datasets/leaf_shakespeare_nlp.yaml",
+    "datasets/synthetic_multilingual_shards.yaml",
+    "datasets/synthetic_hetero_lora_configs.yaml"
+  ],
+  "scripts": [
+    {
+      "path": "scripts/hfl_fedavg_pilot.py",
+      "setting": "hfl",
+      "recommended_when": "HFL + FedAvg pilot"
+    },
+    {
+      "path": "scripts/hfl_non_iid_partition.py",
+      "setting": "hfl",
+      "recommended_when": "HFL + Non-IID partition"
+    },
+    {
+      "path": "scripts/vfl_aligned_logistic_pilot.py",
+      "setting": "vfl",
+      "recommended_when": "VFL + alignment logistic"
+    },
+    {
+      "path": "scripts/run_fedavg_pilot.py",
+      "setting": "hfl",
+      "recommended_when": "service entry for local FedAvg"
+    }
+  ],
+  "checklists": [
+    "checklists/hfl_metrics.md",
+    "checklists/vfl_metrics.md"
+  ],
+  "failure_cases": [
+    "failure_cases/alignment_mismatch.json",
+    "failure_cases/non_iid_collapse.json",
+    "failure_cases/communication_blowup.json"
+  ],
+  "schema": {
+    "paper_facts": [
+      "fact_id",
+      "claim",
+      "method",
+      "setting",
+      "domain",
+      "metrics",
+      "dataset",
+      "limitations",
+      "source",
+      "quote",
+      "relevance"
+    ],
+    "dataset_yaml": [
+      "id",
+      "name",
+      "setting",
+      "domain",
+      "download_url",
+      "partition",
+      "schema",
+      "pilot_subset",
+      "upload_requirement"
+    ]
+  }
+}

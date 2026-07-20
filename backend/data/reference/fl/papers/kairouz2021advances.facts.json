@@ -1,0 +1,31 @@
+{
+  "id": "kairouz2021advances",
+  "title": "Advances and Open Problems in Federated Learning",
+  "year": 2021,
+  "venue": "Foundations and Trends",
+  "external_id": "arXiv:1912.04977",
+  "setting": "both",
+  "facts": [
+    {
+      "fact_id": "fl_seed_open_1",
+      "claim": "联邦学习开放问题覆盖异构性、隐私、公平性与系统效率，报告应明确所选子问题边界。",
+      "method": "survey",
+      "setting": "both",
+      "metrics": [
+        "communication_rounds",
+        "privacy_budget"
+      ],
+      "dataset": "various",
+      "limitations": "开放问题综述不能替代具体可证伪假设。",
+      "source": "Kairouz et al., 2021",
+      "quote": "open problems",
+      "relevance": 0.86
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedProx"
+  ],
+  "domain": "fl_core"
+}

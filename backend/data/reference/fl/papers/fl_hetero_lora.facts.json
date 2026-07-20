@@ -1,0 +1,68 @@
+{
+  "id": "fl_hetero_lora",
+  "title": "Federated Learning with Heterogeneous Client LoRA Adapters",
+  "year": 2024,
+  "venue": "applied FedPEFT / hetero-LoRA",
+  "external_id": "applied:fl-hetero-lora-2024",
+  "setting": "hfl",
+  "domain": "fl_lora_hetero",
+  "facts": [
+    {
+      "fact_id": "fl_seed_hetlora_1",
+      "claim": "客户端模型 LoRA 异构指各客户端可采用不同秩 r、目标模块或适配器结构，以匹配本地算力与数据规模，而非强制统一全参或统一 LoRA 配置。",
+      "method": "heterogeneous FedLoRA",
+      "setting": "hfl",
+      "domain": "fl_lora_hetero",
+      "metrics": [
+        "trainable_params",
+        "downstream_accuracy",
+        "communication_cost_mb"
+      ],
+      "dataset": "multi-client instruction / domain shards",
+      "limitations": "异构适配器不能直接朴素平均，需对齐或投影聚合。",
+      "source": "heterogeneous FedLoRA practice",
+      "quote": "heterogeneous LoRA",
+      "relevance": 0.93
+    },
+    {
+      "fact_id": "fl_seed_hetlora_2",
+      "claim": "LoRA 秩与放置层异构时，聚合应基于共享子空间投影、层对齐或服务器侧公共适配器，并报告各客户端 (r, target_modules) 配置表。",
+      "method": "LoRA alignment / subspace aggregation",
+      "setting": "hfl",
+      "domain": "fl_lora_hetero",
+      "metrics": [
+        "adapter_align_rate",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "hetero-rank client adapters",
+      "limitations": "错误对齐会导致负迁移；小样需固定随机种子复现。",
+      "source": "heterogeneous FedLoRA practice",
+      "quote": "rank heterogeneity",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_hetlora_3",
+      "claim": "相对同构 FedLoRA，异构设定的核心可证伪点是：在通信预算相近时，允许客户端差异化 LoRA 能否提升弱客户端下游精度且不明显损害强客户端。",
+      "method": "hetero vs homo FedLoRA comparison",
+      "setting": "hfl",
+      "domain": "fl_lora_hetero",
+      "metrics": [
+        "weak_client_accuracy",
+        "strong_client_accuracy",
+        "communication_cost_mb"
+      ],
+      "dataset": "capacity-skewed clients",
+      "limitations": "真实 GPU 异构难在本地 Pack 完整复现，可用合成秩表代理。",
+      "source": "heterogeneous FedLoRA practice",
+      "quote": "client capacity",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "homogeneous FedLoRA",
+    "local-only LoRA",
+    "full-param FedAvg"
+  ]
+}

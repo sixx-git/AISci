@@ -1,0 +1,70 @@
+{
+  "id": "yang2019flfinance",
+  "title": "Federated Machine Learning: Concept and Applications (finance / enterprise FL)",
+  "year": 2019,
+  "venue": "ACM TIST",
+  "external_id": "doi:10.1145/3298981",
+  "setting": "both",
+  "domain": "finance_risk",
+  "facts": [
+    {
+      "fact_id": "fl_seed_fin_1",
+      "claim": "金融风控联邦学习允许多家银行/机构在不共享原始客户数据的前提下联合建模，典型任务包括反欺诈与信用评分。",
+      "method": "enterprise FL / HFL+VFL",
+      "setting": "both",
+      "domain": "finance_risk",
+      "metrics": [
+        "auc",
+        "ks",
+        "f1_score",
+        "privacy_budget"
+      ],
+      "dataset": "multi-bank credit / fraud features",
+      "limitations": "监管合规与特征定义不一致常比算法更关键。",
+      "source": "Yang et al., 2019 + finance FL practice",
+      "quote": "credit scoring",
+      "relevance": 0.92
+    },
+    {
+      "fact_id": "fl_seed_fin_2",
+      "claim": "跨机构风控常采用垂直联邦：一方持有标签（违约/欺诈），另一方持有补充特征，实体对齐是可行性前提。",
+      "method": "VFL credit risk",
+      "setting": "vfl",
+      "domain": "finance_risk",
+      "metrics": [
+        "aligned_sample_rate",
+        "auc",
+        "communication_cost_mb"
+      ],
+      "dataset": "feature-party + label-party tabular",
+      "limitations": "对齐键脱敏与样本交集不足会直接压低可用样本量。",
+      "source": "finance VFL practice",
+      "quote": "entity alignment",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_fin_3",
+      "claim": "金融联邦实验应同时报告业务指标（AUC/KS）与隐私/通信约束，避免只追中心化精度。",
+      "method": "finance FL evaluation",
+      "setting": "both",
+      "domain": "finance_risk",
+      "metrics": [
+        "auc",
+        "ks",
+        "communication_rounds",
+        "privacy_budget"
+      ],
+      "dataset": "synthetic or partitioned credit tables",
+      "limitations": "公开数据难还原真实跨行分布。",
+      "source": "finance FL evaluation practice",
+      "quote": "fraud detection",
+      "relevance": 0.86
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized logistic",
+    "FedAvg",
+    "SplitNN/VFL"
+  ]
+}

@@ -66,6 +66,28 @@ def _domain_hint_datasets(hypothesis: str, methods: str, metrics: str) -> List[D
     domains = _detect_hypothesis_domains(f"{hypothesis} {methods} {metrics}")
     out: List[Dict[str, Any]] = []
     seen: set[str] = set()
+    # FL Starter Pack 结构化元数据优先
+    try:
+        from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
+
+        if fl_pack_enabled() and (
+            "federated" in domains
+            or any(k in f"{hypothesis} {methods}".lower() for k in ("联邦", "federated", "fedavg", "vfl"))
+        ):
+            setting = None
+            blob = f"{hypothesis} {methods}".lower()
+            if any(k in blob for k in ("vfl", "vertical", "垂直", "对齐键", "party")):
+                setting = "vfl"
+            elif any(k in blob for k in ("hfl", "fedavg", "fedprox", "non-iid", "横向", "client")):
+                setting = "hfl"
+            for item in get_fl_pack_service().dataset_guidance_hints(fl_setting=setting):
+                key = (item.get("dataset_name") or item.get("name") or "").lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                out.append({**item, "role": "fl_pack"})
+    except Exception:
+        pass
     for domain in ("federated", "classification"):
         if domain not in domains:
             continue

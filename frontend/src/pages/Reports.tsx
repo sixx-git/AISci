@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   FileText, Clock, ArrowRight, FlaskConical, Search, FilterX, ChevronLeft, ChevronRight, Trash2,
@@ -20,6 +20,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 const MODE_OPTIONS = [
   { value: '', label: '全部类型' },
   { value: 'general', label: '通用科学问题' },
+  { value: 'federated_learning', label: '联邦学习（资源包）' },
 ] as const;
 
 const TIME_PRESETS = [
@@ -31,6 +32,7 @@ const TIME_PRESETS = [
 
 const MODE_LABEL: Record<string, string> = {
   general: '通用科学问题',
+  federated_learning: '联邦学习（资源包）',
 };
 
 function resolveDateRange(

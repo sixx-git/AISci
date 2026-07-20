@@ -1,0 +1,31 @@
+{
+  "id": "bagdasaryan2020backdoor",
+  "title": "How To Backdoor Federated Learning",
+  "year": 2020,
+  "venue": "AISTATS",
+  "external_id": "arXiv:1807.00459",
+  "setting": "hfl",
+  "facts": [
+    {
+      "fact_id": "fl_seed_backdoor_1",
+      "claim": "恶意客户端可通过模型投毒在联邦聚合中植入后门，失败案例需写入局限讨论。",
+      "method": "attack analysis",
+      "setting": "hfl",
+      "metrics": [
+        "backdoor_success_rate",
+        "global_accuracy"
+      ],
+      "dataset": "CIFAR / Reddit",
+      "limitations": "防御与攻击共同演进，单一防御不可外推。",
+      "source": "Bagdasaryan et al., 2020",
+      "quote": "backdoor",
+      "relevance": 0.8
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "robust aggregation"
+  ],
+  "domain": "fl_core"
+}

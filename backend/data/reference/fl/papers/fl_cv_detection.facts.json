@@ -1,0 +1,51 @@
+{
+  "id": "fl_cv_detection",
+  "title": "Federated Learning for Computer Vision: Multi-Camera Detection and Recognition",
+  "year": 2021,
+  "venue": "applied CV+FL",
+  "external_id": "applied:fl-cv-2021",
+  "setting": "hfl",
+  "domain": "fl_cv",
+  "facts": [
+    {
+      "fact_id": "fl_seed_cv_1",
+      "claim": "多摄像头、多终端可用联邦学习联合训练目标检测/人脸识别等视觉模型，减少原始图像集中汇聚带来的泄露风险。",
+      "method": "FedAvg on detection/classification CNN",
+      "setting": "hfl",
+      "domain": "fl_cv",
+      "metrics": [
+        "mAP",
+        "global_accuracy",
+        "communication_cost_mb"
+      ],
+      "dataset": "multi-camera / CIFAR / domain-partitioned ImageNet subset",
+      "limitations": "视觉模型通信载荷大，小样宜用浅网或合成分区。",
+      "source": "CV federated learning practice",
+      "quote": "object detection",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_cv_2",
+      "claim": "联邦视觉实验需报告域偏移（光照、机位、分辨率）导致的客户端漂移，并优先用自然摄像头划分而非随机切图。",
+      "method": "domain-partitioned FL-CV",
+      "setting": "hfl",
+      "domain": "fl_cv",
+      "metrics": [
+        "client_drift",
+        "mAP",
+        "non_iid_degree"
+      ],
+      "dataset": "camera-id partitioned images",
+      "limitations": "人脸识别涉及更高合规门槛，课题需明确伦理边界。",
+      "source": "CV federated learning practice",
+      "quote": "multi-camera",
+      "relevance": 0.87
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized CNN",
+    "FedAvg",
+    "FedProx"
+  ]
+}

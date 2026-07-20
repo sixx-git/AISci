@@ -1,0 +1,33 @@
+{
+  "id": "elbir2022v2xfl",
+  "title": "Federated Learning for Vehicular Networks and Intelligent Transportation",
+  "year": 2022,
+  "venue": "communications / V2X line",
+  "external_id": "applied:v2x-fl-2022",
+  "setting": "hfl",
+  "domain": "smart_transport",
+  "facts": [
+    {
+      "fact_id": "fl_seed_v2x_1",
+      "claim": "车联网联邦学习需显式建模车辆移动导致的客户端间歇在线与部分参与，否则通信轮次统计不可比。",
+      "method": "FL with intermittent clients",
+      "setting": "hfl",
+      "domain": "smart_transport",
+      "metrics": [
+        "participation_rate",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "vehicular network traces",
+      "limitations": "仿真参与率与真实道路密度相关。",
+      "source": "vehicular FL literature",
+      "quote": "vehicular networks",
+      "relevance": 0.84
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedProx"
+  ]
+}

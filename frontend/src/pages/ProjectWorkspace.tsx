@@ -75,9 +75,45 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
   pipelineNodes: { id: string; label: string; status: string }[];
 }) {
   const navigate = useNavigate();
+  const fl = project.config?.fl_pack?.summary || project.config?.fl_pack;
+  const flMounted = Boolean(project.config?.fl_pack_mounted && fl);
 
   return (
     <div className="space-y-6">
+      {flMounted && (
+        <Card title="已挂载 FL Starter Pack" subtitle="联邦学习资源包（非多机 runtime）">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div className="bp-metric-box text-center">
+              <div className="text-lg font-semibold text-bp-cyan">{String(fl?.version || '?')}</div>
+              <div className="text-xs text-bp-muted mt-1">版本</div>
+            </div>
+            <div className="bp-metric-box text-center">
+              <div className="text-lg font-semibold text-bp-cyan">
+                {String(fl?.seed_facts_count ?? fl?.seed_facts_count ?? 0)}
+              </div>
+              <div className="text-xs text-bp-muted mt-1">种子 facts</div>
+            </div>
+            <div className="bp-metric-box text-center">
+              <div className="text-lg font-semibold text-bp-cyan">
+                {String(fl?.scripts_count ?? 0)}
+              </div>
+              <div className="text-xs text-bp-muted mt-1">参考脚本</div>
+            </div>
+            <div className="bp-metric-box text-center">
+              <div className="text-lg font-semibold text-bp-cyan">
+                {String((project.config?.fl_setting || fl?.fl_setting || 'both')).toUpperCase()}
+              </div>
+              <div className="text-xs text-bp-muted mt-1">子场景</div>
+            </div>
+          </div>
+          {project.config?.fl_pack_d_applied && (
+            <p className="text-xs text-bp-muted mt-3">
+              已自动应用 pack_d（{project.config.fl_pack_d_applied.count ?? 0} 个阶段）
+            </p>
+          )}
+        </Card>
+      )}
+
       <Card title="研究数据概览" subtitle="当前项目的关键指标">
         {stats.length === 0 ? (
           <div className="text-center py-8 text-bp-muted">
@@ -460,7 +496,12 @@ export function ProjectWorkspace() {
 
   // --- 研究领域 ---
   const resolvedProjectMode = project?.project_mode || 'general';
-  const projectModeLabel = 'General AISci';
+  const projectModeLabel =
+    resolvedProjectMode === 'federated_learning'
+      ? '联邦学习（资源包）'
+      : 'General AISci';
+  const flPackSummary = project?.config?.fl_pack?.summary || project?.config?.fl_pack;
+  const flPackMounted = Boolean(project?.config?.fl_pack_mounted && flPackSummary);
 
   const resolvedResearchField = useMemo(
     () => resolveResearchField(project, id, latestRunStages),
@@ -663,7 +704,11 @@ export function ProjectWorkspace() {
         projectName={project.name}
         status={headerDisplayStatus}
         researchField={resolvedResearchField}
-        projectModeLabel={projectModeLabel}
+        projectModeLabel={
+          flPackMounted
+            ? `${projectModeLabel} · Pack v${flPackSummary?.version || '?'}`
+            : projectModeLabel
+        }
         currentStage={resolvedCurrentStage}
         description={project.description}
         createdAtLabel={formatDate(project.created_at)}

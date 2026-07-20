@@ -32,7 +32,7 @@
 | `pack_a` | AI Scientist v1：想法 → 代码 → 运行 → 评审 |
 | `pack_b` | AI Scientist v2：树搜索、剪枝、pilot 门禁 |
 | `pack_c` | AISci 默认：证据溯源 + 可验证假设（推荐新项目） |
-| `pack_d` | 联邦学习（**仅 `federated_learning` 项目**在 API/UI 中可见） |
+| `pack_d` | 联邦学习 Starter Pack（**仅 `federated_learning` 项目**可见；挂载 `data/reference/fl/`，不启用多机联邦 runtime） |
 
 生成/更新预设文件：`python scripts/generate_prompt_presets.py`
 

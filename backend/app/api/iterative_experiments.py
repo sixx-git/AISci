@@ -41,6 +41,10 @@ class FeedbackBody(BaseModel):
     feedback: str = ""
 
 
+class ApplyFlScriptBody(BaseModel):
+    script_id: str = Field(..., description="FL Pack 脚本 id 或相对 path")
+
+
 class VerifyDataBody(BaseModel):
     data_config: Dict[str, Any]
 
@@ -203,6 +207,26 @@ async def design_script(project_id: str, experiment_id: str, body: DesignScriptB
     try:
         exp = get_iterative_experiment_service().design_script(
             project_id, experiment_id, body.data_config
+        )
+        return success_response(exp)
+    except Exception as e:
+        return _err(e)
+
+
+@router.get("/projects/{project_id}/fl-pack/scripts")
+async def list_fl_pack_scripts(project_id: str):
+    try:
+        items = get_iterative_experiment_service().list_fl_script_templates(project_id)
+        return success_response({"items": items, "count": len(items)})
+    except Exception as e:
+        return _err(e)
+
+
+@router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/apply-fl-script")
+async def apply_fl_script(project_id: str, experiment_id: str, body: ApplyFlScriptBody):
+    try:
+        exp = get_iterative_experiment_service().apply_fl_script_template(
+            project_id, experiment_id, body.script_id
         )
         return success_response(exp)
     except Exception as e:

@@ -1,0 +1,51 @@
+{
+  "id": "li2020fedprox",
+  "title": "Federated Optimization in Heterogeneous Networks",
+  "year": 2020,
+  "venue": "MLSys",
+  "external_id": "arXiv:1812.06127",
+  "setting": "hfl",
+  "domain": "fl_core",
+  "facts": [
+    {
+      "fact_id": "fl_seed_fedprox_1",
+      "claim": "FedProx 在本地目标中加入近端项，缓解系统与统计异构下的不稳定。",
+      "method": "FedProx",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "global_accuracy",
+        "client_drift"
+      ],
+      "dataset": "FEMNIST / Sent140",
+      "limitations": "近端系数需调参；通信成本仍高。",
+      "source": "Li et al., 2020",
+      "quote": "proximal term",
+      "relevance": 0.92
+    },
+    {
+      "fact_id": "fl_seed_fedprox_2",
+      "claim": "当客户端算力与数据量差异大时，FedProx 比朴素 FedAvg 更适合作为稳健基线，报告应同时给出 μ 与参与率。",
+      "method": "FedProx",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "participation_rate",
+        "global_accuracy",
+        "mu"
+      ],
+      "dataset": "heterogeneous networks",
+      "limitations": "μ 过大接近不做本地更新，过小退化为 FedAvg。",
+      "source": "Li et al., 2020",
+      "quote": "heterogeneous networks",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [
+    "https://github.com/TalwalkarLab/leaf"
+  ],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedProx"
+  ]
+}

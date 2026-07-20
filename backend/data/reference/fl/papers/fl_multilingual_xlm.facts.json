@@ -1,0 +1,67 @@
+{
+  "id": "fl_multilingual_xlm",
+  "title": "Federated Multilingual Learning: Cross-Lingual Transfer without Centralizing Corpora",
+  "year": 2022,
+  "venue": "applied / multilingual FL",
+  "external_id": "applied:fl-multilingual-2022",
+  "setting": "hfl",
+  "domain": "fl_multilingual",
+  "facts": [
+    {
+      "fact_id": "fl_seed_multi_1",
+      "claim": "联邦多语言学习允许各机构/地区客户端用本地语种语料训练，仅聚合模型或适配器参数，避免集中上传敏感多语文本。",
+      "method": "FedAvg / FedProx on multilingual encoder",
+      "setting": "hfl",
+      "domain": "fl_multilingual",
+      "metrics": [
+        "avg_lang_accuracy",
+        "per_language_f1",
+        "communication_rounds"
+      ],
+      "dataset": "XNLID / multi-lang instruction shards by language",
+      "limitations": "低资源语种客户端样本少，全局模型易偏向高资源语。",
+      "source": "federated multilingual practice",
+      "quote": "cross-lingual",
+      "relevance": 0.91
+    },
+    {
+      "fact_id": "fl_seed_multi_2",
+      "claim": "多语言联邦评测必须按语种分别报告指标，并写明客户端按语种/地区划分方式，不能只报宏平均。",
+      "method": "per-language FL evaluation",
+      "setting": "hfl",
+      "domain": "fl_multilingual",
+      "metrics": [
+        "per_language_f1",
+        "macro_f1",
+        "client_drift"
+      ],
+      "dataset": "language-partitioned corpora",
+      "limitations": "脚本语言与分词器差异会引入额外异构。",
+      "source": "federated multilingual practice",
+      "quote": "low-resource",
+      "relevance": 0.88
+    },
+    {
+      "fact_id": "fl_seed_multi_3",
+      "claim": "当客户端语种分布极度不均时，可采用语种感知聚合权重或适配器路由，减轻高资源语对低资源语的压制。",
+      "method": "language-aware aggregation",
+      "setting": "hfl",
+      "domain": "fl_multilingual",
+      "metrics": [
+        "per_language_f1",
+        "participation_rate"
+      ],
+      "dataset": "imbalanced multilingual shards",
+      "limitations": "加权策略需防泄露客户端语种规模元数据时的隐私权衡。",
+      "source": "federated multilingual practice",
+      "quote": "language imbalance",
+      "relevance": 0.85
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized multilingual",
+    "FedAvg",
+    "language-local only"
+  ]
+}

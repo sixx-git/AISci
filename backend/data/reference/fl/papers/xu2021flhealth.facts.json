@@ -1,0 +1,50 @@
+{
+  "id": "xu2021flhealth",
+  "title": "Federated Learning for Healthcare Informatics",
+  "year": 2021,
+  "venue": "survey",
+  "external_id": "survey:fl-healthcare-2021",
+  "setting": "both",
+  "domain": "smart_care",
+  "facts": [
+    {
+      "fact_id": "fl_seed_health_1",
+      "claim": "医疗健康联邦学习需同时满足临床可用性与隐私合规，数据常呈机构级 Non-IID，且标签定义可能不一致。",
+      "method": "FL healthcare survey",
+      "setting": "both",
+      "domain": "smart_care",
+      "metrics": [
+        "auc",
+        "f1_score",
+        "privacy_budget"
+      ],
+      "dataset": "multi-hospital EHR / imaging",
+      "limitations": "综述需落到可验证小样与明确临床终点。",
+      "source": "Xu et al., healthcare FL survey line",
+      "quote": "healthcare informatics",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_health_2",
+      "claim": "康养/慢病场景中，穿戴设备与院内数据分属不同机构时，更适合用横向联邦或经对齐的垂直联邦，而不是中心化汇聚原始波形。",
+      "method": "FL for wearable + hospital collaboration",
+      "setting": "both",
+      "domain": "smart_care",
+      "metrics": [
+        "aligned_sample_rate",
+        "global_accuracy"
+      ],
+      "dataset": "wearable + EHR",
+      "limitations": "时间戳对齐与采样率差异是常见失败源。",
+      "source": "healthcare FL practice",
+      "quote": "wearable",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized",
+    "FedAvg",
+    "SplitNN"
+  ]
+}

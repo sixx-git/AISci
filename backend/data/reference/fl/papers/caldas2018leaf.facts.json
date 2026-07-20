@@ -1,0 +1,50 @@
+{
+  "id": "caldas2018leaf",
+  "title": "LEAF: A Benchmark for Federated Settings",
+  "year": 2018,
+  "venue": "arXiv",
+  "external_id": "arXiv:1812.01097",
+  "setting": "hfl",
+  "domain": "fl_core",
+  "facts": [
+    {
+      "fact_id": "fl_seed_leaf_1",
+      "claim": "LEAF 提供 FEMNIST、Shakespeare 等带自然客户端划分的联邦基准。",
+      "method": "benchmark",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "global_accuracy",
+        "num_clients"
+      ],
+      "dataset": "LEAF suite",
+      "limitations": "完整数据体积大，小样验证需子集。",
+      "source": "Caldas et al., 2018",
+      "quote": "LEAF",
+      "relevance": 0.9
+    },
+    {
+      "fact_id": "fl_seed_leaf_2",
+      "claim": "评测联邦算法时应优先使用自然客户端划分基准，并报告客户端规模与样本不均衡，避免仅用人工切 MNIST。",
+      "method": "benchmark protocol",
+      "setting": "hfl",
+      "domain": "fl_core",
+      "metrics": [
+        "num_clients",
+        "non_iid_degree",
+        "global_accuracy"
+      ],
+      "dataset": "LEAF FEMNIST / Shakespeare",
+      "limitations": "小样子集需声明抽样规则，否则不可与全文结果对比。",
+      "source": "Caldas et al., 2018",
+      "quote": "federated settings",
+      "relevance": 0.87
+    }
+  ],
+  "data_links": [
+    "https://github.com/TalwalkarLab/leaf"
+  ],
+  "recommended_baselines": [
+    "FedAvg"
+  ]
+}

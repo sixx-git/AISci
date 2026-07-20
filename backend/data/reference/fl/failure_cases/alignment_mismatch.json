@@ -1,0 +1,10 @@
+{
+  "id": "alignment_mismatch",
+  "setting": "vfl",
+  "summary": "实体对齐键缺失或错配导致 alignment_success_rate 过低",
+  "typical_symptoms": [
+    "aligned_sample_rate < 0.85",
+    "训练样本骤减"
+  ],
+  "report_hint": "可作为「当前方法难以在未对齐数据上验证假设」的反例"
+}

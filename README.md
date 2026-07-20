@@ -211,7 +211,6 @@ AISci/
 │   │   │   ├── evidence_reasoning/ # 证据链迭代、假设修订、引用完整性
 │   │   │   ├── multimodal/       # VLM 图像理解、多模态证据构建
 │   │   │   ├── knowledge_graph/  # KG 构建、推理、增量更新
-│   │   │   ├── federated_experiment/ # 联邦学习场景识别与仿真
 │   │   │   ├── data/             # 数据清洗、数据集发现
 │   │   │   ├── report/           # 图表生成、VLM 评审、质量检查
 │   │   │   ├── reasoning/        # 新颖性审查、问题对齐、Ideation
@@ -221,7 +220,7 @@ AISci/
 │   ├── prompts/                  # 阶段 Prompt 模板 + presets/ 范式预设库（见 prompts/README.md）
 │   ├── scripts/                  # generate_prompt_presets.py 等工具脚本
 │   ├── tests/                    # pytest 测试
-│   ├── data/                     # arXiv fallback 数据
+│   ├── data/                     # arXiv fallback + reference/fl（联邦学习 Starter Pack）
 │   └── storage/                  # 运行时数据（见 storage/README.md）
 ├── pingfenbiao-main/              # 评分表 / 科学影响力预测（独立 Web :8765，顶栏「预测」）
 ├── shaxiang-main/                # 迭代实验上游实现（桥接用，通常 gitignore）
@@ -320,7 +319,7 @@ ALLOWED_EXTENSIONS=txt,pdf,docx,md,csv
 | `pack_a` | AI Scientist v1：想法 → 代码 → 运行 → 评审 |
 | `pack_b` | AI Scientist v2：树搜索、剪枝、pilot 门禁 |
 | `pack_c` | AISci 默认：证据溯源 + 可验证假设（**推荐新项目**） |
-| `pack_d` | 联邦学习（仅 `federated_learning` 项目可见） |
+| `pack_d` | 联邦学习 Starter Pack（仅 `federated_learning` 项目可见；资源包+提示词，非多机 runtime） |
 
 API：`GET /api/v1/prompts/presets/catalog`、`POST /api/v1/prompts/presets/apply`  
 前端：项目工作台 **Prompt 管理** Tab + 工作流阶段 **PromptPresetBar**
@@ -357,7 +356,7 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | **证据推理** | iterative_hypothesis_loop_skill, hypothesis_revision_skill | 多轮证据检索、LLM 假设修订（fact 白名单） |
 | **多模态** | qwen_vl_image_understanding_skill, multimodal_evidence_builder_skill | VLM 图像理解、多模态 fact 构建 |
 | **知识图谱** | evidence_graph_builder_skill, graph_reasoning_skill | 证据图构建与推理 |
-| **联邦实验** | federated_experiment_plan_skill, federated_simulation_executor_skill | 联邦场景识别、仿真与重规划 |
+| **联邦学习（Starter Pack）** | `backend/data/reference/fl/` + pack_d | 预解析文献 / 数据集元数据 / 本地 pilot 脚本；**不**再提供 `federated_experiment` 多机仿真技能栈 |
 | **数据** | data_juicer_lite_skill, preliminary_analysis_skill | 数据质量分析与统计描述 |
 | **推理** | hypothesis_novelty_review_skill, ideation_novelty_skill | 新颖性审查、Ideation 合成 |
 | **报告** | scientific_plot_skill, plot_vlm_critique_skill, report_quality_check_skill | 图表生成、VLM 评审、12 字段合规检查 |

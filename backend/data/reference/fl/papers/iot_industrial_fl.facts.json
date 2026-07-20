@@ -1,0 +1,52 @@
+{
+  "id": "iot_industrial_fl",
+  "title": "Federated Learning for IoT and Industrial Predictive Maintenance",
+  "year": 2021,
+  "venue": "applied / survey line",
+  "external_id": "applied:iot-industrial-fl",
+  "setting": "hfl",
+  "domain": "iot_industrial",
+  "facts": [
+    {
+      "fact_id": "fl_seed_iot_1",
+      "claim": "工业物联网中，工厂设备或传感器可分布式训练预测性维护与能耗优化模型，避免敏感工艺数据集中上传。",
+      "method": "FedAvg on sensor time-series",
+      "setting": "hfl",
+      "domain": "iot_industrial",
+      "metrics": [
+        "f1_score",
+        "mae",
+        "communication_rounds",
+        "participation_rate"
+      ],
+      "dataset": "multi-factory sensor / CMAPSS-style",
+      "limitations": "工况漂移与传感器标定差异造成强烈 Non-IID。",
+      "source": "industrial IoT FL practice",
+      "quote": "predictive maintenance",
+      "relevance": 0.91
+    },
+    {
+      "fact_id": "fl_seed_iot_2",
+      "claim": "工业联邦实验应按产线/设备划分客户端，并报告故障少数类召回，不能只用总体准确率。",
+      "method": "IIoT FL evaluation",
+      "setting": "hfl",
+      "domain": "iot_industrial",
+      "metrics": [
+        "recall",
+        "f1_score",
+        "non_iid_degree"
+      ],
+      "dataset": "imbalanced fault logs",
+      "limitations": "真实故障样本稀少，合成标签需声明。",
+      "source": "industrial IoT FL practice",
+      "quote": "energy optimization",
+      "relevance": 0.86
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "local LSTM",
+    "FedAvg",
+    "FedProx"
+  ]
+}

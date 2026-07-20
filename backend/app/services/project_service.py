@@ -39,8 +39,37 @@ class ProjectService:
         self.db = db
     
     def create_project(self, data: ProjectCreate) -> Project:
-        """创建项目"""
+        """创建项目；联邦学习模式时挂载 FL Starter Pack 到 config。"""
         project_id = str(uuid.uuid4())
+        mode = normalize_project_mode(
+            data.project_mode.value if data.project_mode else None
+        )
+        config: dict = {}
+        if mode == "federated_learning":
+            try:
+                from app.core.config import get_settings
+                from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
+
+                if fl_pack_enabled() and get_settings().AISCI_FL_PACK_ENABLED:
+                    svc = get_fl_pack_service()
+                    if svc.available():
+                        fl_setting = getattr(data, "fl_setting", None) or "hfl"
+                        fl_domains = getattr(data, "fl_domains", None)
+                        config = svc.mount_to_project_config(
+                            config, fl_setting=fl_setting, domains=fl_domains
+                        )
+                        # 研究问题模板兜底
+                        if not data.research_question:
+                            from app.core.project_modes import get_research_question_template
+
+                            tpl = get_research_question_template(mode, fl_setting)
+                            if tpl.get("research_question"):
+                                data.research_question = tpl["research_question"]
+                            if not data.research_domain and tpl.get("research_domain"):
+                                data.research_domain = tpl["research_domain"]
+            except Exception as exc:
+                logger.warning("[Project] 挂载 FL Starter Pack 失败: %s", exc)
+
         project = Project(
             id=project_id,
             name=data.name,
@@ -55,14 +84,39 @@ class ProjectService:
             data_source=data.data_source,
             constraints=data.constraints,
             expected_output=data.expected_output,
-            project_mode=normalize_project_mode(
-                data.project_mode.value if data.project_mode else None
-            ),
+            project_mode=mode,
+            config=config or None,
         )
         
         self.db.add(project)
         self.db.commit()
         self.db.refresh(project)
+
+        # 联邦模式：自动应用 pack_d 全部阶段预设
+        if mode == "federated_learning":
+            try:
+                from app.services.prompt_preset_service import PromptPresetService
+
+                preset_svc = PromptPresetService(self.db)
+                applied = preset_svc.apply_preset(
+                    project_id,
+                    "pack_d",
+                    "",
+                    apply_all_stages=True,
+                )
+                cfg = dict(project.config or {})
+                cfg["fl_pack_d_applied"] = {
+                    "pack_id": "pack_d",
+                    "count": applied.get("count"),
+                    "stages": [a.get("stage") for a in (applied.get("applied") or [])],
+                }
+                project.config = cfg
+                self.db.add(project)
+                self.db.commit()
+                self.db.refresh(project)
+                logger.info("[Project] 已自动应用 pack_d: %s", applied.get("count"))
+            except Exception as exc:
+                logger.warning("[Project] 自动应用 pack_d 失败: %s", exc)
         
         return project
     

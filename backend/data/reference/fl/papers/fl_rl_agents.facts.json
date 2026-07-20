@@ -1,0 +1,49 @@
+{
+  "id": "fl_rl_agents",
+  "title": "Federated Reinforcement Learning: Sharing Policies without Centralizing Trajectories",
+  "year": 2021,
+  "venue": "applied / survey line",
+  "external_id": "applied:fed-rl-2021",
+  "setting": "hfl",
+  "domain": "fl_rl",
+  "facts": [
+    {
+      "fact_id": "fl_seed_frl_1",
+      "claim": "联邦强化学习中，多个智能体在本地与环境交互，仅共享策略或价值网络参数，适用于自动驾驶、机器人控制等分布式场景。",
+      "method": "FedRL / policy averaging",
+      "setting": "hfl",
+      "domain": "fl_rl",
+      "metrics": [
+        "episode_return",
+        "communication_rounds",
+        "participation_rate"
+      ],
+      "dataset": "multi-agent Gym / driving sim shards",
+      "limitations": "环境动态与奖励稀疏使聚合不稳定。",
+      "source": "federated RL literature",
+      "quote": "policy",
+      "relevance": 0.88
+    },
+    {
+      "fact_id": "fl_seed_frl_2",
+      "claim": "FedRL 评测应报告回报曲线与通信轮次，并声明各客户端环境是否同构；异构环境等同于强化版 Non-IID。",
+      "method": "FedRL evaluation",
+      "setting": "hfl",
+      "domain": "fl_rl",
+      "metrics": [
+        "episode_return",
+        "client_drift"
+      ],
+      "dataset": "heterogeneous simulators",
+      "limitations": "真实车/机器人实验成本高，小样多为仿真。",
+      "source": "federated RL literature",
+      "quote": "autonomous driving",
+      "relevance": 0.84
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "independent RL",
+    "FedAvg on policies"
+  ]
+}

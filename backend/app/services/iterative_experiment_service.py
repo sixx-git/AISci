@@ -208,9 +208,38 @@ class IterativeExperimentService:
             raise ValueError("实验不存在")
         if exp.get("executor_type") != "sandbox":
             raise ValueError("模拟实验无需推荐数据集")
+        feedback = human_feedback or ""
+        try:
+            from app.core.database import SessionLocal, init_db
+            from app.models.project import Project
+            from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+
+            if fl_pack_enabled():
+                setting = "both"
+                if SessionLocal is None:
+                    init_db()
+                db = SessionLocal()
+                try:
+                    proj = db.query(Project).filter(Project.id == project_id).first()
+                    if proj and isinstance(proj.config, dict):
+                        setting = FlPackService.get_fl_setting_from_config(proj.config)
+                finally:
+                    db.close()
+                ctx = get_fl_pack_service().scripts_context_for_llm(fl_setting=setting)
+                pack_hints = get_fl_pack_service().dataset_guidance_hints(fl_setting=setting)[:5]
+                hint_lines = [
+                    f"- {h.get('name')}: {h.get('download_url')} ({h.get('description', '')[:80]})"
+                    for h in pack_hints
+                ]
+                extra = ctx
+                if hint_lines:
+                    extra += "\n[FL Pack 数据集]\n" + "\n".join(hint_lines)
+                feedback = (feedback + "\n" + extra).strip() if feedback else extra
+        except Exception:
+            pass
         try:
             projected = bridge.recommend_datasets(
-                project_id, self._sx_id(exp), human_feedback=human_feedback
+                project_id, self._sx_id(exp), human_feedback=feedback or None
             )
         except ShaxiangBridgeError:
             raise
@@ -332,7 +361,30 @@ class IterativeExperimentService:
             if cand.exists():
                 cfg = {**cfg, "source_path": str(cand.resolve())}
         try:
-            projected = bridge.design_script(project_id, self._sx_id(exp), cfg)
+            fl_feedback = None
+            try:
+                from app.core.database import SessionLocal
+                from app.models.project import Project
+                from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+
+                if fl_pack_enabled():
+                    setting = "both"
+                    from app.core.database import SessionLocal, init_db
+                    if SessionLocal is None:
+                        init_db()
+                    db = SessionLocal()
+                    try:
+                        proj = db.query(Project).filter(Project.id == project_id).first()
+                        if proj and isinstance(proj.config, dict):
+                            setting = FlPackService.get_fl_setting_from_config(proj.config)
+                    finally:
+                        db.close()
+                    fl_feedback = get_fl_pack_service().scripts_context_for_llm(fl_setting=setting)
+            except Exception:
+                fl_feedback = None
+            projected = bridge.design_script(
+                project_id, self._sx_id(exp), cfg, human_feedback=fl_feedback
+            )
         except ShaxiangBridgeError:
             raise
         except ValueError:
@@ -341,6 +393,51 @@ class IterativeExperimentService:
             logger.exception("设计脚本失败")
             # 透传截断/解析类错误文案，避免只看到笼统 RuntimeError
             raise RuntimeError(str(exc) or f"设计脚本失败: {exc}") from exc
+        return self._persist_projection(project_id, projected)
+
+    def list_fl_script_templates(self, project_id: str) -> List[Dict[str, Any]]:
+        from app.core.database import SessionLocal, init_db
+        from app.models.project import Project
+        from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+
+        if not fl_pack_enabled():
+            return []
+        setting = "both"
+        if SessionLocal is None:
+            init_db()
+        db = SessionLocal()
+        try:
+            proj = db.query(Project).filter(Project.id == project_id).first()
+            if proj and isinstance(proj.config, dict):
+                setting = FlPackService.get_fl_setting_from_config(proj.config)
+                # 优先用挂载时的 templates（已按 setting 裁剪）
+                pack = (proj.config.get("fl_pack") or {})
+                cached = pack.get("script_templates")
+                if isinstance(cached, list) and cached:
+                    return cached[:3]
+        finally:
+            db.close()
+        return get_fl_pack_service().list_script_templates(fl_setting=setting, limit=3)
+
+    def apply_fl_script_template(
+        self, project_id: str, experiment_id: str, script_id: str
+    ) -> Dict[str, Any]:
+        """将 FL Pack 参考脚本写入实验 analysis_script。"""
+        require_shaxiang_enabled()
+        from app.integrations.shaxiang import bridge
+        from app.services.fl_pack_service import get_fl_pack_service
+
+        exp = self.get(project_id, experiment_id)
+        if not exp:
+            raise ValueError("实验不存在")
+        meta = get_fl_pack_service().read_script_content(script_id)
+        projected = bridge.apply_analysis_script(
+            project_id,
+            self._sx_id(exp),
+            meta["content"],
+            title=f"FL模板: {meta.get('recommended_when') or meta.get('id')}",
+            methodology=f"FL Starter Pack · {meta.get('path')}",
+        )
         return self._persist_projection(project_id, projected)
 
     def set_run_mode(self, project_id: str, experiment_id: str, run_mode: str) -> Dict[str, Any]:
@@ -932,6 +1029,49 @@ class IterativeExperimentService:
             "_experiment_id": primary.get("id"),
             "_has_usable_evidence": has_usable,
         }
+
+        # Phase4：FL 资源包本地 pilot + VFL alignment gate（可选，失败不阻断）
+        try:
+            from app.core.config import get_settings
+            from app.services.fl_pack_service import FlPackService, fl_pack_enabled, get_fl_pack_service
+
+            settings = get_settings()
+            hyp = str(primary.get("hypothesis") or "")
+            looks_fl = any(
+                k in hyp.lower()
+                for k in ("federat", "fedavg", "fedprox", "联邦", "vfl", "non-iid", "client")
+            ) or any(
+                str(c).lower() in ("client_id", "party_id", "entity_id", "aligned_id")
+                for c in columns
+            )
+            if fl_pack_enabled() and looks_fl:
+                fl_svc = get_fl_pack_service()
+                fl_ctx = FlPackService.infer_fl_context_from_columns(
+                    [str(c) for c in columns],
+                    project_mode="federated_learning",
+                )
+                small_validation["fl_context"] = fl_ctx
+                gate = fl_svc.maybe_attach_vfl_gate(fl_ctx)
+                small_validation["federated_pilot"] = {
+                    "alignment_gate": gate,
+                    "execution_mode": "local_pack",
+                }
+                if getattr(settings, "AISCI_FL_LOCAL_PILOT_ENABLED", True) and not metrics:
+                    pilot = fl_svc.run_local_fedavg_pilot()
+                    small_validation["federated_pilot"]["local_fedavg"] = pilot
+                    if pilot.get("success") and isinstance(pilot.get("metrics"), dict):
+                        pm = pilot["metrics"]
+                        merged_metrics = {**metrics, **{k: v for k, v in pm.items() if k != "history"}}
+                        sandbox_execution["metrics"] = merged_metrics
+                        sandbox_execution["success"] = True
+                        actual_results["sandbox_metrics"] = merged_metrics
+                        actual_results["fl_local_pilot"] = pm
+                        small_validation["artifacts"]["metrics"] = merged_metrics
+                        small_validation["results"]["result_type_summary"] = "has_actual_results"
+                        small_validation["_has_usable_evidence"] = True
+        except Exception as exc:
+            logger.warning("[FL Pack] synthesize pilot/gate 跳过: %s", exc)
+
         return {"experiment_design": experiment_design, "small_validation": small_validation}
 
     @staticmethod

@@ -159,6 +159,7 @@ export function IterativeExperimentPage({
   if (view === 'detail' && selected) {
     return (
       <ExperimentDetail
+        projectId={projectId}
         experiment={selected}
         busy={busy}
         error={error}
@@ -174,6 +175,10 @@ export function IterativeExperimentPage({
             setSelectedId(null);
             setView('list');
           });
+        }}
+        onExperimentUpdated={(exp) => {
+          setExperiments((prev) => prev.map((e) => (e.id === exp.id ? exp : e)));
+          void reload();
         }}
         onRecommend={(feedback) => {
           void withBusy(async () => {

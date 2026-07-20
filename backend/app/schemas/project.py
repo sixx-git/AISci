@@ -20,6 +20,7 @@ class ProjectStatus(str, Enum):
 class ProjectMode(str, Enum):
     """项目运行模式"""
     GENERAL = "general"
+    FEDERATED_LEARNING = "federated_learning"
 
 
 class DataSpecHints(BaseModel):
@@ -73,7 +74,19 @@ class ProjectCreate(BaseModel):
     expected_output: Optional[str] = Field(None, description="期望输出")
     project_mode: Optional[ProjectMode] = Field(
         default=ProjectMode.GENERAL,
-        description="项目模式: general",
+        description="项目模式: general | federated_learning（挂载 FL Starter Pack）",
+    )
+    fl_setting: Optional[str] = Field(
+        None,
+        description="联邦子场景提示: hfl | vfl（仅 federated_learning 模式）",
+    )
+    fl_domains: Optional[List[str]] = Field(
+        None,
+        description=(
+            "领域种子过滤（空=全部）。可选: finance_risk, smart_care, edge_mobile, "
+            "iot_industrial, smart_transport, privacy_crypto, fl_cv, fl_nlp, fl_multilingual, "
+            "llm_ft, fl_lora_hetero, fl_blockchain, fl_rl, fl_continual；fl_core 始终保留"
+        ),
     )
 
 

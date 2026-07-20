@@ -1,0 +1,51 @@
+{
+  "id": "bonawitz2017secureagg",
+  "title": "Practical Secure Aggregation for Privacy-Preserving Machine Learning",
+  "year": 2017,
+  "venue": "CCS",
+  "external_id": "arXiv:1611.04482",
+  "setting": "hfl",
+  "domain": "privacy_crypto",
+  "facts": [
+    {
+      "fact_id": "fl_seed_smc_1",
+      "claim": "安全聚合（Secure Aggregation）用加密协议在服务器不可见单客户端更新的前提下完成求和，是联邦学习与安全多方计算结合的经典路径。",
+      "method": "Secure Aggregation",
+      "setting": "hfl",
+      "domain": "privacy_crypto",
+      "metrics": [
+        "communication_cost_mb",
+        "participation_rate",
+        "global_accuracy"
+      ],
+      "dataset": "on-device FL",
+      "limitations": "掉线客户端与协议轮次增加系统复杂度。",
+      "source": "Bonawitz et al., 2017",
+      "quote": "secure aggregation",
+      "relevance": 0.93
+    },
+    {
+      "fact_id": "fl_seed_smc_2",
+      "claim": "报告联邦隐私增强方案时，应区分「本地数据不出域」「安全聚合」「差分隐私」三层保障，避免混为一谈。",
+      "method": "privacy stack taxonomy",
+      "setting": "both",
+      "domain": "privacy_crypto",
+      "metrics": [
+        "privacy_budget",
+        "communication_cost_mb"
+      ],
+      "dataset": "n/a",
+      "limitations": "本 Pack 不做真实 MPC runtime，仅提供写作与指标约束。",
+      "source": "secure aggregation + DP practice",
+      "quote": "MPC",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [
+    "https://arxiv.org/abs/1611.04482"
+  ],
+  "recommended_baselines": [
+    "plain FedAvg",
+    "SecureAgg"
+  ]
+}

@@ -103,7 +103,7 @@
 - **results**：须含（1）实际/模拟/预期结果区分；（2）**结果分析与讨论**（论文体：主要发现 → 与假设对照 → 反例含义 → 局限与后续）；优先引用 `small_validation.artifacts.metrics` 与沙箱 `primary_metric`；未跑满计划轮次时写阶段性结果；失败轮次写入反例/局限；区分 pilot_fallback 与完整沙箱产出
 - **references**：仅 citation_map / literature_facts 可验证条目；禁止编造。
 
-**VFL 场景**：experiments 的 baselines/metrics 须符合 vertical_fl 要求（见原赛题规范）。
+**VFL / 联邦学习场景**：若项目挂载 FL Starter Pack 或 `small_validation.fl_context` / `federated_pilot` 存在，experiments/results 须写清：setting（HFL/VFL）、对齐键或 client 划分、通信轮次、global vs local 指标；失败/对齐未通过写入反例；可参考 pack checklists（alignment_rate、communication_rounds 等）。baselines/metrics 须符合 vertical_fl / horizontal_fl 表述，禁止假装已部署多机联邦。
 
 ---
 

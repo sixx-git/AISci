@@ -1,0 +1,284 @@
+{
+  "papers": [
+    {
+      "id": "mcmahan2017fedavg",
+      "title": "Communication-Efficient Learning of Deep Networks from Decentralized Data",
+      "year": 2017,
+      "setting": "hfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1602.05629",
+      "file": "papers/mcmahan2017fedavg.facts.json"
+    },
+    {
+      "id": "li2020fedprox",
+      "title": "Federated Optimization in Heterogeneous Networks",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1812.06127",
+      "file": "papers/li2020fedprox.facts.json"
+    },
+    {
+      "id": "caldas2018leaf",
+      "title": "LEAF: A Benchmark for Federated Settings",
+      "year": 2018,
+      "setting": "hfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1812.01097",
+      "file": "papers/caldas2018leaf.facts.json"
+    },
+    {
+      "id": "zhao2018noniid",
+      "title": "Federated Learning with Non-IID Data",
+      "year": 2018,
+      "setting": "hfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1806.00582",
+      "file": "papers/zhao2018noniid.facts.json"
+    },
+    {
+      "id": "vepakomma2018splitnn",
+      "title": "Split learning for health: Distributed deep learning without sharing raw patient data",
+      "year": 2018,
+      "setting": "vfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1812.00564",
+      "file": "papers/vepakomma2018splitnn.facts.json"
+    },
+    {
+      "id": "liu2022vflsurvey",
+      "title": "A Survey on Vertical Federated Learning: From Concepts to Applications",
+      "year": 2022,
+      "setting": "vfl",
+      "domain": "fl_core",
+      "external_id": "survey:vfl-2022",
+      "file": "papers/liu2022vflsurvey.facts.json"
+    },
+    {
+      "id": "bagdasaryan2020backdoor",
+      "title": "How To Backdoor Federated Learning",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "fl_core",
+      "external_id": "arXiv:1807.00459",
+      "file": "papers/bagdasaryan2020backdoor.facts.json"
+    },
+    {
+      "id": "kairouz2021advances",
+      "title": "Advances and Open Problems in Federated Learning",
+      "year": 2021,
+      "setting": "both",
+      "domain": "fl_core",
+      "external_id": "arXiv:1912.04977",
+      "file": "papers/kairouz2021advances.facts.json"
+    },
+    {
+      "id": "hu2022lora",
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "year": 2022,
+      "setting": "both",
+      "domain": "llm_ft",
+      "external_id": "arXiv:2106.09685",
+      "file": "papers/hu2022lora.facts.json"
+    },
+    {
+      "id": "ye2024openfedllm",
+      "title": "OpenFedLLM: Training Large Language Models on Decentralized Private Data via Federated Learning",
+      "year": 2024,
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "external_id": "arXiv:2401.06468",
+      "file": "papers/ye2024openfedllm.facts.json"
+    },
+    {
+      "id": "zhang2023fedpeft",
+      "title": "Federated Learning for Large Language Models: Towards Federated PEFT and Instruction Tuning",
+      "year": 2023,
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "external_id": "survey:fed-llm-peft-2023",
+      "file": "papers/zhang2023fedpeft.facts.json"
+    },
+    {
+      "id": "xu2021flhealth",
+      "title": "Federated Learning for Healthcare Informatics",
+      "year": 2021,
+      "setting": "both",
+      "domain": "smart_care",
+      "external_id": "survey:fl-healthcare-2021",
+      "file": "papers/xu2021flhealth.facts.json"
+    },
+    {
+      "id": "sisfall_fl_care",
+      "title": "Fall Detection and Activity Recognition under Federated Learning Constraints (SisFall/MobiAct line)",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "smart_care",
+      "external_id": "applied:sisfall-fl-care",
+      "file": "papers/sisfall_fl_care.facts.json"
+    },
+    {
+      "id": "rieke2020medicalfl",
+      "title": "The Future of Digital Health with Federated Learning",
+      "year": 2020,
+      "setting": "both",
+      "domain": "smart_care",
+      "external_id": "doi:10.1038/s41746-020-00323-1",
+      "file": "papers/rieke2020medicalfl.facts.json"
+    },
+    {
+      "id": "liu2020fedtraffic",
+      "title": "Privacy-Preserving Traffic Flow Prediction: A Federated Learning Approach",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "smart_transport",
+      "external_id": "applied:fed-traffic-flow-2020",
+      "file": "papers/liu2020fedtraffic.facts.json"
+    },
+    {
+      "id": "its_fl_survey",
+      "title": "Federated Learning for Intelligent Transportation Systems: Opportunities and Challenges",
+      "year": 2022,
+      "setting": "both",
+      "domain": "smart_transport",
+      "external_id": "survey:fl-its-2022",
+      "file": "papers/its_fl_survey.facts.json"
+    },
+    {
+      "id": "elbir2022v2xfl",
+      "title": "Federated Learning for Vehicular Networks and Intelligent Transportation",
+      "year": 2022,
+      "setting": "hfl",
+      "domain": "smart_transport",
+      "external_id": "applied:v2x-fl-2022",
+      "file": "papers/elbir2022v2xfl.facts.json"
+    },
+    {
+      "id": "yang2019flfinance",
+      "title": "Federated Machine Learning: Concept and Applications (finance / enterprise FL)",
+      "year": 2019,
+      "setting": "both",
+      "domain": "finance_risk",
+      "external_id": "doi:10.1145/3298981",
+      "file": "papers/yang2019flfinance.facts.json"
+    },
+    {
+      "id": "hard2018nextword",
+      "title": "Federated Learning for Mobile Keyboard Prediction",
+      "year": 2018,
+      "setting": "hfl",
+      "domain": "edge_mobile",
+      "external_id": "arXiv:1811.03604",
+      "file": "papers/hard2018nextword.facts.json"
+    },
+    {
+      "id": "lim2020edgefl",
+      "title": "Federated Learning in Mobile Edge Networks: A Comprehensive Survey",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "edge_mobile",
+      "external_id": "survey:edge-fl-2020",
+      "file": "papers/lim2020edgefl.facts.json"
+    },
+    {
+      "id": "iot_industrial_fl",
+      "title": "Federated Learning for IoT and Industrial Predictive Maintenance",
+      "year": 2021,
+      "setting": "hfl",
+      "domain": "iot_industrial",
+      "external_id": "applied:iot-industrial-fl",
+      "file": "papers/iot_industrial_fl.facts.json"
+    },
+    {
+      "id": "abadi2016dpsgd",
+      "title": "Deep Learning with Differential Privacy",
+      "year": 2016,
+      "setting": "hfl",
+      "domain": "privacy_crypto",
+      "external_id": "arXiv:1607.00133",
+      "file": "papers/abadi2016dpsgd.facts.json"
+    },
+    {
+      "id": "bonawitz2017secureagg",
+      "title": "Practical Secure Aggregation for Privacy-Preserving Machine Learning",
+      "year": 2017,
+      "setting": "hfl",
+      "domain": "privacy_crypto",
+      "external_id": "arXiv:1611.04482",
+      "file": "papers/bonawitz2017secureagg.facts.json"
+    },
+    {
+      "id": "fl_cv_detection",
+      "title": "Federated Learning for Computer Vision: Multi-Camera Detection and Recognition",
+      "year": 2021,
+      "setting": "hfl",
+      "domain": "fl_cv",
+      "external_id": "applied:fl-cv-2021",
+      "file": "papers/fl_cv_detection.facts.json"
+    },
+    {
+      "id": "fl_nlp_lm",
+      "title": "Federated Learning for NLP: Language Models and Cross-Organization Text",
+      "year": 2020,
+      "setting": "hfl",
+      "domain": "fl_nlp",
+      "external_id": "applied:fl-nlp-2020",
+      "file": "papers/fl_nlp_lm.facts.json"
+    },
+    {
+      "id": "fl_blockchain",
+      "title": "Blockchain-Enabled Federated Learning: Authentication, Audit and Incentives",
+      "year": 2021,
+      "setting": "hfl",
+      "domain": "fl_blockchain",
+      "external_id": "survey:fl-blockchain-2021",
+      "file": "papers/fl_blockchain.facts.json"
+    },
+    {
+      "id": "fl_rl_agents",
+      "title": "Federated Reinforcement Learning: Sharing Policies without Centralizing Trajectories",
+      "year": 2021,
+      "setting": "hfl",
+      "domain": "fl_rl",
+      "external_id": "applied:fed-rl-2021",
+      "file": "papers/fl_rl_agents.facts.json"
+    },
+    {
+      "id": "fl_continual",
+      "title": "Federated Continual Learning under Non-IID Data and Concept Drift",
+      "year": 2022,
+      "setting": "hfl",
+      "domain": "fl_continual",
+      "external_id": "applied:fed-continual-2022",
+      "file": "papers/fl_continual.facts.json"
+    },
+    {
+      "id": "fl_health_imaging",
+      "title": "Multi-Hospital Federated Learning for Disease Prediction and Medical Imaging",
+      "year": 2021,
+      "setting": "both",
+      "domain": "smart_care",
+      "external_id": "applied:multi-hospital-fl",
+      "file": "papers/fl_health_imaging.facts.json"
+    },
+    {
+      "id": "fl_multilingual_xlm",
+      "title": "Federated Multilingual Learning: Cross-Lingual Transfer without Centralizing Corpora",
+      "year": 2022,
+      "setting": "hfl",
+      "domain": "fl_multilingual",
+      "external_id": "applied:fl-multilingual-2022",
+      "file": "papers/fl_multilingual_xlm.facts.json"
+    },
+    {
+      "id": "fl_hetero_lora",
+      "title": "Federated Learning with Heterogeneous Client LoRA Adapters",
+      "year": 2024,
+      "setting": "hfl",
+      "domain": "fl_lora_hetero",
+      "external_id": "applied:fl-hetero-lora-2024",
+      "file": "papers/fl_hetero_lora.facts.json"
+    }
+  ],
+  "fact_count": 57
+}

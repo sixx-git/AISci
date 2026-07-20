@@ -1,0 +1,34 @@
+{
+  "id": "lim2020edgefl",
+  "title": "Federated Learning in Mobile Edge Networks: A Comprehensive Survey",
+  "year": 2020,
+  "venue": "IEEE Commun. Surveys",
+  "external_id": "survey:edge-fl-2020",
+  "setting": "hfl",
+  "domain": "edge_mobile",
+  "facts": [
+    {
+      "fact_id": "fl_seed_edge_survey_1",
+      "claim": "移动边缘网络中的联邦学习需联合优化模型精度、通信时延与能耗，是边缘计算与 FL 交叉的核心议题。",
+      "method": "edge FL survey",
+      "setting": "hfl",
+      "domain": "edge_mobile",
+      "metrics": [
+        "latency_ms",
+        "energy",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "edge network traces",
+      "limitations": "综述需落到可验证的单机小样假设。",
+      "source": "Lim et al., 2020",
+      "quote": "mobile edge",
+      "relevance": 0.87
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "FedProx"
+  ]
+}

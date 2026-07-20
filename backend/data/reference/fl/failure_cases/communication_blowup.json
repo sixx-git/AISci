@@ -1,0 +1,10 @@
+{
+  "id": "communication_blowup",
+  "setting": "both",
+  "summary": "为追精度无节制增加通信轮次导致成本不可接受",
+  "typical_symptoms": [
+    "communication_rounds 过大",
+    "communication_cost_mb 失控"
+  ],
+  "report_hint": "在局限中写清通信预算，避免只报精度"
+}

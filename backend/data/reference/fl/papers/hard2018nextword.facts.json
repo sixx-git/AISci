@@ -1,0 +1,53 @@
+{
+  "id": "hard2018nextword",
+  "title": "Federated Learning for Mobile Keyboard Prediction",
+  "year": 2018,
+  "venue": "arXiv / applied",
+  "external_id": "arXiv:1811.03604",
+  "setting": "hfl",
+  "domain": "edge_mobile",
+  "facts": [
+    {
+      "fact_id": "fl_seed_edge_1",
+      "claim": "手机输入法下一词预测是联邦学习在智能终端上的经典落地：本地训练、仅上传模型更新，兼顾个性化与隐私。",
+      "method": "FedAvg on-device language model",
+      "setting": "hfl",
+      "domain": "edge_mobile",
+      "metrics": [
+        "top1_accuracy",
+        "communication_rounds",
+        "participation_rate"
+      ],
+      "dataset": "on-device typing / CIFAR-like mobile shards",
+      "limitations": "设备算力与间歇在线导致部分参与。",
+      "source": "Hard et al., 2018",
+      "quote": "keyboard prediction",
+      "relevance": 0.93
+    },
+    {
+      "fact_id": "fl_seed_edge_2",
+      "claim": "语音助手与推荐系统等边缘场景同样适合「本地更新 + 中心聚合」，报告需写明设备侧资源上限与通信预算。",
+      "method": "on-device FL",
+      "setting": "hfl",
+      "domain": "edge_mobile",
+      "metrics": [
+        "communication_cost_mb",
+        "latency_ms",
+        "global_accuracy"
+      ],
+      "dataset": "edge device shards",
+      "limitations": "仿真设备数远小于真实亿级终端。",
+      "source": "mobile FL practice",
+      "quote": "on-device",
+      "relevance": 0.88
+    }
+  ],
+  "data_links": [
+    "https://arxiv.org/abs/1811.03604"
+  ],
+  "recommended_baselines": [
+    "centralized",
+    "FedAvg",
+    "local-only"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "ye2024openfedllm",
+  "title": "OpenFedLLM: Training Large Language Models on Decentralized Private Data via Federated Learning",
+  "year": 2024,
+  "venue": "arXiv",
+  "external_id": "arXiv:2401.06468",
+  "setting": "hfl",
+  "domain": "llm_ft",
+  "facts": [
+    {
+      "fact_id": "fl_seed_openfedllm_1",
+      "claim": "OpenFedLLM 将联邦学习流程系统化用于大语言模型训练/微调，强调私有分散语料上的协作训练框架与评测协议。",
+      "method": "FedLLM framework",
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "metrics": [
+        "downstream_accuracy",
+        "communication_rounds",
+        "privacy_notes"
+      ],
+      "dataset": "federated LLM benchmarks / private corpora",
+      "limitations": "算力与带宽门槛高；小样验证需用合成指令分片或 PEFT。",
+      "source": "Ye et al., 2024",
+      "quote": "OpenFedLLM",
+      "relevance": 0.91
+    },
+    {
+      "fact_id": "fl_seed_openfedllm_2",
+      "claim": "联邦 LLM 设定下，客户端应报告本地数据域差异与指令分布，否则全局模型可能偏向主导机构语料。",
+      "method": "FedLLM evaluation protocol",
+      "setting": "hfl",
+      "domain": "llm_ft",
+      "metrics": [
+        "client_drift",
+        "global_accuracy"
+      ],
+      "dataset": "heterogeneous instruction sets",
+      "limitations": "公开复现依赖开源分片，真实机构数据不可外发。",
+      "source": "Ye et al., 2024",
+      "quote": "decentralized private data",
+      "relevance": 0.87
+    }
+  ],
+  "data_links": [
+    "https://arxiv.org/abs/2401.06468"
+  ],
+  "recommended_baselines": [
+    "centralized SFT",
+    "FedAvg+LoRA",
+    "local-only LoRA"
+  ]
+}

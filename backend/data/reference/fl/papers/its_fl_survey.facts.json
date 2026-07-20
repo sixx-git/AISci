@@ -1,0 +1,51 @@
+{
+  "id": "its_fl_survey",
+  "title": "Federated Learning for Intelligent Transportation Systems: Opportunities and Challenges",
+  "year": 2022,
+  "venue": "survey",
+  "external_id": "survey:fl-its-2022",
+  "setting": "both",
+  "domain": "smart_transport",
+  "facts": [
+    {
+      "fact_id": "fl_seed_its_1",
+      "claim": "智能交通系统（ITS）中的联邦学习覆盖流量预测、轨迹挖掘、车路协同感知等，需处理高动态拓扑与严格时延。",
+      "method": "FL for ITS survey",
+      "setting": "both",
+      "domain": "smart_transport",
+      "metrics": [
+        "latency_ms",
+        "MAE",
+        "communication_rounds"
+      ],
+      "dataset": "V2X / detector / trajectory",
+      "limitations": "场景碎片化，假设必须限定单一任务与数据模态。",
+      "source": "ITS FL survey literature",
+      "quote": "intelligent transportation",
+      "relevance": 0.88
+    },
+    {
+      "fact_id": "fl_seed_its_2",
+      "claim": "车企与交管分别持有车辆侧特征与路网标签时，可用垂直联邦验证跨组织协作，但实体对齐（车辆ID/时空键）是可行性前提。",
+      "method": "VFL for V2X collaboration",
+      "setting": "vfl",
+      "domain": "smart_transport",
+      "metrics": [
+        "aligned_sample_rate",
+        "AUC",
+        "privacy_budget"
+      ],
+      "dataset": "OEM features + traffic authority labels",
+      "limitations": "ID 脱敏与对齐冲突是常见阻断。",
+      "source": "ITS FL survey literature",
+      "quote": "V2X",
+      "relevance": 0.85
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "FedAvg",
+    "SplitNN",
+    "centralized"
+  ]
+}

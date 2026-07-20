@@ -1,0 +1,68 @@
+{
+  "id": "sisfall_fl_care",
+  "title": "Fall Detection and Activity Recognition under Federated Learning Constraints (SisFall/MobiAct line)",
+  "year": 2020,
+  "venue": "applied FL / HAR",
+  "external_id": "applied:sisfall-fl-care",
+  "setting": "hfl",
+  "domain": "smart_care",
+  "facts": [
+    {
+      "fact_id": "fl_seed_fall_1",
+      "claim": "跌倒检测与日常活动识别（HAR）可按受试者/设备划分客户端做横向联邦，避免集中上传原始加速度波形。",
+      "method": "FedAvg on HAR / fall detection",
+      "setting": "hfl",
+      "domain": "smart_care",
+      "metrics": [
+        "f1_score",
+        "recall",
+        "global_accuracy",
+        "communication_rounds"
+      ],
+      "dataset": "SisFall / MobiAct / UCI-HAR style",
+      "limitations": "跌倒样本稀少会导致极端 Non-IID；需报告少数类召回。",
+      "source": "HAR + FL applied literature",
+      "quote": "fall detection",
+      "relevance": 0.92
+    },
+    {
+      "fact_id": "fl_seed_fall_2",
+      "claim": "智慧康养联邦实验应以受试者独立划分评估泛化，并记录设备异质（采样率、传感器轴）带来的客户端漂移。",
+      "method": "subject-independent FL evaluation",
+      "setting": "hfl",
+      "domain": "smart_care",
+      "metrics": [
+        "client_drift",
+        "f1_score",
+        "non_iid_degree"
+      ],
+      "dataset": "multi-device wearable",
+      "limitations": "实验室跌倒与真实居家跌倒分布不同。",
+      "source": "HAR + FL applied literature",
+      "quote": "subject-independent",
+      "relevance": 0.89
+    },
+    {
+      "fact_id": "fl_seed_fall_3",
+      "claim": "当养老机构只有标签、设备厂商只有特征时，可用垂直联邦思路验证对齐键（如 session_id）与联合判别性能。",
+      "method": "VFL-style care collaboration",
+      "setting": "vfl",
+      "domain": "smart_care",
+      "metrics": [
+        "aligned_sample_rate",
+        "auc"
+      ],
+      "dataset": "feature-party sensors + label-party care records",
+      "limitations": "对齐失败会直接导致可用样本骤减。",
+      "source": "care VFL scenario design",
+      "quote": "alignment",
+      "relevance": 0.85
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "local CNN/LSTM",
+    "FedAvg",
+    "centralized"
+  ]
+}

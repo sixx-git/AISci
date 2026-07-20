@@ -17,6 +17,12 @@ class TestPromptPresets(unittest.TestCase):
         self.assertNotIn("pack_d", pack_ids)
         self.assertIn("report_generation", catalog["excluded_stages"])
 
+    def test_catalog_federated_includes_pack_d(self):
+        catalog = self.svc.get_catalog(project_mode="federated_learning")
+        pack_ids = [p["id"] for p in catalog["packs"]]
+        self.assertIn("pack_d", pack_ids)
+        self.assertEqual(catalog["default_pack_id"], "pack_d")
+
     def test_load_pack_a_hypothesis_bold_idea(self):
         data = self.svc.get_preset_content("pack_a", "hypothesis_generation", "bold_idea")
         self.assertIn("AI Scientist", data["content"])

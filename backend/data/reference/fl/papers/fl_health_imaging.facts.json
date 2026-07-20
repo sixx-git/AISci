@@ -1,0 +1,35 @@
+{
+  "id": "fl_health_imaging",
+  "title": "Multi-Hospital Federated Learning for Disease Prediction and Medical Imaging",
+  "year": 2021,
+  "venue": "applied health FL",
+  "external_id": "applied:multi-hospital-fl",
+  "setting": "both",
+  "domain": "smart_care",
+  "facts": [
+    {
+      "fact_id": "fl_seed_hosp_1",
+      "claim": "医院之间可用联邦学习协同训练疾病预测与医学影像分析模型，在保护患者隐私的同时缓解单中心数据不足。",
+      "method": "multi-site FedAvg / SplitNN",
+      "setting": "both",
+      "domain": "smart_care",
+      "metrics": [
+        "auc",
+        "dice",
+        "privacy_budget",
+        "communication_rounds"
+      ],
+      "dataset": "multi-hospital EHR / imaging",
+      "limitations": "标注协议与设备厂商差异导致特征分布偏移。",
+      "source": "multi-hospital FL practice",
+      "quote": "medical imaging",
+      "relevance": 0.92
+    }
+  ],
+  "data_links": [],
+  "recommended_baselines": [
+    "centralized",
+    "FedAvg",
+    "SplitNN"
+  ]
+}
