@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     LITERATURE_IMPORT_UNVERIFIED: bool = False
     # unverified 但有摘要时仍允许入库（摘要级证据 / 引用），默认开启
     LITERATURE_IMPORT_UNVERIFIED_WITH_ABSTRACT: bool = True
+    # 自动 discovery 默认不下载 PDF（优先摘要建索引），避免串行 60s 超时拖到近 10 分钟
+    LITERATURE_DISCOVERY_DOWNLOAD_PDF: bool = False
+    # 已有可入库候选（含「unverified+摘要」）达到该数则跳过 API 补搜
+    LITERATURE_SKIP_SUPPLEMENT_WHEN_IMPORTABLE: int = 1
 
     # 文献相关性门控（PaperQA 风格：论文门控 + chunk RCS；关闭则回退旧行为）
     LIT_RELEVANCE_GATE_ENABLED: bool = True

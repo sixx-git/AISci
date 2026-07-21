@@ -1,6 +1,7 @@
 """文献挖掘结果归并：将 facts / citation_map / skill 输出统一为下游可消费结构。"""
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,6 +48,30 @@ def _as_dict_list(items: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def ensure_citation_document_id(entry: Dict[str, Any], *, index: int = 0) -> Dict[str, Any]:
+    """保证 citation 条目有 document_id（LiteratureMiningResponse 必填）。
+
+    外部推荐 / 仅标题的 source_papers 常无库内 doc id，用稳定合成 id 占位。
+    """
+    item = dict(entry or {})
+    doc_id = str(
+        item.get("document_id")
+        or item.get("paper_id")
+        or item.get("external_id")
+        or ""
+    ).strip()
+    if doc_id:
+        item["document_id"] = doc_id
+        return item
+    title = (item.get("title") or item.get("paper_title") or "").strip()
+    if title:
+        slug = hashlib.sha1(title.encode("utf-8")).hexdigest()[:12]
+        item["document_id"] = f"ext_cite_{slug}"
+    else:
+        item["document_id"] = f"ext_cite_{index}"
+    return item
+
+
 def _append_fact(
     facts: List[Dict[str, Any]],
     seen_fact_ids: set[str],
@@ -91,7 +116,7 @@ def _append_citation(
         for c in citation_map
     ):
         return
-    citation_map.append(entry)
+    citation_map.append(ensure_citation_document_id(entry, index=len(citation_map)))
 
 
 def normalize_literature_bundle(
@@ -267,6 +292,14 @@ def normalize_literature_bundle(
 
     if not verified and citation_map:
         verified = list(citation_map)
+
+    # 已有 citation / verified 也可能缺 document_id（仅标题条目）
+    citation_map = [
+        ensure_citation_document_id(c, index=i) for i, c in enumerate(citation_map)
+    ]
+    verified = [
+        ensure_citation_document_id(c, index=i) for i, c in enumerate(verified)
+    ]
 
     return facts, citation_map, verified
 

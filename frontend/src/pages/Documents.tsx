@@ -17,10 +17,9 @@ export function Documents() {
     (async () => {
       setLoadingProjects(true);
       try {
-        const res = await projectService.getProjects();
+        const res = await projectService.getProjects({ page: 1, page_size: 100 });
         if (cancelled) return;
-        const list = (res.data as { list?: ProjectOverview[] })?.list ?? res.data ?? [];
-        setProjects(Array.isArray(list) ? list : []);
+        setProjects(res.data?.list ?? []);
       } catch {
         if (!cancelled) setProjects([]);
       } finally {

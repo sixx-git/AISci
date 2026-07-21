@@ -99,7 +99,7 @@ class LiteratureMiningAgent:
     """文献挖掘智能体
 
     工作流程：
-      1. LLM 网页式推荐论文（问题 + 领域）→ API 校验 → 自动入库建索引
+      1. 本地文献不足时：LLM 推荐 → API 校验 → 自动入库建索引（足够则跳过）
       2. Zvec 向量检索 → 获取 Top-K 相关 Chunk
       3. 格式化 Chunk（含完整文献元数据）→ 送入 LLM
       4. LLM 输出结构化事实 + 证据 + citation_map
@@ -120,7 +120,8 @@ class LiteratureMiningAgent:
         """
         从项目文献库挖掘相关科学事实
 
-        当项目缺少文献或检索无结果时，自动运行 LLM 文献推荐（网页式单次推荐 + API 校验）并导入。
+        当项目本地文献不足时，自动运行一次 LLM 文献推荐并导入；
+        本地文献已足够则跳过外部 discovery。向量检索无结果时不再二次 discovery。
 
         Args:
             project_id: 项目 ID
@@ -137,8 +138,10 @@ class LiteratureMiningAgent:
             keywords = self._domain_keywords(domain)
             discovery_output: Dict[str, Any] = {}
             corpus_meta: Dict[str, Any] = {}
+            discovery_ran = False
 
-            if db is not None:
+            if db is not None and self._should_run_literature_discovery(db, project_id):
+                discovery_ran = True
                 discovery_output, corpus_meta = self._discover_and_import_literature(
                     project_id,
                     research_question,
@@ -146,6 +149,16 @@ class LiteratureMiningAgent:
                     research_domain=domain,
                     max_import=self._resolve_max_import(top_k),
                 )
+            elif db is not None:
+                logger.info(
+                    "[文献挖掘] 本地文献已足够，跳过外部 discovery project=%s",
+                    project_id,
+                )
+                corpus_meta = {
+                    "skipped": True,
+                    "reason": "sufficient_local_literature",
+                    "imported": 0,
+                }
 
             vs = get_vector_store()
             has_index = vs.has_index(project_id)
@@ -175,11 +188,18 @@ class LiteratureMiningAgent:
                     logger.warning("[文献挖掘] 补建向量索引失败: %s", idx_err)
 
             if not has_index:
-                return self._empty_response(
-                    warning=(
+                if discovery_ran:
+                    warn = (
                         "当前项目缺少可引用文献，已运行多源文献发现但未获取到有效文献。"
                         "请手动上传 PDF 或导入 BibTeX 文献。"
-                    ),
+                    )
+                else:
+                    warn = (
+                        "当前项目缺少可引用文献（向量索引为空）。"
+                        "请手动上传 PDF 或导入 BibTeX 文献。"
+                    )
+                return self._empty_response(
+                    warning=warn,
                     discovery_output=discovery_output,
                     corpus_meta=corpus_meta,
                 )
@@ -208,26 +228,11 @@ class LiteratureMiningAgent:
                     if search_results:
                         break
 
-            if not search_results and db is not None:
-                logger.info("[文献挖掘] 向量检索仍无结果，二次运行文献推荐")
-                discovery_output, corpus_meta = self._discover_and_import_literature(
-                    project_id,
-                    research_question,
-                    db,
-                    research_domain=domain,
-                    max_import=self._resolve_max_import(top_k),
-                )
-                if vs.has_index(project_id):
-                    search_results = search_vector_store(
-                        project_id=project_id,
-                        query=research_question,
-                        top_k=candidate_k,
-                    )
-
+            # 检索仍无结果：不再二次 discovery（避免整条推荐链翻倍耗时）
             if not search_results:
                 return self._empty_response(
                     warning=(
-                        "已检索并尝试导入外部文献，但未能从文献库中匹配到相关片段。"
+                        "未能从文献库中匹配到相关片段。"
                         "请检查研究问题关键词，或手动上传更相关的 PDF。"
                     ),
                     discovery_output=discovery_output,
@@ -569,6 +574,39 @@ class LiteratureMiningAgent:
         parts = [p.strip() for p in domain.replace("，", ",").replace("、", ",").split(",") if p.strip()]
         return parts[:8]
 
+    def _should_run_literature_discovery(self, db: Session, project_id: str) -> bool:
+        """本地 PROCESSED 文献不足时才跑外部 discovery（复用 Data Finder 门槛）。"""
+        from app.models.project import Document, DocumentStatus, Project
+        from app.services.literature_discovery_adapter import should_auto_discover_literature
+
+        try:
+            doc_count = (
+                db.query(Document)
+                .filter(Document.project_id == project_id)
+                .filter(Document.status == DocumentStatus.PROCESSED)
+                .count()
+            )
+        except Exception as exc:
+            logger.warning("[文献挖掘] 统计本地文献失败，默认允许 discovery: %s", exc)
+            return True
+
+        project_config: Dict[str, Any] = {}
+        try:
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project and isinstance(project.config, dict):
+                project_config = project.config
+        except Exception as exc:
+            logger.debug("[文献挖掘] 读取项目 config 失败: %s", exc)
+
+        should = should_auto_discover_literature(doc_count, project_config)
+        logger.info(
+            "[文献挖掘] discovery 门控: processed_docs=%s should_discover=%s project=%s",
+            doc_count,
+            should,
+            project_id,
+        )
+        return should
+
     def _discover_and_import_literature(
         self,
         project_id: str,
@@ -588,6 +626,19 @@ class LiteratureMiningAgent:
             f"question='{research_question[:80]}...', domain='{domain[:60]}'"
         )
         discovery = run_literature_recommendation_sync(research_question, domain)
+
+        # 无可入库候选时跳过门控/入库，尽快结束空库 discovery
+        if discovery.get("early_exit") or not (discovery.get("papers") or []):
+            reason = discovery.get("early_exit") or "推荐结果无论文"
+            logger.info("[文献推荐] %s，跳过入库 project=%s", reason, project_id)
+            corpus_meta = {
+                "imported": 0,
+                "skipped": True,
+                "reason": reason,
+                "candidate_count": int(discovery.get("candidate_count") or 0),
+            }
+            return discovery, corpus_meta
+
         corpus_meta = ensure_corpora_from_recommendations(
             project_id,
             research_question,
@@ -868,6 +919,15 @@ class LiteratureMiningAgent:
 
         payload = {**response.model_dump(), **merged}
         payload["facts"] = facts
+        # enrich 可能从 source_papers 标题补入无 document_id 的 citation，须在此补齐
+        from app.services.literature_bundle_service import ensure_citation_document_id
+
+        cites = payload.get("citation_map") or []
+        payload["citation_map"] = [
+            ensure_citation_document_id(c, index=i)
+            for i, c in enumerate(cites)
+            if isinstance(c, dict)
+        ]
         payload["evidence_facts"] = len(facts)
         payload["verified_references_count"] = len(payload.get("citation_map") or [])
         return LiteratureMiningResponse(**payload)

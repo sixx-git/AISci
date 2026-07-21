@@ -134,3 +134,47 @@ def test_run_literature_recommendation_web_flow(mock_llm, mock_verify):
     assert len(result["subtopics"]) >= 1
     assert result["verified_count"] == 1
     mock_llm.assert_called_once_with(GOLDEN_QUESTION, GOLDEN_DOMAIN, max_papers=mock_llm.call_args.kwargs.get("max_papers", 12))
+
+
+@patch("app.services.literature_recommendation_service._supplement_by_search_queries", new_callable=AsyncMock)
+@patch("app.services.literature_recommendation_service.verify_recommended_papers", new_callable=AsyncMock)
+@patch("app.services.literature_recommendation_service.llm_recommend_papers")
+def test_empty_llm_recommendation_skips_verify_and_supplement(mock_llm, mock_verify, mock_supp):
+    mock_llm.return_value = {
+        "papers": [],
+        "subtopics": [],
+        "rationale": "none",
+        "search_queries": ["federated learning"],
+    }
+    result = asyncio.run(run_literature_recommendation(GOLDEN_QUESTION, GOLDEN_DOMAIN))
+    assert result.get("early_exit")
+    assert result["papers"] == []
+    mock_verify.assert_not_called()
+    mock_supp.assert_not_called()
+
+
+@patch("app.services.literature_recommendation_service._supplement_by_search_queries", new_callable=AsyncMock)
+@patch("app.services.literature_recommendation_service.verify_recommended_papers", new_callable=AsyncMock)
+@patch("app.services.literature_recommendation_service.llm_recommend_papers")
+def test_unverified_with_abstract_skips_supplement(mock_llm, mock_verify, mock_supp):
+    mock_llm.return_value = {
+        "papers": [{"title": "Paper A", "abstract": "x" * 50}],
+        "subtopics": [],
+        "rationale": "r",
+        "search_queries": ["q1", "q2"],
+    }
+    mock_verify.return_value = [
+        {
+            "title": "Paper A",
+            "verification_status": "unverified",
+            "abstract": "A sufficiently long abstract for importable unverified literature.",
+        }
+    ]
+    mock_supp.return_value = []
+
+    result = asyncio.run(
+        run_literature_recommendation(GOLDEN_QUESTION, GOLDEN_DOMAIN, supplement_api=True)
+    )
+    assert result["supplement_used"] is False
+    mock_supp.assert_not_called()
+    assert result["unverified_count"] == 1

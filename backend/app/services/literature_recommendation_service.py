@@ -169,8 +169,65 @@ def _paper_keys(papers: List[Dict[str, Any]]) -> set[str]:
     return keys
 
 
-def _count_importable(papers: List[Dict[str, Any]]) -> int:
+def _paper_abstract_text(paper: Dict[str, Any]) -> str:
+    return str(
+        paper.get("abstract")
+        or paper.get("resolved_abstract_preview")
+        or ""
+    ).strip()
+
+
+def _count_verified_or_partial(papers: List[Dict[str, Any]]) -> int:
     return sum(1 for p in papers if p.get("verification_status") in ("verified", "partial"))
+
+
+def _count_corpus_importable(
+    papers: List[Dict[str, Any]],
+    *,
+    import_unverified: bool = False,
+    import_unverified_with_abstract: bool = True,
+    min_abstract_chars: int = 40,
+) -> int:
+    """与 literature_corpus_service._importable_papers 口径一致。"""
+    n = 0
+    for p in papers:
+        status = p.get("verification_status") or ""
+        if status in ("verified", "partial"):
+            n += 1
+            continue
+        if status == "unverified" and p.get("title"):
+            if import_unverified:
+                n += 1
+            elif import_unverified_with_abstract and len(_paper_abstract_text(p)) >= min_abstract_chars:
+                n += 1
+    return n
+
+
+def _empty_recommendation_result(
+    *,
+    rq: str,
+    domain: str,
+    rec: Dict[str, Any],
+    reason: str,
+) -> Dict[str, Any]:
+    return {
+        "discovery_mode": "llm_recommend_web_v3",
+        "research_question": rq,
+        "research_domain": domain or "未指定",
+        "subtopics": rec.get("subtopics") or [],
+        "papers": [],
+        "total": 0,
+        "candidate_count": 0,
+        "verified_count": 0,
+        "partial_count": 0,
+        "unverified_count": 0,
+        "rationale": rec.get("rationale") or reason,
+        "search_queries": rec.get("search_queries") or [],
+        "supplement_used": False,
+        "llm_skipped": bool(rec.get("skipped")),
+        "early_exit": reason,
+        "warnings": ([rec.get("error")] if rec.get("error") else []) + [reason],
+    }
 
 
 async def run_literature_recommendation(
@@ -181,7 +238,15 @@ async def run_literature_recommendation(
     min_verified: Optional[int] = None,
     supplement_api: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    max_p, min_v, sup_default, _ = _settings()
+    max_p, min_v, sup_default, import_unverified = _settings()
+    settings = get_settings()
+    import_unverified_with_abstract = bool(
+        getattr(settings, "LITERATURE_IMPORT_UNVERIFIED_WITH_ABSTRACT", True)
+    )
+    skip_supplement_when = int(
+        getattr(settings, "LITERATURE_SKIP_SUPPLEMENT_WHEN_IMPORTABLE", 1) or 1
+    )
+
     max_papers = max_papers if max_papers is not None else max_p
     min_verified = min_verified if min_verified is not None else min_v
     supplement_api = supplement_api if supplement_api is not None else sup_default
@@ -192,20 +257,48 @@ async def run_literature_recommendation(
     rec = llm_recommend_papers(rq, domain, max_papers=max_papers)
     raw_papers = rec.get("papers") or []
 
+    # LLM 未产出标题 → 跳过外网校验与补搜，避免空转数分钟
+    if not raw_papers:
+        logger.info("[文献推荐] LLM 无候选论文，跳过校验/补搜（early exit）")
+        return _empty_recommendation_result(
+            rq=rq,
+            domain=domain,
+            rec=rec,
+            reason="LLM 未推荐任何论文，已跳过外网校验与补搜",
+        )
+
     verified_papers = await verify_recommended_papers(raw_papers)
 
+    corpus_importable = _count_corpus_importable(
+        verified_papers,
+        import_unverified=import_unverified,
+        import_unverified_with_abstract=import_unverified_with_abstract,
+    )
+    verified_or_partial = _count_verified_or_partial(verified_papers)
+
     supplement_used = False
-    if supplement_api and _count_importable(verified_papers) < min_verified:
+    # 已有可入库候选（含 unverified+摘要）则跳过昂贵补搜；否则仍按 verified/partial 门槛决定
+    need_supplement = (
+        supplement_api
+        and corpus_importable < skip_supplement_when
+        and verified_or_partial < min_verified
+    )
+    if need_supplement:
         existing = _paper_keys(verified_papers)
         extra = await _supplement_by_search_queries(
             rec.get("search_queries") or [],
             existing_keys=existing,
-            max_add=max(1, min_verified - _count_importable(verified_papers)),
+            max_add=max(1, min_verified - max(verified_or_partial, corpus_importable)),
         )
         if extra:
             extra_verified = await verify_recommended_papers(extra)
             supplement_used = True
             verified_papers.extend(extra_verified)
+    elif supplement_api and corpus_importable >= skip_supplement_when:
+        logger.info(
+            "[文献推荐] 已有 %s 篇可入库候选，跳过 API 补搜",
+            corpus_importable,
+        )
 
     verified_count = sum(1 for p in verified_papers if p.get("verification_status") == "verified")
     partial_count = sum(1 for p in verified_papers if p.get("verification_status") == "partial")

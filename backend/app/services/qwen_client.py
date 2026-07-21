@@ -408,6 +408,14 @@ class QwenClient:
                         logger.info(f"[LLM重试] 等待 {wait_s}s 后重试...")
                         time.sleep(wait_s)
                     continue
+                except AgentOutputParseError:
+                    # JSON 解析失败已在 structured_chat 内做过一次重调；
+                    # 此处原样抛出，避免被包装成「Unexpected Error」掩盖根因。
+                    _shutdown_executor(wait=False)
+                    raise
+                except QwenError:
+                    _shutdown_executor(wait=False)
+                    raise
                 except APIError as e:
                     _shutdown_executor(wait=False)
                     logger.error(f"Qwen API Error: {str(e)}")
@@ -536,7 +544,8 @@ class QwenClient:
 
         增强点：
         - JSON 解析失败时自动尝试修复
-        - 修复失败抛出 AgentOutputParseError（绝不返回 raw_response）
+        - 修复仍失败时再调一次 LLM（更强 JSON 约束）
+        - 最终失败抛出 AgentOutputParseError（绝不返回 raw_response）
         - 自动记录调用日志
 
         Args:
@@ -551,7 +560,7 @@ class QwenClient:
             解析后的 JSON 字典
 
         Raises:
-            AgentOutputParseError: JSON 解析失败（含自动修复尝试）
+            AgentOutputParseError: JSON 解析失败（含自动修复与一次重调）
         """
         if not self.api_key:
             raise QwenError("QWEN_API_KEY not set")
@@ -578,70 +587,163 @@ class QwenClient:
             {"role": "user", "content": enhanced_prompt}
         ]
 
-        logger.debug(f"Calling Qwen structured_chat: prompt={prompt[:100]}... schema_keys={list(schema_example.keys()) if isinstance(schema_example, dict) else 'N/A'}")
+        logger.debug(
+            f"Calling Qwen structured_chat: prompt={prompt[:100]}... "
+            f"schema_keys={list(schema_example.keys()) if isinstance(schema_example, dict) else 'N/A'}"
+        )
 
         t0 = time.time()
-        raw_content = ""
+        token_pt = token_ct = token_tt = 0
 
-        # 调用 API
-        try:
-            logger.info(f"[LLM] structured_chat 开始调用 model={self.model} prompt_len={len(prompt)} max_tokens={max_tokens}")
+        def _invoke(msgs: List[Dict[str, str]], temp: float) -> str:
+            nonlocal token_pt, token_ct, token_tt
+            logger.info(
+                f"[LLM] structured_chat 调用 model={self.model} "
+                f"msgs={len(msgs)} max_tokens={max_tokens} temp={temp}"
+            )
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
-                temperature=temperature,
+                messages=msgs,
+                temperature=temp,
                 max_tokens=max_tokens or 8192,
                 timeout=self.timeout,
             )
-
-            raw_content = response.choices[0].message.content
-            if raw_content is None:
-                raise QwenAPIError("Empty response from Qwen API")
-
+            content = response.choices[0].message.content
             usage_data = response.usage
-            pt = usage_data.prompt_tokens if usage_data else 0
-            ct = usage_data.completion_tokens if usage_data else 0
-            tt = usage_data.total_tokens if usage_data else 0
+            if usage_data:
+                token_pt += usage_data.prompt_tokens or 0
+                token_ct += usage_data.completion_tokens or 0
+                token_tt += usage_data.total_tokens or 0
+            return content if content is not None else ""
 
+        def _try_parse(raw: str) -> tuple[Optional[dict], Optional[Exception]]:
+            if not (raw or "").strip():
+                return None, json.JSONDecodeError(
+                    "Expecting value: empty model output", raw or "", 0
+                )
+            try:
+                return _safe_json_loads(raw), None
+            except json.JSONDecodeError as e1:
+                try:
+                    return _repair_json(raw), None
+                except json.JSONDecodeError:
+                    return None, e1
+
+        raw_content = ""
+        try:
+            raw_content = _invoke(messages, temperature)
         except (QwenAPIError, QwenTimeoutError) as e:
             duration_ms = int((time.time() - t0) * 1000)
-            self._log_call(self.model, temperature, prompt_version, prompt, "", duration_ms, False, str(e))
+            self._log_call(
+                self.model, temperature, prompt_version, prompt, "", duration_ms, False, str(e)
+            )
             raise
 
-        duration_ms = int((time.time() - t0) * 1000)
-
-        # ──── 第一次尝试：直接解析 ────
-        json_obj = None
-        first_error = None
-        try:
-            json_obj = _safe_json_loads(raw_content)
-            logger.debug("JSON parsed successfully on first attempt")
-        except json.JSONDecodeError as e:
-            first_error = e
-
+        json_obj, first_error = _try_parse(raw_content)
         if json_obj is not None:
-            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(
+                self.model,
+                temperature,
+                prompt_version,
+                prompt,
+                json.dumps(json_obj, ensure_ascii=False),
+                duration_ms,
+                True,
+                prompt_tokens=token_pt,
+                completion_tokens=token_ct,
+                total_tokens=token_tt,
+            )
             return json_obj
 
-        # ──── 第二次尝试：自动修复 JSON ────
-        logger.warning(f"First JSON parse failed, attempting auto-repair: {first_error}")
+        # ──── 模型输出无法解析：自动再跑一次 LLM ────
+        preview = (raw_content or "").strip()
+        preview = preview[:400] if preview else "(空输出)"
+        logger.warning(
+            "structured_chat JSON 解析失败，自动重调 LLM 一次: %s | preview=%r",
+            first_error,
+            preview[:120],
+        )
+        retry_messages: List[Dict[str, str]] = list(messages) + [
+            {"role": "assistant", "content": preview},
+            {
+                "role": "user",
+                "content": (
+                    "上一次输出不是合法 JSON（可能为空、含解释文字或 markdown 代码块）。"
+                    "请重新输出：只返回一个完整的 JSON 对象，"
+                    "不要 markdown 代码块，不要任何解释或前后缀文字。"
+                ),
+            },
+        ]
+        retry_temp = min(float(temperature), 0.1)
         try:
-            json_obj = _repair_json(raw_content)
-            logger.info("JSON auto-repair succeeded")
-            self._log_call(self.model, temperature, prompt_version, prompt, json.dumps(json_obj, ensure_ascii=False), duration_ms, True, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
+            raw_retry = _invoke(retry_messages, retry_temp)
+        except (QwenAPIError, QwenTimeoutError) as e:
+            duration_ms = int((time.time() - t0) * 1000)
+            self._log_call(
+                self.model,
+                temperature,
+                prompt_version,
+                prompt,
+                raw_content,
+                duration_ms,
+                False,
+                f"JSON parse failed then retry API error: {e}",
+                prompt_tokens=token_pt,
+                completion_tokens=token_ct,
+                total_tokens=token_tt,
+            )
+            raise AgentOutputParseError(
+                message=(
+                    f"Agent 输出无法解析为合法 JSON。原始错误: {first_error}。"
+                    f"自动重调时 API 失败: {e}"
+                ),
+                raw_output=raw_content,
+                repair_attempted=True,
+            ) from e
+
+        json_obj, retry_error = _try_parse(raw_retry)
+        duration_ms = int((time.time() - t0) * 1000)
+        if json_obj is not None:
+            logger.info("structured_chat JSON 自动重调成功")
+            self._log_call(
+                self.model,
+                retry_temp,
+                prompt_version,
+                prompt,
+                json.dumps(json_obj, ensure_ascii=False),
+                duration_ms,
+                True,
+                prompt_tokens=token_pt,
+                completion_tokens=token_ct,
+                total_tokens=token_tt,
+            )
             return json_obj
-        except json.JSONDecodeError as e:
-            pass  # 修复也失败了
 
-        # ──── 仍然失败：抛出 AgentOutputParseError，绝不允许 raw_response 继续 ────
-        error_msg = f"模型输出 JSON 解析失败（原始+修复均失败）: {first_error}"
-        self._log_call(self.model, temperature, prompt_version, prompt, raw_content, duration_ms, False, error_msg, prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
-
+        error_msg = (
+            f"模型输出 JSON 解析失败（原始+修复+重调均失败）: "
+            f"first={first_error}; retry={retry_error}"
+        )
+        self._log_call(
+            self.model,
+            temperature,
+            prompt_version,
+            prompt,
+            raw_retry or raw_content,
+            duration_ms,
+            False,
+            error_msg,
+            prompt_tokens=token_pt,
+            completion_tokens=token_ct,
+            total_tokens=token_tt,
+        )
         raise AgentOutputParseError(
-            message=f"Agent 输出无法解析为合法 JSON。原始错误: {first_error}。"
-                    f"已尝试自动修复但依然失败。请检查 prompt 和 schema_example 是否清晰明确。",
-            raw_output=raw_content,
-            repair_attempted=True
+            message=(
+                f"Agent 输出无法解析为合法 JSON。原始错误: {first_error}。"
+                f"已尝试自动修复并重新调用模型，依然失败。请检查 prompt 和 schema_example 是否清晰明确。"
+            ),
+            raw_output=raw_retry or raw_content,
+            repair_attempted=True,
         )
 
     @_with_retry

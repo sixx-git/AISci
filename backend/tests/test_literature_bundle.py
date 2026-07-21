@@ -26,7 +26,34 @@ def test_normalize_retrieved_papers_to_facts_and_citations():
     assert facts[0]["source_paper_title"] == "DNA Origami Nanorobots"
     assert len(citation_map) == 1
     assert citation_map[0]["title"] == "DNA Origami Nanorobots"
+    assert citation_map[0].get("document_id")  # 外部论文也须有稳定 document_id
     assert len(verified) == 1
+
+
+def test_source_paper_title_only_gets_synthetic_document_id():
+    """回归：仅标题的 source_papers 补入 citation_map 时不得缺 document_id。"""
+    from app.agents.literature_mining_agent import LiteratureMiningResponse
+
+    lm = {
+        "facts": [
+            {
+                "fact_id": "f1",
+                "content": "Aging hallmarks include genomic instability.",
+                "source_chunk_id": "c1",
+                "document_id": "doc-1",
+            }
+        ],
+        "citation_map": [{"document_id": "doc-1", "title": "Local Paper", "paper_title": "Local Paper"}],
+        "source_papers": [
+            "The Hallmarks of Aging",
+            "Hallmarks of aging: An expanding universe",
+        ],
+    }
+    enriched = enrich_literature_mining(lm)
+    assert all(c.get("document_id") for c in enriched["citation_map"])
+    # 必须能通过 LiteratureMiningResponse 校验（此前在此抛 validation error）
+    resp = LiteratureMiningResponse(**{**lm, **enriched})
+    assert len(resp.citation_map) >= 2
 
 
 def test_low_score_abstract_not_promoted_to_fact():

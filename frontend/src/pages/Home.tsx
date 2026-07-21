@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useRef } from 'react';
+﻿import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, FlaskConical, Calendar, ArrowRight, FilterX, Trash2,
@@ -30,6 +30,20 @@ const STATUS_OPTIONS = [
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 const DEFAULT_PAGE_SIZE = 10;
 
+/** 首页筛选值 → 后端 Project.status（展示态仍优先看 Pipeline） */
+function toApiProjectStatus(uiStatus: string): string | undefined {
+  switch (uiStatus) {
+    case 'completed':
+      return 'completed';
+    case 'running':
+      return 'in_progress';
+    case 'pending':
+      return 'draft';
+    default:
+      return undefined;
+  }
+}
+
 const selectChevronStyle = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
@@ -40,8 +54,16 @@ const selectChevronStyle = {
 export function Home() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [projects, setProjects] = useState<ProjectOverview[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({
+    total: 0,
+    completed: 0,
+    running: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -50,6 +72,7 @@ export function Home() {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const {
     loading: pipelineLoading,
@@ -77,6 +100,36 @@ export function Home() {
 
   const lastSyncedPipelineKeyRef = useRef('');
 
+  // 搜索防抖：稳定 keyword 后再请求服务端
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setKeyword(search.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, statusFilter, pageSize]);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const [allRes, completedRes, runningRes] = await Promise.all([
+        projectService.getProjects({ page: 1, page_size: 1 }),
+        projectService.getProjects({ page: 1, page_size: 1, status: 'completed' }),
+        projectService.getProjects({ page: 1, page_size: 1, status: 'in_progress' }),
+      ]);
+      setStats({
+        total: allRes.code === 200 ? (allRes.data?.pagination.total ?? 0) : 0,
+        completed: completedRes.code === 200 ? (completedRes.data?.pagination.total ?? 0) : 0,
+        running: runningRes.code === 200 ? (runningRes.data?.pagination.total ?? 0) : 0,
+      });
+    } catch {
+      /* 统计失败不影响列表 */
+    }
+  }, []);
+
+  // 仅加载当前页（服务端分页覆盖全部项目）
   useEffect(() => {
     let cancelled = false;
 
@@ -84,17 +137,31 @@ export function Home() {
       setLoading(true);
       setError(null);
       try {
-        const response = await projectService.getProjects();
+        const apiStatus = toApiProjectStatus(statusFilter);
+        // 「失败」依赖 Pipeline 态，暂无项目 status 过滤；仍按页拉取，客户端再筛
+        const response = await projectService.getProjects({
+          page,
+          page_size: pageSize,
+          keyword: keyword || undefined,
+          status: apiStatus,
+        });
         if (cancelled) return;
-        if (response.code === 200) {
-          const list = (response.data as { list?: ProjectOverview[] })?.list ?? response.data ?? [];
-          setProjects(Array.isArray(list) ? list : []);
+        if (response.code === 200 && response.data) {
+          setProjects(response.data.list ?? []);
+          setTotal(response.data.pagination.total);
+          setTotalPages(Math.max(1, response.data.pagination.total_pages));
         } else {
           setError(response.message || '获取项目列表失败');
+          setProjects([]);
+          setTotal(0);
+          setTotalPages(1);
         }
       } catch (err: unknown) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : '获取项目列表失败，请检查后端服务是否启动');
+        setProjects([]);
+        setTotal(0);
+        setTotalPages(1);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -102,83 +169,44 @@ export function Home() {
 
     loadProjects();
     return () => { cancelled = true; };
-  }, []);
+  }, [page, pageSize, keyword, statusFilter, reloadTick]);
 
-  // Pipeline 回填 research_domain 后，刷新项目列表以同步首页 chip
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats, reloadTick]);
+
+  // 「失败」按 Pipeline 展示态在本页内过滤（服务端无对应 Project.status）
+  const visibleProjects = useMemo(() => {
+    if (statusFilter !== 'failed') return projects;
+    return projects.filter((p) => getDisplayStatus(p) === 'failed');
+  }, [projects, statusFilter, getDisplayStatus]);
+
+  // Pipeline 回填 research_domain 后，刷新当前页
   useEffect(() => {
     if (pipelineLoading || !pipelineSyncKey) return undefined;
     if (lastSyncedPipelineKeyRef.current === pipelineSyncKey) return undefined;
     lastSyncedPipelineKeyRef.current = pipelineSyncKey;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await projectService.getProjects();
-        if (cancelled || response.code !== 200) return;
-        const list = (response.data as { list?: ProjectOverview[] })?.list ?? response.data ?? [];
-        if (Array.isArray(list)) setProjects(list);
-      } catch {
-        /* 静默刷新失败不影响首页主流程 */
-      }
-    })();
-
-    return () => { cancelled = true; };
+    setReloadTick((n) => n + 1);
+    return undefined;
   }, [pipelineLoading, pipelineSyncKey]);
 
   useEffect(() => {
     if (!hasRunningPipeline) return undefined;
-    const timer = setInterval(async () => {
-      try {
-        const response = await projectService.getProjects();
-        if (response.code !== 200) return;
-        const list = (response.data as { list?: ProjectOverview[] })?.list ?? response.data ?? [];
-        if (Array.isArray(list)) setProjects(list);
-      } catch {
-        /* ignore */
-      }
+    const timer = setInterval(() => {
+      setReloadTick((n) => n + 1);
     }, 5000);
     return () => clearInterval(timer);
   }, [hasRunningPipeline]);
-
-  const filtered = useMemo(() => {
-    let list = projects;
-    if (search.trim()) {
-      const kw = search.trim().toLowerCase();
-      list = list.filter(
-        (p) => {
-          const field = resolveResearchField(p, p.id);
-          return (
-            p.name.toLowerCase().includes(kw)
-            || field.toLowerCase().includes(kw)
-            || (p.description && p.description.toLowerCase().includes(kw))
-          );
-        },
-      );
-    }
-    if (statusFilter) {
-      list = list.filter((p) => getDisplayStatus(p) === statusFilter);
-    }
-    return list;
-  }, [search, statusFilter, projects, getDisplayStatus]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, pageSize]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const paged = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
-
   const clearFilters = () => {
     setSearch('');
+    setKeyword('');
     setStatusFilter('');
+    setPage(1);
   };
 
   const openDeleteDialog = (projectId: string, projectName: string) => {
@@ -201,9 +229,15 @@ export function Home() {
     try {
       const response = await projectService.deleteProject(deleteTarget.id);
       if (isApiSuccess(response)) {
-        setProjects((prev) => prev.filter((p) => p.id !== deleteTarget.id));
         setDeleteTarget(null);
         setDeleteConfirmInput('');
+        // 若删空当前页且不是第一页，回退一页
+        if (projects.length <= 1 && page > 1) {
+          setPage((p) => Math.max(1, p - 1));
+        } else {
+          setReloadTick((n) => n + 1);
+        }
+        void loadStats();
       } else {
         setDeleteError(response.message || '删除项目失败');
       }
@@ -215,17 +249,13 @@ export function Home() {
   };
 
   const hasFilters = search.trim() !== '' || statusFilter !== '';
+  const listTotal = statusFilter === 'failed' ? visibleProjects.length : total;
 
-  const projectCount = projects.length;
-  const completedCount = projects.filter((p) => getDisplayStatus(p) === 'completed').length;
-  const runningCount = projects.filter((p) => getDisplayStatus(p) === 'running').length;
-  const pendingCount = projects.filter((p) => getDisplayStatus(p) === 'pending').length;
-
-  const paginationBar = filtered.length > 0 ? (
+  const paginationBar = listTotal > 0 || projects.length > 0 ? (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 px-1">
       <div className="flex flex-wrap items-center gap-3 text-sm text-bp-muted">
         <span>
-          第 {page} / {totalPages} 页，共 {filtered.length} 条
+          第 {page} / {totalPages} 页，共 {listTotal} 条
         </span>
         <label className="inline-flex items-center gap-2">
           <span className="text-xs">每页</span>
@@ -316,22 +346,18 @@ export function Home() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bp-metric-box">
-          <div className="text-bp-metric font-bold text-bp-cyan">{projectCount}</div>
+          <div className="text-bp-metric font-bold text-bp-cyan">{stats.total}</div>
           <div className="text-bp-muted text-sm">总项目数</div>
         </div>
         <div className="bp-metric-box">
-          <div className="text-bp-metric font-bold text-bp-green">{completedCount}</div>
+          <div className="text-bp-metric font-bold text-bp-green">{stats.completed}</div>
           <div className="text-bp-muted text-sm">已完成</div>
         </div>
         <div className="bp-metric-box">
-          <div className="text-bp-metric font-bold text-bp-cyan">{runningCount}</div>
+          <div className="text-bp-metric font-bold text-bp-cyan">{stats.running}</div>
           <div className="text-bp-muted text-sm">运行中</div>
-        </div>
-        <div className="bp-metric-box">
-          <div className="text-bp-metric font-bold text-bp-muted">{pendingCount}</div>
-          <div className="text-bp-muted text-sm">未开始</div>
         </div>
       </div>
 
@@ -341,8 +367,8 @@ export function Home() {
           {!loading && !error && (
             <span className="text-sm text-bp-muted">
               {hasFilters
-                ? `共 ${filtered.length} 个匹配结果`
-                : filtered.length > 0
+                ? `共 ${listTotal} 个匹配结果`
+                : listTotal > 0
                   ? `第 ${page}/${totalPages} 页`
                   : null}
             </span>
@@ -363,10 +389,10 @@ export function Home() {
           <Card>
             <ErrorState
               message={error}
-              onRetry={() => window.location.reload()}
+              onRetry={() => setReloadTick((n) => n + 1)}
             />
           </Card>
-        ) : filtered.length === 0 ? (
+        ) : visibleProjects.length === 0 ? (
           <EmptyState
             icon={hasFilters ? <Search className="w-8 h-8" /> : <FlaskConical className="w-8 h-8" />}
             title={hasFilters ? '未找到匹配的项目' : '暂无项目，请创建新项目。'}
@@ -396,7 +422,7 @@ export function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((project) => (
+                    {visibleProjects.map((project) => (
                       <tr
                         key={project.id}
                         className="border-b border-bp-border/50 last:border-0 hover:bg-bp-cyan-tint/20 transition-colors"

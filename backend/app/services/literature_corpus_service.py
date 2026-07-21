@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def _literature_import_settings() -> tuple[int, bool, bool]:
+def _literature_import_settings() -> tuple[int, bool, bool, bool]:
     from app.core.config import get_settings
 
     s = get_settings()
@@ -17,6 +17,7 @@ def _literature_import_settings() -> tuple[int, bool, bool]:
         int(getattr(s, "LITERATURE_RECOMMEND_MAX", 12) or getattr(s, "LITERATURE_IMPORT_MAX", 12) or 12),
         bool(getattr(s, "LITERATURE_IMPORT_UNVERIFIED", False)),
         bool(getattr(s, "LITERATURE_IMPORT_UNVERIFIED_WITH_ABSTRACT", True)),
+        bool(getattr(s, "LITERATURE_DISCOVERY_DOWNLOAD_PDF", False)),
     )
 
 
@@ -98,7 +99,9 @@ def ensure_corpora_from_recommendations(
     from app.services.literature_relevance_gate import apply_relevance_gate
     from app.services.vector_store import build_vector_index
 
-    default_max, import_unverified, import_unverified_with_abstract = _literature_import_settings()
+    default_max, import_unverified, import_unverified_with_abstract, download_pdf = (
+        _literature_import_settings()
+    )
     max_import = max_import if max_import is not None else default_max
 
     # 入库前论文级相关性门控 + 查询改写（可配置关闭）
@@ -154,18 +157,47 @@ def ensure_corpora_from_recommendations(
                 from app.models import Document
 
                 doc = db.query(Document).filter(Document.id == doc_id).first()
-                if doc and doc.pdf_url and not doc.file_path:
+                abstract = (doc.abstract or "").strip() if doc else ""
+                has_usable_abstract = len(abstract) >= 40
+
+                # 默认不下载 PDF：有摘要则直接建摘要索引，避免串行 60s 超时拖垮 discovery
+                should_download = (
+                    download_pdf
+                    and doc
+                    and doc.pdf_url
+                    and not doc.file_path
+                    and not has_usable_abstract
+                )
+                if should_download:
                     try:
                         service.download_arxiv_pdf(project_id, doc_id)
                         pdf_downloaded += 1
                     except Exception as dl_err:
                         logger.warning("PDF 下载失败 %s: %s", doc_id, dl_err)
-                try:
-                    service.parse_document(project_id=project_id, document_id=doc_id)
-                    parsed += 1
-                except Exception as parse_err:
-                    # 无 PDF 时用摘要建可检索 chunk，避免「入库了却挖不到」
-                    logger.warning("自动 parse 失败 %s: %s", doc_id, parse_err)
+                elif doc and doc.pdf_url and not download_pdf:
+                    logger.info(
+                        "跳过 PDF 下载（LITERATURE_DISCOVERY_DOWNLOAD_PDF=false）doc=%s",
+                        doc_id,
+                    )
+
+                indexed_ok = False
+                if has_usable_abstract and not (doc and doc.file_path):
+                    try:
+                        if service.ensure_abstract_chunks(project_id, doc_id):
+                            abstract_indexed += 1
+                            indexed_ok = True
+                    except Exception as abs_err:
+                        logger.warning("摘要 chunk 写入失败 %s: %s", doc_id, abs_err)
+
+                if not indexed_ok and doc and doc.file_path:
+                    try:
+                        service.parse_document(project_id=project_id, document_id=doc_id)
+                        parsed += 1
+                        indexed_ok = True
+                    except Exception as parse_err:
+                        logger.warning("自动 parse 失败 %s: %s", doc_id, parse_err)
+
+                if not indexed_ok:
                     try:
                         if service.ensure_abstract_chunks(project_id, doc_id):
                             abstract_indexed += 1
@@ -192,6 +224,7 @@ def ensure_corpora_from_recommendations(
         "partial_count": rec.get("partial_count", 0),
         "unverified_count": rec.get("unverified_count", 0),
         "gate_stats": gate_stats,
+        "download_pdf": download_pdf,
         "retrieval_provenance": {
             "query": research_question[:200],
             "research_domain": rec.get("research_domain") or "",
@@ -203,6 +236,7 @@ def ensure_corpora_from_recommendations(
             "supplement_used": rec.get("supplement_used", False),
             "imported_ids": imported_ids,
             "auto_parse": auto_parse,
+            "download_pdf": download_pdf,
             "gate_stats": gate_stats,
             "abstract_indexed": abstract_indexed,
         },

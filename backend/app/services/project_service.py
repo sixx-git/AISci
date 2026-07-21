@@ -142,14 +142,16 @@ class ProjectService:
         if query.status:
             q = q.filter(Project.status == query.status)
         
-        # 关键词搜索
+        # 关键词搜索（名称 / 描述 / 关键词 / 领域 / 研究问题）
         if query.keyword:
             keyword = f"%{query.keyword}%"
             q = q.filter(
                 or_(
                     Project.name.like(keyword),
                     Project.description.like(keyword),
-                    Project.keywords.like(keyword)
+                    Project.keywords.like(keyword),
+                    Project.research_domain.like(keyword),
+                    Project.research_question.like(keyword),
                 )
             )
         

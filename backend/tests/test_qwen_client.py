@@ -139,32 +139,61 @@ class TestQwenClient(TestCase):
         self.assertEqual(result["answer"], "这是 markdown 包裹的回复")
     
     @patch('app.services.qwen_client.openai.OpenAI')
-    def test_structured_chat_invalid_json(self, mock_openai_class):
-        """测试 structured_chat 处理无效 JSON"""
-        # Mock OpenAI client
+    def test_structured_chat_invalid_json_retries_then_raises(self, mock_openai_class):
+        """无效 JSON：自动重调一次后仍失败则抛 AgentOutputParseError（不包装为 Unexpected）"""
+        from app.services.qwen_client import AgentOutputParseError
+
         mock_client_instance = MagicMock()
         mock_openai_class.return_value = mock_client_instance
-        
-        # Mock response with invalid JSON
-        mock_choice = MagicMock()
-        mock_choice.message.content = "这不是有效的 JSON"
-        mock_response = MagicMock()
-        mock_response.choices = [mock_choice]
-        mock_client_instance.chat.completions.create.return_value = mock_response
-        
+
+        bad = MagicMock()
+        bad.message.content = "这不是有效的 JSON"
+        bad_resp = MagicMock()
+        bad_resp.choices = [bad]
+        bad_resp.usage = None
+        mock_client_instance.chat.completions.create.return_value = bad_resp
+
         client = QwenClient(
             api_key=self.mock_api_key,
             base_url="https://test.base.url",
-            model="qwen-test"
+            model="qwen-test",
         )
-        
-        # 调用方法
+
+        with self.assertRaises(AgentOutputParseError) as ctx:
+            client.structured_chat("测试问题")
+
+        self.assertEqual(mock_client_instance.chat.completions.create.call_count, 2)
+        self.assertNotIn("Unexpected Error", str(ctx.exception))
+        self.assertTrue(ctx.exception.repair_attempted)
+
+    @patch('app.services.qwen_client.openai.OpenAI')
+    def test_structured_chat_empty_then_retry_succeeds(self, mock_openai_class):
+        """空输出（Expecting value char 0）时自动重调一次并成功"""
+        mock_client_instance = MagicMock()
+        mock_openai_class.return_value = mock_client_instance
+
+        empty = MagicMock()
+        empty.message.content = ""
+        empty_resp = MagicMock()
+        empty_resp.choices = [empty]
+        empty_resp.usage = None
+
+        ok = MagicMock()
+        ok.message.content = '{"answer": "ok", "confidence": 1.0}'
+        ok_resp = MagicMock()
+        ok_resp.choices = [ok]
+        ok_resp.usage = None
+
+        mock_client_instance.chat.completions.create.side_effect = [empty_resp, ok_resp]
+
+        client = QwenClient(
+            api_key=self.mock_api_key,
+            base_url="https://test.base.url",
+            model="qwen-test",
+        )
         result = client.structured_chat("测试问题")
-        
-        # 验证应该返回包含原始内容的字典
-        self.assertIsInstance(result, dict)
-        self.assertIn("raw_response", result)
-        self.assertIn("error", result)
+        self.assertEqual(result["answer"], "ok")
+        self.assertEqual(mock_client_instance.chat.completions.create.call_count, 2)
     
     @patch('app.services.qwen_client.openai.OpenAI')
     def test_chat_with_messages(self, mock_openai_class):
