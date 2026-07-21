@@ -252,7 +252,7 @@ class DocumentParser:
             ref_text = "\n".join(page_texts[refs_start:])
             parsed.references = self._extract_references(ref_text)
         
-        # 获取 PDF 元数据
+        # 获取 PDF 元数据（优先于页眉启发式，避免期刊页眉/正文污染 title/authors）
         metadata = doc.metadata
         if metadata:
             parsed.metadata['pdf_metadata'] = {
@@ -262,7 +262,8 @@ class DocumentParser:
                 'keywords': metadata.get('keywords', ''),
                 'creator': metadata.get('creator', '')
             }
-        
+            self._prefer_pdf_file_metadata(parsed)
+
         doc.close()
         return parsed
     
@@ -306,8 +307,55 @@ class DocumentParser:
                     'keywords': reader.metadata.get('/Keywords', ''),
                     'creator': reader.metadata.get('/Creator', '')
                 }
-        
+                self._prefer_pdf_file_metadata(parsed)
+
         return parsed
+
+    @staticmethod
+    def _looks_like_polluted_identity(value: str, *, kind: str = "title") -> bool:
+        """页眉/版权行/正文误入 title 或 authors 时的启发式判定。"""
+        text = (value or "").strip()
+        if not text:
+            return True
+        low = text.lower()
+        if text.count("\n") >= 2:
+            return True
+        if kind == "title":
+            if len(text) > 240:
+                return True
+            # 期刊页眉常见：Journal Name 102 (2022) 164–176
+            if re.search(r"\b\d{2,4}\s*\(\d{4}\)\s*\d+", text):
+                return True
+            if low.startswith(("available online", "research paper", "http")):
+                return True
+            return False
+        # authors
+        if len(text) > 180:
+            return True
+        if low.startswith(("http", "published by", "received", "available online", "©", "copyright")):
+            return True
+        if "creativecommons" in low or "open access article" in low:
+            return True
+        return False
+
+    def _prefer_pdf_file_metadata(self, parsed: ParsedDocument) -> None:
+        """当内嵌 PDF metadata 更可靠时，覆盖页文本启发式结果。"""
+        pdf_meta = parsed.metadata.get("pdf_metadata") or {}
+        meta_title = str(pdf_meta.get("title") or "").strip()
+        meta_author = str(pdf_meta.get("author") or "").strip()
+        if meta_title and (
+            not parsed.title
+            or self._looks_like_polluted_identity(parsed.title, kind="title")
+            or (len(meta_title) > len(parsed.title) + 10 and not self._looks_like_polluted_identity(meta_title, kind="title"))
+        ):
+            if not self._looks_like_polluted_identity(meta_title, kind="title"):
+                parsed.title = meta_title
+        if meta_author and (
+            not parsed.authors
+            or self._looks_like_polluted_identity(parsed.authors, kind="authors")
+        ):
+            if not self._looks_like_polluted_identity(meta_author, kind="authors"):
+                parsed.authors = meta_author
     
     def _extract_metadata_from_page(self, text: str, parsed: ParsedDocument, page_num: int):
         """从页面文本中提取元数据"""
@@ -317,12 +365,18 @@ class DocumentParser:
         if page_num == 1:
             # 第一页，尝试提取标题
             if not parsed.title and lines:
-                # 标题通常在前几行
-                for i in range(min(3, len(lines))):
-                    if len(lines[i]) > 3 and not any(keyword in lines[i].lower() 
-                        for keyword in ['abstract', 'introduction', '摘要', '引言']):
-                        parsed.title = lines[i]
-                        break
+                # 标题通常在前几行；跳过期刊页眉/版权行
+                for i in range(min(8, len(lines))):
+                    candidate = lines[i]
+                    if len(candidate) <= 3:
+                        continue
+                    if any(keyword in candidate.lower()
+                        for keyword in ['abstract', 'introduction', '摘要', '引言', 'available online', 'research paper']):
+                        continue
+                    if self._looks_like_polluted_identity(candidate, kind="title"):
+                        continue
+                    parsed.title = candidate
+                    break
             
             # 尝试提取摘要
             if not parsed.abstract:
@@ -334,7 +388,7 @@ class DocumentParser:
                 if abstract_match:
                     parsed.abstract = abstract_match.group(1).strip()
         
-        # 尝试提取作者
+        # 尝试提取作者（仅接受较短、像人名列表的片段）
         if not parsed.authors:
             author_match = re.search(
                 r'(?:authors?|作者)(?:\s*[:：])?\s*([\s\S]*?)(?=\n\s*(?:abstract|introduction|$))',
@@ -342,7 +396,9 @@ class DocumentParser:
                 re.IGNORECASE
             )
             if author_match:
-                parsed.authors = author_match.group(1).strip()
+                authors = author_match.group(1).strip()
+                if not self._looks_like_polluted_identity(authors, kind="authors"):
+                    parsed.authors = authors
     
     def _extract_references(self, text: str) -> str:
         """提取参考文献"""

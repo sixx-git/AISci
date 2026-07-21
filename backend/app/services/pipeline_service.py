@@ -1840,7 +1840,7 @@ class PipelineService:
             if start_idx <= 2:
                 self._run_stage(stages, 2, results, research_question, project_id,
                     lambda: self._exec_knowledge_gap(
-                        results.get("literature_mining"),
+                        self._enrich_and_store_literature_mining(results),
                         project_id,
                         results.get("problem_understanding"),
                     ))
@@ -1879,7 +1879,8 @@ class PipelineService:
                 self._run_stage(stages, 3, results, research_question, project_id,
                     lambda: self._exec_hypothesis_generation(
                         results.get("problem_understanding"),
-                        results.get("literature_mining"),
+                        # 假设生成前强制用项目文献库回填 facts（含手动上传 PDF 的 chunk）
+                        self._enrich_and_store_literature_mining(results),
                         results.get("knowledge_gap"),
                         results.get("ideation_novelty"),
                     ))
@@ -2556,55 +2557,57 @@ class PipelineService:
         return normalize_literature_bundle(literature_mining)
 
     def _enrich_literature_mining(self, literature_mining: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        from app.services.literature_bundle_service import enrich_literature_mining
+        from app.services.literature_bundle_service import (
+            enrich_literature_mining,
+            merge_project_library_into_literature_mining,
+        )
 
         lm = enrich_literature_mining(literature_mining)
+        project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
+        if not project_id:
+            return lm
+
         # FL Starter Pack：合并项目挂载的 seed facts（不改 mining 算法）
         try:
-            project_id = self.db_pipeline_run.project_id if self.db_pipeline_run else ""
-            if project_id:
-                from app.models.project import Project
-                from app.services.fl_pack_service import FlPackService
+            from app.models.project import Project
+            from app.services.fl_pack_service import FlPackService
 
-                project = self.db.query(Project).filter(Project.id == project_id).first()
-                cfg = (project.config if project and isinstance(project.config, dict) else {}) or {}
-                seeds = FlPackService.get_seed_facts_from_project_config(cfg)
-                if seeds:
-                    existing = list(lm.get("facts") or [])
-                    seen = {
-                        str(f.get("fact_id") or f.get("claim") or f.get("content") or "")[:120]
-                        for f in existing
-                        if isinstance(f, dict)
-                    }
-                    merged = list(existing)
-                    for f in seeds:
-                        key = str(f.get("fact_id") or f.get("claim") or f.get("content") or "")[:120]
-                        if key and key not in seen:
-                            fact = dict(f)
-                            fact.setdefault("source", "fl_starter_pack")
-                            # 确保 ScienceFact 关键字段齐全
-                            if not fact.get("content") and fact.get("claim"):
-                                fact["content"] = fact["claim"]
-                            fact.setdefault("source_chunk_id", f"fl_pack_chunk_{fact.get('fact_id')}")
-                            fact.setdefault("document_id", f"fl_pack_doc_{fact.get('paper_id') or fact.get('fact_id')}")
-                            merged.insert(0, fact)
-                            seen.add(key)
-                    lm["facts"] = merged
-                    lm["fl_pack_seed_fact_count"] = len(seeds)
-                    try:
-                        from app.services.fl_pack_service import get_fl_pack_service
-
-                        cmap = list(lm.get("citation_map") or [])
-                        seed_cites = get_fl_pack_service().build_seed_citation_map(seeds)
-                        existing_docs = {str(c.get("document_id")) for c in cmap if isinstance(c, dict)}
-                        for c in seed_cites:
-                            if c.get("document_id") not in existing_docs:
-                                cmap.append(c)
-                        lm["citation_map"] = cmap
-                    except Exception:
-                        pass
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            cfg = (project.config if project and isinstance(project.config, dict) else {}) or {}
+            seeds = FlPackService.get_seed_facts_from_project_config(cfg)
+            if seeds:
+                existing = list(lm.get("facts") or [])
+                seen = {
+                    str(f.get("fact_id") or f.get("content") or "")[:80]
+                    for f in existing
+                    if isinstance(f, dict)
+                }
+                for seed in seeds:
+                    if not isinstance(seed, dict):
+                        continue
+                    key = str(seed.get("fact_id") or seed.get("content") or "")[:80]
+                    if key and key in seen:
+                        continue
+                    existing.append(seed)
+                    if key:
+                        seen.add(key)
+                lm["facts"] = existing
         except Exception as exc:
             logger.warning("[Literature] 合并 FL seed facts 失败: %s", exc)
+
+        # 手动上传 / 已解析文献：回填 citation + facts（摘要或 chunk）
+        try:
+            lm = merge_project_library_into_literature_mining(
+                lm, db=self.db, project_id=project_id
+            )
+        except Exception as exc:
+            logger.warning("[Literature] 合并项目文献库失败: %s", exc)
+        return lm
+
+    def _enrich_and_store_literature_mining(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """回填项目文献库 facts，并写回 results，供假设生成及下游共用。"""
+        lm = self._enrich_literature_mining(results.get("literature_mining") or {})
+        results["literature_mining"] = lm
         return lm
 
     def _merge_data_acquisition_context(
@@ -2813,6 +2816,12 @@ class PipelineService:
         literature_facts = list(lm.get("facts") or [])
         multimodal_facts = list(data_context.get("multimodal_evidence") or [])
         merged_facts = literature_facts + multimodal_facts
+        logger.info(
+            "[Hypothesis] 输入事实: literature=%s multimodal=%s library_docs=%s",
+            len(literature_facts),
+            len(multimodal_facts),
+            lm.get("project_library_document_count"),
+        )
 
         memory_pack: Dict[str, Any] = {}
         experiment_memory_guidance = ""
@@ -2840,6 +2849,13 @@ class PipelineService:
             experiment_memory_guidance=experiment_memory_guidance,
         )
         result_dict = self._safe_model_dump(result)
+        # 供下游 / 调试：记录本次实际喂给假设生成的文献事实规模
+        result_dict["literature_facts_used"] = len(literature_facts)
+        result_dict["literature_mining_enriched"] = {
+            "evidence_facts": lm.get("evidence_facts"),
+            "project_library_document_count": lm.get("project_library_document_count"),
+            "verified_references_count": lm.get("verified_references_count"),
+        }
         if memory_pack:
             skill_outputs = dict(result_dict.get("skill_outputs") or {})
             skill_outputs["experiment_memory"] = {

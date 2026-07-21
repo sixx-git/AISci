@@ -39,6 +39,35 @@ def test_titles_match():
         "Federated Learning with GAN-Based Data Synthesis",
         "Federated Learning with GAN Based Data Synthesis for Non-IID Clients",
     )
+    # 放宽后：核心词重叠仍应通过
+    assert titles_match(
+        "Small gaps between primes",
+        "Small gaps between primes: Bounded gaps between consecutive primes",
+    )
+
+
+def test_verify_soft_title_match_becomes_partial():
+    paper = {
+        "title": "FedProto: Federated Prototype Learning across Heterogeneous Clients",
+        "authors": ["A"],
+        "doi": "10.1234/fedproto",
+    }
+
+    async def _run():
+        with patch(
+            "app.services.paper_verification_service._lookup_openalex_by_doi",
+            new_callable=AsyncMock,
+            return_value={
+                "title": "FedProto: Federated Prototype Learning Across Heterogeneous Clients",
+                "abstract": "We propose FedProto for federated learning with heterogeneous label spaces.",
+                "doi": "10.1234/fedproto",
+            },
+        ):
+            return await verify_recommended_paper(paper)
+
+    result = asyncio.run(_run())
+    assert result["verification_status"] in ("verified", "partial")
+    assert "FedProto" in (result.get("title") or "")
 
 
 def test_verify_rejects_title_mismatch_on_arxiv():
@@ -62,6 +91,8 @@ def test_verify_rejects_title_mismatch_on_arxiv():
 
     result = asyncio.run(_run())
     assert result["verification_status"] == "unverified"
+    # 错文摘要不得写入推荐条目
+    assert "object recognition" not in (result.get("abstract") or "")
 
 
 @patch("app.services.literature_recommendation_service.verify_recommended_papers", new_callable=AsyncMock)

@@ -86,11 +86,19 @@ def rewrite_search_queries(
     *,
     existing_queries: Optional[List[str]] = None,
 ) -> List[str]:
-    """从研究问题生成 3–5 条中英混合检索 query。"""
+    """从研究问题生成 3–5 条中英混合检索 query。
+
+    若推荐阶段已给出足够 search_queries，直接复用并与启发式合并，不再额外调 LLM。
+    """
     enabled, _, use_mock, has_key = _settings()
     rq = (research_question or "").strip()
     domain = (research_domain or "").strip()
-    fallback = list(existing_queries or []) + _heuristic_queries(rq, domain)
+    existing = [str(q).strip() for q in (existing_queries or []) if str(q).strip()]
+    fallback = list(existing) + _heuristic_queries(rq, domain)
+
+    # 推荐已带 ≥2 条 query：跳过改写 LLM
+    if len(existing) >= 2:
+        return _dedupe_queries(fallback)[:5]
 
     if not enabled or use_mock or not has_key or not rq:
         return _dedupe_queries(fallback)[:5]
@@ -135,6 +143,26 @@ def _dedupe_queries(queries: List[str]) -> List[str]:
         seen.add(key)
         out.append(q)
     return out
+
+
+def _parse_existing_score(paper: Dict[str, Any]) -> Optional[Tuple[float, str]]:
+    """读取推荐阶段已写入的 relevance_score；无效则 None。"""
+    raw = paper.get("relevance_score")
+    if raw is None:
+        raw = paper.get("recommend_relevance_score")
+    try:
+        score = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if score != score:  # NaN
+        return None
+    score = max(0.0, min(10.0, score))
+    reason = str(
+        paper.get("relevance_reason")
+        or paper.get("score_source")
+        or "llm_recommend"
+    )[:200]
+    return score, reason
 
 
 def _llm_score_papers(
@@ -194,7 +222,10 @@ def score_and_gate_papers(
     *,
     cutoff: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """对论文列表打分并按 cutoff 过滤。关闭门控时原样返回。"""
+    """对论文列表打分并按 cutoff 过滤。关闭门控时原样返回。
+
+    若推荐阶段已写入 relevance_score，直接复用，不再单独调用门控 LLM。
+    """
     enabled, default_cutoff, use_mock, has_key = _settings()
     cutoff = int(cutoff if cutoff is not None else default_cutoff)
     papers = [dict(p) for p in (papers or []) if isinstance(p, dict)]
@@ -212,22 +243,51 @@ def score_and_gate_papers(
             "candidate_count": len(papers),
             "passed_count": len(papers),
             "rejected_count": 0,
+            "score_source": "disabled",
         }
 
+    prefilled: Dict[int, Tuple[float, str]] = {}
+    missing_indices: List[int] = []
+    for i, p in enumerate(papers):
+        parsed = _parse_existing_score(p)
+        if parsed is not None:
+            prefilled[i] = parsed
+        else:
+            missing_indices.append(i)
+
     llm_scores: Dict[int, Tuple[float, str]] = {}
-    if not use_mock and has_key and research_question.strip():
-        llm_scores = _llm_score_papers(research_question, papers)
+    score_source = "recommend"
+    if missing_indices and not use_mock and has_key and research_question.strip():
+        # 仅对缺分论文补一次批量门控；若全部缺分则打全量
+        if len(missing_indices) == len(papers):
+            llm_scores = _llm_score_papers(research_question, papers)
+            score_source = "gate_llm"
+        else:
+            subset = [papers[i] for i in missing_indices]
+            subset_scores = _llm_score_papers(research_question, subset)
+            for local_i, pair in subset_scores.items():
+                if 0 <= local_i < len(missing_indices):
+                    llm_scores[missing_indices[local_i]] = pair
+            score_source = "recommend+gate_llm"
+    elif missing_indices:
+        score_source = "recommend+heuristic" if prefilled else "heuristic"
 
     passed: List[Dict[str, Any]] = []
     rejected: List[Dict[str, Any]] = []
     for i, p in enumerate(papers):
-        if i in llm_scores:
+        if i in prefilled:
+            score, reason = prefilled[i]
+            p["score_source"] = p.get("score_source") or "llm_recommend"
+        elif i in llm_scores:
             score, reason = llm_scores[i]
+            p["score_source"] = "gate_llm"
         else:
             score = _heuristic_paper_score(research_question, p)
             reason = "heuristic_overlap"
+            p["score_source"] = "heuristic"
         p["relevance_score"] = score
-        p["relevance_reason"] = reason
+        if reason and not (p.get("relevance_reason") or "").strip():
+            p["relevance_reason"] = reason
         p["gate_passed"] = score >= cutoff
         if p["gate_passed"]:
             passed.append(p)
@@ -235,11 +295,13 @@ def score_and_gate_papers(
             rejected.append(p)
 
     logger.info(
-        "[文献门控] 论文筛选: candidates=%s passed=%s rejected=%s cutoff=%s",
+        "[文献门控] 论文筛选: candidates=%s passed=%s rejected=%s cutoff=%s source=%s prefilled=%s",
         len(papers),
         len(passed),
         len(rejected),
         cutoff,
+        score_source,
+        len(prefilled),
     )
     return {
         "enabled": True,
@@ -250,6 +312,7 @@ def score_and_gate_papers(
         "candidate_count": len(papers),
         "passed_count": len(passed),
         "rejected_count": len(rejected),
+        "score_source": score_source,
     }
 
 
@@ -295,6 +358,7 @@ def apply_relevance_gate(
         "candidate_count": gate.get("candidate_count"),
         "passed_count": gate.get("passed_count"),
         "rejected_count": gate.get("rejected_count"),
+        "score_source": gate.get("score_source"),
         "rejected_titles": [
             (p.get("title") or "")[:120] for p in (gate.get("rejected") or [])[:20]
         ],

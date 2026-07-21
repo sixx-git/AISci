@@ -15,6 +15,16 @@ from app.skills.literature.search_papers_skill import SearchPapersSkill
 logger = logging.getLogger(__name__)
 
 
+def _coerce_relevance_score(raw: Any) -> Optional[float]:
+    try:
+        score = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if score != score:  # NaN
+        return None
+    return max(0.0, min(10.0, score))
+
+
 def _settings() -> tuple[int, int, bool, bool]:
     s = get_settings()
     return (
@@ -58,6 +68,7 @@ def llm_recommend_papers(
                 "doi": "10.1234/example",
                 "arxiv_id": "",
                 "subtopic_labels": ["example topic"],
+                "relevance_score": 8,
                 "relevance_reason": "Directly relevant to the research question",
                 "category": "survey",
             }
@@ -70,7 +81,7 @@ def llm_recommend_papers(
             prompt=prompt,
             schema_example=schema,
             temperature=0.25,
-            prompt_version="literature_recommend_web_v3",
+            prompt_version="literature_recommend_web_v4",
         )
         if not isinstance(result, dict):
             return {"papers": [], "subtopics": [], "rationale": "LLM 返回格式异常"}
@@ -81,7 +92,13 @@ def llm_recommend_papers(
                 continue
             if not str(p.get("title") or "").strip():
                 continue
-            cleaned.append(p)
+            item = dict(p)
+            score = _coerce_relevance_score(item.get("relevance_score"))
+            if score is not None:
+                item["relevance_score"] = score
+                item["recommend_relevance_score"] = score
+                item["score_source"] = "llm_recommend"
+            cleaned.append(item)
         queries = [
             str(q).strip()
             for q in (result.get("search_queries") or [])

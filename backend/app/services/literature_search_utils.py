@@ -40,17 +40,22 @@ def normalize_title(title: str) -> str:
     return " ".join(t.split())
 
 
-def titles_match(a: str, b: str, *, min_ratio: float = 0.55) -> bool:
+def title_similarity_ratio(a: str, b: str) -> float:
+    """标题词集 Jaccard 风格相似度（相对较长标题归一）；完全包含时返回 1.0。"""
     na, nb = normalize_title(a), normalize_title(b)
     if not na or not nb:
-        return False
+        return 0.0
     if na == nb or na in nb or nb in na:
-        return True
+        return 1.0
     ta, tb = set(na.split()), set(nb.split())
     if not ta or not tb:
-        return False
-    overlap = len(ta & tb) / max(len(ta), len(tb))
-    return overlap >= min_ratio
+        return 0.0
+    return len(ta & tb) / max(len(ta), len(tb))
+
+
+def titles_match(a: str, b: str, *, min_ratio: float = 0.40) -> bool:
+    """默认阈值放宽到 0.40，减少「标题略有出入就被判不一致」的误杀。"""
+    return title_similarity_ratio(a, b) >= float(min_ratio)
 
 
 def _fact_numeric_suffix(fact_id: str) -> Optional[str]:

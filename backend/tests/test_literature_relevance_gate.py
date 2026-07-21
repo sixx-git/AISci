@@ -89,6 +89,54 @@ def test_llm_gate_uses_structured_scores():
     assert out["passed"][0]["relevance_score"] == 9.0
 
 
+def test_gate_reuses_recommend_scores_without_llm():
+    papers = [
+        {
+            "title": "A",
+            "abstract": "a",
+            "relevance_score": 2,
+            "relevance_reason": "弱",
+            "score_source": "llm_recommend",
+        },
+        {
+            "title": "B",
+            "abstract": "b",
+            "relevance_score": 9,
+            "relevance_reason": "强",
+            "score_source": "llm_recommend",
+        },
+    ]
+    with patch(
+        "app.core.config.get_settings",
+        return_value=_settings(enabled=True, use_mock=False, api_key="k", cutoff=6),
+    ):
+        with patch("app.services.qwen_client.qwen_structured_chat") as mock_chat:
+            out = score_and_gate_papers("q", papers)
+    mock_chat.assert_not_called()
+    assert out["score_source"] == "recommend"
+    assert out["passed_count"] == 1
+    assert out["passed"][0]["title"] == "B"
+    assert out["passed"][0]["relevance_reason"] == "强"
+
+
+def test_rewrite_skips_llm_when_recommend_queries_present():
+    with patch(
+        "app.core.config.get_settings",
+        return_value=_settings(enabled=True, use_mock=False, api_key="k"),
+    ):
+        with patch("app.services.qwen_client.qwen_structured_chat") as mock_chat:
+            qs = rewrite_search_queries(
+                "联邦学习合成数据跌倒检测挑战",
+                "联邦学习",
+                existing_queries=[
+                    "federated synthetic fall detection",
+                    "federated learning elderly care",
+                ],
+            )
+    mock_chat.assert_not_called()
+    assert len(qs) >= 2
+
+
 def test_rewrite_queries_heuristic_when_mock():
     with patch(
         "app.core.config.get_settings",

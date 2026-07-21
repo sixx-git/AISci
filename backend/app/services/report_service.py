@@ -589,16 +589,23 @@ class ReportService:
     def _load_literature_bundle_for_report(
         self, db_report: Report
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """加载 Pipeline 文献阶段数据，供引用验证与质量检查使用。"""
+        """加载 Pipeline 文献阶段数据，并合并项目文献库（供引用验证）。"""
         from app.services._utils.pipeline_queries import get_literature_mining_output
-        from app.services.literature_bundle_service import enrich_literature_mining
+        from app.services.literature_bundle_service import (
+            enrich_literature_mining,
+            merge_project_library_into_literature_mining,
+        )
         from app.services.report_compliance_service import (
             literature_bundle_from_pipeline_stage,
             normalize_literature_bundle,
         )
 
         extra = dict(db_report.extra_metadata or {})
-        lm = enrich_literature_mining(get_literature_mining_output(self.db, db_report.project_id))
+        lm = merge_project_library_into_literature_mining(
+            enrich_literature_mining(get_literature_mining_output(self.db, db_report.project_id)),
+            db=self.db,
+            project_id=db_report.project_id,
+        )
         facts, citation_map, verified = literature_bundle_from_pipeline_stage(
             lm if isinstance(lm, dict) else None
         )
@@ -610,6 +617,18 @@ class ReportService:
                     "verified_references": extra.get("verified_references") or [],
                 }
             )
+            lm2 = merge_project_library_into_literature_mining(
+                {
+                    "facts": facts,
+                    "citation_map": citation_map,
+                    "verified_references": verified,
+                },
+                db=self.db,
+                project_id=db_report.project_id,
+            )
+            facts = list(lm2.get("facts") or [])
+            citation_map = list(lm2.get("citation_map") or [])
+            verified = list(lm2.get("verified_references") or [])
         return facts, citation_map, verified
 
     def _refresh_report_plots_and_quality(
@@ -820,6 +839,47 @@ class ReportService:
             refs_list = json.loads(refs) if isinstance(refs, str) and refs.strip().startswith("[") else refs
         except json.JSONDecodeError:
             refs_list = [refs] if refs else []
+        if not isinstance(refs_list, list):
+            refs_list = [refs_list] if refs_list else []
+
+        # 若引用为空/仅占位，但项目文献库已有文档，用可验证条目回填
+        lit_facts, citation_map_loaded, verified_loaded = self._load_literature_bundle_for_report(db_report)
+        from app.services.report_compliance_service import format_corpus_reference_lines
+
+        corpus_lines = format_corpus_reference_lines(citation_map_loaded, verified_loaded)
+        refs_placeholder = (
+            not refs_list
+            or all(
+                ("缺少真实引用" in str(r)) or ("需先导入" in str(r)) or (not str(r).strip())
+                for r in refs_list
+            )
+            # 现有引用无法在文献库中验证时，也用项目文献覆盖
+            or (
+                bool(corpus_lines)
+                and int(
+                    ((db_report.extra_metadata or {}) if isinstance(db_report.extra_metadata, dict) else {}).get(
+                        "compliance_check", {}
+                    ).get("references_verified")
+                    or 0
+                )
+                == 0
+            )
+        )
+        # 引用行异常长（常为 PDF 正文误入 authors/title）时强制回填
+        if corpus_lines and refs_list and any(len(str(r)) > 400 for r in refs_list):
+            refs_placeholder = True
+        # 文献库标题已修复（例如从 PDF metadata 纠正页眉）时，用新 corpus 覆盖旧引用行
+        if corpus_lines and refs_list:
+            corpus_norm = {str(x).strip().lower() for x in corpus_lines if str(x).strip()}
+            refs_norm = {str(x).strip().lower() for x in refs_list if str(x).strip()}
+            if corpus_norm and not corpus_norm.issubset(refs_norm) and len(corpus_lines) >= len(
+                [r for r in refs_list if str(r).strip()]
+            ):
+                refs_placeholder = True
+        if corpus_lines and refs_placeholder:
+            refs_list = corpus_lines
+            db_report.references = json.dumps(refs_list, ensure_ascii=False)
+            enriched_chapters["references"] = refs_list
 
         export_dir = get_reports_storage_dir() / file_id
         from app.services.report_charts_service import get_public_charts_dir
@@ -829,6 +889,7 @@ class ReportService:
             db_report,
             enriched_chapters,
             charts_dir=charts_dir,
+            verified_references=verified_loaded or citation_map_loaded,
         )
 
         result = {
@@ -849,6 +910,8 @@ class ReportService:
                 "references": refs_list if isinstance(refs_list, list) else [],
             },
         }
+        # keep citation_map for export
+        citation_map = citation_map or citation_map_loaded
         verified = list(citation_map or [])
         json_path = export_dir / "report_data.json"
         if json_path.exists():
@@ -889,11 +952,24 @@ class ReportService:
         }
 
         from app.services.report_service import enrich_report_for_response
+        from app.services.report_compliance_service import refresh_compliance_metrics
 
         extra = dict((enrich_report_for_response(db_report, self.db).extra_metadata) or {})
         extra["plots"] = plots
         if qc_output:
             extra["report_quality_check"] = qc_output
+        # 回填引用后刷新合规指标，避免页面仍提示「虚构引用」
+        try:
+            extra["compliance_check"] = refresh_compliance_metrics(
+                extra.get("compliance_check") or {},
+                references=refs_list if isinstance(refs_list, list) else [],
+                citation_map=citation_map_loaded or citation_map or [],
+                verified_references=verified_loaded or verified or [],
+                literature_facts=lit_facts or [],
+                chapters=result.get("chapters") or {},
+            )
+        except Exception as cc_err:
+            logger.warning("刷新报告合规指标失败: %s", cc_err)
         extra["pdf_success"] = bool(result_payload.get("pdf_success", False))
         if result_payload.get("export_method"):
             extra["export_method"] = result_payload["export_method"]
@@ -904,6 +980,12 @@ class ReportService:
 
         db_report.extra_metadata = extra
         db_report.markdown_content = ""
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_report, "extra_metadata")
+        except Exception:
+            pass
         self.db.commit()
         self.db.refresh(db_report)
 

@@ -311,6 +311,10 @@ class HypothesisGenerationAgent:
                 lines.append(f"模态: {modality}")
             if str(fid).startswith("paper_fact_") or chunk_id.startswith("paper_"):
                 lines.append("⚠ 证据级别: 摘要级代理事实（非全文 chunk）")
+            elif str(fid).startswith("library_chunk_fact_") or fact.get("source") == "project_library_chunk":
+                lines.append("证据级别: 项目文献库解析片段（手动上传/已入库 PDF）")
+            elif str(fid).startswith("library_fact_") or fact.get("source") == "project_library":
+                lines.append("证据级别: 项目文献库摘要/元数据")
             lines.append(f"陈述: {content}")
             if source:
                 lines.append(f"来源: {source}")

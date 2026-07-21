@@ -778,6 +778,66 @@ class LiteratureIngestionService:
             "status": doc.import_status.value,
         }
 
+    def ensure_abstract_chunks(self, project_id: str, document_id: str) -> bool:
+        """
+        无 PDF 时用标题+摘要生成可检索 chunk，并标记为 PROCESSED。
+        返回是否成功写入至少一个 chunk。
+        """
+        from app.models import Chunk, ChunkStatus
+
+        doc = (
+            self.db.query(Document)
+            .filter(Document.id == document_id, Document.project_id == project_id)
+            .first()
+        )
+        if not doc:
+            return False
+
+        abstract = (doc.abstract or "").strip()
+        title = (doc.title or doc.filename or "").strip()
+        if len(abstract) < 40 and len(title) < 8:
+            return False
+
+        existing = (
+            self.db.query(Chunk)
+            .filter(Chunk.document_id == document_id)
+            .count()
+        )
+        if existing > 0:
+            if doc.status != DocumentStatus.PROCESSED:
+                doc.status = DocumentStatus.PROCESSED
+                doc.import_status = ImportStatus.PARSED
+                doc.chunk_count = existing
+                self.db.commit()
+            return True
+
+        body = abstract if len(abstract) >= 40 else title
+        content = f"{title}\n\n{body}".strip() if title and title not in body[:120] else body
+        chunk = Chunk(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            document_id=document_id,
+            chunk_index=0,
+            content=content[:8000],
+            content_preview=content[:500],
+            chunk_type="abstract",
+            status=ChunkStatus.PENDING,
+            extra_metadata={"source": "abstract_fallback", "no_pdf": True},
+        )
+        self.db.add(chunk)
+        doc.status = DocumentStatus.PROCESSED
+        doc.import_status = ImportStatus.PARSED
+        doc.chunk_count = 1
+        if not doc.raw_text:
+            doc.raw_text = content[:12000]
+        self.db.commit()
+        logger.info("摘要 chunk 已写入: doc=%s project=%s", document_id, project_id)
+        try:
+            schedule_project_index_sync(project_id, document_id=document_id)
+        except Exception as idx_exc:
+            logger.warning("摘要 chunk 索引调度失败: %s", idx_exc)
+        return True
+
     # ==================== 内部辅助 ====================
 
     def _delete_document_chunks(self, document_id: str) -> None:

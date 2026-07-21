@@ -7,7 +7,12 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from app.services.literature_search_utils import titles_match
+from app.services.literature_search_utils import title_similarity_ratio, titles_match
+
+# 强匹配：直接视为 verified/partial
+_TITLE_MATCH_RATIO = 0.40
+# 弱匹配：DOI/arXiv 命中但标题略偏，或标题检索结果略偏 → partial（保留摘要入库）
+_TITLE_SOFT_RATIO = 0.30
 from app.skills.literature.search_papers_skill import SearchPapersSkill
 
 logger = logging.getLogger(__name__)
@@ -145,15 +150,46 @@ async def verify_recommended_paper(paper: Dict[str, Any]) -> Dict[str, Any]:
         verify_method = "title"
 
     if not resolved:
+        # 外网未命中：保留 LLM 推荐自身的摘要，便于后续「unverified+摘要」入库
         rec["verification_status"] = "unverified"
         rec["verification_method"] = verify_method or "none"
+        if not (rec.get("abstract") or "").strip():
+            rec["abstract"] = str(rec.get("abstract") or "")
         return rec
 
-    title_ok = titles_match(title, resolved.get("title") or "") if title else True
     resolved_title = str(resolved.get("title") or "").strip()
     has_abstract = bool((resolved.get("abstract") or "").strip())
+    ratio = title_similarity_ratio(title, resolved_title) if title else 1.0
+    title_ok = ratio >= _TITLE_MATCH_RATIO if title else True
+    soft_ok = ratio >= _TITLE_SOFT_RATIO if title else True
 
-    if not title_ok:
+    # DOI/arXiv 命中但标题完全对不上 → 视为错文，不合并（防串号）
+    if not soft_ok and verify_method in ("doi", "arxiv"):
+        rec["verification_status"] = "unverified"
+        rec["verification_method"] = verify_method
+        rec["verification_note"] = (
+            f"推荐标题与 API 解析不一致: 推荐={title[:120]} / 解析={resolved_title[:120]}"
+        )
+        rec["resolved_title"] = resolved_title
+        rec["resolved_abstract_preview"] = (resolved.get("abstract") or "")[:200]
+        # 不把错文摘要写进推荐条目，避免「错误摘要入库」
+        return rec
+
+    # 标题弱匹配：接受为 partial，合并 API 元数据（含摘要）
+    if not title_ok and soft_ok:
+        status = "partial"
+        note = (
+            f"标题弱匹配(ratio={ratio:.2f}): 推荐={title[:80]} / 解析={resolved_title[:80]}"
+        )
+    elif title_ok and has_abstract:
+        status = "verified"
+        note = ""
+    else:
+        status = "partial"
+        note = ""
+
+    # 标题检索弱到完全不像：不合并错误解析；仅当推荐自身已有摘要时才可 unverified 入库
+    if not soft_ok and verify_method == "title":
         rec["verification_status"] = "unverified"
         rec["verification_method"] = verify_method
         rec["verification_note"] = (
@@ -163,25 +199,30 @@ async def verify_recommended_paper(paper: Dict[str, Any]) -> Dict[str, Any]:
         rec["resolved_abstract_preview"] = (resolved.get("abstract") or "")[:200]
         return rec
 
-    if title_ok and has_abstract:
-        status = "verified"
-    else:
-        status = "partial"
-
     merged = {**resolved}
     for k, v in rec.items():
         if k in ("title", "authors", "year", "doi", "arxiv_id", "abstract", "source_url", "pdf_url", "external_id"):
             continue
-        if v:
+        if v is not None and v != "":
             merged[k] = v
+    # 摘要优先用 API；若 API 无摘要则保留推荐摘要
+    if not (merged.get("abstract") or "").strip() and (rec.get("abstract") or "").strip():
+        merged["abstract"] = rec.get("abstract")
+    # 显式保留推荐阶段相关性分数（含 0 分）
+    for k in ("relevance_score", "recommend_relevance_score", "score_source"):
+        if k in rec and rec[k] is not None:
+            merged[k] = rec[k]
     merged["title"] = resolved_title or title
     merged["verification_status"] = status
     merged["verification_method"] = verify_method
-    merged["relevance_reason"] = rec.get("relevance_reason") or ""
+    if note:
+        merged["verification_note"] = note
+    merged["relevance_reason"] = rec.get("relevance_reason") or merged.get("relevance_reason") or ""
     merged["challenge_ids"] = rec.get("challenge_ids") or rec.get("dimension_ids") or []
     merged["dimension_ids"] = rec.get("dimension_ids") or rec.get("challenge_ids") or []
     merged["category"] = rec.get("category") or ""
     merged["recommended_title"] = title
+    merged["title_match_ratio"] = round(ratio, 3)
     return merged
 
 

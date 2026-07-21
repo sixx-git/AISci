@@ -1,6 +1,7 @@
 """文献挖掘结果归并：将 facts / citation_map / skill 输出统一为下游可消费结构。"""
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -268,6 +269,258 @@ def normalize_literature_bundle(
         verified = list(citation_map)
 
     return facts, citation_map, verified
+
+
+def project_documents_as_citations(db: Any, project_id: str) -> List[Dict[str, Any]]:
+    """将项目文献库中已处理的文档转为 citation_map / verified_references 条目。"""
+    if not db or not project_id:
+        return []
+    try:
+        from app.models.project import Document, DocumentStatus
+    except Exception:
+        return []
+
+    rows = (
+        db.query(Document)
+        .filter(Document.project_id == project_id)
+        .filter(Document.status == DocumentStatus.PROCESSED)
+        .order_by(Document.created_at.asc())
+        .all()
+    )
+    entries: List[Dict[str, Any]] = []
+    for doc in rows:
+        title = (doc.title or "").strip()
+        filename = (doc.filename or "").strip()
+        meta = getattr(doc, "extra_metadata", None)
+        if not isinstance(meta, dict):
+            meta = {}
+        pdf_meta = meta.get("pdf_metadata") if isinstance(meta, dict) else {}
+        if not isinstance(pdf_meta, dict):
+            pdf_meta = {}
+        meta_title = str(pdf_meta.get("title") or "").strip()
+        meta_author = str(pdf_meta.get("author") or "").strip()
+
+        def _bad_title(value: str) -> bool:
+            text = (value or "").strip()
+            if not text or len(text) > 240 or text.count("\n") >= 2:
+                return True
+            # 期刊页眉：Journal Name 102 (2022) 164–176
+            if re.search(r"\b\d{2,4}\s*\(\d{4}\)\s*\d+", text):
+                return True
+            low = text.lower()
+            return low.startswith(("available online", "research paper", "http"))
+
+        # PDF 解析偶发把页眉/正文塞进 title；优先内嵌 metadata，再回退文件名
+        if _bad_title(title) and meta_title and not _bad_title(meta_title):
+            title = meta_title
+        elif _bad_title(title):
+            title = filename.rsplit(".", 1)[0] if filename else title
+        elif meta_title and not _bad_title(meta_title) and len(meta_title) > len(title) + 10:
+            title = meta_title
+        if not title:
+            continue
+        authors_raw = doc.authors or ""
+        if isinstance(authors_raw, list):
+            authors = ", ".join(str(a) for a in authors_raw if a)
+        else:
+            authors = str(authors_raw).strip()
+        # authors 字段被 PDF 正文污染时丢弃，避免参考文献变成大段正文
+        if (
+            len(authors) > 180
+            or authors.count("\n") >= 2
+            or authors.lower().startswith(("http", "published by", "received", "available online", "©"))
+            or "creativecommons" in authors.lower()
+            or "open access article" in authors.lower()
+        ):
+            authors = meta_author if meta_author and len(meta_author) <= 180 else ""
+        elif not authors and meta_author and len(meta_author) <= 180:
+            authors = meta_author
+        year = None
+        if doc.publication_date:
+            year = str(doc.publication_date)[:4]
+        abstract = (doc.abstract or "").strip()
+        if len(abstract) > 1200:
+            abstract = abstract[:1200]
+        summary = (getattr(doc, "summary", None) or "").strip()
+        if len(summary) > 1200:
+            summary = summary[:1200]
+        entries.append(
+            {
+                "document_id": doc.id,
+                "title": title,
+                "paper_title": title,
+                "authors": authors,
+                "year": year,
+                "doi": doc.doi,
+                "abstract": abstract,
+                "summary": summary,
+                "source_url": doc.source_url or doc.pdf_url,
+                "external_id": doc.external_id,
+                "source": getattr(doc.source_type, "value", None) or doc.source_type or "upload",
+                "source_type": getattr(doc.source_type, "value", None) or doc.source_type or "upload",
+                "filename": filename,
+            }
+        )
+    return entries
+
+
+def _load_document_chunk_texts(
+    db: Any,
+    document_id: str,
+    *,
+    limit: int = 3,
+    min_chars: int = 40,
+) -> List[Dict[str, Any]]:
+    """读取已解析文档的前若干 chunk，供无摘要时回填假设生成用 facts。"""
+    if not db or not document_id:
+        return []
+    try:
+        from app.models.project import Chunk
+    except Exception:
+        return []
+    try:
+        rows = (
+            db.query(Chunk)
+            .filter(Chunk.document_id == document_id)
+            .order_by(Chunk.chunk_index.asc())
+            .limit(max(1, int(limit)))
+            .all()
+        )
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        text = (getattr(row, "content", None) or "").strip()
+        if len(text) < min_chars:
+            continue
+        out.append(
+            {
+                "chunk_id": getattr(row, "id", None),
+                "chunk_index": getattr(row, "chunk_index", None),
+                "content": text[:1200],
+                "page_number": getattr(row, "page_number", None),
+            }
+        )
+    return out
+
+
+def merge_project_library_into_literature_mining(
+    literature_mining: Optional[Dict[str, Any]],
+    *,
+    db: Any = None,
+    project_id: Optional[str] = None,
+    max_chunks_per_doc: int = 3,
+) -> Dict[str, Any]:
+    """
+    用项目文献库回填 citation_map / verified_references / facts。
+
+    场景：用户在文献挖掘之后才上传 PDF，或向量索引尚未就绪导致 mining 为空，
+    假设生成 / 报告仍应能读到已入库文献与解析片段，避免「上传了却没用上」。
+    """
+    lm = enrich_literature_mining(literature_mining)
+    if not db or not project_id:
+        return lm
+
+    library = project_documents_as_citations(db, project_id)
+    if not library:
+        return lm
+
+    citation_map = _as_dict_list(lm.get("citation_map"))
+    verified = _as_dict_list(lm.get("verified_references"))
+    facts = _as_dict_list(lm.get("facts"))
+    seen_fact_ids = {str(f.get("fact_id")) for f in facts if f.get("fact_id")}
+    seen_chunks = {
+        str(f.get("source_chunk_id") or f.get("chunk_id"))
+        for f in facts
+        if f.get("source_chunk_id") or f.get("chunk_id")
+    }
+    facts_doc_ids = {
+        str(f.get("document_id"))
+        for f in facts
+        if f.get("document_id")
+    }
+
+    for i, entry in enumerate(library):
+        _append_citation(citation_map, entry)
+        _append_citation(verified, entry)
+        title = (entry.get("title") or "").strip()
+        if not title:
+            continue
+        doc_id = str(entry.get("document_id") or "")
+        # 文献挖掘已对该文档抽过 facts：只补 citation，避免重复灌入
+        if doc_id and doc_id in facts_doc_ids:
+            continue
+
+        abstract = (entry.get("abstract") or "").strip()
+        summary = (entry.get("summary") or "").strip()
+        body = abstract or summary
+        added_for_doc = 0
+
+        if body:
+            _append_fact(
+                facts,
+                seen_fact_ids,
+                seen_chunks,
+                {
+                    "fact_id": f"library_fact_{i + 1:03d}",
+                    "content": body[:600],
+                    "fact_text": body[:1200],
+                    "source_chunk_id": f"library_doc_{doc_id or i + 1}",
+                    "source_paper_title": title,
+                    "document_id": doc_id or None,
+                    "quote_text": body[:240],
+                    "confidence": 0.7 if abstract else 0.55,
+                    "source": "project_library",
+                    "evidence_level": "abstract" if abstract else "summary",
+                },
+            )
+            added_for_doc += 1
+            if doc_id:
+                facts_doc_ids.add(doc_id)
+
+        # 无摘要/摘要不够时：用解析 chunk 回填（手动上传 PDF 的主路径）
+        if added_for_doc == 0 and doc_id:
+            chunk_rows = _load_document_chunk_texts(
+                db, doc_id, limit=max_chunks_per_doc
+            )
+            for j, ch in enumerate(chunk_rows):
+                text = (ch.get("content") or "").strip()
+                if not text:
+                    continue
+                chunk_id = str(ch.get("chunk_id") or f"library_chunk_{doc_id}_{j}")
+                _append_fact(
+                    facts,
+                    seen_fact_ids,
+                    seen_chunks,
+                    {
+                        "fact_id": f"library_chunk_fact_{i + 1:03d}_{j + 1:02d}",
+                        "content": text[:600],
+                        "fact_text": text[:1200],
+                        "source_chunk_id": chunk_id,
+                        "source_paper_title": title,
+                        "document_id": doc_id,
+                        "quote_text": text[:240],
+                        "page_number": ch.get("page_number"),
+                        "confidence": 0.75,
+                        "source": "project_library_chunk",
+                        "evidence_level": "chunk",
+                    },
+                )
+                added_for_doc += 1
+            if added_for_doc and doc_id:
+                facts_doc_ids.add(doc_id)
+
+    lm["facts"] = facts
+    lm["citation_map"] = citation_map
+    lm["verified_references"] = verified
+    lm["evidence_facts"] = len(facts)
+    lm["verified_references_count"] = len(verified)
+    lm["project_library_document_count"] = len(library)
+    if not lm.get("imported_documents"):
+        lm["imported_documents"] = len(library)
+    if not lm.get("literature_import_count"):
+        lm["literature_import_count"] = len(library)
+    return lm
 
 
 def enrich_literature_mining(literature_mining: Optional[Dict[str, Any]]) -> Dict[str, Any]:

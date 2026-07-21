@@ -645,8 +645,9 @@ def schedule_project_index_sync(
     from app.models.project import Document, ImportStatus
 
     def _worker() -> None:
-        from app.core.database import SessionLocal
+        from app.core.database import SessionLocal, init_db
 
+        init_db()
         session = SessionLocal()
         try:
             count = sync_project_index(project_id, db=session)

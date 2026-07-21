@@ -14,6 +14,7 @@ def _settings(*, enabled=True, cutoff=5, use_mock=True, api_key=""):
     s.LIT_CHUNK_SCORE_CUTOFF = cutoff
     s.USE_MOCK_LLM = use_mock
     s.QWEN_API_KEY = api_key
+    s.LIT_RCS_BATCH_SIZE = 12
     return s
 
 
@@ -81,3 +82,40 @@ def test_llm_score_chunk_uses_structured_output():
             summary, score = score_chunk("question", "chunk text", "title")
     assert summary == "relevant passage"
     assert score == 8.0
+
+
+def test_rerank_uses_batch_llm_once_for_many_chunks():
+    chunks = [
+        SimpleNamespace(
+            chunk_id=f"c{i}",
+            content=f"federated learning synthetic data chunk {i}",
+            source_title=f"t{i}",
+            relevance_score=None,
+            context_summary=None,
+        )
+        for i in range(8)
+    ]
+    calls = {"n": 0}
+
+    def _fake_chat(**kwargs):
+        calls["n"] += 1
+        schema = kwargs.get("schema_example") or {}
+        if "chunks" in schema:
+            return {
+                "chunks": [
+                    {"index": i, "summary": f"s{i}", "relevance_score": 8 if i % 2 == 0 else 2}
+                    for i in range(8)
+                ]
+            }
+        return {"summary": "x", "relevance_score": 5}
+
+    with patch(
+        "app.core.config.get_settings",
+        return_value=_settings(enabled=True, use_mock=False, api_key="k", cutoff=5),
+    ):
+        with patch("app.services.qwen_client.qwen_structured_chat", side_effect=_fake_chat):
+            kept, stats = rerank_search_results("federated learning", chunks, keep_top_k=10)
+    assert calls["n"] == 1
+    assert stats["scoring_mode"] == "llm_batch"
+    assert stats["llm_batches"] == 1
+    assert all(c.chunk_id.startswith("c") and int(c.chunk_id[1:]) % 2 == 0 for c in kept)

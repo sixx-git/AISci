@@ -9,28 +9,48 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def _literature_import_settings() -> tuple[int, bool]:
+def _literature_import_settings() -> tuple[int, bool, bool]:
     from app.core.config import get_settings
 
     s = get_settings()
     return (
         int(getattr(s, "LITERATURE_RECOMMEND_MAX", 12) or getattr(s, "LITERATURE_IMPORT_MAX", 12) or 12),
         bool(getattr(s, "LITERATURE_IMPORT_UNVERIFIED", False)),
+        bool(getattr(s, "LITERATURE_IMPORT_UNVERIFIED_WITH_ABSTRACT", True)),
     )
+
+
+def _paper_abstract(paper: Dict[str, Any]) -> str:
+    return str(
+        paper.get("abstract")
+        or paper.get("resolved_abstract_preview")
+        or ""
+    ).strip()
 
 
 def _importable_papers(
     papers: List[Dict[str, Any]],
     *,
     import_unverified: bool,
+    import_unverified_with_abstract: bool = True,
+    min_abstract_chars: int = 40,
 ) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for p in papers:
         status = p.get("verification_status") or ""
+        abstract = _paper_abstract(p)
         if status in ("verified", "partial"):
             out.append(p)
-        elif import_unverified and status == "unverified" and p.get("title"):
-            out.append(p)
+        elif status == "unverified" and p.get("title"):
+            if import_unverified:
+                out.append(p)
+            elif import_unverified_with_abstract and len(abstract) >= min_abstract_chars:
+                # 带摘要的 unverified：允许入库（用于摘要级证据与引用）
+                enriched = dict(p)
+                if not (enriched.get("abstract") or "").strip():
+                    enriched["abstract"] = abstract
+                enriched["import_via"] = "unverified_with_abstract"
+                out.append(enriched)
     return out
 
 
@@ -78,7 +98,7 @@ def ensure_corpora_from_recommendations(
     from app.services.literature_relevance_gate import apply_relevance_gate
     from app.services.vector_store import build_vector_index
 
-    default_max, import_unverified = _literature_import_settings()
+    default_max, import_unverified, import_unverified_with_abstract = _literature_import_settings()
     max_import = max_import if max_import is not None else default_max
 
     # 入库前论文级相关性门控 + 查询改写（可配置关闭）
@@ -106,12 +126,16 @@ def ensure_corpora_from_recommendations(
             "gate_stats": gate_stats,
         }
 
-    to_import = _importable_papers(papers, import_unverified=import_unverified)[:max_import]
+    to_import = _importable_papers(
+        papers,
+        import_unverified=import_unverified,
+        import_unverified_with_abstract=import_unverified_with_abstract,
+    )[:max_import]
     if not to_import:
         return {
             "imported": 0,
             "skipped": True,
-            "reason": "无通过校验的论文可入库",
+            "reason": "无通过校验的论文可入库（且无可带摘要的 unverified 候选）",
             "candidate_count": len(papers),
             "verified_count": gated.get("verified_count", 0),
             "unverified_count": gated.get("unverified_count", 0),
@@ -123,6 +147,7 @@ def ensure_corpora_from_recommendations(
 
     parsed = 0
     pdf_downloaded = 0
+    abstract_indexed = 0
     if auto_parse and imported_ids:
         for doc_id in imported_ids:
             try:
@@ -135,8 +160,17 @@ def ensure_corpora_from_recommendations(
                         pdf_downloaded += 1
                     except Exception as dl_err:
                         logger.warning("PDF 下载失败 %s: %s", doc_id, dl_err)
-                service.parse_document(project_id=project_id, document_id=doc_id)
-                parsed += 1
+                try:
+                    service.parse_document(project_id=project_id, document_id=doc_id)
+                    parsed += 1
+                except Exception as parse_err:
+                    # 无 PDF 时用摘要建可检索 chunk，避免「入库了却挖不到」
+                    logger.warning("自动 parse 失败 %s: %s", doc_id, parse_err)
+                    try:
+                        if service.ensure_abstract_chunks(project_id, doc_id):
+                            abstract_indexed += 1
+                    except Exception as abs_err:
+                        logger.warning("摘要 chunk 回退失败 %s: %s", doc_id, abs_err)
             except Exception as parse_err:
                 logger.warning("自动 parse 失败 %s: %s", doc_id, parse_err)
         try:
@@ -150,6 +184,7 @@ def ensure_corpora_from_recommendations(
         "imported": len(imported_ids),
         "parsed": parsed,
         "pdf_downloaded": pdf_downloaded,
+        "abstract_indexed": abstract_indexed,
         "candidate_count": pre_gate,
         "selected_count": len(to_import),
         "import_results": import_results[:10],
@@ -169,6 +204,7 @@ def ensure_corpora_from_recommendations(
             "imported_ids": imported_ids,
             "auto_parse": auto_parse,
             "gate_stats": gate_stats,
+            "abstract_indexed": abstract_indexed,
         },
         "discovery": {
             "subtopics": rec.get("subtopics") or [],

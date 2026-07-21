@@ -150,6 +150,30 @@ class LiteratureMiningAgent:
             vs = get_vector_store()
             has_index = vs.has_index(project_id)
 
+            # 已解析 chunk 但索引未就绪时（上传后后台索引未完成），同步建索引再检索
+            if not has_index and db is not None:
+                try:
+                    from app.models.project import Chunk, Document, DocumentStatus
+                    from app.services.vector_store import sync_project_index
+
+                    chunk_n = (
+                        db.query(Chunk)
+                        .join(Document, Chunk.document_id == Document.id)
+                        .filter(Chunk.project_id == project_id)
+                        .filter(Document.status == DocumentStatus.PROCESSED)
+                        .count()
+                    )
+                    if chunk_n > 0:
+                        logger.info(
+                            "[文献挖掘] 检测到 %s 个已解析 chunk 但无向量索引，开始同步索引 project=%s",
+                            chunk_n,
+                            project_id,
+                        )
+                        sync_project_index(project_id, db=db)
+                        has_index = vs.has_index(project_id)
+                except Exception as idx_err:
+                    logger.warning("[文献挖掘] 补建向量索引失败: %s", idx_err)
+
             if not has_index:
                 return self._empty_response(
                     warning=(

@@ -130,3 +130,162 @@ def test_source_papers_string_titles():
     facts, citation_map, _ = normalize_literature_bundle(lm)
     assert len(citation_map) == 2
     assert facts == []
+
+
+def test_merge_project_library_into_empty_mining():
+    from app.services.literature_bundle_service import merge_project_library_into_literature_mining
+
+    class _Doc:
+        id = "doc-1"
+        title = "Plastic Waste Governance"
+        filename = "plastic.pdf"
+        authors = "Alice, Bob"
+        publication_date = "2024-01-01"
+        doi = "10.1000/test"
+        abstract = "Global plastic waste flows remain opaque."
+        summary = ""
+        source_url = None
+        pdf_url = None
+        external_id = None
+        source_type = "upload"
+        created_at = None
+        extra_metadata = None
+
+    class _Q:
+        def filter(self, *a, **k):
+            return self
+
+        def order_by(self, *a, **k):
+            return self
+
+        def limit(self, *a, **k):
+            return self
+
+        def all(self):
+            return [_Doc()]
+
+        def count(self):
+            return 1
+
+    class _DB:
+        def query(self, *a, **k):
+            return _Q()
+
+    lm = merge_project_library_into_literature_mining(
+        {"facts": [], "citation_map": []},
+        db=_DB(),
+        project_id="proj-1",
+    )
+    assert lm["project_library_document_count"] == 1
+    assert len(lm["citation_map"]) == 1
+    assert lm["citation_map"][0]["title"] == "Plastic Waste Governance"
+    assert len(lm["verified_references"]) == 1
+    assert any(f.get("source") == "project_library" for f in lm["facts"])
+
+
+def test_merge_uploaded_pdf_chunks_into_facts_without_abstract():
+    """手动上传 PDF 常无 abstract：应用解析 chunk 回填假设生成 facts。"""
+    from app.services.literature_bundle_service import merge_project_library_into_literature_mining
+
+    class _Doc:
+        id = "doc-upload"
+        title = "Marine Plastic Governance"
+        filename = "upload.pdf"
+        authors = "A"
+        publication_date = None
+        doi = None
+        abstract = ""
+        summary = ""
+        source_url = None
+        pdf_url = None
+        external_id = None
+        source_type = "upload"
+        created_at = None
+        extra_metadata = None
+
+    class _Chunk:
+        id = "chunk-1"
+        document_id = "doc-upload"
+        chunk_index = 0
+        content = (
+            "Global marine plastic pollution requires coordinated international law "
+            "and extended producer responsibility schemes across coastal states."
+        )
+        page_number = 1
+
+    class _Q:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def filter(self, *a, **k):
+            return self
+
+        def order_by(self, *a, **k):
+            return self
+
+        def limit(self, *a, **k):
+            return self
+
+        def all(self):
+            return self._rows
+
+    class _DB:
+        def query(self, model):
+            name = getattr(model, "__name__", str(model))
+            if "Chunk" in name:
+                return _Q([_Chunk()])
+            return _Q([_Doc()])
+
+    lm = merge_project_library_into_literature_mining(
+        {"facts": [], "citation_map": []},
+        db=_DB(),
+        project_id="proj-upload",
+    )
+    assert len(lm["citation_map"]) == 1
+    chunk_facts = [f for f in lm["facts"] if f.get("source") == "project_library_chunk"]
+    assert len(chunk_facts) >= 1
+    assert "marine plastic" in chunk_facts[0]["content"].lower()
+    assert chunk_facts[0]["document_id"] == "doc-upload"
+
+
+def test_project_documents_prefer_pdf_metadata_over_polluted_title():
+    from app.services.literature_bundle_service import project_documents_as_citations
+
+    class _Doc:
+        id = "doc-2"
+        title = "Industrial Marketing Management 102 (2022) 164–76"
+        filename = "main.pdf"
+        authors = ". Published by Elsevier Inc. This is an open access article under the CC BY license"
+        publication_date = None
+        doi = None
+        abstract = ""
+        source_url = None
+        pdf_url = None
+        external_id = None
+        source_type = "upload"
+        created_at = None
+        extra_metadata = {
+            "pdf_metadata": {
+                "title": "Blockchain application in circular marine plastic debris management",
+                "author": "Yu Gong",
+            }
+        }
+
+    class _Q:
+        def filter(self, *a, **k):
+            return self
+
+        def order_by(self, *a, **k):
+            return self
+
+        def all(self):
+            return [_Doc()]
+
+    class _DB:
+        def query(self, *a, **k):
+            return _Q()
+
+    entries = project_documents_as_citations(_DB(), "proj-1")
+    assert len(entries) == 1
+    assert entries[0]["title"].startswith("Blockchain application")
+    assert entries[0]["authors"] == "Yu Gong"

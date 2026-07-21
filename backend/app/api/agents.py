@@ -157,9 +157,24 @@ async def hypothesis_generation(
     """
     try:
         agent = get_hypothesis_generation_agent()
+        facts = list(request.facts or [])
+        # 有 project_id 时合并项目文献库（手动上传 PDF 的摘要/chunk → facts）
+        if request.project_id:
+            try:
+                from app.services.literature_bundle_service import merge_project_library_into_literature_mining
+
+                enriched = merge_project_library_into_literature_mining(
+                    {"facts": facts, "citation_map": []},
+                    db=db,
+                    project_id=request.project_id,
+                )
+                facts = list(enriched.get("facts") or facts)
+            except Exception as merge_err:
+                logger.warning("假设生成合并项目文献库失败: %s", merge_err)
+
         result = agent.generate(
             research_question=request.research_question,
-            facts=request.facts,
+            facts=facts,
             knowledge_gaps=request.knowledge_gaps,
             constraints=request.constraints,
             project_id=request.project_id
