@@ -115,7 +115,7 @@ class EngineConfig:
     smoke_sample_size_min: int = 2000
     smoke_sample_size_max: int = 80000
     metadata_sample_size: int = 5000
-    max_script_repair_attempts: int = 20
+    max_script_repair_attempts: int = 10
     # 已弃用：sandbox 每轮均基于脚本+修改意见重设计，不再「成功只调参」
     lock_script_on_success: bool = False
     # True=smoke 后再正式全量推演；False=小样本验收即本轮完成（默认）
@@ -127,7 +127,11 @@ class EngineConfig:
         import os
         raw = (os.getenv("SHAXIANG_FULL_DATASET_RUN") or "0").strip().lower()
         full = raw in {"1", "true", "yes", "on"}
-        return cls(full_dataset_run=full)
+        repair_raw = (os.getenv("SHAXIANG_MAX_SCRIPT_REPAIR_ATTEMPTS") or "").strip()
+        repair = 10
+        if repair_raw.isdigit():
+            repair = max(1, min(50, int(repair_raw)))
+        return cls(full_dataset_run=full, max_script_repair_attempts=repair)
 
 
 def _inject_smoke_sample_size(
@@ -393,6 +397,8 @@ class IterationEngine:
             smoke_n = resolve_smoke_sample_size(plan, self.config, column_contract)
             # 把动态样本量写回 plan，供 LLM 下一轮参考，并让分层采样生效
             plan = _inject_smoke_sample_size(plan, smoke_n, column_contract)
+            qm = (getattr(experiment, "quality_mode", None) or "draft").strip().lower()
+            require_numeric = qm == "strict"
 
             plan, smoke_result = repair_plan_until_smoke(
                 self.planner.llm,
@@ -403,6 +409,7 @@ class IterationEngine:
                 smoke_sample_size=smoke_n,
                 max_attempts=self.config.max_script_repair_attempts,
                 require_charts=True,
+                require_numeric_metrics=require_numeric,
                 on_exhausted="raise",
                 rollback_plan=None,
                 human_feedback=(experiment.human_feedback or "").strip(),
@@ -466,6 +473,14 @@ class IterationEngine:
                 experiment_id=experiment.id,
                 max_iterations=experiment.max_iterations,
                 completed_iterations=iteration_num,
+            )
+            from core.quality_mode import apply_quality_mode_to_decision
+
+            decision = apply_quality_mode_to_decision(
+                quality_mode=getattr(experiment, "quality_mode", None) or "draft",
+                analysis=analysis,
+                decision=decision,
+                result=result,
             )
         else:
             should_ask_human = consecutive_failures >= self.config.max_consecutive_failures
@@ -653,6 +668,7 @@ class IterationEngine:
             plan = prepare_sandbox_plan(plan, data_config)
             smoke_n = resolve_smoke_sample_size(plan, self.config, metadata)
             plan = _inject_smoke_sample_size(plan, smoke_n, metadata)
+            qm = (getattr(experiment, "quality_mode", None) or "draft").strip().lower()
             plan, _smoke_result = repair_plan_until_smoke(
                 self.planner.llm,
                 plan,
@@ -662,6 +678,7 @@ class IterationEngine:
                 smoke_sample_size=smoke_n,
                 max_attempts=self.config.max_script_repair_attempts,
                 require_charts=True,
+                require_numeric_metrics=(qm == "strict"),
                 on_exhausted="raise",
                 human_feedback=feedback or "",
             )
@@ -702,13 +719,25 @@ class IterationEngine:
                 else "等待人工反馈后继续迭代"
             )
 
-        # 条件3: LLM 判断已成功
+        # 条件3: LLM 判断已成功 / 草稿模式予以通过
         if not decision.should_continue and self.config.early_stop_on_success:
-            return True, "LLM 评估实验目标已达成，停止迭代"
+            from core.quality_mode import is_round_acceptable, round_has_charts
+
+            qm = getattr(experiment, "quality_mode", None) or "draft"
+            if is_round_acceptable(
+                quality_mode=qm,
+                execution_status="success",
+                overall_assessment=analysis.overall_assessment,
+                has_charts=True,  # 决策已按有图策略改写；此处信任 should_continue=False
+            ) or analysis.overall_assessment in {"success", "promising", "needs_adjustment"}:
+                return True, (
+                    f"质量模式={qm}：本轮评估「{analysis.overall_assessment}」已予以通过，停止迭代"
+                )
 
         # 条件4: 分析报告标记为成功
         if analysis.overall_assessment == "success" and self.config.early_stop_on_success:
             return True, "分析报告确认实验目标已达成"
+
 
         # 条件5: 连续多轮无显著改进（停滞检测）
         if self._check_stagnation(experiment):

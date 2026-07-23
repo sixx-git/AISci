@@ -52,7 +52,7 @@ def enrich_column_contract(metadata: dict, df=None) -> dict:
     suggested_targets = []
     for c in columns:
         cl = str(c).lower()
-        if cl in {"label", "target", "y", "class", "activity", "fall", "is_fall"} or "label" in cl:
+        if cl in {"label", "target", "y", "class", "activity", "fall", "is_fall", "study"} or "label" in cl:
             suggested_targets.append(c)
 
     meta["columns"] = columns
@@ -238,6 +238,7 @@ def smoke_run_plan(
     sample_size: int = 10000,
     require_charts: bool = True,
     stratified: bool = True,
+    require_numeric_metrics: bool = True,
 ) -> tuple[bool, list[str], Optional[object]]:
     """
     小样本试跑门禁（图表写入 data/charts/smoke）。
@@ -286,20 +287,24 @@ def smoke_run_plan(
         dp for dp in (result.data_points or [])
         if isinstance(dp.value, (int, float)) and dp.key not in ("dataset_rows", "dataset_columns", "error")
     ]
-    if not numeric_metrics:
+    charts = []
+    raw = result.raw_output or {}
+    if isinstance(raw, dict):
+        charts = raw.get("chart_paths") or []
+
+    if require_charts and not charts:
+        return False, ["smoke_run 未产出图表文件（至少需要 1 张）"], result
+
+    if require_numeric_metrics and not numeric_metrics:
+        # 草稿模式可只要求图表；严格模式仍要求数值指标
+        if not charts:
+            return False, ["smoke_run 未返回有效数值指标且无图表"], result
         return False, ["smoke_run 未返回有效数值指标"], result
 
-    charts = []
-    if require_charts:
-        raw = result.raw_output or {}
-        if isinstance(raw, dict):
-            charts = raw.get("chart_paths") or []
-        if not charts:
-            return False, ["smoke_run 未产出图表文件（至少需要 1 张）"], result
-
     logger.info(
-        "smoke_run 通过: metrics=%s charts=%s",
+        "smoke_run 通过: metrics=%s charts=%s require_numeric=%s",
         len(numeric_metrics),
         len(charts) if require_charts else 0,
+        require_numeric_metrics,
     )
     return True, [], result

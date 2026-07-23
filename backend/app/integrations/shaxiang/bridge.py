@@ -416,6 +416,7 @@ def project_experiment(project_id: str, experiment_id: str) -> Dict[str, Any]:
             "phase": exp.get("phase") or "created",
             "status": str(status),
             "run_mode": exp.get("run_mode") or "smoke_only",
+            "quality_mode": exp.get("quality_mode") or "draft",
             "dataset_recommendations": _normalize_recs(exp.get("dataset_recommendations")),
             "data_config": data_config if isinstance(data_config, dict) else None,
             "initial_plan": plan if isinstance(plan, dict) else _dump_plan(plan),
@@ -438,6 +439,7 @@ def create_experiment(
     constraints: Optional[List[str]] = None,
     executor_type: str = "sandbox",
     max_iterations: int = 10,
+    skip_dataset_recommend: bool = False,
 ) -> Dict[str, Any]:
     def _inner() -> Dict[str, Any]:
         svc = get_service()
@@ -453,11 +455,19 @@ def create_experiment(
             max_iterations=max(1, min(20, int(max_iterations or 10))),
         )
         sx.hypothesis = hyp
-        SQLiteRepository(svc.config.storage.db_path).update_experiment(sx)
+        repo = SQLiteRepository(svc.config.storage.db_path)
 
         if (executor_type or "sandbox") == "sandbox":
-            svc.recommend_datasets(sx.id)
+            if skip_dataset_recommend:
+                # 已有数据：不调用推荐，直接进入可绑定数据阶段
+                sx.dataset_recommendations = []
+                sx.phase = "data_recommended"
+                repo.update_experiment(sx)
+            else:
+                repo.update_experiment(sx)
+                svc.recommend_datasets(sx.id)
         else:
+            repo.update_experiment(sx)
             svc.start_experiment(sx.id)
         return project_experiment(project_id, sx.id)
 
@@ -584,6 +594,15 @@ def set_run_mode(project_id: str, experiment_id: str, run_mode: str) -> Dict[str
     def _inner() -> Dict[str, Any]:
         svc = get_service()
         svc.set_run_mode(experiment_id, run_mode)
+        return project_experiment(project_id, experiment_id)
+
+    return _run_in_shaxiang(_inner)
+
+
+def set_quality_mode(project_id: str, experiment_id: str, quality_mode: str) -> Dict[str, Any]:
+    def _inner() -> Dict[str, Any]:
+        svc = get_service()
+        svc.set_quality_mode(experiment_id, quality_mode)
         return project_experiment(project_id, experiment_id)
 
     return _run_in_shaxiang(_inner)

@@ -234,6 +234,11 @@ export function IterativeExperimentPage({
             await iterativeExperimentService.setRunMode(projectId, selected.id, mode);
           });
         }}
+        onSetQualityMode={(mode) => {
+          void withBusy(async () => {
+            await iterativeExperimentService.setQualityMode(projectId, selected.id, mode);
+          });
+        }}
         onRunIteration={() => {
           void withBusy(async () => {
             await iterativeExperimentService.runIteration(projectId, selected.id);

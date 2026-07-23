@@ -175,7 +175,7 @@ class ReportGenerationAgent:
                 result = self._enrich_report_with_multimodal_evidence(result, data_context["multimodal_evidence"])
             logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
-            result = sanitize_report_result(result)
+            result = sanitize_report_result(result, small_validation=small_validation)
 
             if pipeline_run_info:
                 result["run_summary"] = self._build_run_summary_content(pipeline_run_info)
@@ -200,13 +200,36 @@ class ReportGenerationAgent:
             # 图表写入 result.plots，最终 Markdown 由 latex_template 结构统一生成
 
             # ── 用实验设计/数据配置回填 datasets/source/target（避免误报）──
-            result = self._backfill_chapters_from_experiment(result, experiment_design)
+            result = self._backfill_chapters_from_experiment(
+                result, experiment_design, small_validation=small_validation
+            )
+
+            # ── 迭代科研叙事提炼（写入 sv，供讨论/摘要护栏使用）──
+            iteration_narrative = None
+            if small_validation and isinstance(small_validation, dict):
+                try:
+                    from app.skills.report.iteration_narrative_skill import IterationNarrativeSkill
+
+                    iteration_narrative = IterationNarrativeSkill.build_narrative(
+                        small_validation=small_validation,
+                        hypothesis=str(small_validation.get("hypothesis") or ""),
+                    )
+                    small_validation = {
+                        **small_validation,
+                        "iteration_narrative": iteration_narrative,
+                    }
+                    if isinstance(result.get("skill_outputs"), dict):
+                        result["skill_outputs"]["iteration_narrative"] = iteration_narrative
+                    else:
+                        result["skill_outputs"] = {"iteration_narrative": iteration_narrative}
+                except Exception as exc:
+                    logger.warning("IterationNarrativeSkill 跳过: %s", exc)
 
             # ── 丰富 Results 章节（区分 actual/simulated/expected）──
             result = self._enrich_results_with_categorized(
                 result, small_validation, preliminary_analysis_skill_outputs
             )
-            result = sanitize_report_result(result)
+            result = sanitize_report_result(result, small_validation=small_validation)
 
             modeling_charts = []
             if small_validation:
@@ -330,7 +353,7 @@ class ReportGenerationAgent:
             )
 
             # ── 按 latex_template 导出 LaTeX/PDF ──
-            result = sanitize_report_result(result)
+            result = sanitize_report_result(result, small_validation=small_validation)
             result["markdown_content"] = ""
             export_info = self._export_report_pdf(
                 result,
@@ -881,31 +904,26 @@ class ReportGenerationAgent:
         citation_map: List[Dict[str, Any]],
         verified_references: List[Dict[str, Any]],
     ) -> List[str]:
+        """统一为 GB/T 7714 风格文本行；去重键优先 DOI，其次 title+year。"""
+        from app.services.latex_export_service import _format_reference_gbt7714
+
         refs: List[str] = []
         seen: set = set()
         for item in list(verified_references or []) + list(citation_map or []):
             if not isinstance(item, dict):
                 continue
             title = (item.get("title") or item.get("paper_title") or "").strip()
-            if not title or title.lower() in seen:
+            if not title:
                 continue
-            seen.add(title.lower())
-            authors = item.get("authors") or ""
-            if isinstance(authors, list):
-                authors = ", ".join(str(a) for a in authors if a)
-            year = item.get("year") or item.get("publication_year") or ""
-            doi = item.get("doi") or ""
-            url = item.get("source_url") or item.get("url") or ""
-            line = title
-            if authors:
-                line = f"{authors}. {line}"
-            if year:
-                line += f" ({year})"
-            if doi:
-                line += f". DOI: {doi}"
-            elif url:
-                line += f". {url}"
-            refs.append(line)
+            doi = str(item.get("doi") or "").strip().lower()
+            year = str(item.get("year") or item.get("publication_year") or "").strip()
+            key = f"doi:{doi}" if doi else f"title:{title.lower()}|{year}"
+            if key in seen:
+                continue
+            seen.add(key)
+            line = _format_reference_gbt7714(dict(item))
+            if line and line not in refs:
+                refs.append(line)
         return refs
 
     def _inject_verified_bibliography(
@@ -1780,8 +1798,11 @@ class ReportGenerationAgent:
     def _backfill_chapters_from_experiment(
         result: Dict[str, Any],
         experiment_design: Optional[Dict[str, Any]],
+        small_validation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """章节为空时，用实验设计/数据绑定信息回填，避免合规误报。"""
+        from app.services.report_content_sanitizer import method_boundary_note
+
         ed = experiment_design if isinstance(experiment_design, dict) else {}
         chapters = result.get("chapters") if isinstance(result.get("chapters"), dict) else {}
         chapters = dict(chapters)
@@ -1803,6 +1824,24 @@ class ReportGenerationAgent:
         if _empty("target") and ed.get("target_data"):
             chapters["target"] = str(ed.get("target_data")).strip()
 
+        boundary = str(ed.get("method_boundary") or "").strip() or method_boundary_note(
+            small_validation, ed
+        )
+        for key in ("methods", "experiments"):
+            val = chapters.get(key)
+            text = ""
+            if isinstance(val, str):
+                text = val
+            elif isinstance(val, dict):
+                text = "\n".join(f"{k}: {v}" for k, v in val.items() if v)
+            if boundary and "验证边界" not in text and "代理实验" not in text:
+                if _empty(key):
+                    chapters[key] = f"【验证边界】{boundary}"
+                elif isinstance(val, str):
+                    chapters[key] = f"{val.rstrip()}\n\n【验证边界】{boundary}"
+                elif isinstance(val, dict):
+                    chapters[key] = {**val, "method_boundary": boundary}
+
         result["chapters"] = chapters
         return result
 
@@ -1819,26 +1858,68 @@ class ReportGenerationAgent:
         modeling_result: Optional[Dict[str, Any]],
         actual_summary: str,
         existing_results: Any,
+        small_validation: Optional[Dict[str, Any]] = None,
     ) -> str:
         """基于已有实验证据生成论文风格的「结果分析与讨论」（不编造数值）。"""
+        from app.services.report_content_sanitizer import (
+            clean_iteration_summary,
+            evidence_flags_from_small_validation,
+            filter_report_metrics,
+            format_metric_label,
+            humanize_error_message,
+        )
+
         lines: List[str] = ["### 结果分析与讨论\n"]
+        sv = small_validation if isinstance(small_validation, dict) else {}
+        narr = sv.get("iteration_narrative") if isinstance(sv.get("iteration_narrative"), dict) else {}
+        brief = sv.get("narrative_brief") if isinstance(sv.get("narrative_brief"), dict) else {}
+        verdict = str(
+            (narr or {}).get("evidence_verdict")
+            or (brief or {}).get("evidence_verdict")
+            or ""
+        ).strip()
+
+        # 优先嵌入叙事 skill 的 story_arc
+        story = str((narr or {}).get("story_arc") or "").strip()
+        if story:
+            lines.append("**迭代演化叙事。** ")
+            lines.append(story + "\n")
+        neg_para = str((narr or {}).get("negative_or_partial_results_paragraph") or "").strip()
+        if neg_para:
+            lines.append("**阶段性/负向证据定位。** ")
+            lines.append(neg_para + "\n")
 
         hyp = (hypothesis or "").strip()
-        metric_items = [
-            (k, v)
-            for k, v in (metrics or {}).items()
-            if k not in ("stdout_preview", "note", "dataset_rows", "dataset_columns", "error")
-            and not str(k).startswith("failed_iter")
-        ][:10]
+        filtered = filter_report_metrics(metrics if isinstance(metrics, dict) else {})
+        metric_items = list(filtered.items())[:10]
         plot_n = len(plots) if isinstance(plots, list) else 0
+        flags = evidence_flags_from_small_validation(
+            sv
+            if sv
+            else {
+                "sandbox_execution": {
+                    "partial_run": partial_run,
+                    "metrics": metrics,
+                    "iteration_progress": progress,
+                },
+                "results": {
+                    "actual_results": {
+                        "failed_iterations": failed_iters,
+                        "summary": actual_summary,
+                    }
+                },
+            }
+        )
+        if verdict:
+            flags = {**flags, "evidence_verdict": verdict}
         findings: List[str] = []
         for r in successful_iters[:6]:
             if not isinstance(r, dict):
                 continue
             for f in (r.get("findings") or [])[:3]:
                 if f and str(f).strip():
-                    findings.append(str(f).strip())
-            summ = (r.get("summary") or "").strip()
+                    findings.append(clean_iteration_summary(f))
+            summ = clean_iteration_summary(r.get("summary") or "")
             if summ:
                 findings.append(summ[:220])
         # 去重保序
@@ -1852,15 +1933,38 @@ class ReportGenerationAgent:
 
         # —— 主要发现 ——
         lines.append("**主要发现。** ")
+        if flags.get("trivial_solution"):
+            lines.append(
+                "观测到准确率接近满分且基线与主模型同量级（或特征重要性近零），"
+                "提示可能存在平凡解、标签泄漏或无效分裂，不宜解读为强支持证据。"
+            )
+        elif flags.get("negative_fit"):
+            lines.append(
+                "拟合指标（如决定系数）为负或未达可用水平，表明当前协议下模型解释力不足。"
+            )
         if metric_items or plot_n or findings:
             parts = []
             if metric_items:
-                metric_txt = "；".join(f"{k}={v}" for k, v in metric_items[:6])
+                metric_txt = "；".join(f"{format_metric_label(k)}={v}" for k, v in metric_items[:6])
                 parts.append(f"已观测到关键指标（{metric_txt}）")
             if plot_n:
                 parts.append(f"并形成 {plot_n} 张实验图供对照")
             if findings:
-                parts.append("迭代分析指出：" + "；".join(findings[:4]))
+                # 截断到完整句，避免 n_test_samples= 半截
+                cleaned_f = []
+                for f in findings[:4]:
+                    ff = str(f).strip()
+                    ff = re.sub(r"(显著高于|显著优于)", "高于", ff)
+                    ff = re.sub(r"验证了([^，。；]{0,40}优势)", r"提示了\1（尚待独立复验）", ff)
+                    # 去掉不完整的尾部键值
+                    ff = re.sub(r"[|；]\s*[A-Za-z0-9_]+=\s*$", "", ff)
+                    ff = re.sub(r"[|；]\s*数据:.*$", "", ff)
+                    if len(ff) > 280:
+                        cut = ff[:280]
+                        sp = max(cut.rfind("。"), cut.rfind("；"), cut.rfind(";"))
+                        ff = cut[: sp + 1] if sp > 80 else cut.rstrip("，,;；") + "…"
+                    cleaned_f.append(ff)
+                parts.append("迭代分析指出：" + "；".join(cleaned_f))
             lines.append("".join(parts) + "。")
             lines.append(
                 "上述结果来自已执行轮次的记录，用于说明当前设置下的可观测行为，"
@@ -1880,7 +1984,16 @@ class ReportGenerationAgent:
             lines.append(f"目标假设可概括为：「{hyp[:280]}」。")
         else:
             lines.append("报告输入中未给出完整假设文本。")
-        if metric_items and not failed_iters:
+        lines.append(
+            "需注意：本节多为可执行代理实验（如表格学习），用于检验可操作推论，"
+            "并不等同于对领域终极问题的完整证明。"
+        )
+        if flags.get("trivial_solution") or flags.get("negative_fit"):
+            lines.append(
+                "结合否定性/平凡性信号，当前更宜将结果解读为方法边界提示或协议需修正，"
+                "而非假设已被证实。"
+            )
+        elif metric_items and not failed_iters:
             lines.append(
                 "现有正向指标与实验图表明，在当前数据与协议下假设具有一定可检验性；"
                 "但尚不足以在未声明显著性检验的前提下宣称假设已被证实或证伪。"
@@ -1907,7 +2020,7 @@ class ReportGenerationAgent:
                 if not isinstance(r, dict):
                     continue
                 n = r.get("iteration_number", "?")
-                err = (r.get("error_message") or "").strip()
+                err = humanize_error_message(r.get("error_message") or "")
                 issues = r.get("identified_issues") or r.get("weaknesses") or []
                 issue_txt = "；".join(str(x) for x in issues[:3]) if isinstance(issues, list) else ""
                 bit = f"第{n}轮"
@@ -1938,6 +2051,8 @@ class ReportGenerationAgent:
         # —— 局限与后续 ——
         lines.append("\n**局限与后续工作。** ")
         lims = []
+        if flags.get("smoke"):
+            lims.append("当前为 smoke/小样本可行性验证，证据层级较弱")
         if partial_run:
             cur = progress.get("current_iteration")
             mx = progress.get("max_iterations")
@@ -1946,6 +2061,8 @@ class ReportGenerationAgent:
             )
         if failed_iters:
             lims.append("存在执行失败或协议不匹配，需先修复数据/脚本再谈效应量")
+        if flags.get("trivial_solution"):
+            lims.append("存在平凡解风险，需检查标签分布、特征泄漏与评价口径")
         if not metric_items:
             lims.append("正向定量指标不足，尚难给出可重复的效应描述")
         if plot_n == 0:
@@ -1953,13 +2070,33 @@ class ReportGenerationAgent:
         if not lims:
             lims.append("样本与协议覆盖范围仍有限，外推需谨慎")
         lines.append("；".join(lims) + "。")
-        lines.append(
-            "后续建议：（1）在固定协议下补齐关键轮次与对照；（2）对失败根因做消融或诊断实验；"
-            "（3）明确主指标、不确定性与可重复脚本，再形成更强的支持/否定结论。\n"
+        next_exps = (narr or {}).get("next_experiments") if isinstance(narr, dict) else None
+        if isinstance(next_exps, list) and next_exps:
+            clean_next = []
+            for x in next_exps[:4]:
+                s = str(x).strip()
+                s = s.replace("['", "").replace("']", "").replace("', '", "；")
+                if s:
+                    clean_next.append(s[:180])
+            if clean_next:
+                lines.append("后续可检验步骤：" + "；".join(clean_next) + "。")
+        else:
+            lines.append(
+                "后续建议：（1）在固定协议下补齐关键轮次与对照；（2）对失败根因做消融或诊断实验；"
+                "（3）明确主指标、不确定性与可重复脚本，再形成更强的支持/否定结论。"
+            )
+        # 边界声明：若讨论前文或 methods 已出现则不再重复粘贴
+        boundary_n = str((narr or {}).get("method_boundary") or "").strip()
+        already_has_boundary = any(
+            "最小代理实验" in (ln or "") or "验证边界" in (ln or "") for ln in lines
         )
+        if boundary_n and not already_has_boundary:
+            lines.append(boundary_n)
+        lines.append("\n")
 
-        if actual_summary and str(actual_summary).strip():
-            lines.append(f"\n> 实验侧摘要：{str(actual_summary).strip()[:400]}\n")
+        cleaned_summary = clean_iteration_summary(actual_summary)
+        if cleaned_summary:
+            lines.append(f"\n> 实验侧摘要：{cleaned_summary[:400]}\n")
 
         # 若 LLM 原文已含讨论段落，摘出作为补充论述（避免丢弃）
         if isinstance(existing_results, str) and "结果分析与讨论" in existing_results:
@@ -1969,7 +2106,27 @@ class ReportGenerationAgent:
                 lines.append("\n**模型生成的补充论述（需与上文实测对齐）。**\n\n")
                 lines.append(tail[:800] + ("…\n" if len(tail) > 800 else "\n"))
 
-        return "\n".join(lines) + "\n"
+        text = "\n".join(lines) + "\n"
+        # 否定/不确定证据下剔除过度正面措辞
+        if verdict in {"contradicted", "inconclusive", "blocked"} or (
+            flags.get("has_failures") and not metric_items
+        ):
+            try:
+                from app.skills.report.iteration_narrative_skill import IterationNarrativeSkill
+
+                text = IterationNarrativeSkill.strip_overclaim(text, verdict or "inconclusive")
+            except Exception:
+                pass
+        try:
+            from app.services.report_content_sanitizer import (
+                collapse_method_boundary_duplicates,
+                dedupe_repeated_sentences,
+            )
+
+            text = collapse_method_boundary_duplicates(dedupe_repeated_sentences(text))
+        except Exception:
+            pass
+        return text
 
     @staticmethod
     def _enrich_results_with_categorized(
@@ -1977,7 +2134,17 @@ class ReportGenerationAgent:
         small_validation: Optional[Dict[str, Any]],
         preliminary_analysis_skill_outputs: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        sv = small_validation or {}
+        sv = dict(small_validation or {})
+        if sv and not isinstance(sv.get("iteration_narrative"), dict):
+            try:
+                from app.skills.report.iteration_narrative_skill import IterationNarrativeSkill
+
+                sv["iteration_narrative"] = IterationNarrativeSkill.build_narrative(
+                    small_validation=sv,
+                    hypothesis=str(sv.get("hypothesis") or ""),
+                )
+            except Exception:
+                pass
         sv_results = sv.get("results", {}) if isinstance(sv.get("results"), dict) else {}
         # 兼容：sandbox_execution 在 sv 顶层（迭代实验 synthesize）
         top_sandbox = sv.get("sandbox_execution") if isinstance(sv.get("sandbox_execution"), dict) else {}
@@ -2001,6 +2168,14 @@ class ReportGenerationAgent:
             or (sv.get("artifacts") or {}).get("metrics")
             or {}
         )
+        from app.services.report_content_sanitizer import (
+            clean_iteration_summary,
+            filter_report_metrics,
+            format_metric_label,
+            humanize_error_message,
+        )
+
+        metrics = filter_report_metrics(metrics if isinstance(metrics, dict) else {})
         plots = (
             sandbox_exec.get("plots")
             or actual.get("sandbox_plots")
@@ -2121,11 +2296,33 @@ class ReportGenerationAgent:
                     enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
                 if isinstance(metrics, dict) and metrics:
                     enriched += "- 实测指标:\n"
-                    for k, v in list(metrics.items())[:12]:
-                        if k not in ("stdout_preview", "note", "dataset_rows", "dataset_columns", "error"):
-                            enriched += f"  - {k}: {v}\n"
+                    skip_keys = {"overall_score", "overall score", "run_scope", "run_mode"}
+                    for k, v in list(metrics.items())[:16]:
+                        if str(k).lower().replace(" ", "_") in skip_keys or str(k) in skip_keys:
+                            continue
+                        if v is None or v == "":
+                            continue
+                        enriched += f"  - {format_metric_label(k)}: {v}\n"
                 if isinstance(plots, list) and plots:
-                    enriched += f"- 沙箱图表: {len(plots)} 张（见报告图表区）\n"
+                    enriched += f"- 沙箱图表: {len(plots)} 张\n"
+                    enriched += "\n#### 图题与核心读图要点\n\n"
+                    for i, pl in enumerate(plots[:6], 1):
+                        if not isinstance(pl, dict):
+                            continue
+                        title = str(pl.get("title") or pl.get("plot_id") or f"图{i}").strip()
+                        kind = str(pl.get("chart_kind") or "").strip()
+                        note = ""
+                        if "混淆" in title or "confusion" in title.lower():
+                            note = "关注对角线强度及有利/不利类别是否可分。"
+                        elif "阶段" in title or "phase" in title.lower() or "前半" in title:
+                            note = "对比任务前/后半段准确率，检验长期策略建模是否成立。"
+                        elif "对比" in title or "comparison" in title.lower() or "柱" in title:
+                            note = "对照主模型与基线的准确率/F1差距及其方向。"
+                        elif kind == "diagnostic_counterexample":
+                            note = "失败/反例诊断图，仅用于界定方法边界，不作成功证据。"
+                        else:
+                            note = "结合对应指标解读趋势，勿脱离数值单独外推。"
+                        enriched += f"{i}. **{title}** — {note}\n"
                 enriched += "\n"
                 enriched += "> 以下 Results 以迭代实验/沙箱验证为准；模拟/预期结果仅作参考。\n\n"
             elif successful_iters and not sandbox_success:
@@ -2138,8 +2335,9 @@ class ReportGenerationAgent:
                         f"- 第 {r.get('iteration_number', '?')} 轮"
                         f"（{r.get('status', 'partial')}）"
                     )
-                    if r.get("summary"):
-                        enriched += f": {str(r.get('summary'))[:200]}"
+                    summ = clean_iteration_summary(r.get("summary") or "")
+                    if summ:
+                        enriched += f": {summ[:200]}"
                     enriched += "\n"
                 enriched += "\n"
 
@@ -2154,10 +2352,12 @@ class ReportGenerationAgent:
                         continue
                     n = r.get("iteration_number", "?")
                     enriched += f"- **第 {n} 轮**（{r.get('status') or 'failed'}）\n"
-                    err = (r.get("error_message") or "").strip()
+                    err = humanize_error_message(r.get("error_message") or "")
                     if err:
                         enriched += f"  - 错误/失败信息: {err[:400]}\n"
-                    summ = (r.get("summary") or r.get("overall_assessment") or "").strip()
+                    summ = clean_iteration_summary(
+                        r.get("summary") or r.get("overall_assessment") or ""
+                    )
                     if summ:
                         enriched += f"  - 分析摘要: {summ[:300]}\n"
                     issues = r.get("identified_issues") or r.get("weaknesses") or []
@@ -2214,6 +2414,7 @@ class ReportGenerationAgent:
                 modeling_result=modeling_result if isinstance(modeling_result, dict) else None,
                 actual_summary=str(actual.get("summary") or ""),
                 existing_results=existing_results,
+                small_validation=sv,
             )
             enriched += discussion_md
             if isinstance(result.get("results"), dict):

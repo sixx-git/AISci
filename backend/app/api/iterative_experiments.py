@@ -23,6 +23,8 @@ class CreateExperimentBody(BaseModel):
     constraints: List[str] = Field(default_factory=list)
     executor_type: str = "sandbox"
     max_iterations: int = 10
+    # True: 用户已有数据，跳过 LLM 推荐，直接进入绑定/设计
+    skip_dataset_recommend: bool = False
 
 
 class ReportIdsBody(BaseModel):
@@ -35,6 +37,10 @@ class DesignScriptBody(BaseModel):
 
 class RunModeBody(BaseModel):
     run_mode: str = "smoke_only"
+
+
+class QualityModeBody(BaseModel):
+    quality_mode: str = "draft"
 
 
 class FeedbackBody(BaseModel):
@@ -237,6 +243,17 @@ async def apply_fl_script(project_id: str, experiment_id: str, body: ApplyFlScri
 async def set_run_mode(project_id: str, experiment_id: str, body: RunModeBody):
     try:
         exp = get_iterative_experiment_service().set_run_mode(project_id, experiment_id, body.run_mode)
+        return success_response(exp)
+    except Exception as e:
+        return _err(e)
+
+
+@router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/quality-mode")
+async def set_quality_mode(project_id: str, experiment_id: str, body: QualityModeBody):
+    try:
+        exp = get_iterative_experiment_service().set_quality_mode(
+            project_id, experiment_id, body.quality_mode
+        )
         return success_response(exp)
     except Exception as e:
         return _err(e)

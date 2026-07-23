@@ -74,5 +74,7 @@ class Experiment(BaseModel):
     # 运行模式: smoke_only=小样本验收即完成; full=smoke 后再正式全量/正式样本量推演
     # 空字符串表示跟随全局 EngineConfig.full_dataset_run
     run_mode: str = "smoke_only"
+    # 质量模式: draft=有图且非显著问题即通过; strict=需 promising/success
+    quality_mode: str = "draft"
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())

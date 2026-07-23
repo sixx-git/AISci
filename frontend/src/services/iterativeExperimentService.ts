@@ -7,6 +7,7 @@ import type {
   DataConfig,
   IterativeExperiment,
   IterationRecordMock,
+  QualityMode,
   RunMode,
 } from '@/types/iterativeExperiment';
 
@@ -54,6 +55,7 @@ export const iterativeExperimentService = {
       constraints?: string[];
       executor_type: 'sandbox' | 'simulation';
       max_iterations: number;
+      skip_dataset_recommend?: boolean;
     },
   ): Promise<IterativeExperiment> {
     const { data } = await api.post<ApiResponse<IterativeExperiment>>(
@@ -207,6 +209,18 @@ export const iterativeExperimentService = {
     const { data } = await api.post<ApiResponse<IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/run-mode`,
       { run_mode: runMode },
+    );
+    return unwrap(data);
+  },
+
+  async setQualityMode(
+    projectId: string,
+    experimentId: string,
+    qualityMode: QualityMode,
+  ): Promise<IterativeExperiment> {
+    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/quality-mode`,
+      { quality_mode: qualityMode },
     );
     return unwrap(data);
   },

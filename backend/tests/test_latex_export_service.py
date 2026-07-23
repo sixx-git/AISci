@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from app.services.latex_export_service import (
+    _build_figures_section,
     _build_references_bib,
     _build_thebibliography_section,
     _format_chapter_body,
@@ -56,6 +57,37 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn(r"\item", body)
         self.assertIn("D:/浏览器/allgaps", body)
         self.assertNotIn(r"\allgaps", body)
+
+    def test_format_chapter_body_prose_not_itemize(self):
+        """多行散文不得整段变成 itemize（避免每行一个圆点）。"""
+        text = (
+            "**主要发现。**\n"
+            "已观测到关键指标并形成实验图。\n"
+            "**局限与后续工作。**\n"
+            "当前为 smoke 验证，证据层级较弱。"
+        )
+        body = _format_chapter_body(text)
+        self.assertNotIn(r"\begin{itemize}", body)
+        self.assertNotIn(r"\item", body)
+        self.assertIn(r"\textbf{主要发现。}", body)
+        self.assertIn("证据层级较弱", body)
+
+    def test_format_chapter_body_mixed_list_and_prose(self):
+        text = (
+            "- 执行状态: 成功\n"
+            "- 沙箱图表: 3 张\n"
+            "#### 图题与核心读图要点\n"
+            "1. **混淆矩阵** — 关注对角线。\n"
+            "2. **折线图** — 对比前后半段。\n"
+            "> 以下结果以沙箱验证为准。"
+        )
+        body = _format_chapter_body(text)
+        self.assertIn(r"\begin{itemize}", body)
+        self.assertIn(r"\begin{enumerate}", body)
+        self.assertIn(r"\paragraph{图题与核心读图要点}", body)
+        self.assertIn(r"\textit{", body)
+        # 编号读图要点不应再被塞进 itemize
+        self.assertNotIn(r"\item 1.", body)
 
     def test_build_latex_document_contains_sections(self):
         result = {
@@ -235,6 +267,32 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn("\\begin{thebibliography}", tex)
         self.assertIn("\\bibitem{ref1}", tex)
         self.assertNotIn("\\bibliography{references}", tex)
+
+    def test_figures_section_avoids_figure_h_and_uses_compact_layout(self):
+        """7.3 图表用 minipage+captionof，避免 figure[H] 导致页末大片留白。"""
+        charts = [
+            {
+                "relative_path": "figures/a.png",
+                "title": "图A",
+                "label": "fig:a",
+            },
+            {
+                "relative_path": "figures/b.png",
+                "title": "图B",
+                "label": "fig:b",
+            },
+            {
+                "relative_path": "figures/c.png",
+                "title": "图C",
+                "label": "fig:c",
+            },
+        ]
+        tex = _build_figures_section(charts)
+        self.assertIn("实验图表", tex)
+        self.assertIn(r"\captionof{figure}", tex)
+        self.assertIn(r"0.30\textheight", tex)
+        self.assertNotIn(r"\begin{figure}[H]", tex)
+        self.assertIn(r"\begin{minipage}", tex)
 
 
 if __name__ == "__main__":

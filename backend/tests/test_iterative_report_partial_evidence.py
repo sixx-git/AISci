@@ -89,20 +89,58 @@ def test_enrich_writes_counterexamples_section():
     assert "KeyError" in text or "缺少标签" in text
 
 
-def test_enrich_writes_discussion_section():
+def test_synthesize_includes_narrative_brief():
+    synth = IterativeExperimentService.synthesize_report_fields(_partial_experiment())
+    sv = synth["small_validation"]
+    brief = sv.get("narrative_brief") or {}
+    assert brief.get("evidence_verdict") in {
+        "supported", "inconclusive", "contradicted", "blocked"
+    }
+    assert isinstance(brief.get("iteration_timeline"), list)
+    assert len(brief["iteration_timeline"]) >= 2
+    assert brief["evidence_verdict"] == "inconclusive"  # 有正有负 + partial
+
+
+def test_iteration_narrative_skill_story_arc():
+    from app.skills.report.iteration_narrative_skill import IterationNarrativeSkill
+
+    synth = IterativeExperimentService.synthesize_report_fields(_partial_experiment())
+    narr = IterationNarrativeSkill.build_narrative(small_validation=synth["small_validation"])
+    assert narr.get("story_arc")
+    assert narr.get("evidence_verdict") == "inconclusive"
+    assert narr.get("negative_or_partial_results_paragraph")
+    para = narr["negative_or_partial_results_paragraph"]
+    assert "成功验证" not in para and "显著提升" not in para
+    assert "阶段性" in para or "外推" in para or "试探" in para
+
+
+def test_enrich_includes_iteration_story():
     synth = IterativeExperimentService.synthesize_report_fields(_partial_experiment())
     sv = synth["small_validation"]
     out = ReportGenerationAgent()._enrich_results_with_categorized(
-        {"chapters": {"results": "仅有预期结果占位文字" * 3}},
+        {"chapters": {"results": ""}},
         sv,
         None,
     )
     text = out["chapters"]["results"]
+    assert "迭代演化叙事" in text or "第1轮" in text
     assert "结果分析与讨论" in text
-    assert "主要发现" in text
-    assert "与科学假设的对照" in text
-    assert "局限与后续" in text
-    assert out["results"].get("discussion")
+
+
+def test_align_abstract_uses_verdict():
+    from app.services.report_content_sanitizer import align_paper_abstract
+
+    sv = {
+        "narrative_brief": {"evidence_verdict": "contradicted", "progress": {}},
+        "results": {
+            "result_type_summary": "has_negative_evidence",
+            "actual_results": {"failed_iterations": [{"iteration_number": 1}]},
+        },
+        "sandbox_execution": {"metrics": {}, "partial_run": True},
+    }
+    text = align_paper_abstract("本研究成功验证了假设并显著提升准确率。", sv)
+    assert "成功验证" not in text
+    assert "未能稳定" in text or "尚待" in text or "方法边界" in text
 
 
 def test_enrich_no_evidence_omits_actual_results_heading():

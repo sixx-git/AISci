@@ -202,6 +202,7 @@ class IterativeExperimentService:
                 constraints=[c for c in (payload.get("constraints") or []) if str(c).strip()],
                 executor_type=payload.get("executor_type") or "sandbox",
                 max_iterations=int(payload.get("max_iterations") or 10),
+                skip_dataset_recommend=bool(payload.get("skip_dataset_recommend")),
             )
         except ShaxiangBridgeError:
             raise
@@ -470,6 +471,16 @@ class IterativeExperimentService:
         projected = bridge.set_run_mode(project_id, self._sx_id(exp), run_mode)
         return self._persist_projection(project_id, projected)
 
+    def set_quality_mode(self, project_id: str, experiment_id: str, quality_mode: str) -> Dict[str, Any]:
+        require_shaxiang_enabled()
+        from app.integrations.shaxiang import bridge
+
+        exp = self.get(project_id, experiment_id)
+        if not exp:
+            raise ValueError("实验不存在")
+        projected = bridge.set_quality_mode(project_id, self._sx_id(exp), quality_mode)
+        return self._persist_projection(project_id, projected)
+
     def run_iteration(self, project_id: str, experiment_id: str) -> Dict[str, Any]:
         require_shaxiang_enabled()
         from app.integrations.shaxiang import bridge
@@ -736,11 +747,22 @@ class IterativeExperimentService:
         seen: set,
         iteration_number: int,
         iteration_status: str,
+        overall_assessment: str = "",
     ) -> int:
-        """解析一轮图表并追加；返回新增张数。"""
+        """解析一轮图表并追加；返回新增张数。
+
+        显著问题轮次的图标记为 exclude_from_report，稍后统一过滤。
+        """
         added = 0
         if not isinstance(chart_items, list):
             return 0
+        assessment = (overall_assessment or "").strip().lower()
+        # 执行失败或显著问题 → 默认不进入报告（稍后可保留 1 张诊断图）
+        exclude = (
+            iteration_status in {"failed", "error"}
+            or assessment == "significant_issue"
+        )
+        diagnostic = exclude  # 标记来源，便于挑选一张反例图
         for c in chart_items:
             if not isinstance(c, dict):
                 continue
@@ -765,9 +787,16 @@ class IterativeExperimentService:
                 continue
             seen.add(key)
             plot_id = Path(name or rel or key).stem
-            title = (c.get("note") or name or plot_id).strip()
-            if iteration_status in {"failed", "error"}:
-                title = f"[失败轮次{iteration_number}] {title}"
+            from app.services.report_content_sanitizer import academic_chart_title
+
+            title = academic_chart_title(
+                name=name or plot_id,
+                note=str(c.get("note") or ""),
+                iteration_number=int(iteration_number or 0),
+                iteration_status=str(iteration_status or ""),
+            )
+            if diagnostic:
+                title = f"【反例/失败轮诊断】{title}"
             entry = {
                 "plot_id": plot_id,
                 "title": title,
@@ -776,9 +805,13 @@ class IterativeExperimentService:
                 "url": c.get("url"),
                 "source": "sandbox_execution",
                 "type": "sandbox_plot",
-                "chart_kind": "experiment_result",
+                "chart_kind": "experiment_result" if not diagnostic else "diagnostic_counterexample",
                 "iteration_number": iteration_number,
                 "iteration_status": iteration_status,
+                "overall_assessment": assessment,
+                "quality_flag": "significant_issue" if exclude else (assessment or "ok"),
+                "exclude_from_report": exclude,
+                "is_diagnostic_candidate": diagnostic,
                 "is_generated_from_real_data": True,
                 "source_dataset_id": (primary.get("data_config") or {}).get("source_path")
                 or (primary.get("data_config") or {}).get("file_name")
@@ -818,6 +851,8 @@ class IterativeExperimentService:
                 it_metrics = {}
             analysis = it.get("analysis") if isinstance(it.get("analysis"), dict) else {}
             result = it.get("result") if isinstance(it.get("result"), dict) else {}
+            decision = it.get("decision") if isinstance(it.get("decision"), dict) else {}
+            plan_obj = it.get("plan") if isinstance(it.get("plan"), dict) else {}
             charts = result.get("charts") or []
             n_charts = IterativeExperimentService._append_chart_rows(
                 primary=primary,
@@ -827,6 +862,7 @@ class IterativeExperimentService:
                 seen=seen,
                 iteration_number=it_num,
                 iteration_status=status,
+                overall_assessment=str(analysis.get("overall_assessment") or ""),
             )
             # 成功/部分成功：合并指标；失败但有指标也保留（标明来源）
             if it_metrics:
@@ -835,6 +871,23 @@ class IterativeExperimentService:
                         metrics[f"failed_iter{it_num}_{k}"] = v
                 else:
                     metrics = {**metrics, **it_metrics}
+
+            plan_one_liner = str(
+                plan_obj.get("description")
+                or plan_obj.get("methodology")
+                or plan_obj.get("title")
+                or ""
+            ).strip()[:280]
+            decision_reason = str(
+                decision.get("reason")
+                or decision.get("rationale")
+                or analysis.get("suggested_adjustments")
+                or ""
+            ).strip()
+            if isinstance(analysis.get("suggested_adjustments"), list):
+                decision_reason = decision_reason or "；".join(
+                    str(x) for x in analysis.get("suggested_adjustments")[:3] if x
+                )
 
             round_summary = {
                 "iteration_number": it_num,
@@ -847,6 +900,9 @@ class IterativeExperimentService:
                 "identified_issues": list(analysis.get("identified_issues") or [])[:8],
                 "weaknesses": list(analysis.get("weaknesses") or [])[:6],
                 "overall_assessment": str(analysis.get("overall_assessment") or "")[:400],
+                "plan_summary": plan_one_liner,
+                "decision_reason": decision_reason[:400],
+                "decision_continue": decision.get("continue"),
             }
             is_failed = status in {"failed", "error"} or bool(it.get("error_message"))
             if is_failed:
@@ -888,8 +944,32 @@ class IterativeExperimentService:
                 if failed_rounds
                 else ""
             ),
+            "excluded_charts_count": len(
+                [p for p in chart_rows if isinstance(p, dict) and p.get("exclude_from_report")]
+            ),
         }
-        return metrics, chart_rows, evidence
+        # 显著问题 / 失败轮次：默认剔除；保留最多 1 张诊断图供讨论锚定
+        report_plots: List[Dict[str, Any]] = []
+        diagnostic_kept = False
+        for p in chart_rows:
+            if not isinstance(p, dict):
+                continue
+            if not p.get("exclude_from_report"):
+                report_plots.append(p)
+                continue
+            if not diagnostic_kept and p.get("is_diagnostic_candidate"):
+                kept = dict(p)
+                kept["exclude_from_report"] = False
+                kept["quality_flag"] = "diagnostic_counterexample"
+                kept["chart_kind"] = "diagnostic_counterexample"
+                report_plots.append(kept)
+                diagnostic_kept = True
+        evidence["diagnostic_chart_kept"] = diagnostic_kept
+        evidence["excluded_charts_count"] = max(
+            0,
+            int(evidence.get("excluded_charts_count") or 0) - (1 if diagnostic_kept else 0),
+        )
+        return metrics, report_plots, evidence
 
     @staticmethod
     def _resolve_iteration_charts(primary: Dict[str, Any]) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -898,15 +978,120 @@ class IterativeExperimentService:
         return metrics, plots
 
     @staticmethod
+    def _build_narrative_brief(
+        *,
+        primary: Dict[str, Any],
+        evidence: Dict[str, Any],
+        metrics: Dict[str, Any],
+        has_positive: bool,
+        has_negative: bool,
+        partial_run: bool,
+        smoke: bool,
+        draftish: bool,
+    ) -> Dict[str, Any]:
+        """从迭代轮次构建科研叙事简报（只重组事实，不编造指标）。"""
+        successful = evidence.get("successful_rounds") or []
+        failed = evidence.get("failed_rounds") or []
+        progress = evidence.get("progress") or {}
+        timeline: List[Dict[str, Any]] = []
+        for r in list(successful) + list(failed):
+            if not isinstance(r, dict):
+                continue
+            it_num = int(r.get("iteration_number") or 0)
+            status = str(r.get("status") or "").lower()
+            failed_round = status in {"failed", "error"} or bool(r.get("error_message"))
+            key_metrics = {}
+            raw_m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+            for k, v in list(raw_m.items())[:6]:
+                if str(k).startswith("failed_iter"):
+                    continue
+                key_metrics[str(k)] = v
+            timeline.append(
+                {
+                    "iteration_number": it_num,
+                    "status": status,
+                    "failed_round": failed_round,
+                    "plan_summary": str(r.get("plan_summary") or "")[:280],
+                    "decision_reason": str(r.get("decision_reason") or "")[:400],
+                    "overall_assessment": str(r.get("overall_assessment") or "")[:200],
+                    "key_metrics": key_metrics,
+                    "summary": str(r.get("summary") or "")[:300],
+                }
+            )
+        timeline.sort(key=lambda x: int(x.get("iteration_number") or 0))
+
+        adjustment_chain: List[str] = []
+        for t in timeline:
+            reason = str(t.get("decision_reason") or "").strip()
+            plan = str(t.get("plan_summary") or "").strip()
+            n = t.get("iteration_number")
+            if reason:
+                adjustment_chain.append(f"第{n}轮：{reason[:200]}")
+            elif plan and t.get("failed_round"):
+                adjustment_chain.append(f"第{n}轮尝试「{plan[:120]}」未达成功标准")
+
+        failed_metrics_summary: Dict[str, Any] = {}
+        for k, v in (metrics or {}).items():
+            if str(k).startswith("failed_iter"):
+                failed_metrics_summary[str(k)] = v
+        # 也从失败轮直接摘
+        for r in failed:
+            if not isinstance(r, dict):
+                continue
+            n = r.get("iteration_number")
+            rm = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+            if rm:
+                failed_metrics_summary[f"round_{n}"] = {str(k): v for k, v in list(rm.items())[:8]}
+
+        # evidence_verdict 规则
+        if not timeline and not has_positive and not has_negative:
+            verdict = "blocked"
+        elif has_negative and not has_positive:
+            verdict = "contradicted"
+        elif smoke or partial_run or draftish or (has_positive and has_negative):
+            verdict = "inconclusive"
+        elif has_positive and not has_negative and not partial_run:
+            verdict = "supported"
+        else:
+            verdict = "inconclusive"
+
+        return {
+            "evidence_verdict": verdict,
+            "iteration_timeline": timeline,
+            "adjustment_chain": adjustment_chain[:12],
+            "failed_round_metrics_summary": failed_metrics_summary,
+            "hypothesis": str(primary.get("hypothesis") or "")[:500],
+            "progress": progress,
+            "notes": {
+                "partial_run": partial_run,
+                "smoke": smoke,
+                "draft_needs_adjustment": draftish,
+                "has_positive_evidence": has_positive,
+                "has_negative_evidence": has_negative,
+            },
+        }
+
+    @staticmethod
     def synthesize_report_fields(primary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """把单条迭代实验映射为报告 agent 入参（历史 ed/sv 形状）。
 
         未跑满计划轮次时仍注入已有结果；失败轮次写入 counterexamples。
+        报告侧不注入 analysis_script / 绝对路径 / smoke 运维键。
         """
-        metrics, plots, evidence = IterativeExperimentService._resolve_iteration_evidence(primary)
+        from app.services.report_content_sanitizer import (
+            clean_iteration_summary,
+            display_path_for_report,
+            filter_report_metrics,
+            humanize_error_message,
+            method_boundary_note,
+        )
+
+        raw_metrics, plots, evidence = IterativeExperimentService._resolve_iteration_evidence(primary)
+        metrics = filter_report_metrics(raw_metrics if isinstance(raw_metrics, dict) else {})
         plan = primary.get("initial_plan") or {}
         data_config = primary.get("data_config") or {}
         source_path = data_config.get("source_path") or data_config.get("file_name") or ""
+        source_display = display_path_for_report(source_path)
         source_type = data_config.get("source_type") or ""
         columns = data_config.get("columns") or data_config.get("feature_columns") or []
         target_cols = data_config.get("target_columns") or []
@@ -916,25 +1101,48 @@ class IterativeExperimentService:
         progress = evidence.get("progress") or {}
         failed_rounds = evidence.get("failed_rounds") or []
         successful_rounds = evidence.get("successful_rounds") or []
+        # 净化失败轮次中的堆栈与 smoke 前缀
+        cleaned_failed: List[Dict[str, Any]] = []
+        for r in failed_rounds:
+            if not isinstance(r, dict):
+                continue
+            rr = dict(r)
+            if rr.get("error_message"):
+                rr["error_message"] = humanize_error_message(rr.get("error_message"))
+            if rr.get("summary"):
+                rr["summary"] = clean_iteration_summary(rr.get("summary"))
+            cleaned_failed.append(rr)
+        failed_rounds = cleaned_failed
+        cleaned_ok: List[Dict[str, Any]] = []
+        for r in successful_rounds:
+            if not isinstance(r, dict):
+                continue
+            rr = dict(r)
+            if rr.get("summary"):
+                rr["summary"] = clean_iteration_summary(rr.get("summary"))
+            cleaned_ok.append(rr)
+        successful_rounds = cleaned_ok
+
         has_positive = bool(metrics or plots) or bool(successful_rounds)
         has_negative = bool(failed_rounds)
         has_usable = has_positive or has_negative
         partial_run = not progress.get("completed_full_plan")
+        smoke = "smoke" in str((raw_metrics or {}).get("run_scope") or "").lower()
 
         dataset_desc = (
             (
-                f"数据集路径: {source_path}"
+                f"数据集: {source_display}"
                 + (f"（类型: {source_type}）" if source_type else "")
-                + "。来自迭代实验绑定的真实/本地数据，用于沙箱验证。"
+                + "。来自迭代实验绑定的真实/本地数据，用于初步实验验证。"
             )
-            if source_path
+            if source_display
             else ""
         )
         source_desc = ""
-        if source_path or source_type:
+        if source_display or source_type:
             source_desc = (
                 f"历史/训练数据来源: {source_type or 'local'}；"
-                f"路径或标识: {source_path or '已绑定数据集'}。"
+                f"数据集标识: {source_display or '已绑定数据集'}。"
             )
             if columns:
                 source_desc += f" 可用字段包括: {', '.join(str(c) for c in list(columns)[:12])}。"
@@ -948,6 +1156,8 @@ class IterativeExperimentService:
             )
 
         limitations = "迭代实验引擎产出；详见 iterations。"
+        if smoke:
+            limitations += " 当前为 smoke/小样本可行性验证，不得外推为全量结论。"
         if partial_run:
             limitations += (
                 f" 当前仅完成 {progress.get('current_iteration')}/{progress.get('max_iterations') or '?'} 轮，"
@@ -955,24 +1165,50 @@ class IterativeExperimentService:
             )
         if has_negative:
             limitations += " 含失败轮次，可作为方法验证失败或假设不适用之反例。"
+        # 草稿模式：需调整轮次仍可入报告，但须写明优劣
+        draftish = any(
+            str(r.get("overall_assessment") or "").lower() == "needs_adjustment"
+            for r in successful_rounds
+            if isinstance(r, dict)
+        )
+        if draftish:
+            limitations += (
+                " 部分轮次评估为「需调整」：报告须并列写清优点、局限与可改进点，"
+                "不得包装为最终严谨结论。"
+            )
+        excluded_n = int((evidence.get("excluded_charts_count") or 0))
+        if excluded_n:
+            limitations += f" 已剔除 {excluded_n} 张显著问题/失败轮次图表，不写入正文图区。"
+
+        boundary = method_boundary_note(
+            {"sandbox_execution": {"partial_run": partial_run, "metrics": raw_metrics}},
+            {"experiment_spec": {"feature_columns": columns}},
+        )
+        methods_text = str(plan.get("methodology") or "").strip()
+        if methods_text and boundary not in methods_text:
+            methods_text = f"{methods_text}\n\n【验证边界】{boundary}"
+        elif not methods_text:
+            methods_text = f"【验证边界】{boundary}"
 
         experiment_design = {
             "hypothesis": primary.get("hypothesis"),
-            "methods": plan.get("methodology") or "",
+            "methods": methods_text,
             "baselines": "baseline vs proposed (iterative experiment)",
             "metrics": str(metrics.get("primary_metric") or metrics.get("accuracy") or "accuracy"),
             "experimental_steps": plan.get("description") or "",
             "expected_results": "; ".join(plan.get("success_criteria") or []),
             "limitations": limitations,
-            "datasets": dataset_desc or source_path or "",
+            "datasets": dataset_desc or source_display or "",
             "source_data": source_desc or source_type or "",
             "target_data": target_desc,
+            "method_boundary": boundary,
             "experiment_spec": {
                 "primary_metric": metrics.get("primary_metric") or "accuracy",
                 "task_type": "classification",
                 "feature_columns": columns,
             },
-            "analysis_script": plan.get("analysis_script") or "",
+            # 不向报告 LLM 注入分析脚本全文，避免代码痕迹泄漏
+            "analysis_script": "",
             "data_requirements": {
                 "uploaded_dataset_count": 1 if data_config else 0,
                 "upload_status": "ready" if data_config else "missing",
@@ -1011,6 +1247,9 @@ class IterativeExperimentService:
             )
         else:
             summary = "迭代实验尚未产出可引用的指标、图表或失败反例。"
+        if smoke:
+            summary = "小样本可行性验证（smoke）。" + summary
+        summary = clean_iteration_summary(summary)
 
         if has_positive:
             result_type = "has_actual_results"
@@ -1019,22 +1258,47 @@ class IterativeExperimentService:
         else:
             result_type = "none"
 
+        # 供证据检测保留 run_scope，但正文 metrics 已过滤
+        evidence_for_flags = dict(evidence)
+        evidence_for_flags["failed_rounds"] = failed_rounds
+        evidence_for_flags["successful_rounds"] = successful_rounds
+
         actual_results = {
             "data_source": "sandbox_execution",
             "sandbox_execution": sandbox_execution,
             "sandbox_metrics": metrics,
             "sandbox_plots": plots,
-            "iteration_evidence": evidence,
+            "iteration_evidence": evidence_for_flags,
             "failed_iterations": failed_rounds,
             "successful_iterations": successful_rounds,
             "counterexamples": failed_rounds,
             "summary": summary,
         }
+
+        narrative_brief = IterativeExperimentService._build_narrative_brief(
+            primary=primary,
+            evidence=evidence_for_flags,
+            metrics=raw_metrics if isinstance(raw_metrics, dict) else {},
+            has_positive=has_positive,
+            has_negative=has_negative,
+            partial_run=partial_run,
+            smoke=smoke,
+            draftish=draftish,
+        )
+
         small_validation = {
             "hypothesis": primary.get("hypothesis"),
             "validation_status": "completed" if progress.get("completed_full_plan") else "partial",
             "has_real_data": 1 if data_config else 0,
-            "sandbox_execution": sandbox_execution,
+            "narrative_brief": narrative_brief,
+            "sandbox_execution": {
+                **sandbox_execution,
+                # evidence_flags 读 raw run_scope
+                "metrics": {
+                    **metrics,
+                    **({"run_scope": raw_metrics.get("run_scope")} if isinstance(raw_metrics, dict) and raw_metrics.get("run_scope") else {}),
+                },
+            },
             "artifacts": {"metrics": metrics, "plots": plots},
             "results": {
                 "actual_results": actual_results,

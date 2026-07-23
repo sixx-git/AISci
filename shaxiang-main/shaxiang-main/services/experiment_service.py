@@ -199,6 +199,19 @@ class ExperimentService:
         logger.info("实验 %s run_mode=%s", experiment_id[:8], mode)
         return experiment
 
+    def set_quality_mode(self, experiment_id: str, quality_mode: str) -> Experiment:
+        """设置质量模式: draft | strict"""
+        from core.quality_mode import normalize_quality_mode
+
+        mode = normalize_quality_mode(quality_mode)
+        experiment = self.repository.get_experiment(experiment_id)
+        if not experiment:
+            raise ValueError(f"实验不存在: {experiment_id}")
+        experiment.quality_mode = mode
+        self.repository.update_experiment(experiment)
+        logger.info("实验 %s quality_mode=%s", experiment_id[:8], mode)
+        return experiment
+
     def submit_feedback(self, experiment_id: str, feedback: str):
         """提交人工反馈（标记为待落实，下一轮迭代或重设计会解锁脚本）"""
         experiment = self.repository.get_experiment(experiment_id)

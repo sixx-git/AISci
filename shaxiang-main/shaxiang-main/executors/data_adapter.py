@@ -333,35 +333,32 @@ class UploadedDataAdapter(BaseDataAdapter):
 
 
 class DirectoryAdapter(BaseDataAdapter):
-    """目录级数据集适配器 (支持预置 Profile 或自动识别)"""
+    """目录级数据集适配器 — 委托 DirectoryLoader（统一扫描/合并逻辑）。"""
     adapter_type = "directory"
 
     def load(self, config: DataConfig) -> pd.DataFrame:
-        from executors.dataset_profile import get_profile, DatasetProfile
+        from executors.directory_loader import DirectoryLoader
 
-        root_dir = Path(config.source_path)
-        if not root_dir.exists():
-            raise FileNotFoundError(f"目录不存在: {config.source_path}")
-
-        if config.profile_name and config.profile_name != "AutoDetect":
-            profile = get_profile(config.profile_name)
-        elif config.profile_json:
-            import json
-            profile_dict = json.loads(config.profile_json)
-            profile = DatasetProfile.from_dict(profile_dict)
-        else:
-            raise ValueError("directory 类型需要指定 profile_name 或 profile_json")
-
-        return self._load_with_profile(root_dir, profile)
+        return DirectoryLoader().load(config)
 
     def _load_with_profile(self, root_dir: Path, profile: 'DatasetProfile') -> pd.DataFrame:
         import re
 
         all_dfs = []
-        files = list(root_dir.glob(profile.scan_pattern))
+        from executors.glob_utils import glob_files
+
+        files = glob_files(
+            root_dir,
+            profile.scan_pattern or "**/*",
+            getattr(profile, "file_extensions", None),
+            getattr(profile, "exclude_patterns", None),
+        )
 
         if not files:
-            raise ValueError(f"在 {root_dir} 中未找到匹配 {profile.scan_pattern} 的文件")
+            raise ValueError(
+                f"在 {root_dir} 中未找到匹配 {profile.scan_pattern} 的文件"
+                f"（extensions={list(getattr(profile, 'file_extensions', None) or [])}）"
+            )
 
         for file_path in files:
             if not file_path.is_file():
@@ -514,6 +511,14 @@ ADAPTER_REGISTRY: dict[str, BaseDataAdapter] = {
     "uploaded": UploadedDataAdapter(),
     "directory": DirectoryAdapter(),
 }
+
+# 热重载后仍强制使用 DirectoryLoader（避免回退到旧 DirectoryAdapter 实现）
+try:
+    from executors.directory_loader import DirectoryLoader as _DirectoryLoader
+
+    ADAPTER_REGISTRY["directory"] = _DirectoryLoader()
+except Exception:
+    pass
 
 
 def get_adapter(source_type: str) -> BaseDataAdapter:

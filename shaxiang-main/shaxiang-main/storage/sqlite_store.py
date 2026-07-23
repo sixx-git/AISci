@@ -80,6 +80,7 @@ class SQLiteRepository(Repository):
             ("human_feedback", "TEXT"),
             ("feedback_status", "TEXT NOT NULL DEFAULT 'none'"),
             ("run_mode", "TEXT NOT NULL DEFAULT 'smoke_only'"),
+            ("quality_mode", "TEXT NOT NULL DEFAULT 'draft'"),
         ]
         for col_name, col_def in migration_cols:
             try:
@@ -100,8 +101,9 @@ class SQLiteRepository(Repository):
                     max_iterations, current_iteration, initial_plan, hypothesis,
                     dataset_recommendations, current_data_config, phase,
                     data_config, human_feedback, feedback_status, run_mode,
+                    quality_mode,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     experiment.id,
                     experiment.title,
@@ -124,6 +126,7 @@ class SQLiteRepository(Repository):
                     getattr(experiment, 'human_feedback', None),
                     getattr(experiment, 'feedback_status', 'none'),
                     getattr(experiment, 'run_mode', None) or 'smoke_only',
+                    getattr(experiment, 'quality_mode', None) or 'draft',
                     experiment.created_at,
                     experiment.updated_at,
                 ),
@@ -280,6 +283,11 @@ class SQLiteRepository(Repository):
                 row["run_mode"]
                 if "run_mode" in row.keys() and row["run_mode"]
                 else "smoke_only"
+            ),
+            quality_mode=(
+                row["quality_mode"]
+                if "quality_mode" in row.keys() and row["quality_mode"]
+                else "draft"
             ),
         )
 

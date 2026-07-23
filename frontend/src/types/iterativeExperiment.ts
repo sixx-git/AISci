@@ -21,6 +21,8 @@ export type ExecutorType = 'sandbox' | 'simulation';
 
 export type RunMode = 'smoke_only' | 'full';
 
+export type QualityMode = 'draft' | 'strict';
+
 export type DataSourceType = 'uploaded' | 'directory' | 'local_csv' | 'local_json' | 'huggingface';
 
 export interface DatasetRecommendation {
@@ -124,6 +126,7 @@ export interface IterativeExperiment {
   phase: IterativeExperimentPhase;
   status: IterativeExperimentStatus;
   run_mode: RunMode;
+  quality_mode?: QualityMode;
   dataset_recommendations: DatasetRecommendation[] | null;
   data_config: DataConfig | null;
   initial_plan: ExperimentPlanMock | null;

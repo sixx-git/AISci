@@ -37,7 +37,13 @@ PROFILE_OUTPUT_SCHEMA = {
             "type": "string",
             "description": "数据模态: tabular | image | audio | mixed",
         },
-        "scan_pattern": {"type": "string", "description": "glob 扫描模式，如 '**/*.jpg' 或 '**/*.txt'"},
+        "scan_pattern": {
+            "type": "string",
+            "description": (
+                "glob 扫描模式，必须可被 Python pathlib 直接使用，"
+                "如 '**/*.csv' 或 '**/*.txt'；禁止 '{csv,txt}' 花括号写法"
+            ),
+        },
         "file_extensions": {
             "type": "array",
             "items": {"type": "string"},
@@ -119,12 +125,241 @@ class DatasetProfiler:
         )
 
         profile = self._dict_to_profile(raw_dict, inventory)
+        profile = self._ensure_scan_matches(profile, root_dir, inventory)
         logger.info(
-            "自动识别数据集格式: %s (modality=%s)",
+            "自动识别数据集格式: %s (modality=%s, scan=%s)",
             profile.name,
             profile.modality,
+            profile.scan_pattern,
         )
         return profile
+
+    def _ensure_scan_matches(
+        self,
+        profile: DatasetProfile,
+        root_dir: Path,
+        inventory: dict,
+    ) -> DatasetProfile:
+        """保证 scan_pattern 在目录上能命中文件；修复 brace glob / 过严扩展名。"""
+        from executors.glob_utils import expand_brace_globs, glob_files, normalize_extensions
+
+        # 规范化扩展名
+        profile.file_extensions = normalize_extensions(profile.file_extensions)
+        profile.media_extensions = normalize_extensions(profile.media_extensions)
+
+        # 展开花括号写入 canonical 单模式列表（保留第一个作主模式，其余靠扩展名覆盖）
+        expanded = expand_brace_globs(profile.scan_pattern or "**/*")
+        if len(expanded) > 1:
+            # 多模式：改用 **/* + 从花括号提取的扩展名，避免再次依赖 brace
+            inferred_exts = []
+            for pat in expanded:
+                suffix = Path(pat).suffix.lower()
+                if suffix and suffix not in inferred_exts:
+                    inferred_exts.append(suffix)
+            if inferred_exts:
+                if (profile.modality or "").lower() in {"image", "audio"}:
+                    profile.media_extensions = profile.media_extensions or inferred_exts
+                    profile.file_extensions = profile.file_extensions or inferred_exts
+                else:
+                    profile.file_extensions = profile.file_extensions or inferred_exts
+                profile.scan_pattern = "**/*"
+            else:
+                profile.scan_pattern = expanded[0]
+        elif expanded:
+            profile.scan_pattern = expanded[0]
+
+        exts = profile.media_extensions or profile.file_extensions or None
+        hits = glob_files(
+            root_dir,
+            profile.scan_pattern,
+            exts if (profile.modality or "").lower() in {"image", "audio", "mixed"} else profile.file_extensions,
+            profile.exclude_patterns,
+        )
+        if hits and self._hits_look_tabular_readable(hits, profile):
+            # 同 stem 同时有 csv/txt 时：txt 常为空格分隔副本，逗号读会整表失败 → 强制优先 csv
+            profile = self._prefer_csv_twins(profile, root_dir, inventory)
+            return profile
+
+        if hits:
+            logger.warning(
+                "AutoDetect scan 命中不可解析文件 (pattern=%s, exts=%s, sample=%s)，回退表格扩展名",
+                profile.scan_pattern,
+                profile.file_extensions,
+                [h.name for h in hits[:5]],
+            )
+        else:
+            logger.warning(
+                "AutoDetect scan 无命中 (pattern=%s, exts=%s)，按目录统计回退",
+                profile.scan_pattern,
+                profile.file_extensions,
+            )
+        counts = inventory.get("counts") or {}
+        modality = (profile.modality or inventory.get("guessed_modality") or "tabular").lower()
+
+        if modality in {"image", "audio", "mixed"}:
+            fallbacks = [
+                ("**/*", [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"] if modality != "audio"
+                 else [".wav", ".mp3", ".flac", ".ogg", ".m4a"]),
+            ]
+            for pat, cand_exts in fallbacks:
+                hits = glob_files(root_dir, pat, cand_exts, profile.exclude_patterns)
+                if hits:
+                    profile.scan_pattern = pat
+                    profile.media_extensions = cand_exts
+                    profile.file_extensions = cand_exts
+                    return profile
+        else:
+            # 表格：优先 csv（IGT 等同时有 csv/txt 副本时避免空花括号）
+            candidates = [
+                ("**/*.csv", [".csv"]),
+                ("**/*.tsv", [".tsv"]),
+                ("**/*.txt", [".txt"]),
+                ("**/*", [".csv", ".txt", ".tsv", ".dat"]),
+            ]
+            # 若目录几乎只有 txt，先试 txt
+            if counts.get("tabular") and not any(
+                str(p).lower().endswith(".csv") for p in (inventory.get("examples") or {}).get("tabular") or []
+            ):
+                candidates = [
+                    ("**/*.txt", [".txt"]),
+                    ("**/*.csv", [".csv"]),
+                    ("**/*", [".csv", ".txt", ".tsv", ".dat"]),
+                ]
+            for pat, cand_exts in candidates:
+                hits = glob_files(root_dir, pat, cand_exts, profile.exclude_patterns)
+                if hits:
+                    profile.scan_pattern = pat
+                    profile.file_extensions = cand_exts
+                    # IGT 等宽表 CSV 通常有表头
+                    if pat.endswith(".csv") and profile.has_header is False:
+                        # 仅在未明确探测时放宽：有 header 的宽表更常见
+                        sample = hits[0]
+                        try:
+                            head = sample.read_text(encoding="utf-8", errors="ignore").splitlines()[:1]
+                            if head and any(c.isalpha() for c in head[0]):
+                                profile.has_header = True
+                                if profile.delimiter in {"", " "}:
+                                    profile.delimiter = ","
+                        except Exception:
+                            pass
+                    return profile
+
+        return profile
+
+    def _prefer_csv_twins(
+        self,
+        profile: DatasetProfile,
+        root_dir: Path,
+        inventory: dict,
+    ) -> DatasetProfile:
+        """
+        若目录存在成对的 .csv/.txt（同 stem），且当前 Profile 只扫 txt 或混合扫到 txt，
+        则改为优先 .csv + 逗号分隔。避免「带引号空格分隔 txt」被当成逗号表读空。
+        """
+        from executors.glob_utils import glob_files
+
+        modality = (profile.modality or "").lower()
+        if modality in {"image", "audio", "mixed"}:
+            return profile
+
+        examples = (inventory.get("examples") or {}).get("tabular") or []
+        names = [str(x).lower().replace("\\", "/") for x in examples]
+        # 也扫一眼根目录，inventory 可能只抽了少量样本
+        try:
+            for p in root_dir.iterdir():
+                if p.is_file() and p.suffix.lower() in {".csv", ".txt"}:
+                    names.append(p.name.lower())
+        except Exception:
+            pass
+
+        stems_csv = {Path(n).stem for n in names if n.endswith(".csv")}
+        stems_txt = {Path(n).stem for n in names if n.endswith(".txt")}
+        if not (stems_csv & stems_txt):
+            return profile
+
+        cur_exts = [e.lower() for e in (profile.file_extensions or [])]
+        only_txt = cur_exts == [".txt"] or (
+            bool(cur_exts) and ".csv" not in cur_exts and ".txt" in cur_exts
+        )
+        mixed_with_txt = ".txt" in cur_exts and ".csv" in cur_exts
+        if not (only_txt or mixed_with_txt or not cur_exts):
+            return profile
+
+        csv_hits = glob_files(root_dir, "**/*.csv", [".csv"], profile.exclude_patterns)
+        if not csv_hits:
+            return profile
+
+        logger.info(
+            "检测到 csv/txt 成对副本，AutoDetect 改为优先 csv（原 scan=%s exts=%s）",
+            profile.scan_pattern,
+            profile.file_extensions,
+        )
+        profile.scan_pattern = "**/*.csv"
+        profile.file_extensions = [".csv"]
+        if not profile.delimiter or profile.delimiter in {" ", "\\s+", r"\s+"}:
+            profile.delimiter = ","
+        # 引号字段的宽表几乎总有表头
+        if profile.has_header is False:
+            try:
+                head = csv_hits[0].read_text(encoding="utf-8", errors="ignore").splitlines()[:1]
+                if head and any(c.isalpha() for c in head[0]):
+                    profile.has_header = True
+            except Exception:
+                profile.has_header = True
+        # 双引号绝不是注释符
+        if (profile.comment_prefix or "").strip() in {'"', "'"}:
+            profile.comment_prefix = ""
+        return profile
+
+    # 不可当表格 CSV 解析的扩展名（LLM 常误扫 .rdata）
+    _NON_TABULAR_EXTS = {
+        ".rdata", ".rds", ".rda", ".r", ".zip", ".gz", ".7z", ".tar",
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff",
+        ".wav", ".mp3", ".flac", ".ogg", ".m4a", ".pdf", ".doc", ".docx",
+        ".pkl", ".pickle", ".h5", ".hdf5", ".parquet", ".feather",
+        ".ds_store", ".exe", ".dll",
+    }
+
+    def _hits_look_tabular_readable(
+        self,
+        hits: list,
+        profile: "DatasetProfile",
+    ) -> bool:
+        """glob 命中不等于可解析：.rdata 等应触发回退。"""
+        modality = (getattr(profile, "modality", None) or "tabular").lower()
+        if modality in {"image", "audio", "mixed"}:
+            return bool(hits)
+
+        readable_exts = {".csv", ".tsv", ".txt", ".dat", ".json", ".jsonl"}
+        candidates = []
+        for h in hits:
+            ext = Path(h).suffix.lower()
+            if ext in self._NON_TABULAR_EXTS:
+                continue
+            if ext in readable_exts or not ext:
+                candidates.append(h)
+        if not candidates:
+            return False
+
+        # 轻量探测：至少一个样本能读出列
+        import pandas as pd
+
+        seps = [getattr(profile, "delimiter", None) or ",", ",", "\t", r"\s+"]
+        for path in candidates[:5]:
+            for sep in seps:
+                try:
+                    df = pd.read_csv(
+                        path,
+                        sep=sep,
+                        nrows=3,
+                        engine="python",
+                        on_bad_lines="skip",
+                    )
+                    if df is not None and not df.empty and df.shape[1] >= 1:
+                        return True
+                except Exception:
+                    continue
+        return False
 
     # ==================== 采样与探测 ====================
 
@@ -399,9 +634,11 @@ class DatasetProfiler:
 输出硬约束:
 1. 只输出符合 Schema 的 JSON 数据实例（不要输出 Schema 自身）
 2. image/audio 时: media_extensions 必填；path_column 默认 file_path；label_column 尽量给出
-3. ImageFolder（无清单）: modality=image, manifest_pattern="", scan_pattern="**/*.{jpg,png,...}", path_field_names 用 label（父目录）
+3. ImageFolder（无清单）: modality=image, manifest_pattern="", scan_pattern="**/*", media_extensions=[".jpg",".png",...]；path_field_names 用 label（父目录）
 4. 有 labels.csv: 填写 manifest_pattern，并推断路径列名到 path_column
-5. tabular 行为与以往一致（delimiter/has_header/filename_pattern 等）"""
+5. tabular: scan_pattern 只能用 pathlib 支持的写法，如 "**/*.csv" 或 "**/*.txt"；**禁止** "**/*.{csv,txt}" 花括号语法；多种扩展名请写 scan_pattern="**/*" 并在 file_extensions 列出
+6. 目录中若同时存在 .rdata/.rds 与 .csv/.txt：必须扫描 .csv/.txt，禁止只扫 .rdata（R 二进制无法被本加载器解析）
+7. tabular 行为与以往一致（delimiter/has_header/filename_pattern 等）"""
 
     def _build_prompt(
         self,
@@ -461,6 +698,21 @@ class DatasetProfiler:
             file_exts = list(media_exts)
 
         scan = data.get("scan_pattern") or "**/*"
+        # 去掉 LLM 常见的花括号写法，交由 _ensure_scan_matches 规范化
+        if "{" in str(scan):
+            from executors.glob_utils import expand_brace_globs, normalize_extensions
+
+            expanded = expand_brace_globs(str(scan))
+            inferred = []
+            for pat in expanded:
+                suf = Path(pat).suffix.lower()
+                if suf:
+                    inferred.append(suf)
+            if inferred:
+                file_exts = normalize_extensions(file_exts or inferred)
+                scan = "**/*"
+            elif expanded:
+                scan = expanded[0]
         if modality == "image" and scan in {"**/*", ""}:
             scan = "**/*.*"
         if modality == "audio" and scan in {"**/*", ""}:
@@ -478,7 +730,11 @@ class DatasetProfiler:
             delimiter=data.get("delimiter", ","),
             has_header=data.get("has_header", True if modality != "tabular" else False),
             column_names=data.get("column_names", []) or [],
-            comment_prefix=data.get("comment_prefix", "") or "",
+            comment_prefix=(
+                ""
+                if (str(data.get("comment_prefix", "") or "").strip() in {'"', "'"})
+                else (data.get("comment_prefix", "") or "")
+            ),
             skip_rows=int(data.get("skip_rows") or 0),
             label_column=data.get("label_column", "") or ("label" if modality in {"image", "audio"} else ""),
         )

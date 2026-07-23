@@ -474,8 +474,9 @@ def repair_plan_until_smoke(
     data_config: Optional[dict],
     column_contract: dict,
     smoke_sample_size: int = 10000,
-    max_attempts: int = 20,
+    max_attempts: int = 10,
     require_charts: bool = True,
+    require_numeric_metrics: bool = True,
     on_exhausted: Literal["raise", "rollback"] = "raise",
     rollback_plan: Optional[ExperimentPlan] = None,
     human_feedback: str = "",
@@ -517,6 +518,7 @@ def repair_plan_until_smoke(
                 data_config=data_config,
                 sample_size=smoke_sample_size,
                 require_charts=require_charts,
+                require_numeric_metrics=require_numeric_metrics,
                 stratified=True,
             )
         if ok:
@@ -587,6 +589,7 @@ def repair_plan_until_smoke(
             data_config=data_config,
             sample_size=smoke_sample_size,
             require_charts=require_charts,
+            require_numeric_metrics=require_numeric_metrics,
             stratified=True,
         )
         if ok:

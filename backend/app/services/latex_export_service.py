@@ -54,6 +54,52 @@ _LATEX_SPECIAL_CHARS = {
     "^": r"\textasciicircum{}",
 }
 
+# Unicode 希腊字母 / 常用数学符号 → LaTeX（避免 ζ 等丢失或乱码）
+_UNICODE_MATH_TO_LATEX = {
+    "α": r"$\alpha$",
+    "β": r"$\beta$",
+    "γ": r"$\gamma$",
+    "δ": r"$\delta$",
+    "ε": r"$\epsilon$",
+    "ζ": r"$\zeta$",
+    "η": r"$\eta$",
+    "θ": r"$\theta$",
+    "ι": r"$\iota$",
+    "κ": r"$\kappa$",
+    "λ": r"$\lambda$",
+    "μ": r"$\mu$",
+    "ν": r"$\nu$",
+    "ξ": r"$\xi$",
+    "π": r"$\pi$",
+    "ρ": r"$\rho$",
+    "σ": r"$\sigma$",
+    "τ": r"$\tau$",
+    "φ": r"$\phi$",
+    "χ": r"$\chi$",
+    "ψ": r"$\psi$",
+    "ω": r"$\omega$",
+    "Γ": r"$\Gamma$",
+    "Δ": r"$\Delta$",
+    "Θ": r"$\Theta$",
+    "Λ": r"$\Lambda$",
+    "Ξ": r"$\Xi$",
+    "Π": r"$\Pi$",
+    "Σ": r"$\Sigma$",
+    "Φ": r"$\Phi$",
+    "Ψ": r"$\Psi$",
+    "Ω": r"$\Omega$",
+    "²": r"$^{2}$",
+    "³": r"$^{3}$",
+    "±": r"$\pm$",
+    "×": r"$\times$",
+    "≤": r"$\leq$",
+    "≥": r"$\geq$",
+    "≠": r"$\neq$",
+    "≈": r"$\approx$",
+    "∞": r"$\infty$",
+    "·": r"$\cdot$",
+}
+
 # 允许在正文中保留的「无参数」LaTeX 命令（避免把 Windows 路径 \Users \allgaps 当命令）
 _SAFE_BARE_LATEX_CMDS = frozenset(
     {
@@ -63,6 +109,7 @@ _SAFE_BARE_LATEX_CMDS = frozenset(
         "gamma",
         "delta",
         "epsilon",
+        "zeta",
         "theta",
         "lambda",
         "mu",
@@ -226,6 +273,15 @@ def _unescape_math_inner(inner: str) -> str:
     )
 
 
+def _replace_unicode_math(text: str) -> str:
+    if not text:
+        return text
+    out: List[str] = []
+    for ch in text:
+        out.append(_UNICODE_MATH_TO_LATEX.get(ch, ch))
+    return "".join(out)
+
+
 def escape_latex(text: Any) -> str:
     """转义 LaTeX 特殊字符，保留 $...$ 行内公式与已有安全 LaTeX 命令。"""
     if text is None:
@@ -233,7 +289,11 @@ def escape_latex(text: Any) -> str:
     s = str(text).replace("\\$", "$")
     if not s.strip():
         return ""
+    # 去掉替换字符与控制符
+    s = re.sub(r"[\ufffd\u0000-\u0008\u000b\u000c\u000e-\u001f]", "", s)
     s = _normalize_windows_paths_for_latex(s)
+    s = _replace_unicode_math(s)
+    # 指标名中的下划线：在非数学片段中由 _escape_plain_latex 转义为 \_
     s = _promote_inline_math(s)
     if "$" not in s:
         return _escape_plain_latex(s)
@@ -453,10 +513,6 @@ def _markdown_to_latex_body(text: str) -> str:
     return "".join(parts)
 
 
-def _is_numbered_list_lines(lines: List[str]) -> bool:
-    return bool(lines) and all(re.match(r"^\d+\.\s", ln.strip()) for ln in lines if ln.strip())
-
-
 def _format_enumerate(lines: List[str]) -> str:
     items: List[str] = []
     for raw in lines:
@@ -470,31 +526,83 @@ def _format_enumerate(lines: List[str]) -> str:
     return "\\begin{enumerate}\n" + "\n".join(items) + "\n\\end{enumerate}\n"
 
 
+_BULLET_LINE_RE = re.compile(r"^[-*]\s+")
+_NUMBERED_LINE_RE = re.compile(r"^\d+\.\s+")
+_MD_HEADING_LINE_RE = re.compile(r"^#{1,6}\s+")
+_BLOCKQUOTE_LINE_RE = re.compile(r"^>\s?")
+
+
+def _line_kind(line: str) -> str:
+    """区分列表项 / 标题 / 引用 / 普通段落，避免散文被误标成 itemize。"""
+    s = (line or "").strip()
+    if not s:
+        return "empty"
+    if _MD_HEADING_LINE_RE.match(s):
+        return "heading"
+    if _BLOCKQUOTE_LINE_RE.match(s):
+        return "quote"
+    if _BULLET_LINE_RE.match(s):
+        return "bullet"
+    if _NUMBERED_LINE_RE.match(s):
+        return "numbered"
+    return "prose"
+
+
+def _format_inline_line(line: str) -> str:
+    return _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
+
+
 def _format_paragraph(value: Any) -> str:
     lines = _normalize_lines(value)
     if not lines:
         return ""
     if len(lines) == 1 and "###" not in lines[0]:
-        return f"{_markdown_to_latex_body(lines[0])}\n\n"
+        return f"{_format_inline_line(lines[0])}\n\n"
     return _format_chapter_body(value)
 
 
 def _format_text_block(text: str) -> str:
-    """将一段纯文本格式化为段落 / itemize / enumerate。"""
+    """将一段纯文本格式化为段落 / itemize / enumerate。
+
+    仅真实 `-`/`*` 列表与 `1.` 编号列表使用条目符号；普通多行散文保持段落，
+    避免「每行一个圆点」的阅读体验。
+    """
     lines = _normalize_lines(text)
     if not lines:
         return ""
-    if _is_numbered_list_lines(lines):
-        return _format_enumerate(lines)
-    bulletish = [
-        ln[2:].strip() if ln.startswith(("- ", "* ")) else ln
-        for ln in lines
-    ]
-    if len(lines) > 1 or any(ln.startswith(("- ", "* ")) for ln in lines):
-        return _format_itemize(bulletish)
-    line = lines[0]
-    body = _markdown_to_latex_body(line) if "**" in line else escape_latex(line)
-    return f"{body}\n\n"
+
+    parts: List[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        kind = _line_kind(lines[i])
+        if kind == "bullet":
+            group: List[str] = []
+            while i < n and _line_kind(lines[i]) == "bullet":
+                group.append(_BULLET_LINE_RE.sub("", lines[i], count=1).strip())
+                i += 1
+            parts.append(_format_itemize(group))
+        elif kind == "numbered":
+            group = []
+            while i < n and _line_kind(lines[i]) == "numbered":
+                group.append(lines[i])
+                i += 1
+            parts.append(_format_enumerate(group))
+        elif kind == "heading":
+            title = _MD_HEADING_LINE_RE.sub("", lines[i]).strip()
+            if title:
+                parts.append(f"\\paragraph{{{escape_latex(title)}}}\n\n")
+            i += 1
+        elif kind == "quote":
+            body = _BLOCKQUOTE_LINE_RE.sub("", lines[i]).strip()
+            if body:
+                parts.append(f"\\textit{{{_format_inline_line(body)}}}\n\n")
+            i += 1
+        else:
+            while i < n and _line_kind(lines[i]) == "prose":
+                parts.append(f"{_format_inline_line(lines[i])}\n\n")
+                i += 1
+    return "".join(parts)
 
 
 def _format_chapter_body(value: Any) -> str:
@@ -776,8 +884,9 @@ def _reference_item_key(item: Dict[str, Any]) -> str:
     if doi:
         return f"doi:{doi}"
     title = str(item.get("title") or item.get("paper_title") or "").strip().lower()
+    year = str(item.get("year") or item.get("publication_year") or "").strip()
     if title:
-        return f"title:{title}"
+        return f"title:{title}|{year}" if year else f"title:{title}"
     return ""
 
 
@@ -1105,18 +1214,47 @@ def _prepare_figure_files(
 
 
 def _build_figures_section(figures: List[Dict[str, str]]) -> str:
+    """紧凑输出实验图表，避免 figure[H] + 大图导致半页空白。"""
     if not figures:
         return ""
-    parts = ["\\subsection{数据图表}\n\n"]
-    for fig in figures:
-        parts.append(
-            "\\begin{figure}[H]\n"
+
+    parts = [
+        "\\subsection{实验图表}\n\n",
+        "% 使用 minipage + captionof，避免 float[H] 在页末强行推图造成大片留白\n",
+        "\\begingroup\\captionsetup{font=small,skip=4pt}\n",
+    ]
+
+    def _one_panel(fig: Dict[str, str], width: str, max_h: str) -> str:
+        return (
+            f"\\begin{{minipage}}[t]{{{width}}}\n"
             "    \\centering\n"
-            f"    \\includegraphics[width=0.85\\textwidth]{{{fig['relative_path']}}}\n"
-            f"    \\caption{{{escape_latex(fig['title'])}}}\n"
+            f"    \\includegraphics[width=\\linewidth,height={max_h},keepaspectratio]"
+            f"{{{fig['relative_path']}}}\n"
+            f"    \\captionof{{figure}}{{{escape_latex(fig['title'])}}}\n"
             f"    \\label{{{fig['label']}}}\n"
-            "\\end{figure}\n\n"
+            "\\end{minipage}\n"
         )
+
+    i = 0
+    n = len(figures)
+    while i < n:
+        left = figures[i]
+        # 两张并排；最后一张单独时略加宽但仍限高
+        if i + 1 < n:
+            right = figures[i + 1]
+            parts.append("\\noindent\n")
+            parts.append(_one_panel(left, "0.48\\textwidth", "0.30\\textheight"))
+            parts.append("\\hfill\n")
+            parts.append(_one_panel(right, "0.48\\textwidth", "0.30\\textheight"))
+            parts.append("\\par\\vspace{0.8em}\n\n")
+            i += 2
+        else:
+            parts.append("\\noindent\n")
+            parts.append(_one_panel(left, "0.72\\textwidth", "0.32\\textheight"))
+            parts.append("\\par\\vspace{0.6em}\n\n")
+            i += 1
+
+    parts.append("\\endgroup\n\n")
     return "".join(parts)
 
 

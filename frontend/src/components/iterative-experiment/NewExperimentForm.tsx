@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, Sparkles } from 'lucide-react';
+import { ArrowLeft, Database, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import type { ExecutorType } from '@/types/iterativeExperiment';
@@ -15,6 +15,7 @@ interface NewExperimentFormProps {
     constraints: string[];
     executor_type: ExecutorType;
     max_iterations: number;
+    skip_dataset_recommend?: boolean;
   }) => void;
 }
 
@@ -31,10 +32,21 @@ export function NewExperimentForm({
   const [researchGoal, setResearchGoal] = useState('');
   const [constraints, setConstraints] = useState<string[]>(['', '', '']);
 
+  const submit = (skipDatasetRecommend: boolean) => {
+    onCreate({
+      hypothesis: hypothesis.trim(),
+      research_goal: researchGoal.trim(),
+      constraints: constraints.map((x) => x.trim()).filter(Boolean),
+      executor_type: experimentType === 'data' ? 'sandbox' : 'simulation',
+      max_iterations: maxIterations,
+      skip_dataset_recommend: skipDatasetRecommend,
+    });
+  };
+
   return (
     <Card
       title="新建实验"
-      subtitle="输入实验假设；数据驱动路径将调用 LLM 推荐经典数据集"
+      subtitle="创建实验将推荐数据集；已有数据集可跳过推荐，直接绑定本地/上传数据"
     >
       <div className="flex justify-between mb-4">
         <Button variant="secondary" size="sm" icon={<ArrowLeft className="w-4 h-4" />} onClick={onBack}>
@@ -137,21 +149,26 @@ export function NewExperimentForm({
         </div>
       </div>
 
-      <Button
-        className="w-full"
-        disabled={!hypothesis.trim() || busy}
-        onClick={() =>
-          onCreate({
-            hypothesis: hypothesis.trim(),
-            research_goal: researchGoal.trim(),
-            constraints: constraints.map((x) => x.trim()).filter(Boolean),
-            executor_type: experimentType === 'data' ? 'sandbox' : 'simulation',
-            max_iterations: maxIterations,
-          })
-        }
-      >
-        {busy ? '创建中…' : '创建实验'}
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Button
+          className="flex-1"
+          disabled={!hypothesis.trim() || busy}
+          onClick={() => submit(false)}
+        >
+          {busy ? '创建中…' : '创建实验'}
+        </Button>
+        {experimentType === 'data' && (
+          <Button
+            className="flex-1"
+            variant="secondary"
+            disabled={!hypothesis.trim() || busy}
+            icon={<Database className="w-4 h-4" />}
+            onClick={() => submit(true)}
+          >
+            {busy ? '创建中…' : '已有数据集'}
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }

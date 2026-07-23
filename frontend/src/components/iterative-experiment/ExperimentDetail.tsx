@@ -13,6 +13,7 @@ import type {
   DataSourceType,
   IterativeExperiment,
   RunMode,
+  QualityMode,
 } from '@/types/iterativeExperiment';
 import { PHASE_EMOJI, PHASE_LABEL } from './phaseLabels';
 import { IterationTimeline } from './IterationTimeline';
@@ -33,6 +34,7 @@ interface ExperimentDetailProps {
   }>;
   onDesignScript: (dataConfig: DataConfig) => void;
   onSetRunMode: (mode: RunMode) => void;
+  onSetQualityMode: (mode: QualityMode) => void;
   onRunIteration: () => void;
   onRunToCompletion: () => void;
   onSubmitFeedback: (text: string) => void;
@@ -79,6 +81,7 @@ export function ExperimentDetail({
   onAutoDetect,
   onDesignScript,
   onSetRunMode,
+  onSetQualityMode,
   onRunIteration,
   onRunToCompletion,
   onSubmitFeedback,
@@ -86,6 +89,7 @@ export function ExperimentDetail({
   onExperimentUpdated,
 }: ExperimentDetailProps) {
   const phase = experiment.phase;
+  const hasDatasetRecommendations = Boolean(experiment.dataset_recommendations?.length);
   const isSandbox = experiment.executor_type === 'sandbox';
   const isFederatedProject = projectMode === 'federated_learning';
   const boundConfig = experiment.data_config ?? null;
@@ -255,59 +259,64 @@ export function ExperimentDetail({
         </details>
       </Card>
 
-      {/* 推荐数据集 */}
-      {isSandbox && (phase === 'created' || phase === 'data_recommended' || phase === 'data_uploaded') && (
+      {/* 有推荐时优先展示推荐列表 */}
+      {isSandbox
+        && hasDatasetRecommendations
+        && (phase === 'created' || phase === 'data_recommended' || phase === 'data_uploaded') && (
         <Card title="推荐数据集" subtitle="根据实验假设由 LLM 推荐经典数据集">
-          {!experiment.dataset_recommendations?.length ? (
-            <p className="text-sm text-bp-muted mb-3">暂无推荐。可点击下方按钮让 AI 推荐，或直接上传数据。</p>
-          ) : (
-            <div className="space-y-3 mb-3">
-              {experiment.dataset_recommendations.filter((d) => d.is_required).map((d) => (
-                <div key={d.name} className="rounded-lg border border-bp-border p-3">
-                  <div className="text-sm font-medium text-bp-text">{d.name}</div>
-                  <p className="text-xs text-bp-muted mt-1">{d.description}</p>
-                  <p className="text-xs text-bp-cyan/80 mt-1">推荐理由: {d.reason}</p>
-                  {(() => {
-                    const href = toAbsoluteDatasetUrl(d.download_url, d.name);
-                    return href ? (
-                      <a href={href} className="text-xs text-bp-cyan underline mt-1 inline-block" target="_blank" rel="noreferrer">
-                        下载链接
-                      </a>
-                    ) : null;
-                  })()}
-                  {d.expected_columns && (
-                    <p className="text-[11px] text-bp-muted mt-1">
-                      预期字段: {d.expected_columns.join(', ')}
-                    </p>
-                  )}
-                </div>
-              ))}
-              {experiment.dataset_recommendations.some((d) => !d.is_required) && (
-                <details className="text-xs text-bp-muted">
-                  <summary className="cursor-pointer text-bp-text">可选补充数据集</summary>
-                  <ul className="mt-2 space-y-1 pl-2">
-                    {experiment.dataset_recommendations.filter((d) => !d.is_required).map((d) => (
-                      <li key={d.name}>· {d.name}: {d.reason || d.description}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          )}
+          <div className="space-y-3 mb-3">
+            {experiment.dataset_recommendations!.filter((d) => d.is_required).map((d) => (
+              <div key={d.name} className="rounded-lg border border-bp-border p-3">
+                <div className="text-sm font-medium text-bp-text">{d.name}</div>
+                <p className="text-xs text-bp-muted mt-1">{d.description}</p>
+                <p className="text-xs text-bp-cyan/80 mt-1">推荐理由: {d.reason}</p>
+                {(() => {
+                  const href = toAbsoluteDatasetUrl(d.download_url, d.name);
+                  return href ? (
+                    <a href={href} className="text-xs text-bp-cyan underline mt-1 inline-block" target="_blank" rel="noreferrer">
+                      下载链接
+                    </a>
+                  ) : null;
+                })()}
+                {d.expected_columns && (
+                  <p className="text-[11px] text-bp-muted mt-1">
+                    预期字段: {d.expected_columns.join(', ')}
+                  </p>
+                )}
+              </div>
+            ))}
+            {experiment.dataset_recommendations!.some((d) => !d.is_required) && (
+              <details className="text-xs text-bp-muted">
+                <summary className="cursor-pointer text-bp-text">可选补充数据集</summary>
+                <ul className="mt-2 space-y-1 pl-2">
+                  {experiment.dataset_recommendations!.filter((d) => !d.is_required).map((d) => (
+                    <li key={d.name}>· {d.name}: {d.reason || d.description}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
           <Button
             variant="secondary"
             disabled={busy}
             icon={<Sparkles className="w-4 h-4" />}
             onClick={() => onRecommend()}
           >
-            推荐数据集
+            重新推荐
           </Button>
         </Card>
       )}
 
-      {/* 上传数据 */}
+      {/* 绑定 / 上传数据 */}
       {canShowUpload && (
-        <Card title="上传数据集" subtitle="缺数据不可设计脚本 / 不可迭代（与 shaxiang 一致）">
+        <Card
+          title={hasDatasetRecommendations ? '上传数据集' : '绑定已有数据'}
+          subtitle={
+            hasDatasetRecommendations
+              ? '缺数据不可设计脚本 / 不可迭代（与 shaxiang 一致）'
+              : '上传文件、指定本地路径或 HuggingFace；绑定后即可设计脚本'
+          }
+        >
           <div className="flex flex-wrap gap-2 mb-4">
             {SOURCE_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -423,9 +432,11 @@ export function ExperimentDetail({
                   </Button>
                   {autodetectPreview && (
                     <div className="rounded-lg border border-bp-border p-3 text-xs space-y-2">
-                      <pre className="text-bp-muted whitespace-pre-wrap">
-                        {JSON.stringify(autodetectPreview, null, 2)}
-                      </pre>
+                      <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-md bg-bp-base/40 border border-bp-border/60">
+                        <pre className="text-bp-muted whitespace-pre-wrap p-2 m-0">
+                          {JSON.stringify(autodetectPreview, null, 2)}
+                        </pre>
+                      </div>
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => setProfileConfirmed(true)}>
                           确认使用此配置
@@ -501,27 +512,67 @@ export function ExperimentDetail({
         </Card>
       )}
 
+      {/* 无推荐时：绑定区之后提供可选推荐入口 */}
+      {isSandbox
+        && !hasDatasetRecommendations
+        && (phase === 'created' || phase === 'data_recommended' || phase === 'data_uploaded') && (
+        <Card
+          title="数据集推荐（可选）"
+          subtitle="已跳过自动推荐。需要时可让 AI 推荐经典数据集"
+        >
+          <p className="text-sm text-bp-muted mb-3">暂无推荐列表。可直接使用上方绑定已有数据，或按需触发推荐。</p>
+          <Button
+            variant="secondary"
+            disabled={busy}
+            icon={<Sparkles className="w-4 h-4" />}
+            onClick={() => onRecommend()}
+          >
+            推荐数据集
+          </Button>
+        </Card>
+      )}
+
       {/* 迭代区 */}
       {canIterate && (
         <Card title="执行与分析" subtitle="smoke / 全量 · 自我纠正在脚本设计阶段完成">
           {isSandbox && (
-            <div className="mb-4 p-3 rounded-lg border border-bp-border">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium text-bp-text">运行模式</div>
-                  <p className="text-xs text-bp-muted mt-0.5">
-                    关闭（推荐）：仅小样验收；打开后 smoke 通过再正式全量推演。
-                  </p>
+            <div className="mb-4 space-y-3">
+              <div className="p-3 rounded-lg border border-bp-border">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-bp-text">运行模式</div>
+                    <p className="text-xs text-bp-muted mt-0.5">
+                      关闭（推荐）：仅小样验收；打开后 smoke 通过再正式全量推演。
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-xs text-bp-text cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={experiment.run_mode === 'full'}
+                      onChange={(e) => onSetRunMode(e.target.checked ? 'full' : 'smoke_only')}
+                      className="accent-bp-cyan"
+                    />
+                    正式全量推演
+                  </label>
                 </div>
-                <label className="inline-flex items-center gap-2 text-xs text-bp-text cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={experiment.run_mode === 'full'}
-                    onChange={(e) => onSetRunMode(e.target.checked ? 'full' : 'smoke_only')}
-                    className="accent-bp-cyan"
-                  />
-                  正式全量推演
-                </label>
+              </div>
+              <div className="p-3 rounded-lg border border-bp-border">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-bp-text">质量模式</div>
+                    <p className="text-xs text-bp-muted mt-0.5">
+                      草稿：有图且非「显著问题」即通过（含「需调整」）；严格：需 promising/success。
+                    </p>
+                  </div>
+                  <select
+                    value={experiment.quality_mode === 'strict' ? 'strict' : 'draft'}
+                    onChange={(e) => onSetQualityMode(e.target.value as QualityMode)}
+                    className="bg-bp-base border border-bp-border rounded-lg px-2 py-1.5 text-xs text-bp-text"
+                  >
+                    <option value="draft">草稿模式</option>
+                    <option value="strict">严格模式</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}

@@ -95,29 +95,60 @@ class DirectoryLoader(BaseDataAdapter):
         # 扫描文件
         files = self._scan_files(root_dir, profile)
         if not files:
-            raise ValueError(f"在 {root_dir} 中未找到匹配的数据文件")
+            raise ValueError(
+                f"在 {root_dir} 中未找到匹配的数据文件"
+                f"（scan_pattern={profile.scan_pattern!r}, "
+                f"file_extensions={list(profile.file_extensions or [])}）。"
+                "常见原因：glob 使用了 pathlib 不支持的 {a,b} 花括号写法，"
+                "或扩展名过滤过严。请重新 AutoDetect，或改用 **/*.csv / **/*.txt。"
+            )
+
+        # 同名 stem 优先保留 csv（避免 csv/txt 副本重复进入合并）
+        by_stem: dict = {}
+        for fp in files:
+            stem = fp.stem.lower()
+            prev = by_stem.get(stem)
+            if prev is None or (fp.suffix.lower() == ".csv" and prev.suffix.lower() != ".csv"):
+                by_stem[stem] = fp
+        files = sorted(by_stem.values(), key=lambda p: str(p))
 
         # 读取并解析每个文件
-        dataframes = []
+        from executors.adaptive_table_combine import TablePiece, adaptive_combine_tables
+
+        pieces: list = []
         for file_path in files:
             df = self._read_file(file_path, profile)
             if df is not None and not df.empty:
-                # 提取元信息
                 meta = self._extract_metadata(file_path, root_dir, profile)
-                for k, v in meta.items():
-                    df[k] = v
+                if meta:
+                    df = df.assign(**meta)
 
-                # UCI HAR 特殊处理：从同目录加载 label 和 subject
                 if profile.custom_rules.get("load_labels_from_separate_file"):
-                    self._load_uci_har_labels(df, file_path)
+                    df = self._load_uci_har_labels(df, file_path)
 
-                dataframes.append(df)
+                pieces.append(TablePiece(path=str(file_path), df=df))
 
-        if not dataframes:
-            raise ValueError("未能读取任何有效的数据文件")
+        if not pieces:
+            from collections import Counter
 
-        # 合并所有 DataFrame
-        combined = pd.concat(dataframes, ignore_index=True)
+            ext_counts = Counter(fp.suffix.lower() or "(none)" for fp in files)
+            raise ValueError(
+                "未能读取任何有效的数据文件"
+                f"（scan_pattern={profile.scan_pattern!r}, "
+                f"file_extensions={list(profile.file_extensions or [])}, "
+                f"matched={len(files)}, ext_dist={dict(ext_counts)}）。"
+                "常见原因：误扫 .rdata 等非表格文件、分隔符/表头不匹配。"
+                "请重新 AutoDetect，或改用 **/*.csv。"
+            )
+
+        # 自适应合并（schema 聚类 + 互补横拼 + 同构竖拼），避免盲目 concat
+        if (profile.custom_rules or {}).get("disable_adaptive_combine"):
+            combined = pd.concat([p.df for p in pieces], ignore_index=True, sort=False)
+            combined = combined.copy()
+        else:
+            combined = adaptive_combine_tables(pieces)
+            if combined is None or combined.empty:
+                raise ValueError("自适应合并后结果为空，请检查目录内数据文件")
 
         # 传感器合并
         if profile.sensor_merge.enabled:
@@ -139,57 +170,74 @@ class DirectoryLoader(BaseDataAdapter):
         return combined
 
     def _scan_files(self, root_dir: Path, profile: DatasetProfile) -> list[Path]:
-        """扫描目录，返回匹配的文件列表"""
-        files = list(root_dir.glob(profile.scan_pattern))
-        if profile.file_extensions:
-            files = [f for f in files if f.suffix.lower() in profile.file_extensions]
-        # 排除不需要的文件
-        for pattern in profile.exclude_patterns:
-            files = [f for f in files if not re.search(pattern, f.name)]
-        return sorted(files)
+        """扫描目录，返回匹配的文件列表（支持 brace glob）。"""
+        from executors.glob_utils import glob_files
+
+        files = glob_files(
+            root_dir,
+            profile.scan_pattern or "**/*",
+            profile.file_extensions,
+            profile.exclude_patterns,
+        )
+        return files
 
     def _read_file(self, file_path: Path, profile: DatasetProfile) -> Optional[pd.DataFrame]:
-        """读取单个文件为 DataFrame"""
-        try:
-            # 处理注释行
-            comment = profile.comment_prefix if profile.comment_prefix else None
+        """读取单个文件为 DataFrame；分隔符失败时自动回退尝试。"""
+        comment = profile.comment_prefix if profile.comment_prefix else None
+        if comment in {'"', "'"}:
+            # 引号包围字段不是注释
+            comment = None
 
-            # 处理特殊标记（如 MobiAct 的 @DATA）
-            skip = profile.skip_rows
-            if profile.custom_rules.get("find_data_marker"):
-                marker = profile.custom_rules["find_data_marker"]
-                skip = self._find_marker_line(file_path, marker)
+        skip = profile.skip_rows
+        if profile.custom_rules.get("find_data_marker"):
+            marker = profile.custom_rules["find_data_marker"]
+            skip = self._find_marker_line(file_path, marker)
 
-            # 读取数据
-            df = pd.read_csv(
-                file_path,
-                sep=profile.delimiter,
-                header=0 if profile.has_header else None,
-                names=profile.column_names if not profile.has_header else None,
-                comment=comment,
-                skiprows=skip,
-                engine='python',
-                on_bad_lines='skip',
-            )
+        # 主分隔符 + 常见回退（IGT 的 .txt 为空格分隔引号字段，.csv 为逗号）
+        seps: list = []
+        primary = profile.delimiter if profile.delimiter is not None else ","
+        for s in (primary, ",", "\t", r"\s+", ";"):
+            if s not in seps:
+                seps.append(s)
 
-            # 去除尾部符号（如 SisFall 的分号）
-            if profile.custom_rules.get("strip_suffix"):
-                suffix = profile.custom_rules["strip_suffix"]
-                for col in df.columns:
-                    if df[col].dtype == 'object':
-                        df[col] = df[col].astype(str).str.rstrip(suffix).str.strip()
-                        # 尝试转为数值
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
+        last_err = None
+        for sep in seps:
+            try:
+                df = pd.read_csv(
+                    file_path,
+                    sep=sep,
+                    header=0 if profile.has_header else None,
+                    names=profile.column_names if (not profile.has_header and profile.column_names) else None,
+                    comment=comment,
+                    skiprows=skip,
+                    engine="python",
+                    on_bad_lines="skip",
+                )
 
-            # 删除全空列
-            df = df.dropna(axis=1, how='all')
-            # 删除全空行
-            df = df.dropna(axis=0, how='all')
+                if profile.custom_rules.get("strip_suffix"):
+                    suffix = profile.custom_rules["strip_suffix"]
+                    for col in df.columns:
+                        if df[col].dtype == "object":
+                            df[col] = df[col].astype(str).str.rstrip(suffix).str.strip()
+                            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            return df
-        except Exception as e:
-            # 忽略无法读取的文件
+                df = df.dropna(axis=1, how="all")
+                df = df.dropna(axis=0, how="all")
+                if df is None or df.empty:
+                    continue
+                # 单列且像未切开的整行文本 → 视为分隔符错误，继续回退
+                if df.shape[1] == 1 and sep != r"\s+":
+                    sample = str(df.iloc[0, 0]) if len(df) else ""
+                    if ("," in sample or "\t" in sample) and len(sample) > 40:
+                        continue
+                return df
+            except Exception as e:
+                last_err = e
+                continue
+
+        if last_err:
             return None
+        return None
 
     def _find_marker_line(self, file_path: Path, marker: str) -> int:
         """找到标记行，返回需要跳过的行数"""
@@ -264,10 +312,11 @@ class DirectoryLoader(BaseDataAdapter):
 
         return base
 
-    def _load_uci_har_labels(self, df: pd.DataFrame, file_path: Path):
-        """为 UCI HAR 加载对应的 label 和 subject"""
+    def _load_uci_har_labels(self, df: pd.DataFrame, file_path: Path) -> pd.DataFrame:
+        """为 UCI HAR 加载对应的 label 和 subject；返回新表以避免碎片化 insert。"""
         parent = file_path.parent
         name = file_path.name
+        extras: dict = {}
         # X_train.txt -> y_train.txt, subject_train.txt
         # X_test.txt -> y_test.txt, subject_test.txt
         if name.startswith("X_"):
@@ -278,18 +327,20 @@ class DirectoryLoader(BaseDataAdapter):
             if labels_file.exists():
                 labels = pd.read_csv(labels_file, header=None, sep=r"\s+", engine="python")
                 if len(labels) == len(df):
-                    df["label"] = labels.iloc[:, 0].values
+                    extras["label"] = labels.iloc[:, 0].values
 
             if subjects_file.exists():
                 subjects = pd.read_csv(subjects_file, header=None, sep=r"\s+", engine="python")
                 if len(subjects) == len(df):
-                    df["subject"] = subjects.iloc[:, 0].values
+                    extras["subject"] = subjects.iloc[:, 0].values
 
             # 标记 train/test
             if "train" in suffix:
-                df["split"] = "train"
+                extras["split"] = "train"
             elif "test" in suffix:
-                df["split"] = "test"
+                extras["split"] = "test"
+
+        return df.assign(**extras) if extras else df
 
     def _load_media_manifest(
         self,
@@ -375,18 +426,21 @@ class DirectoryLoader(BaseDataAdapter):
         return out
 
     def _scan_media_files(self, root_dir: Path, profile: DatasetProfile) -> list[Path]:
-        exts = {e.lower() for e in (profile.media_extensions or profile.file_extensions or [])}
+        from executors.glob_utils import glob_files
+
+        exts = list(profile.media_extensions or profile.file_extensions or [])
         if not exts:
             modality = (profile.modality or "").lower()
             if modality == "audio":
-                exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+                exts = [".wav", ".mp3", ".flac", ".ogg", ".m4a"]
             else:
-                exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-        files = list(root_dir.glob(profile.scan_pattern or "**/*"))
-        files = [f for f in files if f.is_file() and f.suffix.lower() in exts]
-        for pattern in profile.exclude_patterns or []:
-            files = [f for f in files if not re.search(pattern, f.name)]
-        return sorted(files)
+                exts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
+        return glob_files(
+            root_dir,
+            profile.scan_pattern or "**/*",
+            exts,
+            profile.exclude_patterns,
+        )
 
     def _read_manifest_table(self, root_dir: Path, profile: DatasetProfile) -> pd.DataFrame:
         matches = list(root_dir.glob(profile.manifest_pattern))
