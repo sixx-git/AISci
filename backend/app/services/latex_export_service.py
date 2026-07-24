@@ -433,6 +433,7 @@ def _parse_experiments_text(text: str) -> Dict[str, Any]:
         ("baselines", r"(?i)(?:\*\*)?(?:baselines?|基线(?:对比|方法)?)(?:\*\*)?\s*[:：]\s*"),
         ("metrics", r"(?i)(?:\*\*)?(?:metrics?|评估指标)(?:\*\*)?\s*[:：]\s*"),
         ("experimental_setup", r"(?i)(?:\*\*)?(?:experimental\s*setup|实验(?:设置|条件))(?:\*\*)?\s*[:：]\s*"),
+        ("ablation_study", r"(?i)(?:\*\*)?(?:ablation\s*study|消融实验)(?:\*\*)?\s*[:：]\s*"),
         ("validation_protocol", r"(?i)(?:\*\*)?(?:validation\s*protocol|验证方案)(?:\*\*)?\s*[:：]\s*"),
     ]
     for key, pattern in patterns:
@@ -457,10 +458,32 @@ def _parse_experiments_text(text: str) -> Dict[str, Any]:
                 items.append(line[2:].strip())
             elif line:
                 items.append(line)
-        parsed[key] = items if key in ("baselines", "metrics") else chunk
+        parsed[key] = items if key in ("baselines", "metrics", "ablation_study") else chunk
     if not parsed:
         parsed["experimental_setup"] = raw
     return parsed
+
+
+def _normalize_experiments_dict(value: Dict[str, Any]) -> Dict[str, Any]:
+    """若 baselines/metrics 等为空但 experimental_setup 含标签块，则拆分为结构化字段。"""
+    exp = dict(value or {})
+    setup = str(exp.get("experimental_setup") or "").strip()
+    structured_empty = not any(
+        str(exp.get(k) or "").strip()
+        for k in ("baselines", "metrics", "ablation_study", "validation_protocol")
+    )
+    if setup and structured_empty and re.search(
+        r"(?i)(?:baselines?|metrics?|experimental\s*setup|ablation|validation|基线|评估指标|消融|验证方案)\s*[:：]",
+        setup,
+    ):
+        parsed = _parse_experiments_text(setup)
+        for key, val in parsed.items():
+            if val and not str(exp.get(key) or "").strip():
+                exp[key] = val
+        # setup 已拆出后，避免整段重复粘贴；保留纯 setup 段
+        if parsed.get("experimental_setup"):
+            exp["experimental_setup"] = parsed["experimental_setup"]
+    return exp
 
 
 def _format_itemize(lines: List[str]) -> str:
@@ -654,6 +677,8 @@ def _format_experiments(value: Any) -> str:
 
     if not isinstance(value, dict):
         return _format_paragraph(value)
+
+    value = _normalize_experiments_dict(value)
 
     parts: List[str] = []
     setup = value.get("experimental_setup", "")

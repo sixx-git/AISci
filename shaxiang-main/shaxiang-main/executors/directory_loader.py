@@ -167,17 +167,35 @@ class DirectoryLoader(BaseDataAdapter):
             if col in combined.columns:
                 combined = combined.drop(columns=[col])
 
+        # AutoDetect 泛用：把可解析的 object 列转为数值，避免「有数却无数值列」
+        from executors.numeric_coerce import coerce_numeric_like_columns
+
+        combined = coerce_numeric_like_columns(combined)
         return combined
+
+    # AutoDetect 默认排除说明文档 / macOS 垃圾 / R 二进制，避免冲掉数值表
+    _DEFAULT_EXCLUDE_PATTERNS = [
+        r"(?i)^readme(\.|$)",
+        r"(?i)\.md$",
+        r"^\.DS_Store$",
+        r"(?i)\.rdata$",
+        r"(?i)^license(\.|$)",
+    ]
 
     def _scan_files(self, root_dir: Path, profile: DatasetProfile) -> list[Path]:
         """扫描目录，返回匹配的文件列表（支持 brace glob）。"""
         from executors.glob_utils import glob_files
 
+        excludes = list(profile.exclude_patterns or [])
+        for pat in self._DEFAULT_EXCLUDE_PATTERNS:
+            if pat not in excludes:
+                excludes.append(pat)
+
         files = glob_files(
             root_dir,
             profile.scan_pattern or "**/*",
             profile.file_extensions,
-            profile.exclude_patterns,
+            excludes,
         )
         return files
 
@@ -230,6 +248,11 @@ class DirectoryLoader(BaseDataAdapter):
                     sample = str(df.iloc[0, 0]) if len(df) else ""
                     if ("," in sample or "\t" in sample) and len(sample) > 40:
                         continue
+                # 单文件级先行数值化，便于后续合并打分偏好宽数值表
+                if not profile.custom_rules.get("strip_suffix"):
+                    from executors.numeric_coerce import coerce_numeric_like_columns
+
+                    df = coerce_numeric_like_columns(df)
                 return df
             except Exception as e:
                 last_err = e

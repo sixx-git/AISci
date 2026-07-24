@@ -19,11 +19,25 @@ def test_sanitize_removes_llm_agent_from_technical_details():
     )
     tech = chapters["technical_details"]
     assert "Qwen" not in tech
-    assert "智能体" not in tech
+    assert "Pipeline" not in tech
     assert "DNA 折纸" in tech
     methods = chapters["methods"]
     assert "文献事实抽取" not in methods
     assert "微流控实验" in methods
+
+
+def test_sanitize_keeps_scientific_multiagent_wording():
+    """科研正文中的「多智能体系统」不得被整行删除。"""
+    from app.services.report_content_sanitizer import sanitize_text
+
+    text = (
+        "在多智能体系统中，个体局部规则如何导致全局涌现。\n"
+        "围绕假设「利用可微物理仿真实现多智能体涌现行为逆向求解」，开展验证。"
+    )
+    cleaned = sanitize_text(text)
+    assert "多智能体系统" in cleaned
+    assert "围绕假设" in cleaned
+    assert "涌现行为逆向求解" in cleaned
 
 
 def test_sanitize_report_result():

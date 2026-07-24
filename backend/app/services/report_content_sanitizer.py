@@ -59,10 +59,12 @@ _DROP_LINE_PATTERNS = [
     for p in [
         r"qwen|千问|通义|百炼|dashscope",
         r"大语言模型|大模型|llm\b|gpt-?[34]",
-        r"智能体|multi-?agent|agent\s*pipeline",
+        # 仅拦截平台/流水线语境；保留「多智能体系统」等科研表述
+        r"(?:报告|假设|文献|评审|生成)智能体|智能体(?:平台|流水线)|ai\s*智能体",
         r"\bRAG\b|向量检索|faiss|embedding",
         r"AI[\s-]?Scientist|ai scientist",
-        r"多智能体|pipeline\s*阶段|prompt\s*版本",
+        r"多智能体\s*(?:Pipeline|流水线)|pipeline\s*阶段|prompt\s*版本",
+        r"multi-?agent\s*pipeline|agent\s*pipeline",
         r"人在回路|human[\s-]?in[\s-]?the[\s-]?loop",
         r"文献事实抽取|假设生成与筛选|假设生成与评审",
         r"api\s*调用|结构化输出|token",
@@ -72,12 +74,12 @@ _DROP_LINE_PATTERNS = [
     ]
 ]
 
-# 短语替换：保留句子但去掉平台措辞
+# 短语替换：保留句子但去掉平台措辞（勿误伤「多智能体系统」）
 _PHRASE_REPLACEMENTS = [
     (re.compile(r"LLM\s*生成的?", re.I), ""),
     (re.compile(r"大模型生成的?", re.I), ""),
     (re.compile(r"由\s*智能体\s*", re.I), "通过"),
-    (re.compile(r"智能体\s*", re.I), ""),
+    (re.compile(r"智能体\s*(?:平台|流水线|Pipeline)", re.I), ""),
     (re.compile(r"多智能体\s*Pipeline", re.I), "研究流程"),
     (re.compile(r"AI[\s-]?Scientist\s*(平台|系统|Pipeline)?", re.I), ""),
     (re.compile(r"沙箱实测", re.I), "初步实验验证"),

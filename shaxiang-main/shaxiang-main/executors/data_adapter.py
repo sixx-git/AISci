@@ -549,5 +549,14 @@ def load_data_from_config(data_config: dict) -> tuple[pd.DataFrame, dict]:
     config = DataConfig.from_dict(normalized)
     adapter = get_adapter(config.source_type)
     df = adapter.load_and_preprocess(config)
+    # 上传 CSV / JSON 等也可能是全 object：统一做可解析数值列推断
+    try:
+        from executors.numeric_coerce import coerce_numeric_like_columns
+
+        modality = str((getattr(df, "attrs", {}) or {}).get("modality") or "").lower()
+        if modality not in {"image", "audio", "mixed", "media"}:
+            df = coerce_numeric_like_columns(df)
+    except Exception:
+        pass
     metadata = adapter.get_metadata(df, config)
     return df, metadata

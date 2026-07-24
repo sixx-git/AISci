@@ -176,6 +176,14 @@ class ReportGenerationAgent:
             logger.info(f"[报告生成] 步骤2完成: 结果校验/归一化 (has_ref={bool(result.get('chapters', {}).get('references'))})")
 
             result = sanitize_report_result(result, small_validation=small_validation)
+            # 净化后若核心章节仍空，从问题理解/假设/实验设计回填，避免 PDF 出现空节
+            result = self._backfill_core_chapters_from_context(
+                result,
+                problem_understanding=problem_understanding,
+                final_hypothesis=final_hypothesis,
+                knowledge_gaps=knowledge_gaps,
+                experiment_design=experiment_design,
+            )
 
             if pipeline_run_info:
                 result["run_summary"] = self._build_run_summary_content(pipeline_run_info)
@@ -354,6 +362,13 @@ class ReportGenerationAgent:
 
             # ── 按 latex_template 导出 LaTeX/PDF ──
             result = sanitize_report_result(result, small_validation=small_validation)
+            result = self._backfill_core_chapters_from_context(
+                result,
+                problem_understanding=problem_understanding,
+                final_hypothesis=final_hypothesis,
+                knowledge_gaps=knowledge_gaps,
+                experiment_design=experiment_design,
+            )
             result["markdown_content"] = ""
             export_info = self._export_report_pdf(
                 result,
@@ -1209,6 +1224,152 @@ class ReportGenerationAgent:
             "has_cleaned_csv": bool(merged.get("cleaned_csv_path")),
             "bundle_ready": bool((data_finder_results.get("analysis_bundle") or {}).get("ready")),
         }
+        return result
+
+    @staticmethod
+    def _backfill_core_chapters_from_context(
+        result: Dict[str, Any],
+        *,
+        problem_understanding: Optional[Dict[str, Any]] = None,
+        final_hypothesis: Optional[Dict[str, Any]] = None,
+        knowledge_gaps: Optional[Any] = None,
+        experiment_design: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """当 problem_statement / rationale / technical_details 为空时，从上游阶段回填。
+
+        典型场景：LLM 漏写，或正文含「多智能体」等科研词曾被过度净化清空。
+        """
+        chapters = result.get("chapters")
+        if not isinstance(chapters, dict):
+            return result
+        chapters = dict(chapters)
+        pu = problem_understanding if isinstance(problem_understanding, dict) else {}
+        fh = final_hypothesis if isinstance(final_hypothesis, dict) else {}
+        ed = experiment_design if isinstance(experiment_design, dict) else {}
+
+        def _needs(key: str, min_len: int = 20) -> bool:
+            return len(str(chapters.get(key) or "").strip()) < min_len
+
+        def _join_parts(parts: List[str]) -> str:
+            seen: set = set()
+            out: List[str] = []
+            for p in parts:
+                s = str(p or "").strip()
+                if not s or s in seen:
+                    continue
+                seen.add(s)
+                out.append(s)
+            return "\n\n".join(out)
+
+        if _needs("problem_statement"):
+            parts: List[str] = []
+            for key in ("problem_statement", "main_contradiction", "phenomenon_contradiction"):
+                val = str(pu.get(key) or "").strip()
+                if val:
+                    label = {
+                        "problem_statement": "研究问题",
+                        "main_contradiction": "主要矛盾",
+                        "phenomenon_contradiction": "矛盾来源",
+                    }[key]
+                    parts.append(f"**{label}。** {val}" if key != "problem_statement" else val)
+            ro = pu.get("research_object") or {}
+            if isinstance(ro, dict) and any(str(ro.get(k) or "").strip() for k in ("internal", "external", "boundary")):
+                def _trim(s: str) -> str:
+                    return str(s or "—").strip().rstrip("。；;,.，")
+
+                parts.append(
+                    "**研究对象拆解。** "
+                    f"内部：{_trim(ro.get('internal'))}；"
+                    f"外部：{_trim(ro.get('external'))}；"
+                    f"边界：{_trim(ro.get('boundary'))}。"
+                )
+            scope = str(pu.get("scope_boundary") or "").strip()
+            if scope:
+                parts.append(f"**研究范围。** {scope}")
+            hyp = str(fh.get("hypothesis") or ed.get("hypothesis") or "").strip()
+            if hyp:
+                parts.append(f"**待检验科学假设。** {hyp}")
+            filled = _join_parts(parts)
+            if filled:
+                chapters["problem_statement"] = filled
+
+        if _needs("rationale"):
+            parts = []
+            sig = str(pu.get("research_significance") or "").strip()
+            if sig:
+                parts.append(f"**科研价值。** {sig}")
+            notes = str(pu.get("decomposition_notes") or "").strip()
+            if notes:
+                parts.append(f"**机制说明。** {notes}")
+            # 知识空白
+            gaps = knowledge_gaps
+            gap_items: List[str] = []
+            if isinstance(gaps, dict):
+                for g in (gaps.get("gaps") or gaps.get("knowledge_gaps") or [])[:5]:
+                    if isinstance(g, dict):
+                        desc = str(g.get("description") or g.get("gap") or g.get("title") or "").strip()
+                    else:
+                        desc = str(g or "").strip()
+                    if desc:
+                        gap_items.append(desc)
+            elif isinstance(gaps, list):
+                for g in gaps[:5]:
+                    if isinstance(g, dict):
+                        desc = str(g.get("description") or g.get("gap") or g.get("title") or "").strip()
+                    else:
+                        desc = str(g or "").strip()
+                    if desc:
+                        gap_items.append(desc)
+            if gap_items:
+                parts.append("**知识空白。**\n" + "\n".join(f"- {g}" for g in gap_items))
+            hyp = str(fh.get("hypothesis") or ed.get("hypothesis") or "").strip()
+            hyp_r = str(fh.get("rationale") or "").strip()
+            if hyp:
+                parts.append(f"**科学假设。** {hyp}")
+            if hyp_r:
+                parts.append(f"**假设依据。** {hyp_r}")
+            domain = str(pu.get("research_domain") or "").strip()
+            if domain:
+                parts.append(f"**所属领域。** {domain}")
+            filled = _join_parts(parts)
+            if filled:
+                chapters["rationale"] = filled
+
+        if _needs("technical_details"):
+            parts = []
+            methods = str(ed.get("methods") or ed.get("experimental_steps") or chapters.get("methods") or "").strip()
+            if methods:
+                # 去掉仅有边界声明的极短 methods
+                if len(methods) >= 40:
+                    parts.append(methods)
+            constraints = pu.get("constraints") or []
+            if isinstance(constraints, list) and constraints:
+                c_lines = [str(c).strip() for c in constraints if str(c).strip()]
+                if c_lines:
+                    parts.append("**约束条件。**\n" + "\n".join(f"- {c}" for c in c_lines[:8]))
+            expected = pu.get("expected_output") or []
+            if isinstance(expected, list) and expected:
+                e_lines = [str(c).strip() for c in expected if str(c).strip()]
+                if e_lines:
+                    parts.append("**预期技术产出。**\n" + "\n".join(f"- {c}" for c in e_lines[:8]))
+            keywords = pu.get("keywords") or []
+            if isinstance(keywords, list) and keywords:
+                parts.append("**关键词。** " + "、".join(str(k).strip() for k in keywords[:12] if str(k).strip()))
+            filled = _join_parts(parts)
+            if filled:
+                chapters["technical_details"] = filled
+
+        # experiments：若结构字段空但 setup 含标签，拆分
+        exp = chapters.get("experiments")
+        if isinstance(exp, dict):
+            try:
+                from app.services.latex_export_service import _normalize_experiments_dict
+
+                chapters["experiments"] = _normalize_experiments_dict(exp)
+            except Exception:
+                pass
+
+        result["chapters"] = chapters
         return result
 
     @staticmethod

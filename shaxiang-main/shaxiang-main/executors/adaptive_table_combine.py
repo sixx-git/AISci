@@ -56,12 +56,29 @@ def _null_frac(df: pd.DataFrame) -> float:
         return 1.0
 
 
-def _score(df: pd.DataFrame) -> tuple[float, int, int]:
-    """越高越好：优先低空值，再优先信息量（行×列），避免仅元数据窄表胜出。"""
+def _score(df: pd.DataFrame) -> tuple:
+    """越高越好：有数值列 > 行×数值列信息量 > 低空值 > 行列规模。
+
+    避免两类误判：
+    - 仅 index/标签窄表（无数值）胜出
+    - 列更多但受试者更少的宽表压过「行更多」的同构 cohort
+    """
     if df is None or df.empty:
-        return (-1.0, 0, 0)
+        return (0, -1, -1.0, 0, 0)
+    try:
+        from executors.numeric_coerce import count_numeric_columns
+
+        n_num = count_numeric_columns(df)
+    except Exception:
+        n_num = int(df.select_dtypes(include=["number"]).shape[1])
     nrows, ncols = len(df), int(df.shape[1])
-    return (-_null_frac(df), nrows * max(ncols, 1), ncols)
+    return (
+        1 if n_num > 0 else 0,
+        nrows * max(n_num, 1),
+        -_null_frac(df),
+        nrows * max(ncols, 1),
+        ncols,
+    )
 
 
 def _ncols_compatible(a: int, b: int, tol: float = 0.08) -> bool:

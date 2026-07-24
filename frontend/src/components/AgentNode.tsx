@@ -96,17 +96,51 @@ interface AgentNodeProps {
   isLast: boolean;
   stepNumber: number;
   onClick: () => void;
+  /** 迭代实验节点：当前项目下的实验组数量 */
+  experimentGroupCount?: number | null;
+  /** 迭代实验节点：如「1 已完成 · 1 待审阅」 */
+  experimentGroupHint?: string | null;
 }
 
-export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: AgentNodeProps) {
+export function AgentNode({
+  node,
+  isSelected,
+  isLast,
+  stepNumber,
+  onClick,
+  experimentGroupCount = null,
+  experimentGroupHint = null,
+}: AgentNodeProps) {
   const Icon = node.icon;
-  const sc = statusConfig[node.status];
   const isFailed = node.status === 'failed';
-  const isPending = node.status === 'pending';
   const isRunning = node.status === 'running';
   const isCompleted = node.status === 'completed';
+  const isReview =
+    node.status === 'human_review' || node.status === 'human_review_required';
+  const isExperimentNode = node.id === 'experiment';
+  const hasExperimentCount = isExperimentNode && experimentGroupCount != null;
+  const hasExperiments = isExperimentNode && (experimentGroupCount ?? 0) > 0;
+  // 有实验组时按「已完成」绿色样式展示（失败/运行中仍保留原语义色）
+  const showAsCompleted = isCompleted || (hasExperiments && !isFailed && !isRunning);
+  const isPending = node.status === 'pending' && !showAsCompleted;
+  const visualStatus: AgentStatus = isFailed
+    ? 'failed'
+    : isRunning
+      ? 'running'
+      : showAsCompleted
+        ? 'completed'
+        : isReview
+          ? node.status
+          : 'pending';
+  const sc = statusConfig[visualStatus];
   const hasError = isFailed && !!node.error_message;
-  const statusLabel = node.human_edited && isCompleted ? '已修订' : sc.label;
+  const statusLabel = (() => {
+    if (node.human_edited && isCompleted) return '已修订';
+    if (hasExperimentCount && (isPending || showAsCompleted) && !isRunning && !isFailed) {
+      return `${experimentGroupCount} 组实验`;
+    }
+    return statusConfig[node.status].label;
+  })();
   const literatureStats = node.id === 'literature'
     ? extractLiteratureStats(node.output_data)
     : null;
@@ -125,17 +159,17 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
         )}>
           <Icon className={cn(
             'w-3.5 h-3.5',
-            isCompleted ? 'text-bp-green'
+            showAsCompleted ? 'text-bp-green'
             : isRunning ? 'text-bp-cyan'
             : isFailed ? 'text-danger-400'
-            : node.status === 'human_review' || node.status === 'human_review_required' ? 'text-bp-yellow'
+            : isReview ? 'text-bp-yellow'
             : 'text-bp-muted',
           )} />
         </div>
         {!isLast && (
           <div className={cn(
             'w-0.5 flex-1 min-h-[8px] rounded-full transition-all duration-300',
-            isCompleted ? 'bg-bp-green/40'
+            showAsCompleted ? 'bg-bp-green/40'
             : isRunning ? 'bg-bp-cyan/40 animate-pulse'
             : isFailed ? 'bg-danger-500/40'
             : 'bg-bp-border',
@@ -162,7 +196,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
             isFailed && !isSelected && 'hover:bg-danger-500/10 hover-accent-left-danger',
             isPending && !isSelected && 'hover:bg-bp-panel/40 hover-accent-left-muted',
             isRunning && !isSelected && 'hover:bg-bp-cyan-tint hover-accent-left',
-            isCompleted && !isSelected && 'hover:bg-bp-green/10 hover-accent-left-green',
+            showAsCompleted && !isSelected && 'hover:bg-bp-green/10 hover-accent-left-green',
           )}
         >
           <div className="flex items-start justify-between gap-2">
@@ -176,7 +210,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                   'text-sm font-medium truncate',
                   isSelected ? 'text-bp-cyan'
                   : isFailed ? 'text-danger-300'
-                  : isCompleted ? 'text-bp-green'
+                  : showAsCompleted ? 'text-bp-green'
                   : isRunning ? 'text-bp-cyan'
                   : 'text-bp-muted',
                 )}>
@@ -185,13 +219,13 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 {/* 状态角标 */}
                 <span className={cn(
                   'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
-                  isCompleted && 'bg-bp-green/15 text-bp-green border border-bp-green/30',
+                  showAsCompleted && 'bg-bp-green/15 text-bp-green border border-bp-green/30',
                   isRunning && 'bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/30',
                   isPending && 'bg-bp-surface/50 text-bp-muted border border-bp-border',
                   isFailed && 'bg-danger-500/15 text-danger-400 border border-danger-500/30',
-                  (node.status === 'human_review' || node.status === 'human_review_required') && 'bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30',
+                  isReview && !showAsCompleted && 'bg-bp-yellow/15 text-bp-yellow border border-bp-yellow/30',
                 )}>
-                  <StatusIcon status={node.status} className="w-3 h-3" />
+                  <StatusIcon status={visualStatus} className="w-3 h-3" />
                   {statusLabel}
                 </span>
               </div>
@@ -210,6 +244,23 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                   <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded bg-bp-cyan-tint text-bp-cyan border border-bp-cyan/20">
                     {literatureSummary}
                   </span>
+                </div>
+              )}
+
+              {/* 迭代实验：实验组数量 */}
+              {hasExperimentCount && (
+                <div className="ml-6 mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className={cn(
+                    'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border',
+                    hasExperiments
+                      ? 'bg-bp-green/15 text-bp-green border-bp-green/30'
+                      : 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/20',
+                  )}>
+                    当前共 {experimentGroupCount} 组实验
+                  </span>
+                  {experimentGroupHint ? (
+                    <span className="text-xs text-bp-muted line-clamp-1">{experimentGroupHint}</span>
+                  ) : null}
                 </div>
               )}
 
@@ -251,11 +302,17 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
                 </div>
               )}
 
-              {/* 待处理提示 */}
-              {isPending && (
+              {/* 待处理提示（迭代实验改显示组数，不再显示「等待执行」） */}
+              {isPending && !hasExperimentCount && (
                 <div className="flex items-center gap-1.5 ml-6 mt-2">
                   <Circle className="w-2.5 h-2.5 text-bp-muted fill-bp-muted" />
                   <span className="text-xs text-bp-muted">等待执行</span>
+                </div>
+              )}
+              {isPending && hasExperimentCount && experimentGroupCount === 0 && (
+                <div className="flex items-center gap-1.5 ml-6 mt-2">
+                  <Circle className="w-2.5 h-2.5 text-bp-muted fill-bp-muted" />
+                  <span className="text-xs text-bp-muted">暂无实验组</span>
                 </div>
               )}
 
@@ -276,7 +333,7 @@ export function AgentNode({ node, isSelected, isLast, stepNumber, onClick }: Age
               'w-4 h-4 shrink-0 mt-1 transition-colors',
               isSelected ? 'text-bp-cyan'
               : isFailed ? 'text-danger-500/50'
-              : isCompleted ? 'text-bp-green/50'
+              : showAsCompleted ? 'text-bp-green/50'
               : 'text-bp-border',
             )} />
           </div>

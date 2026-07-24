@@ -29,6 +29,34 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 const DEFAULT_PAGE_SIZE = 10;
+const HOME_LIST_STATE_KEY = 'aisci.home.projectList';
+
+type HomeListPersisted = {
+  page: number;
+  pageSize: number;
+  search: string;
+  statusFilter: string;
+};
+
+function readHomeListState(): HomeListPersisted | null {
+  try {
+    const raw = sessionStorage.getItem(HOME_LIST_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<HomeListPersisted>;
+    const pageSize = Number(parsed.pageSize);
+    const page = Number(parsed.page);
+    return {
+      page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+      pageSize: (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSize)
+        ? pageSize
+        : DEFAULT_PAGE_SIZE,
+      search: typeof parsed.search === 'string' ? parsed.search : '',
+      statusFilter: typeof parsed.statusFilter === 'string' ? parsed.statusFilter : '',
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** 首页筛选值 → 后端 Project.status（展示态仍优先看 Pipeline） */
 function toApiProjectStatus(uiStatus: string): string | undefined {
@@ -53,9 +81,11 @@ const selectChevronStyle = {
 
 export function Home() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const restoredRef = useRef(readHomeListState());
+  const restored = restoredRef.current;
+  const [search, setSearch] = useState(() => restored?.search ?? '');
+  const [keyword, setKeyword] = useState(() => (restored?.search ?? '').trim());
+  const [statusFilter, setStatusFilter] = useState(() => restored?.statusFilter ?? '');
   const [projects, setProjects] = useState<ProjectOverview[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -70,9 +100,10 @@ export function Home() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(() => restored?.page ?? 1);
+  const [pageSize, setPageSize] = useState<number>(() => restored?.pageSize ?? DEFAULT_PAGE_SIZE);
   const [reloadTick, setReloadTick] = useState(0);
+  const skipFilterPageResetRef = useRef(true);
 
   const {
     loading: pipelineLoading,
@@ -108,9 +139,28 @@ export function Home() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // 筛选/每页条数变化时回第一页；挂载恢复分页时跳过一次，避免退出项目后总是回到第 1 页
   useEffect(() => {
+    if (skipFilterPageResetRef.current) {
+      skipFilterPageResetRef.current = false;
+      return;
+    }
     setPage(1);
   }, [keyword, statusFilter, pageSize]);
+
+  useEffect(() => {
+    try {
+      const payload: HomeListPersisted = {
+        page,
+        pageSize,
+        search,
+        statusFilter,
+      };
+      sessionStorage.setItem(HOME_LIST_STATE_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [page, pageSize, search, statusFilter]);
 
   const loadStats = useCallback(async () => {
     try {

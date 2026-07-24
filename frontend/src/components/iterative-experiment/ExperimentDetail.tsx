@@ -24,6 +24,7 @@ interface ExperimentDetailProps {
   experiment: IterativeExperiment;
   busy?: boolean;
   error?: string | null;
+  onClearError?: () => void;
   onBack: () => void;
   onDelete: () => void;
   onRecommend: (feedback?: string) => void;
@@ -74,6 +75,7 @@ export function ExperimentDetail({
   experiment,
   busy,
   error,
+  onClearError,
   onBack,
   onDelete,
   onRecommend,
@@ -240,9 +242,20 @@ export function ExperimentDetail({
         </div>
 
         {displayError && (
-          <div className="mb-3 p-2.5 rounded-lg border border-danger-500/30 bg-danger-500/10 text-xs text-danger-300 flex gap-2">
+          <div className="mb-3 p-2.5 rounded-lg border border-danger-500/30 bg-danger-500/10 text-xs text-danger-300 flex gap-2 items-start">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            {displayError}
+            <span className="flex-1 min-w-0">{displayError}</span>
+            <button
+              type="button"
+              className="shrink-0 text-danger-300/70 hover:text-danger-200 px-1"
+              title="关闭提示"
+              onClick={() => {
+                setLocalError(null);
+                onClearError?.();
+              }}
+            >
+              ×
+            </button>
           </div>
         )}
 
@@ -415,15 +428,22 @@ export function ExperimentDetail({
                     disabled={!filePath.trim() || busy}
                     onClick={() => {
                       setLocalError(null);
-                      void onAutoDetect(filePath.trim())
+                      onClearError?.();
+                      const normalized = filePath.trim().replace(/^["']+|["']+$/g, '');
+                      if (normalized !== filePath.trim()) setFilePath(normalized);
+                      void onAutoDetect(normalized)
                         .then((out) => {
                           setAutodetectPreview(out.preview);
                           setAutodetectConfig(out.data_config);
-                          setProfileConfirmed(false);
+                          // 试加载已成功则直接确认，避免漏点确认导致设计脚本用空配置
+                          setProfileConfirmed(true);
+                          setLocalError(null);
+                          onClearError?.();
                         })
                         .catch((err: unknown) => {
                           setAutodetectPreview(null);
                           setAutodetectConfig(null);
+                          setProfileConfirmed(false);
                           setLocalError(err instanceof Error ? err.message : '自动识别失败');
                         });
                     }}

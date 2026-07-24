@@ -165,6 +165,7 @@ export function IterativeExperimentPage({
         experiment={selected}
         busy={busy}
         error={error}
+        onClearError={() => setError(null)}
         onBack={() => {
           setSelectedId(null);
           setError(null);
@@ -215,6 +216,7 @@ export function IterativeExperimentPage({
               selected.id,
               directoryPath,
             );
+            setError(null);
             return { preview: out.preview, data_config: out.data_config };
           } catch (err: unknown) {
             const msg = getErrorMessage(err, '自动识别失败');

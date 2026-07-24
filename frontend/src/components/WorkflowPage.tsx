@@ -33,6 +33,7 @@ import {
 import { pipelineService } from '@/services/pipelineService';
 import { humanLoopService } from '@/services/humanLoopService';
 import { reportService } from '@/services/reportService';
+import { iterativeExperimentService } from '@/services/iterativeExperimentService';
 import { buildReportDownloadFilename } from '@/lib/reportExport';
 import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
 import type {
@@ -691,6 +692,51 @@ export function WorkflowPage({
   const [workflowReportLoading, setWorkflowReportLoading] = useState(false);
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
+  const [experimentGroupCount, setExperimentGroupCount] = useState<number | null>(null);
+  const [experimentGroupHint, setExperimentGroupHint] = useState<string | null>(null);
+
+  // 迭代实验节点：拉取当前项目实验组数量（不依赖 Pipeline stage）
+  useEffect(() => {
+    if (!projectId) {
+      setExperimentGroupCount(null);
+      setExperimentGroupHint(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { experiments } = await iterativeExperimentService.list(projectId);
+        if (cancelled) return;
+        const total = experiments.length;
+        setExperimentGroupCount(total);
+        if (total === 0) {
+          setExperimentGroupHint(null);
+          return;
+        }
+        const completed = experiments.filter((e) => e.phase === 'completed').length;
+        const running = experiments.filter((e) => e.phase === 'running').length;
+        const review = experiments.filter((e) => e.phase === 'needs_human_review').length;
+        const parts: string[] = [];
+        if (completed) parts.push(`${completed} 已完成`);
+        if (running) parts.push(`${running} 进行中`);
+        if (review) parts.push(`${review} 待审阅`);
+        const other = total - completed - running - review;
+        if (other > 0) parts.push(`${other} 筹备中`);
+        setExperimentGroupHint(parts.join(' · ') || null);
+      } catch {
+        if (!cancelled) {
+          setExperimentGroupCount(null);
+          setExperimentGroupHint(null);
+        }
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => { void load(); }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [projectId, currentRunId, latestRunId]);
 
   useEffect(() => {
     if (!isReportNode || !projectId) {
@@ -1575,6 +1621,8 @@ export function WorkflowPage({
                   isLast={idx === nodes.length - 1}
                   stepNumber={idx + 1}
                   onClick={() => handleSelect(node.id)}
+                  experimentGroupCount={node.id === 'experiment' ? experimentGroupCount : null}
+                  experimentGroupHint={node.id === 'experiment' ? experimentGroupHint : null}
                 />
               ))}
             </div>
@@ -1586,7 +1634,17 @@ export function WorkflowPage({
           {isExperimentNode ? (
             <div className="rounded-bp border border-bp-border bg-bp-panel/40 px-4 py-8 text-center space-y-3">
               <FlaskConical className="w-8 h-8 text-bp-muted mx-auto" />
-              <p className="text-sm text-bp-muted">迭代实验详情请在「迭代实验」页查看与操作</p>
+              <p className="text-sm text-bp-text">
+                {experimentGroupCount == null
+                  ? '正在统计实验组…'
+                  : experimentGroupCount === 0
+                    ? '当前尚无实验组'
+                    : `当前共 ${experimentGroupCount} 组实验`}
+              </p>
+              {experimentGroupHint && (
+                <p className="text-xs text-bp-muted">{experimentGroupHint}</p>
+              )}
+              <p className="text-sm text-bp-muted">详情请在「迭代实验」页查看与操作</p>
               {projectId && (
                 <Button
                   variant="secondary"

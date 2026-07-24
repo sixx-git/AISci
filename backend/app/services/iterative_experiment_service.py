@@ -328,6 +328,73 @@ class IterativeExperimentService:
         preview = bridge.verify_data_config(data_config)
         return {"ok": True, "preview": preview}
 
+    @staticmethod
+    def _heuristic_directory_profiles(directory_path: str) -> List[Dict[str, Any]]:
+        """不依赖 LLM 的表格 Profile 候选（目录内有什么扩展名就试什么）。"""
+        root = Path(directory_path)
+        if not root.is_dir():
+            return []
+        has_csv = any(root.rglob("*.csv"))
+        has_tsv = any(root.rglob("*.tsv"))
+        has_txt = any(p for p in root.rglob("*.txt") if "readme" not in p.name.lower())
+        excludes = [
+            r"(?i)^readme(\.|$)",
+            r"(?i)\.md$",
+            r"^\.DS_Store$",
+            r"(?i)\.rdata$",
+        ]
+        base = {
+            "modality": "tabular",
+            "comment_prefix": "",
+            "exclude_patterns": excludes,
+        }
+        out: List[Dict[str, Any]] = []
+        if has_csv:
+            out.append({
+                **base,
+                "name": "Heuristic_csv",
+                "scan_pattern": "**/*.csv",
+                "file_extensions": [".csv"],
+                "delimiter": ",",
+                "has_header": True,
+            })
+            out.append({
+                **base,
+                "name": "Heuristic_csv_noheader",
+                "scan_pattern": "**/*.csv",
+                "file_extensions": [".csv"],
+                "delimiter": ",",
+                "has_header": False,
+            })
+        if has_tsv:
+            out.append({
+                **base,
+                "name": "Heuristic_tsv",
+                "scan_pattern": "**/*.tsv",
+                "file_extensions": [".tsv"],
+                "delimiter": "\t",
+                "has_header": True,
+            })
+        if has_txt:
+            out.append({
+                **base,
+                "name": "Heuristic_txt_space",
+                "scan_pattern": "**/*.txt",
+                "file_extensions": [".txt"],
+                "delimiter": r"\s+",
+                "has_header": True,
+            })
+        if has_csv or has_tsv or has_txt:
+            out.append({
+                **base,
+                "name": "Heuristic_tables",
+                "scan_pattern": "**/*",
+                "file_extensions": [x for x, ok in ((".csv", has_csv), (".tsv", has_tsv), (".txt", has_txt)) if ok],
+                "delimiter": ",",
+                "has_header": True,
+            })
+        return out
+
     def auto_detect(
         self, project_id: str, experiment_id: str, directory_path: str
     ) -> Dict[str, Any]:
@@ -337,26 +404,41 @@ class IterativeExperimentService:
         exp = self.get(project_id, experiment_id)
         if not exp:
             raise ValueError("实验不存在")
-        hint = exp.get("hypothesis") or exp.get("research_goal") or ""
-        profile_dict = bridge.auto_detect_profile(directory_path, hypothesis_hint=hint)
+        path = (directory_path or "").strip().strip('"').strip("'").strip()
+        path = str(Path(path).expanduser()) if path else ""
+        if not path or not Path(path).is_dir():
+            raise ValueError(f"目录不存在: {directory_path}")
 
-        verify_cfg = {
-            "source_type": "directory",
-            "source_path": directory_path,
-            "profile_json": json.dumps(profile_dict, ensure_ascii=False),
-            "preprocessing_steps": [],
-            "sample_size": 5000,
-            "profile_name": "AutoDetect",
-        }
-        preview = bridge.verify_data_config(verify_cfg)
+        hint = exp.get("hypothesis") or exp.get("research_goal") or ""
+        # 启发式优先（在 bridge 内，且 verify 层可热更新回退）
+        out = bridge.auto_detect_and_verify(path, hypothesis_hint=hint)
+        data_config = out.get("data_config") or {}
+        if not isinstance(data_config, dict) or not data_config.get("source_path"):
+            raise ValueError("自动识别未返回可用 data_config")
+
+        exp = {**exp, "data_config": data_config, "phase": "data_uploaded"}
+        self._upsert(project_id, exp)
+        try:
+            from app.integrations.shaxiang.bridge import get_service, shaxiang_workdir
+
+            with shaxiang_workdir():
+                svc = get_service()
+                sx = svc.repository.get_experiment(self._sx_id(exp))
+                if sx is not None:
+                    sx.data_config = data_config
+                    sx.current_data_config = data_config
+                    if getattr(sx, "phase", None) in {
+                        None, "created", "data_recommended", "hypothesis_submitted"
+                    }:
+                        sx.phase = "data_uploaded"
+                    svc.repository.update_experiment(sx)
+        except Exception as exc:
+            logger.warning("AutoDetect 同步 shaxiang data_config 失败: %s", exc)
+
         return {
-            "profile": profile_dict,
-            "preview": preview,
-            "data_config": {
-                **verify_cfg,
-                "row_count": preview.get("row_count"),
-                "columns": preview.get("columns") or [],
-            },
+            "profile": out.get("profile") or {},
+            "preview": out.get("preview") or {},
+            "data_config": data_config,
         }
 
     def design_script(

@@ -18,9 +18,21 @@ from typing import Any, Callable, Dict, List, Optional, TypeVar
 logger = logging.getLogger(__name__)
 
 _svc_fingerprint: Optional[str] = None
+_shaxiang_modules_mtime: Optional[float] = None
 
 # shaxiang .env.example 默认 4096；ExperimentPlan+脚本易被截断，尤其 qwen3.6-max
 SHAXIANG_MAX_TOKENS = 16384
+
+# 热更新这些模块，避免 uvicorn 不 --reload 时仍用旧 AutoDetect / verify 逻辑
+_SHAXIANG_HOT_RELOAD_GLOBS = (
+    "services/experiment_service.py",
+    "executors/numeric_coerce.py",
+    "executors/directory_loader.py",
+    "executors/adaptive_table_combine.py",
+    "executors/data_adapter.py",
+    "core/script_validator.py",
+    "core/dataset_profiler.py",
+)
 
 T = TypeVar("T")
 
@@ -34,6 +46,61 @@ def shaxiang_root() -> Path:
     return Path(__file__).resolve().parents[4] / "shaxiang-main" / "shaxiang-main"
 
 
+def _shaxiang_sources_mtime(root: Path) -> float:
+    latest = 0.0
+    for rel in _SHAXIANG_HOT_RELOAD_GLOBS:
+        p = root / rel
+        if p.is_file():
+            latest = max(latest, p.stat().st_mtime)
+    return latest
+
+
+def _reload_shaxiang_modules_if_changed(root: Path) -> bool:
+    """源码变更时 reload shaxiang 包并重置 ExperimentService 单例。"""
+    global _shaxiang_modules_mtime
+    import importlib
+
+    mtime = _shaxiang_sources_mtime(root)
+    if _shaxiang_modules_mtime is not None and mtime <= _shaxiang_modules_mtime:
+        return False
+
+    prefixes = (
+        "services.",
+        "executors.",
+        "core.",
+        "llm.",
+        "schemas.",
+        "config.",
+    )
+    exact = {
+        "services",
+        "executors",
+        "core",
+        "llm",
+        "schemas",
+        "config",
+    }
+    names = [
+        name
+        for name in list(sys.modules)
+        if name in exact or any(name.startswith(p) for p in prefixes)
+    ]
+    # 先清子模块再清父包，避免残留旧类
+    for name in sorted(names, key=lambda n: n.count("."), reverse=True):
+        sys.modules.pop(name, None)
+
+    try:
+        from services.experiment_service import ExperimentService
+
+        ExperimentService.reset()
+    except Exception:
+        pass
+
+    _shaxiang_modules_mtime = mtime
+    logger.info("Shaxiang 模块已热重载 (mtime=%.0f)", mtime)
+    return True
+
+
 def ensure_shaxiang_path() -> Path:
     root = shaxiang_root()
     if not root.is_dir():
@@ -45,6 +112,7 @@ def ensure_shaxiang_path() -> Path:
         sys.path.insert(0, path)
     for sub in ("data", "data/uploads", "data/charts", "data/charts/smoke"):
         (root / sub).mkdir(parents=True, exist_ok=True)
+    _reload_shaxiang_modules_if_changed(root)
     return root
 
 
@@ -487,8 +555,21 @@ def recommend_datasets(
 
 def verify_data_config(data_config: Dict[str, Any], sample_size: int = 5000) -> Dict[str, Any]:
     def _inner() -> Dict[str, Any]:
+        import json
+
         svc = get_service()
-        return svc.verify_data_config(data_config, sample_size=sample_size)
+        out = svc.verify_data_config(data_config, sample_size=sample_size)
+        # 若自适应回退了 Profile，同步写回 data_config 字段，供调用方直接落库
+        if isinstance(out, dict) and isinstance(out.get("recovered_profile"), dict):
+            out = {
+                **out,
+                "data_config": {
+                    **dict(data_config or {}),
+                    "profile_name": "AutoDetect",
+                    "profile_json": json.dumps(out["recovered_profile"], ensure_ascii=False),
+                },
+            }
+        return out
 
     return _run_in_shaxiang(_inner)
 
@@ -504,6 +585,150 @@ def auto_detect_profile(directory_path: str, hypothesis_hint: str = "") -> Dict[
         if isinstance(profile, dict):
             return profile
         return {}
+
+    return _run_in_shaxiang(_inner)
+
+
+def _normalize_directory_path(directory_path: str) -> str:
+    raw = (directory_path or "").strip().strip('"').strip("'").strip()
+    return str(Path(raw).expanduser()) if raw else ""
+
+
+def auto_detect_and_verify(
+    directory_path: str,
+    hypothesis_hint: str = "",
+    sample_size: int = 5000,
+) -> Dict[str, Any]:
+    """目录 AutoDetect：启发式 Profile 优先，LLM 仅作补充；返回可落库的 data_config。"""
+    import json
+
+    path = _normalize_directory_path(directory_path)
+    if not path or not Path(path).is_dir():
+        raise ValueError(f"目录不存在: {directory_path}")
+
+    def _inner() -> Dict[str, Any]:
+        from pathlib import Path as _Path
+
+        svc = get_service()
+        root = _Path(path)
+        has_csv = any(root.rglob("*.csv"))
+        has_tsv = any(root.rglob("*.tsv"))
+        has_txt = any(p for p in root.rglob("*.txt") if "readme" not in p.name.lower())
+        excludes = [
+            r"(?i)^readme(\.|$)",
+            r"(?i)\.md$",
+            r"^\.DS_Store$",
+            r"(?i)\.rdata$",
+            r"(?i)^license(\.|$)",
+        ]
+        base = {
+            "modality": "tabular",
+            "comment_prefix": "",
+            "exclude_patterns": excludes,
+            "skip_rows": 0,
+        }
+        candidates: List[Dict[str, Any]] = []
+        if has_csv:
+            candidates.append({
+                **base, "name": "Heuristic_csv", "scan_pattern": "**/*.csv",
+                "file_extensions": [".csv"], "delimiter": ",", "has_header": True,
+            })
+            candidates.append({
+                **base, "name": "Heuristic_csv_noheader", "scan_pattern": "**/*.csv",
+                "file_extensions": [".csv"], "delimiter": ",", "has_header": False,
+            })
+        if has_tsv:
+            candidates.append({
+                **base, "name": "Heuristic_tsv", "scan_pattern": "**/*.tsv",
+                "file_extensions": [".tsv"], "delimiter": "\t", "has_header": True,
+            })
+        if has_txt:
+            candidates.append({
+                **base, "name": "Heuristic_txt_space", "scan_pattern": "**/*.txt",
+                "file_extensions": [".txt"], "delimiter": r"\s+", "has_header": True,
+            })
+        table_exts = [x for x, ok in ((".csv", has_csv), (".tsv", has_tsv), (".txt", has_txt)) if ok]
+        if table_exts:
+            candidates.append({
+                **base, "name": "Heuristic_tables", "scan_pattern": "**/*",
+                "file_extensions": table_exts, "delimiter": ",", "has_header": True,
+            })
+
+        # 启发式已能出数值列时跳过 LLM，避免误判拖垮整条链路
+        errors: List[str] = []
+        best: Optional[tuple] = None
+
+        def _try_profile(profile_dict: Dict[str, Any]) -> None:
+            nonlocal best
+            verify_cfg = {
+                "source_type": "directory",
+                "source_path": path,
+                "profile_json": json.dumps(profile_dict, ensure_ascii=False),
+                "preprocessing_steps": [],
+                "sample_size": sample_size,
+                "profile_name": "AutoDetect",
+            }
+            try:
+                preview = svc.verify_data_config(verify_cfg, sample_size=sample_size)
+            except Exception as exc:
+                errors.append(f"{profile_dict.get('name') or 'profile'}: {exc}")
+                return
+            recovered = preview.get("recovered_profile") if isinstance(preview, dict) else None
+            use_profile = recovered if isinstance(recovered, dict) and recovered else profile_dict
+            if isinstance(recovered, dict) and recovered:
+                verify_cfg = {
+                    **verify_cfg,
+                    "profile_json": json.dumps(use_profile, ensure_ascii=False),
+                }
+            n_num = len((preview or {}).get("numeric_columns") or [])
+            media_ok = bool((preview or {}).get("media_path_column"))
+            if n_num <= 0 and not media_ok:
+                errors.append(f"{use_profile.get('name')}: 无数值列")
+                return
+            score = (
+                n_num,
+                int((preview or {}).get("row_count") or 0),
+                int((preview or {}).get("column_count") or 0),
+            )
+            if best is None or score > best[0]:
+                best = (score, use_profile, preview, verify_cfg)
+
+        for cand in candidates:
+            _try_profile(cand)
+            if best is not None and best[0][0] > 0:
+                break
+
+        if best is None:
+            try:
+                llm_profile = svc.auto_detect_profile(path, hypothesis_hint=hypothesis_hint or "")
+                if hasattr(llm_profile, "to_dict"):
+                    llm_profile = llm_profile.to_dict()
+                elif hasattr(llm_profile, "model_dump"):
+                    llm_profile = llm_profile.model_dump()
+                if isinstance(llm_profile, dict) and llm_profile:
+                    _try_profile(llm_profile)
+            except Exception as exc:
+                errors.append(f"LLM识别: {exc}")
+                logger.warning("AutoDetect LLM 失败: %s", exc)
+
+        if best is None:
+            detail = "；".join(errors[-5:]) if errors else "未知原因"
+            raise ValueError(
+                "试加载后没有可用数值列，无法可靠设计分析脚本。"
+                f"已尝试启发式/LLM 识别仍失败。{detail}"
+            )
+
+        _, profile_dict, preview, verify_cfg = best
+        data_config = {
+            **verify_cfg,
+            "row_count": preview.get("row_count"),
+            "columns": preview.get("columns") or [],
+        }
+        return {
+            "profile": profile_dict,
+            "preview": preview,
+            "data_config": data_config,
+        }
 
     return _run_in_shaxiang(_inner)
 
@@ -571,9 +796,32 @@ def design_script(
     human_feedback: Optional[str] = None,
 ) -> Dict[str, Any]:
     def _inner() -> Dict[str, Any]:
+        import json
+
         svc = get_service()
-        svc.verify_data_config(data_config)
-        svc.design_script(experiment_id, data_config, human_feedback=human_feedback)
+        cfg = dict(data_config or {})
+        preview = svc.verify_data_config(cfg)
+        recovered = preview.get("recovered_profile") if isinstance(preview, dict) else None
+        if isinstance(recovered, dict) and recovered:
+            cfg = {
+                **cfg,
+                "profile_name": "AutoDetect",
+                "profile_json": json.dumps(recovered, ensure_ascii=False),
+            }
+            # 写回实验，避免下次仍用失败 Profile
+            try:
+                exp = svc.repository.get_experiment(experiment_id)
+                if exp is not None:
+                    exp.data_config = {
+                        **(exp.data_config or {}),
+                        **cfg,
+                        "row_count": preview.get("row_count"),
+                        "columns": preview.get("columns") or [],
+                    }
+                    svc.repository.update_experiment(exp)
+            except Exception as exc:
+                logger.warning("写回 recovered profile 失败: %s", exc)
+        svc.design_script(experiment_id, cfg, human_feedback=human_feedback)
         return project_experiment(project_id, experiment_id)
 
     return _run_in_shaxiang(_inner)

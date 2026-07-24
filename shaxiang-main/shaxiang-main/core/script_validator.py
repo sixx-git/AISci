@@ -34,6 +34,14 @@ def enrich_column_contract(metadata: dict, df=None) -> dict:
     non_numeric_columns = list(meta.get("non_numeric_columns") or [])
 
     if df is not None:
+        # 契约阶段再兜底一次：避免上游未 coerce 时门禁误杀
+        try:
+            from executors.numeric_coerce import coerce_numeric_like_columns, count_numeric_columns
+
+            if count_numeric_columns(df) == 0:
+                df = coerce_numeric_like_columns(df)
+        except Exception:
+            pass
         columns = list(df.columns)
         dtypes = {col: str(df[col].dtype) for col in df.columns}
         numeric_columns = list(df.select_dtypes(include=["number"]).columns)
