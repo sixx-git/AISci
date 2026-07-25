@@ -788,6 +788,7 @@ export interface PlotQualityData {
 
 export type PipelineRunMode = 'teaching' | 'discovery';
 
+/** 运行时仅支持 human；旧值 teaching_auto / discovery_auto 由前后端归一为 human */
 export type IterationMode = 'human' | 'teaching_auto' | 'discovery_auto';
 
 export interface PipelineRunOptions {
@@ -804,6 +805,7 @@ export interface PipelineRunOptions {
   adversarial_mode?: AdversarialMode;
   con_challenge_max_rounds?: number;
   enable_hypothesis_evolution?: boolean;
+  pause_after_hypothesis_review?: boolean;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {

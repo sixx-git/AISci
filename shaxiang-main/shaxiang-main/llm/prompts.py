@@ -216,6 +216,9 @@ SCRIPT_DESIGNER_SYSTEM_PROMPT = """你是一位数据科学实验设计专家。
 7. 制定明确的成功判定标准
 8. 迭代时必须基于「当前脚本 + 修改意见」完善实现。
    允许高自由度重写划分方式、特征工程、评估协议与图表。人工反馈优先级最高。
+9. independent_variables / dependent_variables / control_variables 中每个变量的 values
+   必须是 JSON 数组（如 [0, 1, 2] 或 ["A","B"]），禁止写成 "condition_idx (0-119)" 这类描述字符串；
+   取值范围说明请放到 description 字段。
 
 实验范式自适应（必须二选一，禁止混用）:
 - 先根据研究假设与人工反馈判定范式：

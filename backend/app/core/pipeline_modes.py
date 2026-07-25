@@ -1,4 +1,4 @@
-"""Pipeline 运行模式 — 迭代模式（human / teaching_auto / discovery_auto）与底层执行参数"""
+"""Pipeline 运行模式 — 仅保留人工主导（human）；历史 teaching_auto / discovery_auto 一律映射为 human。"""
 from __future__ import annotations
 
 from enum import Enum
@@ -7,24 +7,21 @@ from typing import Any, Dict
 
 class PipelineMode(str, Enum):
     TEACHING = "teaching"
-    DISCOVERY = "discovery"
+    DISCOVERY = "discovery"  # 仅兼容历史 metadata 读取，运行时不再启用
 
 
 class IterationMode(str, Enum):
     HUMAN = "human"
+    # 已退役：仍保留枚举值以便解析旧 run / 本地配置，resolve 时强制映射为 human
     TEACHING_AUTO = "teaching_auto"
     DISCOVERY_AUTO = "discovery_auto"
 
 
 VALID_PIPELINE_MODES = {PipelineMode.TEACHING.value, PipelineMode.DISCOVERY.value}
-VALID_ITERATION_MODES = {
-    IterationMode.HUMAN.value,
-    IterationMode.TEACHING_AUTO.value,
-    IterationMode.DISCOVERY_AUTO.value,
-}
+VALID_ITERATION_MODES = {IterationMode.HUMAN.value}
 
 DEFAULT_NUM_IDEAS = 3
-DEFAULT_DISCOVERY_MAX_ROUNDS = 3
+DEFAULT_DISCOVERY_MAX_ROUNDS = 3  # 兼容旧字段，运行时不再驱动闭环
 DEFAULT_TEACHING_AUTO_REFINEMENT_MAX = 1
 DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
@@ -51,66 +48,37 @@ HITL_GATE_STAGE_LABELS = {
 }
 
 ITERATION_MODE_LABELS_ZH = {
-    IterationMode.HUMAN.value: "人工主导 — 单阶段重跑（假设/迭代实验页内审阅）",
-    IterationMode.TEACHING_AUTO.value: "轻量自动 — 验证失败时自动精化 1 轮",
-    IterationMode.DISCOVERY_AUTO.value: "深度自动 — 未 Accept 时多轮 Discovery 循环",
+    IterationMode.HUMAN.value: "人工主导 — 可行性评估后暂停，在迭代实验页完成验证与报告",
 }
 
 PIPELINE_MODE_LABELS_ZH = {
-    PipelineMode.TEACHING.value: "Teaching 模式 — 单轮自动精化，适合研究生仿真",
-    PipelineMode.DISCOVERY.value: "Discovery 模式 — Sakana-like 自动 ideate→experiment→review 循环",
+    PipelineMode.TEACHING.value: "标准流水线（人工主导）",
+    PipelineMode.DISCOVERY.value: "（已退役）Discovery 自动循环",
 }
 
 
 def normalize_pipeline_mode(mode: str | None) -> str:
+    """运行时一律使用 teaching；discovery 仅作历史标签时仍可识别。"""
     if mode and mode in VALID_PIPELINE_MODES:
+        # 不再进入 discovery 执行路径
+        if mode == PipelineMode.DISCOVERY.value:
+            return PipelineMode.TEACHING.value
         return mode
     return PipelineMode.TEACHING.value
 
 
 def resolve_iteration_mode(opts: Dict[str, Any]) -> str:
-    """解析互斥的宏迭代模式；兼容旧版 pipeline_mode / enable_* 字段。"""
-    explicit = opts.get("iteration_mode")
-    if explicit in VALID_ITERATION_MODES:
-        return str(explicit)
-
-    legacy_mode = normalize_pipeline_mode(opts.get("pipeline_mode"))
-    if legacy_mode == PipelineMode.DISCOVERY.value:
-        return IterationMode.DISCOVERY_AUTO.value
-
-    if opts.get("enable_hitl_gate"):
-        return IterationMode.HUMAN.value
-
-    teaching_auto = opts.get("enable_teaching_auto_refinement")
-    if teaching_auto is None:
-        # 旧默认是 teaching 下开启自动精化；新默认改为人工主导
-        return DEFAULT_ITERATION_MODE
-    if teaching_auto:
-        return IterationMode.TEACHING_AUTO.value
-
+    """始终返回 human；兼容旧版 iteration_mode / pipeline_mode / enable_* 字段。"""
     return DEFAULT_ITERATION_MODE
 
 
 def apply_iteration_mode(opts: Dict[str, Any]) -> Dict[str, Any]:
-    """将 iteration_mode 映射为互斥的 pipeline_mode / HITL / Teaching 精化开关。"""
-    mode = resolve_iteration_mode(opts)
+    """强制人工主导：关闭自动精化与 Discovery 循环。"""
     out = dict(opts)
-    out["iteration_mode"] = mode
-
-    if mode == IterationMode.HUMAN.value:
-        out["pipeline_mode"] = PipelineMode.TEACHING.value
-        # HITL 阶段门控默认关闭（人工审在假设页 / 迭代实验页完成）
-        out["enable_hitl_gate"] = bool(opts.get("enable_hitl_gate", False))
-        out["enable_teaching_auto_refinement"] = False
-    elif mode == IterationMode.TEACHING_AUTO.value:
-        out["pipeline_mode"] = PipelineMode.TEACHING.value
-        out["enable_hitl_gate"] = False
-        out["enable_teaching_auto_refinement"] = True
-    else:
-        out["pipeline_mode"] = PipelineMode.DISCOVERY.value
-        out["enable_hitl_gate"] = False
-        out["enable_teaching_auto_refinement"] = False
-
+    out["iteration_mode"] = IterationMode.HUMAN.value
+    out["pipeline_mode"] = PipelineMode.TEACHING.value
+    out["enable_hitl_gate"] = bool(opts.get("enable_hitl_gate", False))
+    out["enable_teaching_auto_refinement"] = False
     return out
 
 
@@ -146,7 +114,7 @@ def _resolve_post_evolution_enabled(opts: Dict[str, Any]) -> bool:
 def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     opts = apply_iteration_mode(dict(options or {}))
     mode = normalize_pipeline_mode(opts.get("pipeline_mode"))
-    iteration_mode = opts.get("iteration_mode", DEFAULT_ITERATION_MODE)
+    iteration_mode = IterationMode.HUMAN.value
 
     num_ideas = opts.get("num_ideas", DEFAULT_NUM_IDEAS)
     try:
@@ -196,7 +164,6 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
     if not enable_pro_con:
         adversarial_mode = "off"
     elif adversarial_mode == "off":
-        # 显式开启对抗但未指定模式时，回落到单研究组
         adversarial_mode = "single_group"
     if adversarial_mode == "multi_group" and num_ideas < 2:
         adversarial_mode = "single_group"
@@ -224,9 +191,9 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "pipeline_mode": mode,
         "num_ideas": num_ideas,
         "discovery_max_rounds": max_rounds,
-        "force_sandbox": mode == PipelineMode.DISCOVERY.value or bool(opts.get("force_sandbox")),
+        "force_sandbox": bool(opts.get("force_sandbox")),
         "enable_plot_vlm_critique": opts.get("enable_plot_vlm_critique", False),
-        "enable_teaching_auto_refinement": bool(opts.get("enable_teaching_auto_refinement")),
+        "enable_teaching_auto_refinement": False,
         "teaching_auto_refinement_max": DEFAULT_TEACHING_AUTO_REFINEMENT_MAX,
         "enable_experiment_self_correction": bool(opts.get("enable_experiment_self_correction", True)),
         "experiment_self_correction_max": max(
@@ -256,10 +223,7 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "literature_max_papers": literature_max,
         "evidence_reasoning_max_rounds": evidence_max_rounds,
         "enable_science_iteration_observe": opts.get("enable_science_iteration_observe", True),
-        # discovery_auto 保持全自动；其余模式默认在可行性评估后暂停
-        "pause_after_hypothesis_review": (
-            False
-            if iteration_mode == IterationMode.DISCOVERY_AUTO.value
-            else bool(opts.get("pause_after_hypothesis_review", DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW))
+        "pause_after_hypothesis_review": bool(
+            opts.get("pause_after_hypothesis_review", DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW)
         ),
     }

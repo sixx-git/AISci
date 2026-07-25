@@ -1,7 +1,9 @@
-"""迭代实验 API（对齐 shaxiang ExperimentService；失败返回可读错误，无 mock 降级）"""
+"""迭代实验 API（对齐 shaxiang ExperimentService；失败返回可读错误，无 mock 降级）
+
+阻塞调用一律走 run_blocking；设计脚本 / 跑到完成走后台 job + 轮询。
+"""
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -9,9 +11,15 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.async_utils import run_blocking
 from app.core.database import get_db
 from app.integrations.shaxiang.bridge import ShaxiangBridgeError, shaxiang_root
 from app.schemas.common import success_response, error_response
+from app.services.iterative_experiment_jobs import (
+    KIND_DESIGN_SCRIPT,
+    KIND_RUN_TO_COMPLETION,
+    get_ie_job_store,
+)
 from app.services.iterative_experiment_service import get_iterative_experiment_service
 
 router = APIRouter()
@@ -68,16 +76,40 @@ def _err(exc: Exception, default_code: int = 400):
     return error_response(msg, code=default_code)
 
 
+def _start_long_job(
+    *,
+    project_id: str,
+    experiment_id: str,
+    kind: str,
+    runner,
+    message: str,
+):
+    store = get_ie_job_store()
+    # 启动前确认实验存在（轻量，仍放线程外快速失败）
+    svc = get_iterative_experiment_service()
+    if not svc.get(project_id, experiment_id):
+        raise ValueError("实验不存在")
+    job = store.start(
+        project_id=project_id,
+        experiment_id=experiment_id,
+        kind=kind,
+        runner=runner,
+        message=message,
+    )
+    return job.to_dict()
+
+
 @router.get("/projects/{project_id}/iterative-experiments")
 async def list_experiments(project_id: str, db: Session = Depends(get_db)):
     try:
-        svc = get_iterative_experiment_service()
-        return success_response(
-            {
+        def _work():
+            svc = get_iterative_experiment_service()
+            return {
                 "items": svc.list(project_id),
                 "report_experiment_ids": svc.get_report_ids(project_id),
             }
-        )
+
+        return success_response(await run_blocking(_work))
     except Exception as e:
         return _err(e)
 
@@ -85,8 +117,34 @@ async def list_experiments(project_id: str, db: Session = Depends(get_db)):
 @router.post("/projects/{project_id}/iterative-experiments")
 async def create_experiment(project_id: str, body: CreateExperimentBody, db: Session = Depends(get_db)):
     try:
-        exp = get_iterative_experiment_service().create(project_id, body.model_dump())
+        payload = body.model_dump()
+        exp = await run_blocking(
+            get_iterative_experiment_service().create, project_id, payload
+        )
         return success_response(exp, message="实验已创建")
+    except Exception as e:
+        return _err(e)
+
+
+@router.get("/projects/{project_id}/iterative-experiments/jobs/{job_id}")
+async def get_experiment_job(project_id: str, job_id: str):
+    """轮询长任务状态（design-script / run-to-completion）。"""
+    try:
+        job = get_ie_job_store().get(job_id)
+        if not job or job.project_id != project_id:
+            return error_response("任务不存在", code=404)
+        return success_response(job.to_dict())
+    except Exception as e:
+        return _err(e)
+
+
+@router.get("/projects/{project_id}/iterative-experiments/{experiment_id}/active-job")
+async def get_active_experiment_job(project_id: str, experiment_id: str):
+    try:
+        job = get_ie_job_store().get_active_for_experiment(experiment_id)
+        if not job or job.project_id != project_id:
+            return success_response({"job": None})
+        return success_response({"job": job.to_dict()})
     except Exception as e:
         return _err(e)
 
@@ -96,7 +154,6 @@ async def get_iteration_chart(chart_path: str):
     """提供 shaxiang data/charts 下的迭代图表（对齐 Streamlit 图片展示）。"""
     try:
         root = (shaxiang_root() / "data" / "charts").resolve()
-        # 禁止路径穿越
         rel = chart_path.replace("\\", "/").lstrip("/")
         if ".." in rel.split("/"):
             return error_response("非法图表路径", code=400)
@@ -120,8 +177,9 @@ async def get_iteration_chart(chart_path: str):
 @router.get("/iterative-experiments/{experiment_id}")
 async def get_experiment(experiment_id: str, project_id: str):
     try:
-        svc = get_iterative_experiment_service()
-        exp = svc.get(project_id, experiment_id)
+        exp = await run_blocking(
+            get_iterative_experiment_service().get, project_id, experiment_id
+        )
         if not exp:
             return error_response("实验不存在", code=404)
         return success_response(exp)
@@ -132,7 +190,9 @@ async def get_experiment(experiment_id: str, project_id: str):
 @router.delete("/projects/{project_id}/iterative-experiments/{experiment_id}")
 async def delete_experiment(project_id: str, experiment_id: str):
     try:
-        get_iterative_experiment_service().delete(project_id, experiment_id)
+        await run_blocking(
+            get_iterative_experiment_service().delete, project_id, experiment_id
+        )
         return success_response({"deleted": True})
     except Exception as e:
         return _err(e)
@@ -141,7 +201,11 @@ async def delete_experiment(project_id: str, experiment_id: str):
 @router.put("/projects/{project_id}/iterative-experiments/report-selection")
 async def set_report_selection(project_id: str, body: ReportIdsBody):
     try:
-        ids = get_iterative_experiment_service().set_report_ids(project_id, body.experiment_ids)
+        ids = await run_blocking(
+            get_iterative_experiment_service().set_report_ids,
+            project_id,
+            body.experiment_ids,
+        )
         return success_response({"report_experiment_ids": ids})
     except Exception as e:
         return _err(e)
@@ -150,7 +214,9 @@ async def set_report_selection(project_id: str, body: ReportIdsBody):
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/toggle-report")
 async def toggle_report(project_id: str, experiment_id: str):
     try:
-        ids = get_iterative_experiment_service().toggle_report(project_id, experiment_id)
+        ids = await run_blocking(
+            get_iterative_experiment_service().toggle_report, project_id, experiment_id
+        )
         return success_response({"report_experiment_ids": ids})
     except Exception as e:
         return _err(e)
@@ -159,8 +225,12 @@ async def toggle_report(project_id: str, experiment_id: str):
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/recommend-datasets")
 async def recommend_datasets(project_id: str, experiment_id: str, body: FeedbackBody = FeedbackBody()):
     try:
-        exp = get_iterative_experiment_service().recommend_datasets(
-            project_id, experiment_id, body.feedback or None
+        feedback = body.feedback or None
+        exp = await run_blocking(
+            get_iterative_experiment_service().recommend_datasets,
+            project_id,
+            experiment_id,
+            feedback,
         )
         return success_response(exp)
     except Exception as e:
@@ -177,8 +247,13 @@ async def upload_dataset(
         content = await file.read()
         if not content:
             return error_response("上传文件为空", code=400)
-        out = get_iterative_experiment_service().upload_dataset(
-            project_id, experiment_id, file.filename or "upload.csv", content
+        filename = file.filename or "upload.csv"
+        out = await run_blocking(
+            get_iterative_experiment_service().upload_dataset,
+            project_id,
+            experiment_id,
+            filename,
+            content,
         )
         return success_response(out, message="上传并试加载成功")
     except Exception as e:
@@ -188,8 +263,11 @@ async def upload_dataset(
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/verify-data")
 async def verify_data(project_id: str, experiment_id: str, body: VerifyDataBody):
     try:
-        out = get_iterative_experiment_service().verify_data(
-            project_id, experiment_id, body.data_config
+        out = await run_blocking(
+            get_iterative_experiment_service().verify_data,
+            project_id,
+            experiment_id,
+            body.data_config,
         )
         return success_response(out)
     except Exception as e:
@@ -202,7 +280,12 @@ async def auto_detect_profile(project_id: str, experiment_id: str, body: AutoDet
         path = (body.directory_path or "").strip()
         if not path:
             return error_response("请填写数据集目录路径", code=400)
-        out = get_iterative_experiment_service().auto_detect(project_id, experiment_id, path)
+        out = await run_blocking(
+            get_iterative_experiment_service().auto_detect,
+            project_id,
+            experiment_id,
+            path,
+        )
         return success_response(out)
     except Exception as e:
         return _err(e)
@@ -210,11 +293,25 @@ async def auto_detect_profile(project_id: str, experiment_id: str, body: AutoDet
 
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/design-script")
 async def design_script(project_id: str, experiment_id: str, body: DesignScriptBody):
+    """启动设计脚本后台任务，立即返回 job_id；请轮询 jobs/{job_id}。"""
     try:
-        exp = get_iterative_experiment_service().design_script(
-            project_id, experiment_id, body.data_config
+        data_config = body.data_config
+
+        def _runner():
+            return get_iterative_experiment_service().design_script(
+                project_id, experiment_id, data_config
+            )
+
+        # 启动本身很快；runner 在独立线程执行
+        job = await run_blocking(
+            _start_long_job,
+            project_id=project_id,
+            experiment_id=experiment_id,
+            kind=KIND_DESIGN_SCRIPT,
+            runner=_runner,
+            message="设计脚本已启动（后台执行）",
         )
-        return success_response(exp)
+        return success_response(job, message="设计脚本已启动，后台执行中")
     except Exception as e:
         return _err(e)
 
@@ -222,7 +319,9 @@ async def design_script(project_id: str, experiment_id: str, body: DesignScriptB
 @router.get("/projects/{project_id}/fl-pack/scripts")
 async def list_fl_pack_scripts(project_id: str):
     try:
-        items = get_iterative_experiment_service().list_fl_script_templates(project_id)
+        items = await run_blocking(
+            get_iterative_experiment_service().list_fl_script_templates, project_id
+        )
         return success_response({"items": items, "count": len(items)})
     except Exception as e:
         return _err(e)
@@ -231,8 +330,11 @@ async def list_fl_pack_scripts(project_id: str):
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/apply-fl-script")
 async def apply_fl_script(project_id: str, experiment_id: str, body: ApplyFlScriptBody):
     try:
-        exp = get_iterative_experiment_service().apply_fl_script_template(
-            project_id, experiment_id, body.script_id
+        exp = await run_blocking(
+            get_iterative_experiment_service().apply_fl_script_template,
+            project_id,
+            experiment_id,
+            body.script_id,
         )
         return success_response(exp)
     except Exception as e:
@@ -242,7 +344,12 @@ async def apply_fl_script(project_id: str, experiment_id: str, body: ApplyFlScri
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/run-mode")
 async def set_run_mode(project_id: str, experiment_id: str, body: RunModeBody):
     try:
-        exp = get_iterative_experiment_service().set_run_mode(project_id, experiment_id, body.run_mode)
+        exp = await run_blocking(
+            get_iterative_experiment_service().set_run_mode,
+            project_id,
+            experiment_id,
+            body.run_mode,
+        )
         return success_response(exp)
     except Exception as e:
         return _err(e)
@@ -251,8 +358,11 @@ async def set_run_mode(project_id: str, experiment_id: str, body: RunModeBody):
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/quality-mode")
 async def set_quality_mode(project_id: str, experiment_id: str, body: QualityModeBody):
     try:
-        exp = get_iterative_experiment_service().set_quality_mode(
-            project_id, experiment_id, body.quality_mode
+        exp = await run_blocking(
+            get_iterative_experiment_service().set_quality_mode,
+            project_id,
+            experiment_id,
+            body.quality_mode,
         )
         return success_response(exp)
     except Exception as e:
@@ -262,19 +372,35 @@ async def set_quality_mode(project_id: str, experiment_id: str, body: QualityMod
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/run-iteration")
 async def run_iteration(project_id: str, experiment_id: str):
     try:
-        svc = get_iterative_experiment_service()
-        record = svc.run_iteration(project_id, experiment_id)
-        exp = svc.get(project_id, experiment_id)
-        return success_response({"record": record, "experiment": exp})
+        def _work():
+            svc = get_iterative_experiment_service()
+            record = svc.run_iteration(project_id, experiment_id)
+            exp = svc.get(project_id, experiment_id)
+            return {"record": record, "experiment": exp}
+
+        return success_response(await run_blocking(_work))
     except Exception as e:
         return _err(e)
 
 
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/run-to-completion")
 async def run_to_completion(project_id: str, experiment_id: str):
+    """启动跑到完成后台任务，立即返回 job_id；请轮询 jobs/{job_id}。"""
     try:
-        exp = get_iterative_experiment_service().run_to_completion(project_id, experiment_id)
-        return success_response(exp)
+        def _runner():
+            return get_iterative_experiment_service().run_to_completion(
+                project_id, experiment_id
+            )
+
+        job = await run_blocking(
+            _start_long_job,
+            project_id=project_id,
+            experiment_id=experiment_id,
+            kind=KIND_RUN_TO_COMPLETION,
+            runner=_runner,
+            message="自动运行已启动（后台执行）",
+        )
+        return success_response(job, message="自动运行已启动，后台执行中")
     except Exception as e:
         return _err(e)
 
@@ -282,8 +408,11 @@ async def run_to_completion(project_id: str, experiment_id: str):
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/feedback")
 async def submit_feedback(project_id: str, experiment_id: str, body: FeedbackBody):
     try:
-        exp = get_iterative_experiment_service().submit_feedback(
-            project_id, experiment_id, body.feedback
+        exp = await run_blocking(
+            get_iterative_experiment_service().submit_feedback,
+            project_id,
+            experiment_id,
+            body.feedback,
         )
         return success_response(exp)
     except Exception as e:
@@ -293,8 +422,11 @@ async def submit_feedback(project_id: str, experiment_id: str, body: FeedbackBod
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/redesign")
 async def redesign(project_id: str, experiment_id: str, body: FeedbackBody):
     try:
-        exp = get_iterative_experiment_service().redesign_from_feedback(
-            project_id, experiment_id, body.feedback
+        exp = await run_blocking(
+            get_iterative_experiment_service().redesign_from_feedback,
+            project_id,
+            experiment_id,
+            body.feedback,
         )
         return success_response(exp)
     except Exception as e:

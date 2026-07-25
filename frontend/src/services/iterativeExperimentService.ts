@@ -13,12 +13,60 @@ import type {
 
 /** 设计脚本 / smoke 修复 / 多轮迭代：最长 60 分钟 */
 const LONG_OP_TIMEOUT_MS = 60 * 60 * 1000;
+const JOB_POLL_INTERVAL_MS = 2000;
+/** 启动后台任务本身应很快返回 */
+const JOB_START_TIMEOUT_MS = 60_000;
+
+export type IterativeExperimentJob = {
+  job_id: string;
+  project_id: string;
+  experiment_id: string;
+  kind: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | string;
+  created_at?: string;
+  updated_at?: string;
+  error?: string | null;
+  message?: string;
+  result?: IterativeExperiment | null;
+};
 
 function unwrap<T>(res: ApiResponse<T>, fallbackMsg = '请求失败'): T {
   if (res.code !== 200 || res.data === undefined || res.data === null) {
     throw new Error(res.message || fallbackMsg);
   }
   return res.data;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function pollJobUntilDone(
+  projectId: string,
+  jobId: string,
+  fallbackMsg: string,
+): Promise<IterativeExperiment> {
+  const deadline = Date.now() + LONG_OP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await sleep(JOB_POLL_INTERVAL_MS);
+    const { data } = await api.get<ApiResponse<IterativeExperimentJob>>(
+      `/projects/${projectId}/iterative-experiments/jobs/${jobId}`,
+      { timeout: 30_000 },
+    );
+    const job = unwrap(data, '查询任务状态失败');
+    if (job.status === 'succeeded') {
+      if (!job.result || typeof job.result !== 'object') {
+        throw new Error(`${fallbackMsg}：任务完成但未返回实验数据`);
+      }
+      return job.result;
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error || fallbackMsg);
+    }
+  }
+  throw new Error(`${fallbackMsg}：等待超时`);
 }
 
 export const iterativeExperimentService = {
@@ -150,17 +198,39 @@ export const iterativeExperimentService = {
     return unwrap(data, '自动识别失败');
   },
 
+  async getJob(projectId: string, jobId: string): Promise<IterativeExperimentJob> {
+    const { data } = await api.get<ApiResponse<IterativeExperimentJob>>(
+      `/projects/${projectId}/iterative-experiments/jobs/${jobId}`,
+    );
+    return unwrap(data, '查询任务失败');
+  },
+
+  async getActiveJob(
+    projectId: string,
+    experimentId: string,
+  ): Promise<IterativeExperimentJob | null> {
+    const { data } = await api.get<ApiResponse<{ job: IterativeExperimentJob | null }>>(
+      `/projects/${projectId}/iterative-experiments/${experimentId}/active-job`,
+    );
+    return unwrap(data).job ?? null;
+  },
+
   async designScript(
     projectId: string,
     experimentId: string,
     dataConfig?: DataConfig,
   ): Promise<IterativeExperiment> {
-    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+    const { data } = await api.post<ApiResponse<IterativeExperimentJob | IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/design-script`,
       { data_config: dataConfig },
-      { timeout: LONG_OP_TIMEOUT_MS },
+      { timeout: JOB_START_TIMEOUT_MS },
     );
-    return unwrap(data, '设计脚本失败');
+    const payload = unwrap(data, '设计脚本失败');
+    // 新协议：立即返回 job；兼容旧后端直接返回实验
+    if (payload && typeof payload === 'object' && 'job_id' in payload && (payload as IterativeExperimentJob).job_id) {
+      return pollJobUntilDone(projectId, (payload as IterativeExperimentJob).job_id, '设计脚本失败');
+    }
+    return payload as IterativeExperiment;
   },
 
   async listFlScriptTemplates(projectId: string): Promise<Array<{
@@ -239,12 +309,16 @@ export const iterativeExperimentService = {
   },
 
   async runToCompletion(projectId: string, experimentId: string): Promise<IterativeExperiment> {
-    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+    const { data } = await api.post<ApiResponse<IterativeExperimentJob | IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/run-to-completion`,
       null,
-      { timeout: LONG_OP_TIMEOUT_MS },
+      { timeout: JOB_START_TIMEOUT_MS },
     );
-    return unwrap(data, '自动运行失败');
+    const payload = unwrap(data, '自动运行失败');
+    if (payload && typeof payload === 'object' && 'job_id' in payload && (payload as IterativeExperimentJob).job_id) {
+      return pollJobUntilDone(projectId, (payload as IterativeExperimentJob).job_id, '自动运行失败');
+    }
+    return payload as IterativeExperiment;
   },
 
   async submitFeedback(

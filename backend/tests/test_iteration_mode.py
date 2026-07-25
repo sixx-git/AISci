@@ -1,7 +1,6 @@
-"""迭代模式互斥与默认配置测试"""
+"""迭代模式：仅人工主导；旧模式一律归一为 human。"""
 from app.core.pipeline_modes import (
     DEFAULT_ITERATION_MODE,
-    IterationMode,
     PipelineMode,
     resolve_run_options,
 )
@@ -16,23 +15,20 @@ def test_default_iteration_mode_is_human():
     assert opts["pause_after_hypothesis_review"] is True
 
 
-def test_teaching_auto_mode():
+def test_legacy_teaching_auto_maps_to_human():
     opts = resolve_run_options({"iteration_mode": "teaching_auto"})
-    assert opts["iteration_mode"] == IterationMode.TEACHING_AUTO.value
-    assert opts["enable_hitl_gate"] is False
-    assert opts["enable_teaching_auto_refinement"] is True
+    assert opts["iteration_mode"] == "human"
+    assert opts["enable_teaching_auto_refinement"] is False
     assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
     assert opts["pause_after_hypothesis_review"] is True
 
 
-def test_discovery_auto_mode():
+def test_legacy_discovery_auto_maps_to_human():
     opts = resolve_run_options({"iteration_mode": "discovery_auto", "discovery_max_rounds": 4})
-    assert opts["iteration_mode"] == IterationMode.DISCOVERY_AUTO.value
-    assert opts["pipeline_mode"] == PipelineMode.DISCOVERY.value
-    assert opts["force_sandbox"] is True
-    assert opts["discovery_max_rounds"] == 4
+    assert opts["iteration_mode"] == "human"
+    assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
     assert opts["enable_teaching_auto_refinement"] is False
-    assert opts["pause_after_hypothesis_review"] is False
+    assert opts["pause_after_hypothesis_review"] is True
 
 
 def test_human_mode_can_disable_feasibility_pause():
@@ -47,10 +43,10 @@ def test_human_mode_can_disable_hitl():
     assert opts["enable_hitl_gate"] is False
 
 
-def test_legacy_pipeline_mode_discovery_maps_to_discovery_auto():
+def test_legacy_pipeline_mode_discovery_maps_to_teaching_human():
     opts = resolve_run_options({"pipeline_mode": "discovery"})
-    assert opts["iteration_mode"] == "discovery_auto"
-    assert opts["pipeline_mode"] == "discovery"
+    assert opts["iteration_mode"] == "human"
+    assert opts["pipeline_mode"] == "teaching"
 
 
 def test_pro_con_adversarial_defaults_off():

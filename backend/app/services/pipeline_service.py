@@ -35,7 +35,6 @@ from app.models.project import Report, Project, ProjectStatus
 from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.core.pipeline_modes import (
     PipelineMode,
-    IterationMode,
     normalize_pipeline_mode,
     resolve_run_options,
     ENSEMBLE_ACCEPT_SCORE,
@@ -103,7 +102,6 @@ class PipelineService:
         self._finalize_report_after_gate: bool = False
         self._skip_to_post_validation: bool = False
         self._last_pilot_results: Dict[str, Any] = {}
-        self._teaching_refinement_count: int = 0
         self._experiment_correction_count: int = 0
         self._federated_campaign_count: int = 0
         self._fed_campaign_discovery_done: set = set()
@@ -778,39 +776,6 @@ class PipelineService:
         except Exception as exc:
             logger.warning("[CounterfactualPreview] 跳过: %s", exc)
 
-    def _build_discovery_refined_context(
-        self,
-        results: Dict[str, Any],
-        refinement_notes: List[str],
-    ) -> Dict[str, Any]:
-        """从评审弱点 + ideation 方向构建文献刷新 query。"""
-        ideation = results.get("ideation_novelty") or {}
-        angles = list(ideation.get("suggested_angles") or [])[:3]
-        avoid = list(ideation.get("avoid_topics") or [])[:2]
-        gaps = results.get("knowledge_gap") or {}
-        gap_texts = []
-        for g in (gaps.get("knowledge_gaps") or gaps.get("gaps") or [])[:3]:
-            if isinstance(g, dict):
-                gap_texts.append(str(g.get("gap") or g.get("description") or "")[:80])
-            elif g:
-                gap_texts.append(str(g)[:80])
-
-        refinement_queries = list(refinement_notes or [])[:6]
-        refinement_queries.extend(gap_texts)
-        keywords = angles + [f"NOT {a}" for a in avoid if a]
-        pu = results.get("problem_understanding") or {}
-        if pu.get("keywords"):
-            kw = pu["keywords"]
-            if isinstance(kw, list):
-                keywords.extend(kw[:5])
-            elif isinstance(kw, str):
-                keywords.extend(k.strip() for k in kw.split(",") if k.strip())
-
-        return {
-            "refinement_queries": refinement_queries,
-            "keywords": list(dict.fromkeys(k for k in keywords if k))[:10],
-            "suggested_angles": angles,
-        }
 
     def _build_validation_feedback_constraints(
         self,
@@ -912,23 +877,6 @@ class PipelineService:
                     orch.record_milestone(
                         results, "validation_fail",
                         actions=["sandbox_success=False"],
-                    )
-            elif hook == "after_teaching_refinement":
-                meta = results.get("teaching_auto_refinement") or {}
-                if meta.get("reran"):
-                    orch.record_milestone(
-                        results, "validation_fail",
-                        label=f"teaching_R{meta.get('round', 1)}",
-                        actions=list(meta.get("reasons") or [])[:4],
-                    )
-            elif hook == "after_discovery_round":
-                meta = results.get("discovery_loop") or {}
-                if meta.get("history"):
-                    last = meta["history"][-1] if isinstance(meta["history"], list) else {}
-                    orch.record_milestone(
-                        results, "review_reject",
-                        label=f"discovery_R{last.get('round', '?')}",
-                        actions=[str(last.get("status") or "")],
                     )
             elif hook == "finalize":
                 meta = dict(self.db_pipeline_run.extra_metadata or {}) if self.db_pipeline_run else {}
@@ -1095,109 +1043,6 @@ class PipelineService:
                     },
                 )
 
-    def _exec_literature_mining_refresh(
-        self,
-        project_id: str,
-        research_question: str,
-        results: Dict[str, Any],
-        discovery_round: int,
-        refinement_notes: List[str],
-    ) -> dict:
-        """Discovery 回退：刷新文献库检索与外部论文搜索。"""
-        ctx = self._build_discovery_refined_context(results, refinement_notes)
-        agent = get_literature_mining_agent()
-        previous = results.get("literature_mining") or {}
-        response = agent.mine_discovery_refresh(
-            project_id=project_id,
-            research_question=research_question,
-            refinement_queries=ctx["refinement_queries"],
-            keywords=ctx["keywords"],
-            previous=previous if isinstance(previous, dict) else None,
-            discovery_round=discovery_round,
-            top_k=self._get_literature_top_k(),
-            db=self.db,
-            research_domain=(
-                (results.get("problem_understanding") or {}).get("research_domain") or ""
-            ).strip(),
-        )
-        return self._enrich_literature_mining(self._safe_model_dump(response))
-
-    def _discovery_rollback_to_ideation(
-        self,
-        stages: List[PipelineStageLog],
-        results: Dict[str, Any],
-        research_question: str,
-        project_id: str,
-        project_mode: str,
-        round_num: int,
-        refinement_notes: List[str],
-    ) -> Dict[str, Any]:
-        """低分 Discovery 回退：刷新文献 → 知识缺口 → ideation → 再进入假设生成。"""
-        logger.info(f"[Discovery R{round_num}] 回退到 ideation 并刷新文献")
-
-        self._run_stage(
-            stages, 1, results, research_question, project_id,
-            lambda: self._exec_literature_mining_refresh(
-                project_id, research_question, results, round_num, refinement_notes,
-            ),
-        )
-        lm = results.get("literature_mining") or {}
-        refresh_meta = lm.get("discovery_refresh") if isinstance(lm, dict) else {}
-
-        self._run_stage(
-            stages, 2, results, research_question, project_id,
-            lambda: self._exec_knowledge_gap(
-                lm,
-                project_id,
-                results.get("problem_understanding"),
-            ),
-        )
-
-        ideation = {}
-        try:
-            ideation = self._exec_ideation_novelty(
-                results.get("problem_understanding"),
-                results.get("knowledge_gap"),
-            )
-            if ideation:
-                results["ideation_novelty"] = ideation
-                self._record_closed_loop_event(
-                    "ideation_novelty",
-                    {
-                        "round": round_num,
-                        "novelty_score": ideation.get("novelty_score"),
-                        "external_papers": ideation.get("external_papers_count"),
-                        "summary": (ideation.get("assessment") or "")[:200],
-                        "quality_trend_entry": {
-                            "stage": f"ideation_r{round_num}",
-                            "score": ideation.get("novelty_score"),
-                        },
-                    },
-                )
-        except Exception as exc:
-            logger.warning(f"Discovery R{round_num} ideation 失败: {exc}")
-
-        self._record_closed_loop_event(
-            "discovery_literature_refresh",
-            {
-                "round": round_num,
-                "facts_before": (refresh_meta or {}).get("facts_before"),
-                "facts_after": (refresh_meta or {}).get("facts_after"),
-                "new_facts": (refresh_meta or {}).get("new_facts"),
-                "search_query": ((refresh_meta or {}).get("search_query") or "")[:120],
-                "quality_trend_entry": {
-                    "stage": f"literature_r{round_num}",
-                    "score": min(10.0, 5.0 + float((refresh_meta or {}).get("new_facts") or 0)),
-                },
-            },
-        )
-
-        return {
-            "round": round_num,
-            "literature_refresh": refresh_meta,
-            "ideation_novelty_score": ideation.get("novelty_score") if ideation else None,
-            "refinement_count": len(refinement_notes),
-        }
 
     def _merge_science_iteration_run_options(self, project_id: str) -> None:
         """将 project.config.science_iteration 合并进 run_options。"""
@@ -1263,219 +1108,6 @@ class PipelineService:
             logger.warning("[Pipeline] 自动 gap enrichment 失败: %s", exc)
             return None
 
-    def _run_discovery_loop(
-        self,
-        stages: List[PipelineStageLog],
-        results: Dict[str, Any],
-        research_question: str,
-        project_id: str,
-        project_mode: str,
-    ) -> Dict[str, Any]:
-        """P5: Discovery 模式 — while not accept: ideate → experiment → write → review → refine。"""
-        max_rounds = int(self._run_options.get("discovery_max_rounds", 3))
-        history: List[Dict[str, Any]] = []
-        final_report_id = None
-
-        self._capture_iteration_snapshot(1, results, label="R1_initial")
-
-        for round_num in range(2, max_rounds + 1):
-            meta = (
-                self.db_pipeline_run.extra_metadata
-                if self.db_pipeline_run and isinstance(self.db_pipeline_run.extra_metadata, dict)
-                else {}
-            )
-            from app.services.loops.discovery_runner import (
-                check_discovery_acceptance,
-                check_discovery_stagnation,
-            )
-
-            continuation = check_discovery_stagnation(
-                meta.get("quality_trend"),
-                round_num=round_num,
-                stagnant_rounds=int(
-                    self._run_options.get("gate_stagnant_rounds", 2)
-                ),
-            )
-            if continuation.get("action") == "stop_stagnant":
-                self._record_closed_loop_decision(
-                    trigger="gate_stagnant",
-                    action="stop_discovery",
-                    reason=continuation.get("reason", "质量 Gate 停滞"),
-                    next_stage="human_review",
-                    round_num=round_num,
-                    metadata={
-                        "consecutive_failures": continuation.get("stagnant_rounds_detected"),
-                        "latest_gate_passed": continuation.get("latest_gate_passed"),
-                    },
-                )
-                history.append({
-                    "round": round_num,
-                    "status": "stagnant",
-                    "overall": None,
-                    "stagnation": continuation,
-                })
-                break
-
-            hr = results.get("hypothesis_review") or {}
-            accepted, accept_meta = check_discovery_acceptance(
-                hr,
-                results.get("small_validation") or {},
-                project_mode=project_mode,
-            )
-            if accepted:
-                history.append({
-                    "round": round_num - 1,
-                    "status": accept_meta.get("status", "accepted"),
-                    "overall": accept_meta.get("overall"),
-                    **({k: v for k, v in accept_meta.items() if k not in ("status", "overall")}),
-                })
-                break
-
-            ensemble = (hr.get("skill_outputs") or {}).get("ensemble_review") or {}
-            decision = ensemble.get("decision") or hr.get("ensemble_decision")
-            overall = ensemble.get("overall") or hr.get("ensemble_overall")
-
-            weaknesses = list(ensemble.get("weaknesses") or [])[:4]
-            suggestions = list(ensemble.get("revision_suggestions") or [])[:4]
-            self._discovery_refinement = weaknesses + suggestions
-            pre_snapshot = self._capture_iteration_snapshot(round_num - 1, results, label=f"R{round_num - 1}_before_refine")
-            df_before = None
-            try:
-                from app.services.data_finder_service import get_data_finder_service
-
-                df_before = get_data_finder_service(self.db).load_results(project_id)
-            except Exception:
-                pass
-
-            history.append({
-                "round": round_num,
-                "status": "refining",
-                "decision": decision,
-                "overall": overall,
-                "refinement_notes": self._discovery_refinement,
-                "snapshot_before": pre_snapshot,
-            })
-            self._record_closed_loop_event(
-                "discovery_refine",
-                {
-                    "round": round_num,
-                    "decision": decision,
-                    "overall": overall,
-                    "quality_trend_entry": {"stage": f"discovery_r{round_num}", "score": overall},
-                },
-            )
-
-            self._record_closed_loop_decision(
-                trigger="ensemble_not_accept",
-                action="discovery_refine",
-                reason=f"评审未 Accept (decision={decision}, overall={overall})",
-                next_stage="literature_refresh",
-                round_num=round_num,
-                metadata={"weaknesses": weaknesses[:3]},
-            )
-
-            rollback_meta = self._discovery_rollback_to_ideation(
-                stages,
-                results,
-                research_question,
-                project_id,
-                project_mode,
-                round_num,
-                self._discovery_refinement,
-            )
-            history[-1]["rollback"] = rollback_meta
-
-            self._validation_feedback_constraints = self._build_validation_feedback_constraints(
-                results.get("small_validation"),
-                results.get("experiment_design"),
-            )
-            self._last_pilot_results = self._build_pilot_results_payload(results.get("small_validation"))
-
-            self._run_stage(stages, 3, results, research_question, project_id,
-                lambda: self._exec_hypothesis_generation(
-                    results.get("problem_understanding"),
-                    results.get("literature_mining"),
-                    results.get("knowledge_gap"),
-                    results.get("ideation_novelty"),
-                ))
-            if results.get("ideation_novelty") and results.get("hypothesis_generation"):
-                hg = results["hypothesis_generation"]
-                if isinstance(hg, dict):
-                    hg["ideation_novelty"] = results["ideation_novelty"]
-                    results["hypothesis_generation"] = hg
-
-            try:
-                self._exec_evidence_reasoning(project_id, research_question, results)
-            except Exception:
-                pass
-            try:
-                self._exec_hypothesis_tree(results, research_question)
-            except Exception:
-                pass
-            try:
-                self._save_hypotheses(project_id, research_question, results)
-            except Exception:
-                pass
-
-            self._run_stage(stages, 4, results, research_question, project_id,
-                lambda: self._exec_hypothesis_review(results.get("hypothesis_generation")))
-            self._run_stage(stages, 5, results, research_question, project_id,
-                lambda: self._exec_iterative_experiment(
-                    results.get("hypothesis_review"), project_id, project_mode,
-                ))
-            ie = results.get("iterative_experiment") or {}
-            if isinstance(ie, dict) and ie.get("small_validation"):
-                self._apply_post_validation_updates(results, ie["small_validation"])
-            if ie.get("status") in {"blocked_need_data", "blocked_need_hypothesis"}:
-                self._record_closed_loop_decision(
-                    trigger="iterative_experiment_blocked",
-                    action="skip_report",
-                    reason=ie.get("warning") or "迭代实验未完成，跳过本轮报告",
-                    next_stage="human_review",
-                    round_num=round_num,
-                )
-                history[-1]["status"] = "blocked"
-                history[-1]["iterative_experiment_status"] = ie.get("status")
-                continue
-
-            def _exec_report():
-                return self._exec_report_generation(
-                    results, self._build_pipeline_run_info(), project_mode,
-                )
-
-            self._run_stage(stages, 6, results, research_question, project_id, _exec_report)
-            final_report_id = self._persist_pipeline_report(project_id, results)
-            post_snapshot = self._capture_iteration_snapshot(round_num, results, label=f"R{round_num}_after_refine")
-            history[-1]["snapshot_after"] = post_snapshot
-
-            from app.core.closed_loop_decisions import build_iteration_causal_summary
-
-            df_after = None
-            try:
-                from app.services.data_finder_service import get_data_finder_service
-
-                df_after = get_data_finder_service(self.db).load_results(project_id)
-            except Exception:
-                pass
-            causal = build_iteration_causal_summary(
-                pre_snapshot,
-                post_snapshot,
-                rollback_meta=rollback_meta,
-                data_finder_before=df_before,
-                data_finder_after=df_after,
-                refinement_notes=self._discovery_refinement,
-            )
-            history[-1].update(causal)
-            self._executability_blocked = False
-
-        return {
-            "pipeline_mode": PipelineMode.DISCOVERY.value,
-            "max_rounds": max_rounds,
-            "rounds_executed": len(history) + 1,
-            "history": history,
-            "final_report_id": final_report_id,
-            "version_snapshots": self._iteration_snapshots,
-        }
 
     def _apply_plot_quality_loop(
         self,
@@ -2010,21 +1642,6 @@ class PipelineService:
                     skip_payload.get("warning"),
                 )
 
-            # ── P5: Discovery 开放循环（仅 discovery_auto 模式）──
-            if (
-                start_idx <= 3
-                and self._run_options.get("iteration_mode") == "discovery_auto"
-            ):
-                discovery_meta = self._run_discovery_loop(
-                    stages, results, research_question, project_id, project_mode
-                )
-                if discovery_meta:
-                    results["discovery_loop"] = discovery_meta
-                    if discovery_meta.get("final_report_id"):
-                        final_report_id = discovery_meta["final_report_id"]
-                    self._run_science_iteration_hooks(
-                        "after_discovery_round", results, research_question, project_id, project_mode,
-                    )
             
             # Pipeline 完成
             pipeline_end = datetime.now(CHINA_TZ)
@@ -2162,8 +1779,6 @@ class PipelineService:
         """默认将迭代实验 defer 到「迭代实验」页；discovery / 显式关闭暂停 / 显式重跑除外。"""
         if not self._run_options.get("pause_after_hypothesis_review", True):
             return False
-        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
-            return False
         start_idx = getattr(self, "_start_idx", 0) or 0
         if getattr(self, "_rerun_single_stage_only", False) and start_idx == 5:
             return False
@@ -2179,8 +1794,6 @@ class PipelineService:
     def _should_defer_auto_report(self) -> bool:
         """默认不自动生成报告；由迭代实验页「生成报告」或显式重跑报告阶段触发。"""
         if not self._run_options.get("pause_after_hypothesis_review", True):
-            return False
-        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
             return False
         start_idx = getattr(self, "_start_idx", 0) or 0
         if start_idx >= 6:
@@ -2198,8 +1811,6 @@ class PipelineService:
     def _pause_for_feasibility_handoff(self, results: Dict[str, Any]) -> None:
         """可行性评估完成后暂停 Pipeline，引导用户前往「迭代实验」页。"""
         if not self._run_options.get("pause_after_hypothesis_review", True):
-            return
-        if self._run_options.get("iteration_mode") == IterationMode.DISCOVERY_AUTO.value:
             return
         stage_key = "hypothesis_review"
         meta = (

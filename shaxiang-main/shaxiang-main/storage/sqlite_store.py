@@ -251,25 +251,34 @@ class SQLiteRepository(Repository):
     # --- 内部辅助 ---
 
     def _row_to_experiment(self, row) -> Experiment:
-        from schemas.experiment import ExperimentPlan
+        # 必须用当前 schemas 模块中的类：bridge 热重载会替换 schemas.*，
+        # 若继续用本文件顶部缓存的旧 Experiment，会把新 ExperimentPlan 判为类型不匹配。
+        from schemas.experiment import Experiment as ExperimentCls
+        from schemas.experiment import ExperimentPlan, ExperimentStatus as StatusCls
 
         initial_plan = None
         if row["initial_plan"]:
             try:
-                initial_plan = ExperimentPlan.model_validate(json.loads(row["initial_plan"]))
+                raw_plan = json.loads(row["initial_plan"])
+                # 先走 dict，避免跨 reload 的 BaseModel 实例身份冲突
+                if isinstance(raw_plan, dict):
+                    initial_plan = ExperimentPlan.model_validate(raw_plan)
+                else:
+                    initial_plan = None
             except Exception:
-                pass
+                initial_plan = None
 
-        return Experiment(
+        return ExperimentCls(
             id=row["id"],
             title=row["title"],
             research_goal=row["research_goal"],
             constraints=json.loads(row["constraints"]),
-            status=ExperimentStatus(row["status"]),
+            status=StatusCls(row["status"]),
             executor_type=row["executor_type"],
             max_iterations=row["max_iterations"],
             current_iteration=row["current_iteration"],
-            initial_plan=initial_plan,
+            # 传 dict 再校验，兼容热重载后的类替换
+            initial_plan=initial_plan.model_dump() if initial_plan is not None else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             hypothesis=row["hypothesis"] if "hypothesis" in row.keys() else "",

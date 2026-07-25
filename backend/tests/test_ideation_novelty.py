@@ -47,10 +47,11 @@ def test_ideation_novelty_with_mock_search():
     assert result.data["novelty_score"] == 7.2
 
 
-def test_resolve_run_options_discovery():
+def test_resolve_run_options_legacy_discovery_maps_to_human():
     from app.core.pipeline_modes import resolve_run_options, PipelineMode
 
     opts = resolve_run_options({"pipeline_mode": "discovery", "num_ideas": 5})
-    assert opts["pipeline_mode"] == PipelineMode.DISCOVERY.value
+    assert opts["pipeline_mode"] == PipelineMode.TEACHING.value
+    assert opts["iteration_mode"] == "human"
     assert opts["num_ideas"] == 5
-    assert opts["force_sandbox"] is True
+    assert opts["force_sandbox"] is False

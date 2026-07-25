@@ -5,12 +5,11 @@ import { loopConfigKey } from '@/lib/storageKeys';
 import type { AdversarialMode, IterationMode } from '@/types';
 
 export interface LoopConfigState {
+  /** 仅支持人工主导；读取旧配置时会强制归一为 human */
   iterationMode: IterationMode;
   enableHitl: boolean;
   numIdeas: number;
   literatureMaxPapers: number;
-  maxRounds: number;
-  gateStagnantRounds: number;
   enableProConAdversarial: boolean;
   adversarialMode: AdversarialMode;
   conChallengeMaxRounds: number;
@@ -21,14 +20,11 @@ export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   enableHitl: false,
   numIdeas: 3,
   literatureMaxPapers: 10,
-  maxRounds: 3,
-  gateStagnantRounds: 2,
   enableProConAdversarial: false,
   adversarialMode: 'off',
   conChallengeMaxRounds: 2,
 };
 
-const VALID_ITERATION_MODES = new Set<IterationMode>(['human', 'teaching_auto', 'discovery_auto']);
 const VALID_ADVERSARIAL_MODES = new Set<AdversarialMode>(['off', 'single_group', 'multi_group']);
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -37,12 +33,9 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
-/** 校验并合并本地存储 / 外部传入的 Loop 配置。 */
+/** 校验并合并本地存储 / 外部传入的 Loop 配置（强制人工主导）。 */
 export function normalizeLoopConfig(raw: unknown): LoopConfigState {
-  const src = raw && typeof raw === 'object' ? (raw as Partial<LoopConfigState>) : {};
-  const iterationMode = VALID_ITERATION_MODES.has(src.iterationMode as IterationMode)
-    ? (src.iterationMode as IterationMode)
-    : DEFAULT_LOOP_CONFIG.iterationMode;
+  const src = raw && typeof raw === 'object' ? (raw as Partial<LoopConfigState> & Record<string, unknown>) : {};
   const enableProConAdversarial =
     typeof src.enableProConAdversarial === 'boolean'
       ? src.enableProConAdversarial
@@ -56,12 +49,10 @@ export function normalizeLoopConfig(raw: unknown): LoopConfigState {
     adversarialMode = 'single_group';
   }
   return {
-    iterationMode,
+    iterationMode: 'human',
     enableHitl: typeof src.enableHitl === 'boolean' ? src.enableHitl : DEFAULT_LOOP_CONFIG.enableHitl,
     numIdeas: clampInt(src.numIdeas, 1, 8, DEFAULT_LOOP_CONFIG.numIdeas),
     literatureMaxPapers: clampInt(src.literatureMaxPapers, 5, 30, DEFAULT_LOOP_CONFIG.literatureMaxPapers),
-    maxRounds: clampInt(src.maxRounds, 1, 5, DEFAULT_LOOP_CONFIG.maxRounds),
-    gateStagnantRounds: clampInt(src.gateStagnantRounds, 1, 4, DEFAULT_LOOP_CONFIG.gateStagnantRounds),
     enableProConAdversarial,
     adversarialMode,
     conChallengeMaxRounds: clampInt(
@@ -96,27 +87,23 @@ export function saveLoopConfig(projectId: string | undefined | null, config: Loo
 export function loopConfigToRunOptions(config: LoopConfigState): Record<string, unknown> {
   const normalized = normalizeLoopConfig(config);
   return {
-    iteration_mode: normalized.iterationMode,
+    iteration_mode: 'human',
     num_ideas: normalized.numIdeas,
     literature_max_papers: normalized.literatureMaxPapers,
-    discovery_max_rounds: normalized.maxRounds,
-    gate_stagnant_rounds: normalized.gateStagnantRounds,
     // 假设生成门控可选；可行性评估后由后端强制 handoff，不再经此开关自动跑迭代实验/报告
     enable_hitl_gate: false,
     enable_pro_con_adversarial: normalized.enableProConAdversarial,
     adversarial_mode: normalized.adversarialMode,
     con_challenge_max_rounds: normalized.conChallengeMaxRounds,
     enable_science_iteration_observe: true,
+    pause_after_hypothesis_review: true,
+    enable_teaching_auto_refinement: false,
   };
 }
 
-export const ITERATION_MODE_HINTS: Record<IterationMode, string> = {
+export const ITERATION_MODE_HINTS: Record<'human', string> = {
   human:
     '人工主导：可行性评估后自动暂停；请在「迭代实验」页完成实验设计与沙箱验证，并手动生成报告。',
-  teaching_auto:
-    '轻量自动：验证或图表检查失败时自动精化（旧实验环已退役；请以「迭代实验」页反馈重设计为主）。可行性评估后同样暂停。',
-  discovery_auto:
-    '深度自动：评审未 Accept 时自动刷新文献并重跑假设→迭代实验→报告（最多 N 轮）；不在可行性评估后暂停。',
 };
 
 interface LoopConfigPanelProps {
@@ -132,58 +119,21 @@ export function LoopConfigPanel({
   disabled = false,
   compact = false,
 }: LoopConfigPanelProps) {
-  const patch = (partial: Partial<LoopConfigState>) => onChange({ ...value, ...partial });
+  const patch = (partial: Partial<LoopConfigState>) => onChange(normalizeLoopConfig({ ...value, ...partial }));
 
   return (
     <div className={cn('rounded-bp border border-bp-border bg-bp-panel/30', compact ? 'p-2' : 'p-3')}>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="inline-flex items-center gap-1.5 text-xs text-bp-muted font-medium">
           <Settings2 className="w-3.5 h-3.5 text-bp-cyan" />
-          迭代模式
+          运行配置
+        </span>
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-bp-green/15 text-bp-green border border-bp-green/30">
+          人工主导
         </span>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="宏闭环模式">
-          <select
-            value={value.iterationMode}
-            onChange={(e) => patch({ iterationMode: e.target.value as IterationMode })}
-            disabled={disabled}
-            className="input-field py-1.5 px-2 text-sm min-w-[180px]"
-          >
-            <option value="human">人工主导（推荐）</option>
-            <option value="teaching_auto">轻量自动精化</option>
-            <option value="discovery_auto">深度 Discovery 循环</option>
-          </select>
-        </Field>
-
-        {value.iterationMode === 'discovery_auto' && (
-          <>
-            <Field label="最大轮次">
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={value.maxRounds}
-                onChange={(e) => patch({ maxRounds: Math.max(1, Math.min(5, Number(e.target.value) || 3)) })}
-                disabled={disabled}
-                className="input-field py-1.5 px-2 text-sm w-16"
-              />
-            </Field>
-            <Field label="Gate 停滞轮次">
-              <input
-                type="number"
-                min={1}
-                max={4}
-                value={value.gateStagnantRounds}
-                onChange={(e) => patch({ gateStagnantRounds: Math.max(1, Math.min(4, Number(e.target.value) || 2)) })}
-                disabled={disabled}
-                className="input-field py-1.5 px-2 text-sm w-16"
-              />
-            </Field>
-          </>
-        )}
-
         <Field label="候选假设数">
           <input
             type="number"

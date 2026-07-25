@@ -34,8 +34,8 @@ export interface IterationHistoryPanelProps {
 
 const ITERATION_MODE_LABEL: Record<string, string> = {
   human: '人工主导',
-  teaching_auto: '轻量自动',
-  discovery_auto: 'Discovery 自动',
+  teaching_auto: '轻量自动（已退役）',
+  discovery_auto: 'Discovery 自动（已退役）',
 };
 
 function SectionTitle({ icon: Icon, children }: { icon: typeof History; children: ReactNode }) {

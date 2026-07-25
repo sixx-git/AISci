@@ -22,6 +22,7 @@ import { getPipelineStageTab } from '@/config/pipelineStageNavigation';
 import { PromptManagementPage } from '@/components/PromptManagementPage';
 import { projectService } from '@/services/projectService';
 import { pipelineService } from '@/services/pipelineService';
+import { iterativeExperimentService } from '@/services/iterativeExperimentService';
 import { buildPipelineProgressNodes, resolveCurrentPipelineStageLabel } from '@/lib/pipelineProgressNodes';
 import {
   resolveProjectDisplayStatus,
@@ -345,6 +346,7 @@ export function ProjectWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [experimentGroupCount, setExperimentGroupCount] = useState<number | null>(null);
 
   const handlePipelineCompleted = useCallback((_result: PipelineRunResult) => {
     setLatestRunId(_result.run_id);
@@ -565,6 +567,29 @@ export function ProjectWorkspace() {
     ];
   }, [pipelineRuns.length, resolvedResearchField, resolvedCurrentStage]);
 
+  // 概览 Pipeline：迭代实验节点展示实验组数
+  useEffect(() => {
+    if (!id) {
+      setExperimentGroupCount(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { experiments } = await iterativeExperimentService.list(id);
+        if (!cancelled) setExperimentGroupCount(experiments.length);
+      } catch {
+        if (!cancelled) setExperimentGroupCount(null);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => { void load(); }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [id, revalidateKey, activeTab]);
+
   // --- Pipeline 节点（与阶段执行记录对齐） ---
   const pipelineStageDefs = useMemo(
     () => [
@@ -579,15 +604,32 @@ export function ProjectWorkspace() {
     [],
   );
 
-  const overviewPipelineNodes = useMemo(
-    () => buildPipelineProgressNodes(
+  const overviewPipelineNodes = useMemo(() => {
+    const nodes = buildPipelineProgressNodes(
       pipelineStageDefs,
       latestRunStages,
       latestRun?.status,
       latestRun?.failed_stage,
-    ),
-    [pipelineStageDefs, latestRunStages, latestRun?.status, latestRun?.failed_stage],
-  );
+    );
+    return nodes.map((node) => {
+      if (node.id !== 'iterative_experiment' || experimentGroupCount == null) return node;
+      const hasExperiments = experimentGroupCount > 0;
+      return {
+        ...node,
+        // 有实验组时按完成态绿色展示；文案始终显示组数
+        status: hasExperiments && node.status !== 'error' && node.status !== 'running'
+          ? 'completed'
+          : node.status,
+        statusText: `${experimentGroupCount} 组实验`,
+      };
+    });
+  }, [
+    pipelineStageDefs,
+    latestRunStages,
+    latestRun?.status,
+    latestRun?.failed_stage,
+    experimentGroupCount,
+  ]);
 
   const headerDisplayStatus = resolveProjectDisplayStatus(
     project?.status,

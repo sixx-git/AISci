@@ -7,6 +7,8 @@ export interface PipelineProgressNode {
   label: string;
   status: 'pending' | 'running' | 'completed' | 'error';
   icon: LucideIcon;
+  /** 覆盖默认状态文案（如迭代实验：「N 组实验」） */
+  statusText?: string | null;
 }
 
 interface PipelineProgressProps {
@@ -32,26 +34,27 @@ function nodeRingStyle(s: PipelineProgressNode['status']) {
   }
 }
 
-function statusBadge(s: PipelineProgressNode['status']) {
+function statusBadge(s: PipelineProgressNode['status'], statusText?: string | null) {
+  const label = (statusText && statusText.trim()) || statusLabel[s];
   switch (s) {
     case 'completed': return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-xs font-medium bg-bp-green/20 text-bp-green">
-        <CheckCircle className="w-3 h-3" />{statusLabel[s]}
+        <CheckCircle className="w-3 h-3" />{label}
       </span>
     );
     case 'running': return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-xs font-medium bg-bp-cyan-tint text-bp-cyan">
-        <Loader2 className="w-3 h-3 animate-spin" />{statusLabel[s]}
+        <Loader2 className="w-3 h-3 animate-spin" />{label}
       </span>
     );
     case 'error': return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-xs font-medium bg-danger-500/20 text-danger-400">
-        <XCircle className="w-3 h-3" />{statusLabel[s]}
+        <XCircle className="w-3 h-3" />{label}
       </span>
     );
     default: return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-bp text-xs font-medium bg-bp-surface text-bp-muted">
-        <Clock className="w-3 h-3" />{statusLabel[s]}
+        <Clock className="w-3 h-3" />{label}
       </span>
     );
   }
@@ -101,7 +104,7 @@ export function PipelineProgress({ nodes, className, onNodeClick }: PipelineProg
         )}>
           {node.label}
         </span>
-        {statusBadge(node.status)}
+        {statusBadge(node.status, node.statusText)}
       </>
     );
 
@@ -218,14 +221,14 @@ export function PipelineProgress({ nodes, className, onNodeClick }: PipelineProg
                     <span className={cn('text-sm font-medium group-hover:text-bp-cyan',
                       node.status === 'pending' ? 'text-bp-muted' : 'text-bp-text',
                     )}>{node.label}</span>
-                    <div className="mt-1">{statusBadge(node.status)}</div>
+                    <div className="mt-1">{statusBadge(node.status, node.statusText)}</div>
                   </button>
                 ) : (
                   <>
                     <span className={cn('text-sm font-medium',
                       node.status === 'pending' ? 'text-bp-muted' : 'text-bp-text',
                     )}>{node.label}</span>
-                    <div className="mt-1">{statusBadge(node.status)}</div>
+                    <div className="mt-1">{statusBadge(node.status, node.statusText)}</div>
                   </>
                 )}
               </div>

@@ -15,6 +15,32 @@ import numpy as np
 from executors.data_adapter import BaseDataAdapter, DataConfig, ADAPTER_REGISTRY
 from executors.dataset_profile import DatasetProfile, get_profile
 
+_BINARY_DAT_MSG = (
+    "检测到二进制 .dat 文件，当前 AutoDetect 仅支持文本型 .dat"
+    "（空格/逗号/Tab 分隔的表格）。请先导出为 .csv/.txt，"
+    "或改用已转换的表格数据；暂不支持原始神经/脉冲二进制 .dat。"
+)
+
+
+def looks_like_text_tabular_file(file_path: Path, sample_bytes: int = 4096) -> bool:
+    """抽样判断文件是否像可 print 的文本表（用于 .dat，避免对二进制硬读）。"""
+    try:
+        with open(file_path, "rb") as f:
+            chunk = f.read(sample_bytes)
+    except OSError:
+        return False
+    if not chunk:
+        return False
+    # NUL 或过高非文本比例 → 二进制
+    if b"\x00" in chunk:
+        return False
+    # 允许常见空白与可打印 ASCII / UTF-8 高位字节
+    textish = 0
+    for b in chunk:
+        if b in (9, 10, 13) or 32 <= b <= 126 or b >= 0x80:
+            textish += 1
+    return (textish / len(chunk)) >= 0.85
+
 
 class DirectoryLoader(BaseDataAdapter):
     """
@@ -116,8 +142,16 @@ class DirectoryLoader(BaseDataAdapter):
         from executors.adaptive_table_combine import TablePiece, adaptive_combine_tables
 
         pieces: list = []
+        binary_dat_hits: list[str] = []
         for file_path in files:
-            df = self._read_file(file_path, profile)
+            try:
+                df = self._read_file(file_path, profile)
+            except ValueError as exc:
+                msg = str(exc)
+                if "二进制 .dat" in msg:
+                    binary_dat_hits.append(str(file_path))
+                    continue
+                raise
             if df is not None and not df.empty:
                 meta = self._extract_metadata(file_path, root_dir, profile)
                 if meta:
@@ -129,6 +163,12 @@ class DirectoryLoader(BaseDataAdapter):
                 pieces.append(TablePiece(path=str(file_path), df=df))
 
         if not pieces:
+            if binary_dat_hits:
+                sample = binary_dat_hits[0]
+                raise ValueError(
+                    f"{_BINARY_DAT_MSG} 示例文件: {sample}"
+                    + (f"（另有 {len(binary_dat_hits) - 1} 个类似文件）" if len(binary_dat_hits) > 1 else "")
+                )
             from collections import Counter
 
             ext_counts = Counter(fp.suffix.lower() or "(none)" for fp in files)
@@ -201,6 +241,9 @@ class DirectoryLoader(BaseDataAdapter):
 
     def _read_file(self, file_path: Path, profile: DatasetProfile) -> Optional[pd.DataFrame]:
         """读取单个文件为 DataFrame；分隔符失败时自动回退尝试。"""
+        if file_path.suffix.lower() == ".dat" and not looks_like_text_tabular_file(file_path):
+            raise ValueError(_BINARY_DAT_MSG)
+
         comment = profile.comment_prefix if profile.comment_prefix else None
         if comment in {'"', "'"}:
             # 引号包围字段不是注释

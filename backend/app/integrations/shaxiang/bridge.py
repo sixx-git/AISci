@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TypeVar
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 _svc_fingerprint: Optional[str] = None
 _shaxiang_modules_mtime: Optional[float] = None
+# os.chdir 为进程级；多线程 run_blocking / 后台 job 时必须串行化
+_shaxiang_workdir_lock = threading.RLock()
 
 # shaxiang .env.example 默认 4096；ExperimentPlan+脚本易被截断，尤其 qwen3.6-max
 SHAXIANG_MAX_TOKENS = 16384
@@ -70,6 +73,7 @@ def _reload_shaxiang_modules_if_changed(root: Path) -> bool:
         "core.",
         "llm.",
         "schemas.",
+        "storage.",
         "config.",
     )
     exact = {
@@ -78,6 +82,7 @@ def _reload_shaxiang_modules_if_changed(root: Path) -> bool:
         "core",
         "llm",
         "schemas",
+        "storage",
         "config",
     }
     names = [
@@ -119,16 +124,17 @@ def ensure_shaxiang_path() -> Path:
 @contextmanager
 def shaxiang_workdir():
     """对齐 Streamlit：在 shaxiang 根目录下执行（相对 chart/upload 路径才正确）。"""
-    root = ensure_shaxiang_path()
-    prev = os.getcwd()
-    os.chdir(str(root))
-    try:
-        yield root
-    finally:
+    with _shaxiang_workdir_lock:
+        root = ensure_shaxiang_path()
+        prev = os.getcwd()
+        os.chdir(str(root))
         try:
-            os.chdir(prev)
-        except Exception:
-            pass
+            yield root
+        finally:
+            try:
+                os.chdir(prev)
+            except Exception:
+                pass
 
 
 def uploads_dir(project_id: str) -> Path:
@@ -614,6 +620,7 @@ def auto_detect_and_verify(
         has_csv = any(root.rglob("*.csv"))
         has_tsv = any(root.rglob("*.tsv"))
         has_txt = any(p for p in root.rglob("*.txt") if "readme" not in p.name.lower())
+        has_dat = any(root.rglob("*.dat"))
         excludes = [
             r"(?i)^readme(\.|$)",
             r"(?i)\.md$",
@@ -647,7 +654,28 @@ def auto_detect_and_verify(
                 **base, "name": "Heuristic_txt_space", "scan_pattern": "**/*.txt",
                 "file_extensions": [".txt"], "delimiter": r"\s+", "has_header": True,
             })
-        table_exts = [x for x, ok in ((".csv", has_csv), (".tsv", has_tsv), (".txt", has_txt)) if ok]
+        if has_dat:
+            # 文本型 .dat（空格/逗号分隔表）；二进制 .dat 由 loader 明确拒绝
+            candidates.append({
+                **base, "name": "Heuristic_dat_space", "scan_pattern": "**/*.dat",
+                "file_extensions": [".dat"], "delimiter": r"\s+", "has_header": True,
+            })
+            candidates.append({
+                **base, "name": "Heuristic_dat_space_noheader", "scan_pattern": "**/*.dat",
+                "file_extensions": [".dat"], "delimiter": r"\s+", "has_header": False,
+            })
+            candidates.append({
+                **base, "name": "Heuristic_dat_comma", "scan_pattern": "**/*.dat",
+                "file_extensions": [".dat"], "delimiter": ",", "has_header": True,
+            })
+        table_exts = [
+            x for x, ok in (
+                (".csv", has_csv),
+                (".tsv", has_tsv),
+                (".txt", has_txt),
+                (".dat", has_dat),
+            ) if ok
+        ]
         if table_exts:
             candidates.append({
                 **base, "name": "Heuristic_tables", "scan_pattern": "**/*",

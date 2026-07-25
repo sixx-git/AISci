@@ -1359,6 +1359,12 @@ export function WorkflowPage({
     && selectedNodeId
     && ['hypothesis', 'evaluation'].includes(selectedNodeId),
   );
+  // 迭代实验按实验组数展示，不计入「智能体」完成度
+  const agentNodes = useMemo(
+    () => nodes.filter((n) => n.id !== 'experiment'),
+    [nodes],
+  );
+  const agentCompletedCount = agentNodes.filter((n) => n.status === 'completed').length;
   const completedCount = nodes.filter((n) => n.status === 'completed').length;
   const failedCount = nodes.filter((n) => n.status === 'failed').length;
 
@@ -1404,7 +1410,7 @@ export function WorkflowPage({
             disabled={runState !== 'idle'}
           />
           <p className="text-xs text-bp-muted mt-2">
-            {ITERATION_MODE_HINTS[loopConfig.iterationMode]}
+            {ITERATION_MODE_HINTS.human}
           </p>
           {projectId && <WorkflowAdvancedLinks projectId={projectId} />}
         </div>
@@ -1497,8 +1503,11 @@ export function WorkflowPage({
             {runningStageName && !staleWarning && (
               <p className="text-xs text-bp-cyan/70 mt-1">正在运行：{runningStageName}</p>
             )}
-            {completedCount > 0 && (
-              <p className="text-xs text-bp-cyan/70 mt-1">已完成 {completedCount}/{nodes.length} 个阶段</p>
+            {agentCompletedCount > 0 && (
+              <p className="text-xs text-bp-cyan/70 mt-1">
+                已完成 {agentCompletedCount}/{agentNodes.length} 个智能体
+                {experimentGroupCount != null ? ` · 实验 ${experimentGroupCount} 组` : ''}
+              </p>
             )}
             {!staleWarning && allPendingCountRef.current >= 3 && !runningStageName && !completedCount && (
               <p className="text-xs text-bp-yellow/80 mt-1">
@@ -1609,7 +1618,11 @@ export function WorkflowPage({
         <div className="lg:col-span-1">
           <Card
             title="Pipeline 节点"
-            subtitle={`共 ${nodes.length} 个智能体` + (completedCount > 0 ? ` · 已完成 ${completedCount}/${nodes.length}` : '')}
+            subtitle={
+              `共 ${agentNodes.length} 个智能体`
+              + (agentCompletedCount > 0 ? ` · 已完成 ${agentCompletedCount}/${agentNodes.length}` : '')
+              + (experimentGroupCount != null ? ` · 实验 ${experimentGroupCount} 组` : '')
+            }
             className="max-h-[calc(100vh-300px)] overflow-y-auto"
           >
             <div className="space-y-0">

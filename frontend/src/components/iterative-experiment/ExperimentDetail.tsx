@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Trash2, Upload, FolderOpen, Link2, Sparkles,
+  ArrowLeft, Trash2, Upload, FolderOpen, Sparkles,
   Play, RefreshCw, AlertTriangle, CheckCircle2, FileCode2,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
@@ -46,18 +46,12 @@ interface ExperimentDetailProps {
 const SOURCE_OPTIONS: Array<{ label: string; value: DataSourceType; icon: typeof Upload }> = [
   { label: '上传文件', value: 'uploaded', icon: Upload },
   { label: '本地目录路径', value: 'directory', icon: FolderOpen },
-  { label: '本地文件路径', value: 'local_csv', icon: Link2 },
-  { label: 'HuggingFace', value: 'huggingface', icon: Sparkles },
 ];
 
 const PROFILES = ['', 'SisFall', 'MobiAct', 'UCI_HAR', 'AutoDetect'];
 
 function resolveInitialSourceType(cfg?: DataConfig | null): DataSourceType {
-  if (!cfg?.source_type) return 'uploaded';
-  if (cfg.source_type === 'local_json') return 'local_csv';
-  if (SOURCE_OPTIONS.some((o) => o.value === cfg.source_type)) {
-    return cfg.source_type;
-  }
+  if (cfg?.source_type === 'directory') return 'directory';
   return 'uploaded';
 }
 
@@ -173,7 +167,7 @@ export function ExperimentDetail({
     sourceType === 'uploaded'
       ? Boolean(uploadedConfig?.source_path)
       : Boolean(filePath.trim())
-        && (sourceType !== 'directory' || Boolean(profileName))
+        && Boolean(profileName)
         && !autodetectBlocked;
   const canDesignScript = !busy && (hasBoundData || formReadyForDesign);
 
@@ -183,19 +177,22 @@ export function ExperimentDetail({
       if (boundConfig?.source_path) return boundConfig;
       throw new Error('请先上传并完成试加载的数据文件');
     }
-    if (sourceType === 'directory' && profileName === 'AutoDetect') {
+    if (profileName === 'AutoDetect') {
       if (autodetectConfig && profileConfirmed) return autodetectConfig;
       if (boundConfig?.source_path) return boundConfig;
       throw new Error('请先完成 AutoDetect 识别试加载并确认');
     }
     const path = filePath.trim() || boundConfig?.source_path || '';
     if (!path) {
-      throw new Error('请填写数据路径');
+      throw new Error('请填写数据目录路径');
+    }
+    if (!profileName) {
+      throw new Error('请选择数据集 Profile');
     }
     return {
-      source_type: sourceType === 'local_csv' && path.endsWith('.json') ? 'local_json' : sourceType,
+      source_type: 'directory',
       source_path: path,
-      profile_name: sourceType === 'directory' ? (profileName || boundConfig?.profile_name || undefined) : undefined,
+      profile_name: profileName || boundConfig?.profile_name || undefined,
       sample_size: boundConfig?.sample_size ?? 5000,
       preprocessing_steps: boundConfig?.preprocessing_steps || [],
       profile_json: boundConfig?.profile_json,
@@ -327,7 +324,7 @@ export function ExperimentDetail({
           subtitle={
             hasDatasetRecommendations
               ? '缺数据不可设计脚本 / 不可迭代（与 shaxiang 一致）'
-              : '上传文件、指定本地路径或 HuggingFace；绑定后即可设计脚本'
+              : '上传文件或指定本地目录路径；绑定后即可设计脚本'
           }
         >
           <div className="flex flex-wrap gap-2 mb-4">
@@ -422,6 +419,9 @@ export function ExperimentDetail({
               </select>
               {profileName === 'AutoDetect' && (
                 <div className="space-y-2">
+                  <p className="text-xs text-bp-muted">
+                    支持文本型表格（.csv / .tsv / .txt / .dat，按分隔表解析）；不支持原始二进制 .dat。
+                  </p>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -491,22 +491,6 @@ export function ExperimentDetail({
             </div>
           )}
 
-          {(sourceType === 'local_csv' || sourceType === 'huggingface') && (
-            <div className="mb-3">
-              <input
-                type="text"
-                value={filePath}
-                onChange={(e) => setFilePath(e.target.value)}
-                placeholder={
-                  sourceType === 'huggingface'
-                    ? '例如: scikit-learn/iris'
-                    : String.raw`例如: D:\data\my_dataset.csv`
-                }
-                className="w-full bg-bp-base border border-bp-border rounded-lg px-3 py-2 text-sm text-bp-text"
-              />
-            </div>
-          )}
-
           {boundConfig && (
             <p className="text-xs text-bp-green mb-3">
               已绑定数据: {boundConfig.file_name || boundConfig.source_path}
@@ -527,7 +511,7 @@ export function ExperimentDetail({
               }
             }}
           >
-            {busy ? '设计中（生成 → 试跑 → 修补）…' : '确认并设计分析脚本'}
+            {busy ? '设计中（后台执行，可切换页面）…' : '确认并设计分析脚本'}
           </Button>
         </Card>
       )}

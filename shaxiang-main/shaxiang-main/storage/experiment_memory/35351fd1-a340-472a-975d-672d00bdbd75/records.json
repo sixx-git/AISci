@@ -1,0 +1,46 @@
+[
+  {
+    "record_id": "35351fd1-a340-472a-975d-672d00bdbd75_c58dfae1-07fc-4d1d-8784-589196f89fae",
+    "scope_key": "35351fd1-a340-472a-975d-672d00bdbd75",
+    "experiment_id": "c58dfae1-07fc-4d1d-8784-589196f89fae",
+    "title": "融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控…",
+    "hypothesis": "融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控制系统发育史和具体环境压力变量的前提下，能够比传统静态适应度模型更准确地预测极端生态位下物种的睡眠时长与睡眠结构（如REM/NREM比例）的进化最优解，并可通过跨物种实证数据进行检验。",
+    "research_goal": "融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控制系统发育史和具体环境压力变量的前提下，能够比传统静态适应度模型更准确地预测极端生态位下物种的睡眠时长与睡眠结构（如REM/NREM比例）的进化最优解，并可通过跨物种实证数据进行检验。",
+    "method_summary": "多模态生理反馈动态模型预测物种睡眠结构进化最优解（修正版）",
+    "baseline_metrics": {
+      "n_samples_sleep": 2.0,
+      "n_samples_rem": 2.0,
+      "n_features": 12.0,
+      "dataset_rows": 303.0,
+      "dataset_columns": 55.0,
+      "overall_score": 5.3333
+    },
+    "best_metrics": {
+      "mae_static_sleep": 3.282997,
+      "mae_dynamic_rem": 0.065791,
+      "rmse_static_rem": 0.096234,
+      "rmse_dynamic_rem": 0.090914,
+      "r2_dynamic_sleep": 0.268569,
+      "rmse_static_sleep": 4.02111,
+      "overall_score": 36.542,
+      "n_features": 15.0,
+      "r2_dynamic_rem": -0.003598,
+      "dataset_rows": 303.0,
+      "n_samples_rem": 222.0,
+      "r2_static_sleep": 0.051245,
+      "mae_dynamic_sleep": 2.778787,
+      "n_samples_sleep": 297.0,
+      "mae_static_rem": 0.0719,
+      "dataset_columns": 55.0,
+      "rmse_dynamic_sleep": 3.512519,
+      "r2_static_rem": -0.106097
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "mae_static_sleep",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-25T13:36:53.585219+00:00",
+    "embedding_text": "融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控…\n融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控制系统发育史和具体环境压力变量的前提下，能够比传统静态适应度模型更准确地预测极端生态位下物种的睡眠时长与睡眠结构（如REM/NREM比例）的进化最优解，并可通过跨物种实证数据进行检验。\n融合神经-内分泌-免疫多模态生理反馈的动态计算进化模型，在控制系统发育史和具体环境压力变量的前提下，能够比传统静态适应度模型更准确地预测极端生态位下物种的睡眠时长与睡眠结构（如REM/NREM比例）的进化最优解，并可通过跨物种实证数据进行检验。\n多模态生理反馈动态模型预测物种睡眠结构进化最优解（修正版）"
+  }
+]

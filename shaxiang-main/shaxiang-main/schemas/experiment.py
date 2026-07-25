@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import Any, Optional
 from enum import Enum
 from datetime import datetime
+import json
+import re
 
 
 class ExperimentStatus(str, Enum):
@@ -12,12 +14,88 @@ class ExperimentStatus(str, Enum):
     FAILED = "failed"
 
 
+_RANGE_IN_PARENS_RE = re.compile(
+    r"\(([-+]?\d+(?:\.\d+)?)\s*[-~–—到至]\s*([-+]?\d+(?:\.\d+)?)\)"
+)
+_BARE_RANGE_RE = re.compile(
+    r"^([-+]?\d+(?:\.\d+)?)\s*[-~–—到至]\s*([-+]?\d+(?:\.\d+)?)$"
+)
+
+
+def _coerce_variable_values(v: Any) -> list:
+    """LLM 常把 values 写成描述字符串；统一强制为 list，避免 ExperimentPlan 校验失败。"""
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    if isinstance(v, (tuple, set)):
+        return list(v)
+    if isinstance(v, dict):
+        # {"min": 0, "max": 10} / {"values": [...]}
+        if isinstance(v.get("values"), list):
+            return v["values"]
+        if "min" in v and "max" in v:
+            try:
+                lo, hi = float(v["min"]), float(v["max"])
+                if lo.is_integer() and hi.is_integer() and 0 <= hi - lo <= 32:
+                    return list(range(int(lo), int(hi) + 1))
+                return [v["min"], v["max"]]
+            except (TypeError, ValueError):
+                pass
+        return [v]
+    if isinstance(v, (int, float, bool)):
+        return [v]
+    if not isinstance(v, str):
+        return [v]
+
+    s = v.strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
+
+    m = _RANGE_IN_PARENS_RE.search(s) or _BARE_RANGE_RE.match(s)
+    if m:
+        try:
+            lo_f, hi_f = float(m.group(1)), float(m.group(2))
+            if lo_f.is_integer() and hi_f.is_integer():
+                lo, hi = int(lo_f), int(hi_f)
+                if lo > hi:
+                    lo, hi = hi, lo
+                # 小范围展开；大范围只保留端点，避免撑爆 schema
+                if hi - lo <= 32:
+                    return list(range(lo, hi + 1))
+                return [lo, hi]
+            return [lo_f, hi_f]
+        except (TypeError, ValueError):
+            pass
+
+    if "," in s:
+        parts = [p.strip() for p in s.split(",") if p.strip()]
+        if parts:
+            return parts
+    return [s]
+
+
 class VariableDefinition(BaseModel):
     """实验变量的定义"""
     name: str = Field(..., description="变量名称")
     type: str = Field(..., description="变量类型: categorical, continuous, ordinal")
-    values: list = Field(default_factory=list, description="可选取值范围")
+    values: list = Field(
+        default_factory=list,
+        description="可选取值范围，必须是 JSON 数组，例如 [0,1,2] 或 [\"A\",\"B\"]，禁止写成描述字符串",
+    )
     description: str = Field("", description="变量说明")
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def _normalize_values(cls, v: Any) -> list:
+        return _coerce_variable_values(v)
 
 
 class Hypothesis(BaseModel):

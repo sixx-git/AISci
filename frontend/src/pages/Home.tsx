@@ -38,23 +38,41 @@ type HomeListPersisted = {
   statusFilter: string;
 };
 
+/** 模块级缓存：组件卸载后仍保留，避免仅依赖 sessionStorage / StrictMode 时序 */
+let homeListMemory: HomeListPersisted | null = null;
+
+function normalizeHomeListState(parsed: Partial<HomeListPersisted>): HomeListPersisted {
+  const pageSize = Number(parsed.pageSize);
+  const page = Number(parsed.page);
+  return {
+    page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+    pageSize: (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSize)
+      ? pageSize
+      : DEFAULT_PAGE_SIZE,
+    search: typeof parsed.search === 'string' ? parsed.search : '',
+    statusFilter: typeof parsed.statusFilter === 'string' ? parsed.statusFilter : '',
+  };
+}
+
 function readHomeListState(): HomeListPersisted | null {
+  if (homeListMemory) return homeListMemory;
   try {
     const raw = sessionStorage.getItem(HOME_LIST_STATE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<HomeListPersisted>;
-    const pageSize = Number(parsed.pageSize);
-    const page = Number(parsed.page);
-    return {
-      page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
-      pageSize: (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSize)
-        ? pageSize
-        : DEFAULT_PAGE_SIZE,
-      search: typeof parsed.search === 'string' ? parsed.search : '',
-      statusFilter: typeof parsed.statusFilter === 'string' ? parsed.statusFilter : '',
-    };
+    const state = normalizeHomeListState(JSON.parse(raw) as Partial<HomeListPersisted>);
+    homeListMemory = state;
+    return state;
   } catch {
     return null;
+  }
+}
+
+function writeHomeListState(state: HomeListPersisted): void {
+  homeListMemory = state;
+  try {
+    sessionStorage.setItem(HOME_LIST_STATE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota / private mode */
   }
 }
 
@@ -102,8 +120,12 @@ export function Home() {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [page, setPage] = useState(() => restored?.page ?? 1);
   const [pageSize, setPageSize] = useState<number>(() => restored?.pageSize ?? DEFAULT_PAGE_SIZE);
+  const [jumpPageInput, setJumpPageInput] = useState(() => String(restored?.page ?? 1));
   const [reloadTick, setReloadTick] = useState(0);
-  const skipFilterPageResetRef = useRef(true);
+  /** 列表至少成功/失败加载过一次后，才允许用 totalPages 钳制 page，避免恢复页码被初始 totalPages=1 冲掉 */
+  const [listHydrated, setListHydrated] = useState(false);
+  /** 用「值是否真变了」判断，避免 React StrictMode 双调用把「跳过一次」吃掉后误 setPage(1) */
+  const prevFiltersRef = useRef({ keyword, statusFilter, pageSize });
 
   const {
     loading: pipelineLoading,
@@ -139,27 +161,23 @@ export function Home() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // 筛选/每页条数变化时回第一页；挂载恢复分页时跳过一次，避免退出项目后总是回到第 1 页
+  // 筛选/每页条数真正变化时回第一页（挂载恢复时 prev===current，不会误重置）
   useEffect(() => {
-    if (skipFilterPageResetRef.current) {
-      skipFilterPageResetRef.current = false;
-      return;
-    }
-    setPage(1);
+    const prev = prevFiltersRef.current;
+    const changed =
+      prev.keyword !== keyword ||
+      prev.statusFilter !== statusFilter ||
+      prev.pageSize !== pageSize;
+    prevFiltersRef.current = { keyword, statusFilter, pageSize };
+    if (changed) setPage(1);
   }, [keyword, statusFilter, pageSize]);
 
   useEffect(() => {
-    try {
-      const payload: HomeListPersisted = {
-        page,
-        pageSize,
-        search,
-        statusFilter,
-      };
-      sessionStorage.setItem(HOME_LIST_STATE_KEY, JSON.stringify(payload));
-    } catch {
-      /* ignore quota / private mode */
-    }
+    writeHomeListState({ page, pageSize, search, statusFilter });
+  }, [page, pageSize, search, statusFilter]);
+
+  const persistListStateNow = useCallback(() => {
+    writeHomeListState({ page, pageSize, search, statusFilter });
   }, [page, pageSize, search, statusFilter]);
 
   const loadStats = useCallback(async () => {
@@ -213,7 +231,10 @@ export function Home() {
         setTotal(0);
         setTotalPages(1);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setListHydrated(true);
+          setLoading(false);
+        }
       }
     }
 
@@ -249,8 +270,25 @@ export function Home() {
   }, [hasRunningPipeline]);
 
   useEffect(() => {
+    // 未 hydration 前 totalPages 默认是 1，若此时钳制会把恢复的页码写成第 1 页
+    if (!listHydrated) return;
     if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  }, [page, totalPages, listHydrated]);
+
+  useEffect(() => {
+    setJumpPageInput(String(page));
+  }, [page]);
+
+  const jumpToPage = () => {
+    const raw = Number.parseInt(jumpPageInput.trim(), 10);
+    if (!Number.isFinite(raw)) {
+      setJumpPageInput(String(page));
+      return;
+    }
+    const next = Math.min(Math.max(1, raw), Math.max(1, totalPages));
+    setPage(next);
+    setJumpPageInput(String(next));
+  };
 
   const clearFilters = () => {
     setSearch('');
@@ -324,7 +362,7 @@ export function Home() {
           </select>
         </label>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
           size="sm"
@@ -333,6 +371,34 @@ export function Home() {
           onClick={() => setPage((p) => Math.max(1, p - 1))}
         >
           上一页
+        </Button>
+        <label className="inline-flex items-center gap-1.5 text-xs text-bp-muted">
+          <span>跳至</span>
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, totalPages)}
+            value={jumpPageInput}
+            disabled={loading || totalPages <= 1}
+            onChange={(e) => setJumpPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                jumpToPage();
+              }
+            }}
+            className="input-field py-1 px-2 text-xs w-14 text-center tabular-nums"
+            aria-label="跳转页码"
+          />
+          <span>/ {totalPages}</span>
+        </label>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={loading || totalPages <= 1}
+          onClick={jumpToPage}
+        >
+          跳转
         </Button>
         <Button
           variant="secondary"
@@ -485,6 +551,7 @@ export function Home() {
                             <div className="min-w-0">
                               <Link
                                 to={`/projects/${project.id}`}
+                                onClick={persistListStateNow}
                                 className="font-medium text-bp-text hover:text-bp-cyan transition-colors line-clamp-1"
                                 title={project.name}
                               >
@@ -526,6 +593,7 @@ export function Home() {
                           <div className="flex items-center gap-2">
                             <Link
                               to={`/projects/${project.id}`}
+                              onClick={persistListStateNow}
                               className="inline-flex items-center gap-1 text-xs text-bp-cyan hover:underline"
                             >
                               进入
