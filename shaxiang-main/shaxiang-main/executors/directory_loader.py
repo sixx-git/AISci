@@ -207,10 +207,10 @@ class DirectoryLoader(BaseDataAdapter):
             if col in combined.columns:
                 combined = combined.drop(columns=[col])
 
-        # AutoDetect 泛用：把可解析的 object 列转为数值，避免「有数却无数值列」
-        from executors.numeric_coerce import coerce_numeric_like_columns
+        # AutoDetect 泛用：键值透视 + 数值强制转换，避免「有数却无数值列」
+        from executors.numeric_coerce import enrich_tabular_for_analysis
 
-        combined = coerce_numeric_like_columns(combined)
+        combined = enrich_tabular_for_analysis(combined)
         return combined
 
     # AutoDetect 默认排除说明文档 / macOS 垃圾 / R 二进制，避免冲掉数值表
@@ -291,11 +291,11 @@ class DirectoryLoader(BaseDataAdapter):
                     sample = str(df.iloc[0, 0]) if len(df) else ""
                     if ("," in sample or "\t" in sample) and len(sample) > 40:
                         continue
-                # 单文件级先行数值化，便于后续合并打分偏好宽数值表
+                # 单文件级先行数值化 / 键值透视，便于后续合并打分偏好宽数值表
                 if not profile.custom_rules.get("strip_suffix"):
-                    from executors.numeric_coerce import coerce_numeric_like_columns
+                    from executors.numeric_coerce import enrich_tabular_for_analysis
 
-                    df = coerce_numeric_like_columns(df)
+                    df = enrich_tabular_for_analysis(df)
                 return df
             except Exception as e:
                 last_err = e

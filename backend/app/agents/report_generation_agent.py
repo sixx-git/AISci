@@ -919,27 +919,10 @@ class ReportGenerationAgent:
         citation_map: List[Dict[str, Any]],
         verified_references: List[Dict[str, Any]],
     ) -> List[str]:
-        """统一为 GB/T 7714 风格文本行；去重键优先 DOI，其次 title+year。"""
-        from app.services.latex_export_service import _format_reference_gbt7714
+        """统一为 GB/T 7714 风格文本行（与合规/导出回填同一出口）。"""
+        from app.services.latex_export_service import format_reference_items_as_gbt7714_lines
 
-        refs: List[str] = []
-        seen: set = set()
-        for item in list(verified_references or []) + list(citation_map or []):
-            if not isinstance(item, dict):
-                continue
-            title = (item.get("title") or item.get("paper_title") or "").strip()
-            if not title:
-                continue
-            doi = str(item.get("doi") or "").strip().lower()
-            year = str(item.get("year") or item.get("publication_year") or "").strip()
-            key = f"doi:{doi}" if doi else f"title:{title.lower()}|{year}"
-            if key in seen:
-                continue
-            seen.add(key)
-            line = _format_reference_gbt7714(dict(item))
-            if line and line not in refs:
-                refs.append(line)
-        return refs
+        return format_reference_items_as_gbt7714_lines(citation_map, verified_references)
 
     def _inject_verified_bibliography(
         self,
@@ -1545,8 +1528,24 @@ class ReportGenerationAgent:
         result: Dict[str, Any],
         all_hypotheses: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
+        """证据链仅在书目为空/占位时回填；已有可验证 GB/T 书目时不整表覆盖。"""
         chapters = result.get("chapters", {})
         if not isinstance(chapters, dict):
+            return result
+
+        existing = chapters.get("references") or []
+        if not isinstance(existing, list):
+            existing = [existing] if existing else []
+        has_real_bib = any(
+            isinstance(r, str)
+            and r.strip()
+            and not any(
+                m in r
+                for m in ("证据链不足", "暂无真实文献", "禁止虚构", "缺少真实引用", "需补充文献")
+            )
+            for r in existing
+        )
+        if has_real_bib:
             return result
 
         refs: List[str] = []

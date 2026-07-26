@@ -9,12 +9,15 @@ from app.services.latex_export_service import (
     _build_figures_section,
     _build_references_bib,
     _build_thebibliography_section,
+    _collect_bibliography_items,
     _format_chapter_body,
     _format_reference_gbt7714,
     build_latex_document,
+    clean_reference_text,
     copy_template_assets,
     escape_latex,
     export_report_via_latex,
+    format_reference_items_as_gbt7714_lines,
     get_latex_template_dir,
     parse_reference_line_to_item,
 )
@@ -36,6 +39,37 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn("$H_0$", escaped)
         self.assertIn(r"\Omega", escaped)
         self.assertIn("$", escaped)
+
+    def test_escape_ensuremath_lambda_not_broken(self):
+        """文献摘要常见 \\ensuremath{\\Lambda}，不得变成 \\ensuremath{$\\Lambda$\\}。"""
+        text = (
+            "Einstein's cosmological constant, \\ensuremath{\\Lambda}; "
+            "today the concept is dark energy."
+        )
+        escaped = escape_latex(text)
+        self.assertNotIn(r"\ensuremath{$", escaped)
+        self.assertNotIn(r"$\}", escaped)
+        self.assertIn(r"$\Lambda$", escaped)
+        # 已含 $ 的 ensuremath 也应归一
+        escaped2 = escape_latex(r"constant \ensuremath{$\Lambda$} today")
+        self.assertEqual(escaped2.count(r"\ensuremath"), 0)
+        self.assertIn(r"$\Lambda$", escaped2)
+
+    def test_prepare_figure_files_uses_existing_figures_dir(self):
+        from app.services.latex_export_service import _prepare_figure_files
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fig_dir = root / "figures"
+            fig_dir.mkdir()
+            png = fig_dir / "iter_demo.png"
+            png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+            prepared = _prepare_figure_files(
+                [{"plot_id": "iter_demo", "title": "Demo chart", "path": str(root / "missing.png")}],
+                root,
+            )
+            self.assertEqual(len(prepared), 1)
+            self.assertEqual(prepared[0]["relative_path"], "figures/iter_demo.png")
 
     def test_escape_windows_path_not_treated_as_commands(self):
         text = r"数据集路径：D:\浏览器\allgaps，共 5000 条"
@@ -222,7 +256,8 @@ class TestLatexExportService(unittest.TestCase):
             }
         )
         self.assertIn("姜启源", line)
-        self.assertIn("数学模型{[M]}", line)
+        self.assertIn("数学模型[M]", line)
+        self.assertNotIn("{[M]}", line)
         self.assertIn("北京: 高等教育出版社", line)
         self.assertIn("2018", line)
 
@@ -293,6 +328,65 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn(r"0.30\textheight", tex)
         self.assertNotIn(r"\begin{figure}[H]", tex)
         self.assertIn(r"\begin{minipage}", tex)
+
+    def test_clean_reference_text_strips_html_and_dup_markers(self):
+        self.assertEqual(clean_reference_text("<i>Planck</i> 2018 results"), "Planck 2018 results")
+        self.assertEqual(clean_reference_text("Title{[J]}{[J]}"), "Title[J]")
+        self.assertEqual(clean_reference_text("Title[J][J]"), "Title[J]")
+
+    def test_format_gbt7714_strips_html_title(self):
+        line = _format_reference_gbt7714(
+            {
+                "authors": "Planck Collaboration",
+                "title": "<i>Planck</i> 2018 results. VI. Cosmological parameters",
+                "journal": "Astron. Astrophys.",
+                "year": "2020",
+            }
+        )
+        self.assertNotIn("<i>", line)
+        self.assertIn("Planck 2018 results", line)
+        self.assertIn("[J]", line)
+        self.assertNotIn("{[J]}", line)
+
+    def test_collect_bibliography_skips_chapter_reparse_when_structured(self):
+        chapters = {
+            "references": [
+                "Planck Collaboration. <i>Planck</i> 2018 results{[J]}{[J]}. Astron. Astrophys., 2020.",
+                "Another garbled line{[J]}",
+            ]
+        }
+        citation_map = [
+            {
+                "authors": "Planck Collaboration",
+                "title": "<i>Planck</i> 2018 results. VI. Cosmological parameters",
+                "journal": "Astron. Astrophys.",
+                "year": "2020",
+                "doi": "10.1051/0004-6361/201833910",
+            }
+        ]
+        items = _collect_bibliography_items(chapters, citation_map=citation_map)
+        self.assertEqual(len(items), 1)
+        self.assertNotIn("<i>", items[0].get("title", ""))
+        block = _build_thebibliography_section(items)
+        self.assertEqual(block.count(r"\bibitem{ref"), 1)
+        self.assertNotIn(r"\{[J]\}", block)
+
+    def test_unified_gbt7714_formatter_matches_export(self):
+        from app.services.report_compliance_service import format_corpus_reference_lines
+
+        verified = [
+            {
+                "authors": ["姜启源", "谢金星", "叶俊"],
+                "title": "数学模型及其应用方法导论",
+                "publisher_location": "北京",
+                "publisher": "高等教育出版社",
+                "year": "2018",
+            }
+        ]
+        a = format_reference_items_as_gbt7714_lines(verified_references=verified)
+        b = format_corpus_reference_lines([], verified)
+        self.assertEqual(a, b)
+        self.assertTrue(a and "数学模型及其应用方法导论[M]" in a[0])
 
 
 if __name__ == "__main__":

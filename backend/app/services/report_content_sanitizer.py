@@ -753,8 +753,28 @@ def sanitize_chapters(chapters: Dict[str, Any]) -> Dict[str, Any]:
             cleaned[key] = collapse_method_boundary_duplicates(str(cleaned[key]))
         if key == "results" and isinstance(cleaned.get(key), str):
             cleaned[key] = dedupe_repeated_sentences(str(cleaned[key]))
-        if key == "references":
-            cleaned[key] = annotate_preprint_references(cleaned.get(key))
+
+    # references 不在正文科学章节键中，需单独清洗 HTML / 重复类型标，并标注预印本
+    if "references" in cleaned:
+        from app.services.latex_export_service import clean_reference_text
+
+        refs = cleaned.get("references")
+        if isinstance(refs, list):
+            cleaned_refs: List[Any] = []
+            for item in refs:
+                if isinstance(item, str):
+                    cleaned_refs.append(clean_reference_text(item))
+                elif isinstance(item, dict):
+                    row = dict(item)
+                    for field in ("title", "paper_title", "journal", "note", "authors"):
+                        if field in row and isinstance(row[field], str):
+                            row[field] = clean_reference_text(row[field])
+                    cleaned_refs.append(row)
+                else:
+                    cleaned_refs.append(item)
+            cleaned["references"] = annotate_preprint_references(cleaned_refs)
+        else:
+            cleaned["references"] = annotate_preprint_references(refs)
     return cleaned
 
 

@@ -53,32 +53,10 @@ def format_corpus_reference_lines(
     citation_map: List[Dict[str, Any]],
     verified_references: Optional[List[Dict[str, Any]]] = None,
 ) -> List[str]:
-    refs: List[str] = []
-    seen: set[str] = set()
-    for item in list(verified_references or []) + list(citation_map or []):
-        if not isinstance(item, dict):
-            continue
-        title = (item.get("title") or item.get("paper_title") or "").strip()
-        if not title or title.lower() in seen:
-            continue
-        seen.add(title.lower())
-        authors = item.get("authors") or ""
-        if isinstance(authors, list):
-            authors = ", ".join(str(a) for a in authors if a)
-        year = item.get("year") or item.get("publication_year") or ""
-        doi = item.get("doi") or ""
-        url = item.get("source_url") or item.get("url") or ""
-        line = title
-        if authors:
-            line = f"{authors}. {line}"
-        if year:
-            line += f" ({year})"
-        if doi:
-            line += f". DOI: {doi}"
-        elif url:
-            line += f". {url}"
-        refs.append(line)
-    return refs
+    """与报告注入共用 GB/T 7714 出口，避免导出回填换成另一套格式。"""
+    from app.services.latex_export_service import format_reference_items_as_gbt7714_lines
+
+    return format_reference_items_as_gbt7714_lines(citation_map, verified_references)
 
 
 def _collect_match_keywords(

@@ -11,6 +11,7 @@ LaTeX 报告导出服务
 from __future__ import annotations
 
 import base64
+import html
 import json
 import logging
 import os
@@ -182,6 +183,62 @@ def get_latex_template_dir() -> Path:
     return DEFAULT_TEMPLATE_DIR
 
 
+def _find_braced_group_end(text: str, open_brace_idx: int) -> int:
+    """open_brace_idx 指向 '{'，返回闭合 '}' 之后的下标；失败返回 -1。"""
+    if open_brace_idx < 0 or open_brace_idx >= len(text) or text[open_brace_idx] != "{":
+        return -1
+    depth = 0
+    i = open_brace_idx
+    while i < len(text):
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def _normalize_ensuremath_to_inline_math(text: str) -> str:
+    """
+    将 \\ensuremath{...} 规范为 $...$，避免后续按 $ 切分时拆破花括号，
+    产生 \\ensuremath{$\\Lambda$\\} 这类非法源码。
+    """
+    if not text or "\\ensuremath" not in text:
+        return text
+    out: List[str] = []
+    i = 0
+    token = "\\ensuremath"
+    while i < len(text):
+        if text.startswith(token, i):
+            j = i + len(token)
+            while j < len(text) and text[j].isspace():
+                j += 1
+            if j < len(text) and text[j] == "{":
+                end = _find_braced_group_end(text, j)
+                if end > j:
+                    inner = text[j + 1 : end - 1].strip()
+                    # 去掉已有外层 $...$
+                    while (
+                        len(inner) >= 2
+                        and inner.startswith("$")
+                        and inner.endswith("$")
+                        and inner.count("$") == 2
+                    ):
+                        inner = inner[1:-1].strip()
+                    # 残留未配对 $ 会再次破坏切分，直接去掉
+                    if "$" in inner:
+                        inner = inner.replace("$", "")
+                    out.append(f"${inner}$" if inner else "")
+                    i = end
+                    continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
 def _promote_inline_math_segment(text: str) -> str:
     """在不含 $...$ 的文本段内提升伪 LaTeX 数学片段。"""
     if not text:
@@ -292,6 +349,8 @@ def escape_latex(text: Any) -> str:
     # 去掉替换字符与控制符
     s = re.sub(r"[\ufffd\u0000-\u0008\u000b\u000c\u000e-\u001f]", "", s)
     s = _normalize_windows_paths_for_latex(s)
+    # 必须先规范化 ensuremath，再做 Unicode/$ 提升，否则会拆出 \\ensuremath{$...$\\}
+    s = _normalize_ensuremath_to_inline_math(s)
     s = _replace_unicode_math(s)
     # 指标名中的下划线：在非数学片段中由 _escape_plain_latex 转义为 \_
     s = _promote_inline_math(s)
@@ -868,9 +927,28 @@ def _normalize_bib_authors(authors: Any) -> str:
     return " and ".join(_bibtex_field_value(p) for p in parts)
 
 
+def clean_reference_text(text: Any) -> str:
+    """去掉 HTML / 多余空白，避免 <i>Planck</i> 等脏标题进入书目。"""
+    if text is None:
+        return ""
+    s = str(text).strip()
+    if not s:
+        return ""
+    s = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", s)
+    s = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", s)
+    s = re.sub(r"(?i)</?(i|em|b|strong|u|sup|sub|span|font|a|p|br|div)[^>]*>", "", s)
+    s = re.sub(r"<[^>]+>", "", s)
+    s = html.unescape(s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # 去掉误重复的类型标记 {[J]} / [J][J]
+    s = re.sub(r"(?:\{\[([A-Z](?:/[A-Z]+)?)\]\}\s*)+", r"[\1]", s)
+    s = re.sub(r"(?:\[([A-Z](?:/[A-Z]+)?)\]\s*){2,}", r"[\1]", s)
+    return s
+
+
 def parse_reference_line_to_item(line: str) -> Dict[str, str]:
-    """将「作者. 标题 (年份). DOI/URL」格式的参考文献行解析为结构化字段。"""
-    text = (line or "").strip()
+    """将参考文献行解析为结构化字段（兼容 GB/T 与 Authors. Title (year)）。"""
+    text = clean_reference_text(line)
     if not text:
         return {}
 
@@ -888,9 +966,15 @@ def parse_reference_line_to_item(line: str) -> Dict[str, str]:
 
     year = ""
     m_year = re.search(r"\((\d{4})\)\s*$", text)
+    if not m_year:
+        # GB/T: Journal, 2020. 或 北京: 出版社, 2018.
+        m_year = re.search(r",\s*(\d{4})\.?\s*$", text)
     if m_year:
         year = m_year.group(1)
-        text = text[: m_year.start()].strip().rstrip(".")
+        text = text[: m_year.start()].strip().rstrip(".,;；")
+
+    # 去掉末尾类型标 [J] / {[J]}
+    text = re.sub(r"(?:\{\[([A-Z](?:/[A-Z]+)?)]\}|\[([A-Z](?:/[A-Z]+)?)])\s*$", "", text).strip()
 
     authors = ""
     title = text
@@ -900,6 +984,7 @@ def parse_reference_line_to_item(line: str) -> Dict[str, str]:
             authors = head.strip()
             title = tail.strip()
 
+    title = clean_reference_text(title)
     out = {"title": title, "authors": authors, "year": year, "doi": doi, "url": url}
     return {k: v for k, v in out.items() if v}
 
@@ -908,7 +993,7 @@ def _reference_item_key(item: Dict[str, Any]) -> str:
     doi = str(item.get("doi") or "").strip().lower()
     if doi:
         return f"doi:{doi}"
-    title = str(item.get("title") or item.get("paper_title") or "").strip().lower()
+    title = clean_reference_text(item.get("title") or item.get("paper_title") or "").lower()
     year = str(item.get("year") or item.get("publication_year") or "").strip()
     if title:
         return f"title:{title}|{year}" if year else f"title:{title}"
@@ -926,7 +1011,15 @@ def _structured_reference_items(
         if not isinstance(raw, dict):
             continue
         item = dict(raw)
-        item["title"] = (item.get("title") or item.get("paper_title") or "").strip()
+        item["title"] = clean_reference_text(item.get("title") or item.get("paper_title") or "")
+        if item.get("paper_title"):
+            item["paper_title"] = clean_reference_text(item.get("paper_title"))
+        if item.get("journal"):
+            item["journal"] = clean_reference_text(item.get("journal"))
+        if isinstance(item.get("authors"), str):
+            item["authors"] = clean_reference_text(item.get("authors"))
+        elif isinstance(item.get("authors"), list):
+            item["authors"] = [clean_reference_text(a) for a in item["authors"] if clean_reference_text(a)]
         if not item["title"] or not _is_valid_reference_text(item["title"]):
             continue
         key = _reference_item_key(item)
@@ -936,6 +1029,25 @@ def _structured_reference_items(
             seen.add(key)
         merged.append(item)
     return merged
+
+
+def format_reference_items_as_gbt7714_lines(
+    citation_map: Optional[List[Dict[str, Any]]] = None,
+    verified_references: Optional[List[Dict[str, Any]]] = None,
+) -> List[str]:
+    """统一出口：结构化文献 → GB/T 7714 文本行（报告注入/合规回填共用）。"""
+    refs: List[str] = []
+    seen_line: set[str] = set()
+    for item in _structured_reference_items(citation_map, verified_references):
+        line = _format_reference_gbt7714(item)
+        if not line:
+            continue
+        key = line.lower()
+        if key in seen_line:
+            continue
+        seen_line.add(key)
+        refs.append(line)
+    return refs
 
 
 def _reference_item_to_bib_fields(item: Dict[str, Any]) -> Tuple[str, Dict[str, str]]:
@@ -1095,25 +1207,28 @@ def _format_reference_gbt7714(item: Dict[str, Any]) -> str:
     """
     格式化为 GB/T 7714 参考文献条目（用于 \\bibitem 正文）。
     示例：姜启源, 谢金星, 叶俊. 数学模型[M]. 北京: 高等教育出版社, 2018.
+    类型标使用 [M]/[J]（不用花括号），以便 escape_latex 后仍可读。
     """
-    note = str(item.get("note") or "").strip()
-    title = (item.get("title") or item.get("paper_title") or "").strip().rstrip(".")
+    note = clean_reference_text(item.get("note") or "")
+    title = clean_reference_text(item.get("title") or item.get("paper_title") or "").rstrip(".")
     if not title:
         return note
 
     authors = _format_authors_for_citation(item.get("authors"))
     marker = _reference_type_marker(item)
     year = str(item.get("year") or item.get("publication_year") or "").strip()
-    journal = str(item.get("journal") or "").strip()
-    publisher = str(item.get("publisher") or "").strip()
-    pub_place = str(item.get("publisher_location") or item.get("address") or "").strip()
+    journal = clean_reference_text(item.get("journal") or "")
+    publisher = clean_reference_text(item.get("publisher") or "")
+    pub_place = clean_reference_text(item.get("publisher_location") or item.get("address") or "")
     doi = str(item.get("doi") or "").strip()
     url = str(item.get("source_url") or item.get("url") or "").strip()
 
     segments: List[str] = []
     if authors:
-        segments.append(f"{authors}.")
-    segments.append(f"{title}{{[{marker}]}}")
+        authors = authors.rstrip().rstrip(".")
+        segments.append(f"{authors}. ")
+    # 不用 {[M]}：经 escape_latex 会变成 \{[M]\}
+    segments.append(f"{title}[{marker}]")
 
     if marker == "M" and (pub_place or publisher):
         place_pub = pub_place
@@ -1146,25 +1261,33 @@ def _collect_bibliography_items(
     citation_map: Optional[List[Dict[str, Any]]] = None,
     verified_references: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """合并结构化文献与 chapters.references 文本行，去重。"""
+    """合并结构化文献与 chapters.references；有 structured 时不再二次解析文本行。"""
     items: List[Dict[str, Any]] = []
     seen: set[str] = set()
 
     def _add(item: Dict[str, Any]) -> None:
-        if not item.get("title") and not item.get("paper_title"):
+        if not item.get("title") and not item.get("paper_title") and not item.get("note"):
             return
-        title = (item.get("title") or item.get("paper_title") or "").strip()
-        if title and not _is_valid_reference_text(title):
-            return
-        key = _reference_item_key(item)
+        title = clean_reference_text(item.get("title") or item.get("paper_title") or "")
+        if title:
+            item = dict(item)
+            item["title"] = title
+            if not _is_valid_reference_text(title):
+                return
+        key = _reference_item_key(item) if title else f"note:{clean_reference_text(item.get('note'))}"
         if key:
             if key in seen:
                 return
             seen.add(key)
         items.append(item)
 
-    for item in _structured_reference_items(citation_map, verified_references):
+    structured = _structured_reference_items(citation_map, verified_references)
+    for item in structured:
         _add(dict(item))
+
+    # 与 _build_references_bib 对齐：已有结构化文献时，不再 parse 章节文本（避免 GB/T 二次解析出重复坏条目）
+    if structured:
+        return items
 
     refs = chapters.get("references", [])
     if isinstance(refs, list):
@@ -1175,7 +1298,7 @@ def _collect_bibliography_items(
             if parsed.get("title"):
                 _add(parsed)
             else:
-                _add({"note": ref.strip()})
+                _add({"note": clean_reference_text(ref)})
 
     return items
 
@@ -1197,6 +1320,39 @@ def _build_thebibliography_section(items: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _resolve_plot_source_path(plot: Dict[str, Any], output_dir: Path, target: Path) -> Optional[Path]:
+    """解析图表源文件：绝对路径 / 相对路径 / /storage/charts URL / 已复制到 figures/。"""
+    candidates: List[Path] = []
+    for key in ("path", "file_path"):
+        raw = str(plot.get(key) or "").strip()
+        if raw:
+            candidates.append(Path(raw))
+    rel = str(plot.get("relative_path") or "").strip().replace("\\", "/")
+    if rel:
+        candidates.append(output_dir / rel)
+        candidates.append(Path(rel))
+    url = str(plot.get("url") or "").strip().replace("\\", "/")
+    if url.startswith("/storage/charts/"):
+        name = url.rsplit("/", 1)[-1]
+        if name:
+            try:
+                from app.services.report_charts_service import get_public_charts_dir
+
+                candidates.append(get_public_charts_dir() / name)
+            except Exception:
+                candidates.append(Path(__file__).resolve().parents[2] / "storage" / "charts" / name)
+    # 报告目录里已有同名图（上次复制残留）也可直接用
+    candidates.append(target)
+
+    for cand in candidates:
+        try:
+            if cand.is_file() and cand.stat().st_size > 0:
+                return cand
+        except OSError:
+            continue
+    return None
+
+
 def _prepare_figure_files(
     plots: Optional[List[Dict[str, Any]]],
     output_dir: Path,
@@ -1214,10 +1370,7 @@ def _prepare_figure_files(
         filename = f"{safe_id}.png"
         target = figures_dir / filename
 
-        src_path = plot.get("path") or plot.get("file_path") or ""
-        if src_path and os.path.exists(src_path):
-            shutil.copy2(src_path, target)
-        elif plot.get("base64"):
+        if plot.get("base64") and not _resolve_plot_source_path(plot, output_dir, target):
             try:
                 raw = base64.b64decode(plot["base64"])
                 target.write_bytes(raw)
@@ -1225,6 +1378,14 @@ def _prepare_figure_files(
                 logger.warning(f"图表 Base64 解码失败 [{plot_id}]: {exc}")
                 continue
         else:
+            src = _resolve_plot_source_path(plot, output_dir, target)
+            if src is None:
+                logger.warning("跳过缺失图表文件 [%s]", plot_id)
+                continue
+            if src.resolve() != target.resolve():
+                shutil.copy2(src, target)
+
+        if not target.is_file() or target.stat().st_size <= 0:
             continue
 
         prepared.append(

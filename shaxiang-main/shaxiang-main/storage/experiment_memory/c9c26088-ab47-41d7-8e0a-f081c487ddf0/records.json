@@ -1,0 +1,50 @@
+[
+  {
+    "record_id": "c9c26088-ab47-41d7-8e0a-f081c487ddf0_8c44f7c3-ab51-4ca4-82d5-87a98750db35",
+    "scope_key": "c9c26088-ab47-41d7-8e0a-f081c487ddf0",
+    "experiment_id": "8c44f7c3-ab51-4ca4-82d5-87a98750db35",
+    "title": "设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增…",
+    "hypothesis": "设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增材制造协同调度架构，有望在火星资源受限条件下优化物质循环与能源利用效率，但该闭环系统的长期效能受限于非传统生物技术3D打印火星土壤的材料稳定性及作用机制的验证，并需排除元数据不匹配的ISRU数据干扰。",
+    "research_goal": "设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增材制造协同调度架构，有望在火星资源受限条件下优化物质循环与能源利用效率，但该闭环系统的长期效能受限于非传统生物技术3D打印火星土壤的材料稳定性及作用机制的验证，并需排除元数据不匹配的ISRU数据干扰。",
+    "method_summary": "基于物理约束的火星土壤模拟数据生成与材料稳定性验证框架",
+    "baseline_metrics": {
+      "silhouette_score": 0.081266,
+      "optimal_clusters": 2.0,
+      "pca_explained_variance": 0.979506,
+      "pca_n_components": 13.0,
+      "thermal_conductivity_r2_mean": 0.999246,
+      "thermal_conductivity_r2_std": 5.3e-05,
+      "max_correlation": 0.952438,
+      "mean_correlation": 0.03805,
+      "dataset_rows": 1.0,
+      "dataset_columns": 34.0,
+      "overall_score": 2.2563
+    },
+    "best_metrics": {
+      "pca_n_components": 13.0,
+      "optimal_clusters": 2.0,
+      "overall_score": 626.4836,
+      "best_silhouette_score": 0.232007,
+      "thermal_conductivity_r2_mean": 0.999246,
+      "silhouette_score": 0.081266,
+      "pca_explained_variance": 0.979506,
+      "best_k_clusters": 2.0,
+      "mean_correlation": 0.03805,
+      "max_correlation": 0.952438,
+      "n_samples": 5000.0,
+      "cv_r2_std": 0.011067,
+      "thermal_conductivity_r2_std": 5.3e-05,
+      "dataset_rows": 1.0,
+      "physical_consistency_rate": 1.0,
+      "cv_r2_mean": 0.667482,
+      "dataset_columns": 34.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "pca_n_components",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-26T14:01:01.653181+00:00",
+    "embedding_text": "设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增…\n设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增材制造协同调度架构，有望在火星资源受限条件下优化物质循环与能源利用效率，但该闭环系统的长期效能受限于非传统生物技术3D打印火星土壤的材料稳定性及作用机制的验证，并需排除元数据不匹配的ISRU数据干扰。\n设计基于多智能体深度强化学习的生物再生生命保障系统与自动化增材制造协同调度架构，有望在火星资源受限条件下优化物质循环与能源利用效率，但该闭环系统的长期效能受限于非传统生物技术3D打印火星土壤的材料稳定性及作用机制的验证，并需排除元数据不匹配的ISRU数据干扰。\n基于物理约束的火星土壤模拟数据生成与材料稳定性验证框架"
+  }
+]

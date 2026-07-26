@@ -1,0 +1,44 @@
+[
+  {
+    "record_id": "435afd9f-e522-4ff1-8556-9d89896c066b_db519eae-7137-4a9e-a64c-e9cc2d1fd6df",
+    "scope_key": "435afd9f-e522-4ff1-8556-9d89896c066b",
+    "experiment_id": "db519eae-7137-4a9e-a64c-e9cc2d1fd6df",
+    "title": "鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测…",
+    "hypothesis": "鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测，广义不确定性原理（GUP）中的最小位置不确定性可作为一种理论框架，尝试与圈量子引力中体积算符的离散谱进行数学映射。通过构建依赖间接推论的微观运动学模型，探索GUP的代数结构在离散几何粗粒化极限中的涌现条件，从而为时空最小尺度的理论自洽性提供间接验证途径。",
+    "research_goal": "鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测，广义不确定性原理（GUP）中的最小位置不确定性可作为一种理论框架，尝试与圈量子引力中体积算符的离散谱进行数学映射。通过构建依赖间接推论的微观运动学模型，探索GUP的代数结构在离散几何粗粒化极限中的涌现条件，从而为时空最小尺度的理论自洽性提供间接验证途径。",
+    "method_summary": "GUP最小长度与圈量子引力体积算符离散谱的映射验证",
+    "baseline_metrics": {
+      "best_f1": 0.0,
+      "best_accuracy": 1.0,
+      "pos_ratio": 0.0,
+      "n_positive": 0.0,
+      "n_negative": 5000.0,
+      "min_volume_gap": 0.0,
+      "mean_volume_gap": 4e-06,
+      "top_feature_importance": 0.0,
+      "top_feature_name_idx": 6.0,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 9.0
+    },
+    "best_metrics": {
+      "min_volume_gap": 0.0,
+      "top_feature_importance": 0.0,
+      "dataset_columns": 9.0,
+      "n_positive": 0.0,
+      "best_accuracy": 1.0,
+      "n_negative": 5000.0,
+      "pos_ratio": 0.0,
+      "mean_volume_gap": 4e-06,
+      "dataset_rows": 5000.0,
+      "top_feature_name_idx": 6.0,
+      "best_f1": 0.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "min_volume_gap",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-07-26T09:55:34.371020+00:00",
+    "embedding_text": "鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测…\n鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测，广义不确定性原理（GUP）中的最小位置不确定性可作为一种理论框架，尝试与圈量子引力中体积算符的离散谱进行数学映射。通过构建依赖间接推论的微观运动学模型，探索GUP的代数结构在离散几何粗粒化极限中的涌现条件，从而为时空最小尺度的理论自洽性提供间接验证途径。\n鉴于不同量子引力方法对最小长度机制尚未统一且缺乏直接实验探测，广义不确定性原理（GUP）中的最小位置不确定性可作为一种理论框架，尝试与圈量子引力中体积算符的离散谱进行数学映射。通过构建依赖间接推论的微观运动学模型，探索GUP的代数结构在离散几何粗粒化极限中的涌现条件，从而为时空最小尺度的理论自洽性提供间接验证途径。\nGUP最小长度与圈量子引力体积算符离散谱的映射验证"
+  }
+]

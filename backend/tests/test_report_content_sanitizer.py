@@ -7,6 +7,22 @@ from app.services.report_content_sanitizer import (
 )
 
 
+def test_sanitize_chapters_cleans_references_html():
+    chapters = sanitize_chapters(
+        {
+            "references": [
+                "Planck Collaboration. <i>Planck</i> 2018 results{[J]}. Astron. Astrophys., 2020.",
+                "Smith et al. arXiv preprint study. 2026. DOI: 10.48550/arXiv.2601.00001",
+            ]
+        }
+    )
+    refs = chapters["references"]
+    assert "<i>" not in refs[0]
+    assert "Planck 2018 results" in refs[0]
+    assert "{[J]}" not in refs[0]
+    assert "预印本" in refs[1]
+
+
 def test_sanitize_removes_llm_agent_from_technical_details():
     chapters = sanitize_chapters(
         {

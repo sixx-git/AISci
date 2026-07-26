@@ -33,16 +33,24 @@ if not exist "%VENV_PY%" (
     exit /b 1
 )
 
+REM Backend 实际读取 backend\.env（优先于根目录 .env）。改密钥请改 backend\.env。
 if not exist "%PROJECT_ROOT%\backend\.env" (
-    if exist "%PROJECT_ROOT%\.env.example" (
+    if exist "%PROJECT_ROOT%\.env" (
+        echo [INFO] backend\.env missing, copying from project root .env ...
+        copy "%PROJECT_ROOT%\.env" "%PROJECT_ROOT%\backend\.env" >nul
+        echo.
+    ) else if exist "%PROJECT_ROOT%\.env.example" (
         echo [WARN] backend\.env missing, copying from .env.example ...
         copy "%PROJECT_ROOT%\.env.example" "%PROJECT_ROOT%\backend\.env" >nul
         echo         Please edit backend\.env then re-run if needed.
         echo.
-    ) else if not exist "%PROJECT_ROOT%\.env" (
+    ) else (
         echo [WARN] No .env found. Backend may fail without QWEN_API_KEY / USE_MOCK_LLM.
         echo.
     )
+) else if exist "%PROJECT_ROOT%\.env" (
+    echo [INFO] Using backend\.env for QWEN_API_KEY ^(root .env is ignored when backend\.env exists^).
+    echo.
 )
 
 if not exist "%PROJECT_ROOT%\data" mkdir "%PROJECT_ROOT%\data"
@@ -66,6 +74,8 @@ REM ---- free stuck ports optionally warn ----
 call :port_in_use 8000
 if "!PORT_BUSY!"=="1" (
     echo [WARN] Port 8000 already in use. Reusing existing backend if healthy.
+    echo         NOTE: reusing will NOT reload .env / API key changes.
+    echo         To apply a new QWEN_API_KEY: close "AI Scientist Backend" window, then re-run.
     call :wait_url "http://127.0.0.1:8000/health" 5
     if errorlevel 1 (
         echo [ERROR] Port 8000 busy but /health failed. Close the old Backend window and retry.

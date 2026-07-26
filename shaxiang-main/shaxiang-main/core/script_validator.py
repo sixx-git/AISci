@@ -36,10 +36,13 @@ def enrich_column_contract(metadata: dict, df=None) -> dict:
     if df is not None:
         # 契约阶段再兜底一次：避免上游未 coerce 时门禁误杀
         try:
-            from executors.numeric_coerce import coerce_numeric_like_columns, count_numeric_columns
+            from executors.numeric_coerce import (
+                count_numeric_columns,
+                enrich_tabular_for_analysis,
+            )
 
             if count_numeric_columns(df) == 0:
-                df = coerce_numeric_like_columns(df)
+                df = enrich_tabular_for_analysis(df)
         except Exception:
             pass
         columns = list(df.columns)

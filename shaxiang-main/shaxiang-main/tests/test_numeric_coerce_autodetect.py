@@ -8,7 +8,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from executors.numeric_coerce import coerce_numeric_like_columns, count_numeric_columns
+from executors.numeric_coerce import (
+    coerce_numeric_like_columns,
+    count_numeric_columns,
+    enrich_tabular_for_analysis,
+    try_pivot_key_value_table,
+)
 from executors.adaptive_table_combine import _score, adaptive_combine_tables, TablePiece
 
 
@@ -27,6 +32,57 @@ def test_coerce_numeric_like_object_columns():
     assert pd.api.types.is_numeric_dtype(out["b"])
     assert out["label"].dtype == object or str(out["label"].dtype) == "string"
     assert not pd.api.types.is_numeric_dtype(out["path"])
+
+
+def test_coerce_extracts_number_from_mixed_cells():
+    from executors.numeric_coerce import _extract_first_number
+
+    assert _extract_first_number("100 (Fresnel1)") == "100"
+    assert _extract_first_number("0.90–0.98") == "0.90"
+    assert _extract_first_number("5.42e6") == "5.42e6"
+    assert _extract_first_number("87Rb") is None
+    assert _extract_first_number("2025-07-23") is None
+    assert _extract_first_number("—") is None
+    df = pd.DataFrame(
+        {
+            "value": ["256", "4.0", "100 (Fresnel1)", "0.90–0.98", "Aquila", "87Rb", "—"],
+        }
+    )
+    out = coerce_numeric_like_columns(df, min_ratio=0.5)
+    assert pd.api.types.is_numeric_dtype(out["value"])
+    assert out["value"].notna().sum() >= 4
+    assert pd.isna(out.loc[5, "value"])  # 87Rb
+
+
+def test_pivot_key_value_hardware_capabilities():
+    df = pd.DataFrame(
+        {
+            "field": ["max_qubits", "lattice_area_x", "rabi_frequency_max", "device_name"],
+            "value": ["256", "75", "15.8", "Aquila"],
+            "unit": ["count", "um", "rad/us", ""],
+        }
+    )
+    wide = try_pivot_key_value_table(df)
+    assert wide is not None
+    assert count_numeric_columns(wide) >= 3
+    assert "device_name" not in wide.columns  # 非数值字段不进透视
+    enriched = enrich_tabular_for_analysis(df)
+    assert count_numeric_columns(enriched) >= 3
+
+
+def test_skip_unit_source_notes_columns():
+    df = pd.DataFrame(
+        {
+            "unit": ["count", "um", "us"],
+            "source": ["2025-07-23", "2025-07-23", "paper"],
+            "notes": ["Fresnel2 up to 200", "x", "y"],
+            "quera_aquila": ["256", "4.0", "15.8"],
+        }
+    )
+    out = coerce_numeric_like_columns(df, min_ratio=0.5)
+    assert not pd.api.types.is_numeric_dtype(out["unit"])
+    assert not pd.api.types.is_numeric_dtype(out["source"])
+    assert pd.api.types.is_numeric_dtype(out["quera_aquila"])
 
 
 def test_coerce_strips_quoted_column_names():
