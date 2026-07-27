@@ -41,7 +41,7 @@ def enrich_column_contract(metadata: dict, df=None) -> dict:
                 enrich_tabular_for_analysis,
             )
 
-            if count_numeric_columns(df) == 0:
+            if count_numeric_columns(df) < 2:
                 df = enrich_tabular_for_analysis(df)
         except Exception:
             pass

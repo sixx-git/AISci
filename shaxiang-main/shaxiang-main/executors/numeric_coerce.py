@@ -74,20 +74,20 @@ def count_numeric_columns(df: Optional[pd.DataFrame]) -> int:
     return int(sum(num[c].notna().any() for c in num.columns))
 
 
-def _extract_first_number(text: str) -> Optional[str]:
+def _extract_first_number(text: str, *, allow_incidental: bool = True) -> Optional[str]:
     if text is None:
         return None
-    s = str(text).strip().strip("\"'")
-    if not s:
+    raw = str(text).strip().strip("\"'")
+    if not raw:
         return None
-    low = s.lower()
+    low = raw.lower()
     if low in _MISSING_TOKENS or low.startswith("not publicly") or low.startswith("not stated"):
         return None
-    if _DATE_LIKE.match(s):
+    if _DATE_LIKE.match(raw):
         return None
     # 归一化特殊减号/波浪；保留科学计数法 e
     s = (
-        s.replace("\u00a0", " ")
+        raw.replace("\u00a0", " ")
         .replace("−", "-")
         .replace("–", "-")
         .replace("—", "-")
@@ -100,7 +100,14 @@ def _extract_first_number(text: str) -> Optional[str]:
     m = _FIRST_NUMBER.search(s)
     if not m:
         return None
-    return m.group(1)
+    num = m.group(1)
+    if not allow_incidental and len(raw) > 24:
+        # 长文本里夹带 "1000 Genomes..." 不应算数值列
+        rest = raw.replace(num, "", 1)
+        letters = len(re.findall(r"[A-Za-z\u4e00-\u9fff]", rest))
+        if letters >= 6:
+            return None
+    return num
 
 
 def coerce_numeric_like_columns(
@@ -149,18 +156,21 @@ def coerce_numeric_like_columns(
         if sample.map(lambda x: bool(_PATH_LIKE.search(x))).mean() >= 0.3:
             continue
 
-        cleaned = series.map(_extract_first_number)
-        numeric = pd.to_numeric(pd.Series(cleaned, index=series.index), errors="coerce")
-        # 分母用「非空原始单元格」；缺失标记抽取为 None 不计入成功，但也不应拖垮「值」列
-        ratio = float(numeric.notna().sum()) / float(len(non_null))
-        # value / 厂商数值列允许更低阈值（硬件能力表常见）
-        need = 0.55 if (
+        loose_value_col = (
             col_l in _VALUE_COL_NAMES
             or col_l.endswith("_value")
             or "aquila" in col_l
             or "fresnel" in col_l
             or col_l in {"quera_aquila", "pasqal_fresnel"}
-        ) else min_ratio
+        )
+        cleaned = series.map(
+            lambda x: _extract_first_number(x, allow_incidental=loose_value_col)
+        )
+        numeric = pd.to_numeric(pd.Series(cleaned, index=series.index), errors="coerce")
+        # 分母用「非空原始单元格」；缺失标记抽取为 None 不计入成功，但也不应拖垮「值」列
+        ratio = float(numeric.notna().sum()) / float(len(non_null))
+        # value / 厂商数值列允许更低阈值（硬件能力表常见）
+        need = 0.55 if loose_value_col else min_ratio
         if ratio >= need:
             out[col] = numeric
 
@@ -239,12 +249,88 @@ def try_pivot_key_value_table(df: pd.DataFrame) -> Optional[pd.DataFrame]:
     return out
 
 
+_SEX_TOKENS = {
+    "m": 1.0,
+    "male": 1.0,
+    "man": 1.0,
+    "男": 1.0,
+    "f": 0.0,
+    "female": 0.0,
+    "woman": 0.0,
+    "女": 0.0,
+}
+
+
+def _looks_like_free_text_series(series: pd.Series) -> bool:
+    sample = series.dropna().astype(str).head(40)
+    if sample.empty:
+        return True
+    mean_len = float(sample.map(len).mean())
+    comma_ratio = float(sample.map(lambda x: "," in x or "，" in x).mean())
+    return mean_len >= 40 or comma_ratio >= 0.4
+
+
+def encode_categoricals_for_analysis(df: pd.DataFrame) -> pd.DataFrame:
+    """纯分类型表（样本元数据等）派生数值编码列，供 AutoDetect / 分析脚本使用。"""
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+    n_rows = len(out)
+    for col in list(df.columns):
+        col_s = str(col).strip()
+        col_l = col_s.lower()
+        if col_l in _SKIP_COERCE_NAMES or _ID_NAME.match(col_s):
+            continue
+        if pd.api.types.is_numeric_dtype(out[col]):
+            continue
+        if not (pd.api.types.is_object_dtype(out[col]) or str(out[col].dtype) == "string"):
+            continue
+
+        non_null = out[col].dropna()
+        if non_null.empty:
+            continue
+        nunique = int(non_null.nunique())
+        # 接近主键 / 自由文本不编码
+        if nunique <= 1 or nunique > min(50, max(4, int(n_rows * 0.6))):
+            continue
+        if _looks_like_free_text_series(non_null):
+            continue
+
+        code_col = f"{col_s}__code"
+        if code_col in out.columns:
+            continue
+
+        vals = non_null.astype(str).str.strip().str.lower()
+        uniq = set(vals.unique())
+        sex_like = col_l in {"sex", "gender", "性别"} or uniq.issubset(set(_SEX_TOKENS))
+        if sex_like and uniq & set(_SEX_TOKENS):
+            mapped = out[col].astype(str).str.strip().str.lower().map(_SEX_TOKENS)
+            if mapped.notna().sum() >= max(2, int(0.5 * len(non_null))):
+                out[code_col] = mapped
+                continue
+
+        if 2 <= nunique <= 40:
+            codes, _ = pd.factorize(out[col].astype(str).str.strip(), sort=True)
+            series = pd.Series(codes, index=out.index, dtype="float64")
+            series = series.mask(series < 0)
+            # 全相同编码无意义
+            if series.nunique(dropna=True) >= 2:
+                out[code_col] = series
+
+    return out
+
+
 def enrich_tabular_for_analysis(df: pd.DataFrame) -> pd.DataFrame:
-    """加载后增强：键值透视（若有收益）+ 数值强制转换。"""
+    """加载后增强：键值透视（若有收益）+ 数值强制转换 + 分类编码兜底。"""
     if df is None or df.empty:
         return df
     pivoted = try_pivot_key_value_table(df)
     base = coerce_numeric_like_columns(df)
     if pivoted is not None and count_numeric_columns(pivoted) > count_numeric_columns(base):
         return pivoted
+    if count_numeric_columns(base) < 2:
+        encoded = encode_categoricals_for_analysis(base)
+        if count_numeric_columns(encoded) > count_numeric_columns(base):
+            return encoded
     return base

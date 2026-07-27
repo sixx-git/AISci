@@ -11,6 +11,7 @@ import pytest
 from executors.numeric_coerce import (
     coerce_numeric_like_columns,
     count_numeric_columns,
+    encode_categoricals_for_analysis,
     enrich_tabular_for_analysis,
     try_pivot_key_value_table,
 )
@@ -90,6 +91,42 @@ def test_coerce_strips_quoted_column_names():
     out = coerce_numeric_like_columns(df)
     assert "Choice_1" in out.columns
     assert count_numeric_columns(out) == 2
+
+
+def test_reject_incidental_number_in_long_text():
+    df = pd.DataFrame(
+        {
+            "Data collections": [
+                "1000 Genomes on GRCh38,Human Genome Structural Variation Consortium",
+                "1000 Genomes 30x on GRCh38,Human Genome Structural Variation Consortium, Phase 2",
+                "Human Genome Structural Variation Consortium",
+            ]
+        }
+    )
+    out = coerce_numeric_like_columns(df)
+    assert count_numeric_columns(out) == 0
+
+
+def test_encode_igsr_like_sample_metadata():
+    df = pd.DataFrame(
+        {
+            "Sample name": [f"HG{i}" for i in range(9)],
+            "Sex": ["M", "F", "M", "F", "M", "F", "M", "F", "M"],
+            "Population code": ["CHS", "CHS", "GBR", "GBR", "YRI", "YRI", "CHS", "GBR", "YRI"],
+            "Superpopulation code": ["EAS", "EAS", "EUR", "EUR", "AFR", "AFR", "EAS", "EUR", "AFR"],
+            "Data collections": [
+                "1000 Genomes on GRCh38,Human Genome Structural Variation Consortium"
+            ]
+            * 9,
+        }
+    )
+    out = enrich_tabular_for_analysis(df)
+    assert count_numeric_columns(out) >= 2
+    assert "Sex__code" in out.columns
+    assert "Population code__code" in out.columns
+    assert not pd.api.types.is_numeric_dtype(out["Data collections"])
+    encoded = encode_categoricals_for_analysis(df)
+    assert encoded["Sex__code"].nunique(dropna=True) == 2
 
 
 def test_combine_score_prefers_numeric_wide_table():

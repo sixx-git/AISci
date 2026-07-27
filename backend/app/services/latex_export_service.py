@@ -245,7 +245,12 @@ def _promote_inline_math_segment(text: str) -> str:
         return text
 
     def _wrap(match: re.Match[str]) -> str:
-        inner = match.group(0).replace("\\_", "_")
+        token = match.group(0)
+        plain = token.replace("\\_", "_")
+        # significant_issue / feature_columns 等长 snake_case 标识符不是数学量
+        if re.fullmatch(r"[A-Za-z]{4,}_[A-Za-z]{3,}(?:_[A-Za-z0-9]+)*", plain):
+            return plain.replace("_", " ")
+        inner = plain
         return f"${inner}$"
 
     greek_cmd = (
@@ -254,7 +259,15 @@ def _promote_inline_math_segment(text: str) -> str:
         r"times|leq|geq|neq|approx|equiv|infty|pm|mp|sum|int|prod)"
         r"(?:\\_[A-Za-z0-9]+|_\{[^}]+\}|_[A-Za-z0-9]+|\{[^}]*\})*"
     )
-    var_cmd = r"(?<![\\$])[A-Za-z]+(?:\\_[A-Za-z0-9]+|_\{[^}]+\}|_[A-Za-z0-9]+)"
+    # 仅提升短物理量（H_0 / n_s）或已转义 H\_0；避免吞掉英文标识符
+    var_cmd = (
+        r"(?<![\\$A-Za-z])"
+        r"(?:"
+        r"[A-Za-z]{1,4}(?:\\_[A-Za-z0-9]+)+|"
+        r"[A-Za-z]{1,3}(?:_[0-9A-Za-z]{1,4})+"
+        r")"
+        r"(?![A-Za-z0-9])"
+    )
     text = re.sub(greek_cmd, _wrap, text)
     parts = re.split(r"(\$[^$\n]+\$)", text)
     rebuilt: List[str] = []

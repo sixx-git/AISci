@@ -239,10 +239,71 @@ class DirectoryLoader(BaseDataAdapter):
         )
         return files
 
+    def _try_read_office_or_zip_table(self, file_path: Path) -> Optional[pd.DataFrame]:
+        """误命名为 .csv 的 xlsx/zip：PK 头时尝试 Excel 或包内首个表格。"""
+        try:
+            head = file_path.read_bytes()[:4]
+        except OSError:
+            return None
+        if len(head) < 2 or head[:2] != b"PK":
+            return None
+
+        try:
+            df = pd.read_excel(file_path, engine="openpyxl")
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            pass
+
+        try:
+            import io
+            import zipfile
+
+            with zipfile.ZipFile(file_path) as zf:
+                names = [
+                    n
+                    for n in zf.namelist()
+                    if not n.endswith("/")
+                    and not n.startswith("__MACOSX")
+                    and Path(n).suffix.lower() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+                ]
+                for name in names:
+                    raw = zf.read(name)
+                    suf = Path(name).suffix.lower()
+                    if suf in {".xlsx", ".xls"}:
+                        try:
+                            df = pd.read_excel(io.BytesIO(raw), engine="openpyxl")
+                            if df is not None and not df.empty:
+                                return df
+                        except Exception:
+                            continue
+                    else:
+                        for enc in ("utf-8", "utf-8-sig", "latin-1"):
+                            try:
+                                text = raw.decode(enc)
+                                sep = "\t" if suf == ".tsv" else ","
+                                df = pd.read_csv(io.StringIO(text), sep=sep, engine="python", on_bad_lines="skip")
+                                if df is not None and not df.empty and df.shape[1] >= 2:
+                                    return df
+                            except Exception:
+                                continue
+        except Exception:
+            return None
+        return None
+
     def _read_file(self, file_path: Path, profile: DatasetProfile) -> Optional[pd.DataFrame]:
         """读取单个文件为 DataFrame；分隔符失败时自动回退尝试。"""
         if file_path.suffix.lower() == ".dat" and not looks_like_text_tabular_file(file_path):
             raise ValueError(_BINARY_DAT_MSG)
+
+        office_df = self._try_read_office_or_zip_table(file_path)
+        if office_df is not None and not office_df.empty:
+            office_df = office_df.dropna(axis=1, how="all").dropna(axis=0, how="all")
+            if not profile.custom_rules.get("strip_suffix"):
+                from executors.numeric_coerce import enrich_tabular_for_analysis
+
+                office_df = enrich_tabular_for_analysis(office_df)
+            return office_df
 
         comment = profile.comment_prefix if profile.comment_prefix else None
         if comment in {'"', "'"}:

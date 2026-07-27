@@ -1,0 +1,52 @@
+[
+  {
+    "record_id": "8a81b476-d49d-40b2-8d38-d78aaf2ca24e_40e4c4ee-0f0a-4f32-8b5c-4b4366b24cb9",
+    "scope_key": "8a81b476-d49d-40b2-8d38-d78aaf2ca24e",
+    "experiment_id": "40e4c4ee-0f0a-4f32-8b5c-4b4366b24cb9",
+    "title": "针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒…",
+    "hypothesis": "针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒律约束的扩散模型生成合成数据，并探索基于异质多尺度方法（HMM）框架的跨尺度校验机制，可能提升宏观模型在边缘场景下的鲁棒性与精度，但需进一步解决HMM中宏观-微观耦合的数学障碍。",
+    "research_goal": "针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒律约束的扩散模型生成合成数据，并探索基于异质多尺度方法（HMM）框架的跨尺度校验机制，可能提升宏观模型在边缘场景下的鲁棒性与精度，但需进一步解决HMM中宏观-微观耦合的数学障碍。",
+    "method_summary": "融入物理守恒律约束的扩散模型生成合成数据对宏观模型鲁棒性的提升研究",
+    "baseline_metrics": {
+      "rmse_baseline": 0.76447,
+      "rmse_diffusion_no_physics": 0.728345,
+      "rmse_diffusion_with_physics": 0.733294,
+      "rmse_physics_hmm": 0.731355,
+      "mae_baseline": 0.533154,
+      "mae_physics_hmm": 0.521048,
+      "edge_rmse_baseline": 1.28679,
+      "edge_rmse_physics_hmm": 1.282822,
+      "physics_violation_rate_baseline": 0.491961,
+      "physics_violation_rate_physics_hmm": 0.491961,
+      "edge_sample_count": 81.0,
+      "improvement_pct": 4.331764,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 5.0,
+      "overall_score": 7.7414
+    },
+    "best_metrics": {
+      "edge_sample_count": 81.0,
+      "edge_rmse_physics_hmm": 1.282822,
+      "physics_violation_rate_baseline": 0.491961,
+      "rmse_diffusion_with_physics": 0.733294,
+      "rmse_diffusion_no_physics": 0.728345,
+      "mae_physics_hmm": 0.521048,
+      "improvement_pct": 4.331764,
+      "dataset_columns": 5.0,
+      "dataset_rows": 5000.0,
+      "rmse_baseline": 0.76447,
+      "rmse_physics_hmm": 0.731355,
+      "physics_violation_rate_physics_hmm": 0.491961,
+      "overall_score": 7.7414,
+      "mae_baseline": 0.533154,
+      "edge_rmse_baseline": 1.28679
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "edge_sample_count",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-07-27T02:23:42.058116+00:00",
+    "embedding_text": "针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒…\n针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒律约束的扩散模型生成合成数据，并探索基于异质多尺度方法（HMM）框架的跨尺度校验机制，可能提升宏观模型在边缘场景下的鲁棒性与精度，但需进一步解决HMM中宏观-微观耦合的数学障碍。\n针对极端物理工况下微观高保真数据稀缺的问题，构建融入物理守恒律约束的扩散模型生成合成数据，并探索基于异质多尺度方法（HMM）框架的跨尺度校验机制，可能提升宏观模型在边缘场景下的鲁棒性与精度，但需进一步解决HMM中宏观-微观耦合的数学障碍。\n融入物理守恒律约束的扩散模型生成合成数据对宏观模型鲁棒性的提升研究"
+  }
+]

@@ -1,0 +1,52 @@
+[
+  {
+    "record_id": "fa1e8b20-66ea-417b-a08a-809d244e7425_246fea63-310a-4915-9170-479cc78d8fad",
+    "scope_key": "fa1e8b20-66ea-417b-a08a-809d244e7425",
+    "experiment_id": "246fea63-310a-4915-9170-479cc78d8fad",
+    "title": "针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为…",
+    "hypothesis": "针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为超冷原子（如玻色-爱因斯坦凝聚态）在光晶格中的量子模拟提供基础物理参数，但受限于当前文献缺乏对玻色-爱因斯坦凝聚态在量子模拟中具体应用机制及技术瓶颈的深入探讨，该测量技术在推动玻色-爱因斯坦凝聚态未来复杂应用方面的具体发展路径与实际效能仍需进一步实验验证。",
+    "research_goal": "针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为超冷原子（如玻色-爱因斯坦凝聚态）在光晶格中的量子模拟提供基础物理参数，但受限于当前文献缺乏对玻色-爱因斯坦凝聚态在量子模拟中具体应用机制及技术瓶颈的深入探讨，该测量技术在推动玻色-爱因斯坦凝聚态未来复杂应用方面的具体发展路径与实际效能仍需进一步实验验证。",
+    "method_summary": "原子/分子极化率单位体系一致性验证与玻色-爱因斯坦凝聚态量子模拟参数评估",
+    "baseline_metrics": {
+      "n_species_paired": 276.0,
+      "mean_conversion_ratio": 0.148184,
+      "std_conversion_ratio": 1.3e-05,
+      "theoretical_ratio": 0.14818,
+      "mape_ratio_percent": 0.005166,
+      "linear_slope": 0.148185,
+      "linear_intercept": 0.0,
+      "r_squared": 1.0,
+      "pearson_r": 1.0,
+      "spearman_r": 1.0,
+      "top_candidate_au": 79.0,
+      "slope_deviation_percent": 0.003057,
+      "dataset_rows": 1.0,
+      "dataset_columns": 552.0,
+      "overall_score": 29.8711
+    },
+    "best_metrics": {
+      "theoretical_ratio": 0.14818,
+      "n_species_paired": 276.0,
+      "dataset_rows": 1.0,
+      "mean_conversion_ratio": 0.148184,
+      "slope_deviation_percent": 0.003057,
+      "spearman_r": 1.0,
+      "top_candidate_au": 79.0,
+      "mape_ratio_percent": 0.005166,
+      "linear_intercept": 0.0,
+      "dataset_columns": 552.0,
+      "r_squared": 1.0,
+      "overall_score": 29.8711,
+      "pearson_r": 1.0,
+      "std_conversion_ratio": 1.3e-05,
+      "linear_slope": 0.148185
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "theoretical_ratio",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-27T04:14:36.806047+00:00",
+    "embedding_text": "针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为…\n针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为超冷原子（如玻色-爱因斯坦凝聚态）在光晶格中的量子模拟提供基础物理参数，但受限于当前文献缺乏对玻色-爱因斯坦凝聚态在量子模拟中具体应用机制及技术瓶颈的深入探讨，该测量技术在推动玻色-爱因斯坦凝聚态未来复杂应用方面的具体发展路径与实际效能仍需进一步实验验证。\n针对微型化纳米光栅原子干涉仪的高精度测量（如基态极化率）可为超冷原子（如玻色-爱因斯坦凝聚态）在光晶格中的量子模拟提供基础物理参数，但受限于当前文献缺乏对玻色-爱因斯坦凝聚态在量子模拟中具体应用机制及技术瓶颈的深入探讨，该测量技术在推动玻色-爱因斯坦凝聚态未来复杂应用方面的具体发展路径与实际效能仍需进一步实验验证。\n原子/分子极化率单位体系一致性验证与玻色-爱因斯坦凝聚态量子模拟参数评估"
+  }
+]
