@@ -202,6 +202,51 @@ def prepare_plots_for_persistence(
     return [slim_plot_for_db(p) for p in synced]
 
 
+def load_plots_from_report_storage(report_file_id: Optional[str]) -> List[Dict[str, Any]]:
+    """从 report_data.json / figures 回填图表（兼容 DB extra_metadata.plots 为空的历史报告）。"""
+    if not report_file_id:
+        return []
+    report_dir = Path(__file__).resolve().parents[2] / "storage" / "reports" / str(report_file_id)
+    if not report_dir.is_dir():
+        return []
+
+    plots: List[Dict[str, Any]] = []
+    json_path = report_dir / "report_data.json"
+    if json_path.is_file():
+        try:
+            import json
+
+            saved = json.loads(json_path.read_text(encoding="utf-8"))
+            raw = saved.get("plots") if isinstance(saved, dict) else None
+            if isinstance(raw, list):
+                plots = [p for p in raw if isinstance(p, dict)]
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("读取报告图表失败 file_id=%s: %s", report_file_id, exc)
+
+    if not plots:
+        # 仅有 figures/*.png 时按文件名生成占位元数据
+        for folder_name in ("figures", "charts"):
+            fig_dir = report_dir / folder_name
+            if not fig_dir.is_dir():
+                continue
+            for png in sorted(fig_dir.glob("*.png")):
+                plots.append(
+                    {
+                        "plot_id": png.stem,
+                        "title": png.stem.replace("_", " "),
+                        "path": str(png),
+                        "file_path": str(png),
+                        "source": "sandbox_execution",
+                        "type": "sandbox_plot",
+                        "is_generated_from_real_data": True,
+                    }
+                )
+
+    if not plots:
+        return []
+    return prepare_plots_for_persistence(plots, report_file_id=str(report_file_id), keep_base64=False)
+
+
 def resolve_plot_image_path(
     extra_metadata: Dict[str, Any],
     plot_id: str,
@@ -210,15 +255,17 @@ def resolve_plot_image_path(
 ) -> Optional[Path]:
     plots = extra_metadata.get("plots") or []
     if not isinstance(plots, list):
-        return None
+        plots = []
 
     target_plot: Optional[Dict[str, Any]] = None
     for p in plots:
         if isinstance(p, dict) and str(p.get("plot_id") or "") == plot_id:
             target_plot = p
             break
+
+    # DB 无元数据时，仍允许按 report figures / 公共 charts 直接取图
     if not target_plot:
-        return None
+        target_plot = {"plot_id": plot_id}
 
     for key in ("file_path", "path", "url"):
         raw = target_plot.get(key)
@@ -238,16 +285,13 @@ def resolve_plot_image_path(
         return fallback
 
     if report_file_id:
-        report_chart = (
-            Path(__file__).resolve().parents[2]
-            / "storage"
-            / "reports"
-            / report_file_id
-            / "charts"
-            / f"{plot_id}.png"
+        report_root = (
+            Path(__file__).resolve().parents[2] / "storage" / "reports" / str(report_file_id)
         )
-        if report_chart.is_file():
-            return report_chart
+        for sub in ("figures", "charts"):
+            report_chart = report_root / sub / f"{plot_id}.png"
+            if report_chart.is_file():
+                return report_chart
     return None
 
 

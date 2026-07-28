@@ -1,0 +1,53 @@
+[
+  {
+    "record_id": "c8dc37b0-148c-467c-82ad-97875c8aff15_b1f60a9d-6de3-4831-aa97-ec09461f12fc",
+    "scope_key": "c8dc37b0-148c-467c-82ad-97875c8aff15",
+    "experiment_id": "b1f60a9d-6de3-4831-aa97-ec09461f12fc",
+    "title": "融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫…",
+    "hypothesis": "融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫微环境（TIME）的动态演化与合成致死机制（如PARP抑制），识别出克服免疫治疗耐药性和异质性的特定干预靶点，从而为部分难治性癌症提供精准治疗策略，而非实现单一疗法治愈所有癌症。",
+    "research_goal": "融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫微环境（TIME）的动态演化与合成致死机制（如PARP抑制），识别出克服免疫治疗耐药性和异质性的特定干预靶点，从而为部分难治性癌症提供精准治疗策略，而非实现单一疗法治愈所有癌症。",
+    "method_summary": "肿瘤基因组特征与免疫治疗响应及生存期的关联分析（标签修复与生存二分类重构版）",
+    "baseline_metrics": {
+      "auc": 0.0,
+      "f1_score": 0.0,
+      "accuracy": 0.0,
+      "n_classification_samples": 64.0,
+      "r2_score": 0.269752,
+      "mae_months": 13.893059,
+      "n_regression_samples": 320.0,
+      "survival_mean_months": 37.169922,
+      "mean_cancer_auc": 0.0,
+      "std_cancer_auc": 0.0,
+      "dataset_rows": 2997.0,
+      "dataset_columns": 42.0,
+      "overall_score": 43.5333
+    },
+    "best_metrics": {
+      "mae_months": 16.34897,
+      "n_classification_samples": 2997.0,
+      "auc": 0.0,
+      "n_selected_features": 0.0,
+      "mean_cancer_auc": 0.0,
+      "best_threshold": 0.5,
+      "accuracy": 0.0,
+      "pr_auc": 0.0,
+      "survival_mean_months": 37.169922,
+      "n_regression_samples": 320.0,
+      "overall_score": 336.8855,
+      "positive_rate": 1.0,
+      "dataset_columns": 42.0,
+      "f1_score": 0.0,
+      "response_rate": 0.0,
+      "dataset_rows": 2997.0,
+      "std_cancer_auc": 0.0,
+      "r2_score": 0.269752
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "accuracy",
+    "success": false,
+    "status": "running",
+    "timestamp": "2026-07-27T18:07:24.523772+00:00",
+    "embedding_text": "融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫…\n融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫微环境（TIME）的动态演化与合成致死机制（如PARP抑制），识别出克服免疫治疗耐药性和异质性的特定干预靶点，从而为部分难治性癌症提供精准治疗策略，而非实现单一疗法治愈所有癌症。\n融合物理约束与生物学先验的生成式AI模型能够通过模拟肿瘤免疫微环境（TIME）的动态演化与合成致死机制（如PARP抑制），识别出克服免疫治疗耐药性和异质性的特定干预靶点，从而为部分难治性癌症提供精准治疗策略，而非实现单一疗法治愈所有癌症。\n肿瘤基因组特征与免疫治疗响应及生存期的关联分析（标签修复与生存二分类重构版）"
+  }
+]

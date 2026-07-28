@@ -1,0 +1,45 @@
+[
+  {
+    "record_id": "89d737c4-ec5d-4e2c-bcc7-f9ee628aeac0_ae48a47a-4317-4d98-b380-efee435f0676",
+    "scope_key": "89d737c4-ec5d-4e2c-bcc7-f9ee628aeac0",
+    "experiment_id": "ae48a47a-4317-4d98-b380-efee435f0676",
+    "title": "在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框…",
+    "hypothesis": "在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框架下，引力子在额外维度中的自由传播会导致特定频段的原初引力波能谱特征或亚毫米尺度的引力偏离；尽管确切维度数 n 尚未确定且亚毫米级测量精度存在不确定性，这些特征仍可作为限制额外维度数量及验证高维相变到当前三维展开过渡的潜在观测证据。",
+    "research_goal": "在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框架下，引力子在额外维度中的自由传播会导致特定频段的原初引力波能谱特征或亚毫米尺度的引力偏离；尽管确切维度数 n 尚未确定且亚毫米级测量精度存在不确定性，这些特征仍可作为限制额外维度数量及验证高维相变到当前三维展开过渡的潜在观测证据。",
+    "method_summary": "脉冲星计时阵列对三维空间假设的支持度评估与异常检测分析",
+    "baseline_metrics": {
+      "accuracy_rf": 1.0,
+      "accuracy_et": 1.0,
+      "f1_macro_rf": 1.0,
+      "f1_macro_et": 1.0,
+      "n_classes": 1.0,
+      "cv_splits_used": 5.0,
+      "dataset_rows": 76.0,
+      "dataset_columns": 12.0,
+      "overall_score": 1.6667
+    },
+    "best_metrics": {
+      "dataset_columns": 12.0,
+      "overall_score": 19.4,
+      "n_total": 76.0,
+      "n_zscore_anomalies": 4.0,
+      "cv_splits_used": 5.0,
+      "f1_macro_et": 1.0,
+      "f1_macro_rf": 1.0,
+      "n_ocsvm_anomalies": 6.0,
+      "n_classes": 1.0,
+      "n_consensus_anomalies": 3.0,
+      "accuracy_et": 1.0,
+      "accuracy_rf": 1.0,
+      "n_iso_anomalies": 8.0,
+      "dataset_rows": 76.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "dataset_columns",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-28T03:21:28.386172+00:00",
+    "embedding_text": "在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框…\n在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框架下，引力子在额外维度中的自由传播会导致特定频段的原初引力波能谱特征或亚毫米尺度的引力偏离；尽管确切维度数 n 尚未确定且亚毫米级测量精度存在不确定性，这些特征仍可作为限制额外维度数量及验证高维相变到当前三维展开过渡的潜在观测证据。\n在弦气体宇宙学与包含至少两个新紧致空间维度（n ≥ 2）的框架下，引力子在额外维度中的自由传播会导致特定频段的原初引力波能谱特征或亚毫米尺度的引力偏离；尽管确切维度数 n 尚未确定且亚毫米级测量精度存在不确定性，这些特征仍可作为限制额外维度数量及验证高维相变到当前三维展开过渡的潜在观测证据。\n脉冲星计时阵列对三维空间假设的支持度评估与异常检测分析"
+  }
+]

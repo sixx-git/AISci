@@ -201,6 +201,11 @@ DATASET_ADVISOR_USER_TEMPLATE = Template("""请根据以下实验假设，推荐
 SCRIPT_DESIGNER_SYSTEM_PROMPT = """你是一位数据科学实验设计专家。
 你的任务是根据实验假设和已上传的具体数据，设计分析脚本。
 
+输出必须是完整 ExperimentPlan JSON（字段名用 snake_case）：
+- 必填顶层字段：title, description, hypothesis, methodology
+- hypothesis 必须是对象，含 statement / rationale / expected_outcome（勿只用 PascalCase 的 Hypothesis 单键包装）
+- 禁止只返回 {"Hypothesis": {...}}；必须同时给出 title、description、methodology
+
 你必须：
 1. 根据假设设计合适的分析方法
 2. 在 parameters 中配置:

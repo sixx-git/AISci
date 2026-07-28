@@ -1,0 +1,44 @@
+[
+  {
+    "record_id": "f01ddcc6-519d-4682-a557-85f29c31440d_e807f504-029b-404c-a944-bbd86aa877f9",
+    "scope_key": "f01ddcc6-519d-4682-a557-85f29c31440d",
+    "experiment_id": "e807f504-029b-404c-a944-bbd86aa877f9",
+    "title": "热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现…",
+    "hypothesis": "热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现有相关文献的文本解析错误，关于其衰减的具体动力学机制（如潮汐耗散与星际介质阻力的协同作用及临界半长轴边界）尚无法得到证实，需依赖后续准确的观测数据进行验证。",
+    "research_goal": "热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现有相关文献的文本解析错误，关于其衰减的具体动力学机制（如潮汐耗散与星际介质阻力的协同作用及临界半长轴边界）尚无法得到证实，需依赖后续准确的观测数据进行验证。",
+    "method_summary": "热木星系统轨道衰减动力学机制的观测验证（改进版）",
+    "baseline_metrics": {
+      "best_dp_de": -0.0,
+      "best_dp_err": 0.0,
+      "best_z_score": -1632.941935,
+      "best_chi2_lin": 914.732491,
+      "best_chi2_quad": 245468.109404,
+      "valid_systems_count": 184.0,
+      "dataset_rows": 8667.0,
+      "dataset_columns": 7.0,
+      "overall_score": 40822.3167
+    },
+    "best_metrics": {
+      "best_z_score": -1632.941935,
+      "best_dp_de": -0.0,
+      "best_chi2_lin": 914.732491,
+      "dataset_rows": 8667.0,
+      "best_system_dp": -0.0,
+      "dataset_columns": 7.0,
+      "overall_score": 40822.3167,
+      "best_chi2_quad": 245468.109404,
+      "decay_candidates_count": 2.0,
+      "best_dp_err": 0.0,
+      "best_system_delta_bic": -286.0566,
+      "valid_systems_count": 184.0,
+      "best_system_z_score": -369.792954
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "best_z_score",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-27T10:15:12.344312+00:00",
+    "embedding_text": "热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现…\n热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现有相关文献的文本解析错误，关于其衰减的具体动力学机制（如潮汐耗散与星际介质阻力的协同作用及临界半长轴边界）尚无法得到证实，需依赖后续准确的观测数据进行验证。\n热木星系统（如WASP-12b）存在轨道衰减现象，但受限于现有相关文献的文本解析错误，关于其衰减的具体动力学机制（如潮汐耗散与星际介质阻力的协同作用及临界半长轴边界）尚无法得到证实，需依赖后续准确的观测数据进行验证。\n热木星系统轨道衰减动力学机制的观测验证（改进版）"
+  }
+]

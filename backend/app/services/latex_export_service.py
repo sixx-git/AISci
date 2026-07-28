@@ -259,14 +259,14 @@ def _promote_inline_math_segment(text: str) -> str:
         r"times|leq|geq|neq|approx|equiv|infty|pm|mp|sum|int|prod)"
         r"(?:\\_[A-Za-z0-9]+|_\{[^}]+\}|_[A-Za-z0-9]+|\{[^}]*\})*"
     )
-    # 仅提升短物理量（H_0 / n_s）或已转义 H\_0；避免吞掉英文标识符
+    # 仅提升短物理量：已转义 H\_0，或单一下标 H_0 / n_s / k_B。
+    # 禁止匹配列名中部片段（如 k_W_per_mK 里的 per_mK），否则会 Double subscript。
     var_cmd = (
-        r"(?<![\\$A-Za-z])"
+        r"(?<![\\$A-Za-z0-9_])"
         r"(?:"
-        r"[A-Za-z]{1,4}(?:\\_[A-Za-z0-9]+)+|"
-        r"[A-Za-z]{1,3}(?:_[0-9A-Za-z]{1,4})+"
+        r"[A-Za-z]{1,4}\\_(?:[0-9]{1,4}|[A-Za-z]{1,3})(?![A-Za-z0-9\\_])|"
+        r"[A-Za-z]{1,3}_(?:[0-9]{1,4}|[A-Za-z]{1,2})(?![A-Za-z0-9_])"
         r")"
-        r"(?![A-Za-z0-9])"
     )
     text = re.sub(greek_cmd, _wrap, text)
     parts = re.split(r"(\$[^$\n]+\$)", text)

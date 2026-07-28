@@ -1,0 +1,44 @@
+[
+  {
+    "record_id": "45cbdcad-d4b6-4d8e-adaf-a9376ad8e861_24d4e432-3689-4b5e-807b-8b4671009381",
+    "scope_key": "45cbdcad-d4b6-4d8e-adaf-a9376ad8e861",
+    "experiment_id": "24d4e432-3689-4b5e-807b-8b4671009381",
+    "title": "设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨…",
+    "hypothesis": "设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨水，通过整合具有胞外电子传递（EET）能力的电活性细菌，构建具备环境响应功能的活体结构，从而实现水净化等特定应用。",
+    "research_goal": "设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨水，通过整合具有胞外电子传递（EET）能力的电活性细菌，构建具备环境响应功能的活体结构，从而实现水净化等特定应用。",
+    "method_summary": "基于基因表达谱的电活性细菌功能基因聚类与分类分析",
+    "baseline_metrics": {
+      "silhouette_score": 0.482988,
+      "classification_accuracy_mean": 0.625,
+      "classification_accuracy_std": 0.0,
+      "f1_macro_mean": 0.563636,
+      "f1_macro_std": 0.0,
+      "n_genes": 4560.0,
+      "n_samples": 16.0,
+      "n_clusters": 3.0,
+      "dataset_rows": 4560.0,
+      "dataset_columns": 17.0,
+      "overall_score": 572.584
+    },
+    "best_metrics": {
+      "overall_score": 572.584,
+      "dataset_rows": 4560.0,
+      "n_samples": 16.0,
+      "n_genes": 4560.0,
+      "classification_accuracy_mean": 0.625,
+      "classification_accuracy_std": 0.0,
+      "f1_macro_mean": 0.563636,
+      "n_clusters": 3.0,
+      "silhouette_score": 0.482988,
+      "dataset_columns": 17.0,
+      "f1_macro_std": 0.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "overall_score",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-07-27T12:52:25.993254+00:00",
+    "embedding_text": "设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨…\n设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨水，通过整合具有胞外电子传递（EET）能力的电活性细菌，构建具备环境响应功能的活体结构，从而实现水净化等特定应用。\n设计一种基于明胶复合基质的工程活体材料（ELMs）3D打印墨水，通过整合具有胞外电子传递（EET）能力的电活性细菌，构建具备环境响应功能的活体结构，从而实现水净化等特定应用。\n基于基因表达谱的电活性细菌功能基因聚类与分类分析"
+  }
+]

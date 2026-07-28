@@ -1,0 +1,37 @@
+[
+  {
+    "record_id": "83388dba-70ea-4e0c-92d4-e1fcf56a6c1e_019d62a1-fce8-4028-a613-966cc164087c",
+    "scope_key": "83388dba-70ea-4e0c-92d4-e1fcf56a6c1e",
+    "experiment_id": "019d62a1-fce8-4028-a613-966cc164087c",
+    "title": "考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性…",
+    "hypothesis": "考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性等挑战，协同优化组织特异性启动子与新型AAV衣壳蛋白可能在一定程度上改善单基因遗传病的体内靶向递送效率，但其降低系统性免疫毒性的实际效果及克服AAV生物学局限性的能力仍需进一步验证。",
+    "research_goal": "考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性等挑战，协同优化组织特异性启动子与新型AAV衣壳蛋白可能在一定程度上改善单基因遗传病的体内靶向递送效率，但其降低系统性免疫毒性的实际效果及克服AAV生物学局限性的能力仍需进一步验证。",
+    "method_summary": "AAV衣壳蛋白序列特征与生存力预测及数据泄露排查",
+    "baseline_metrics": {
+      "auc": 1.0,
+      "accuracy": 0.9996,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 11.0,
+      "overall_score": 0.9998
+    },
+    "best_metrics": {
+      "auc": 1.0,
+      "accuracy": 0.9996,
+      "dataset_rows": 5000.0,
+      "auc_with_leak": 0.999997,
+      "dataset_columns": 11.0,
+      "overall_score": 1.7657,
+      "n_splits": 5.0,
+      "auc_robust": 0.82828,
+      "n_groups": 1.0,
+      "viral_selection_single_auc": 1.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "accuracy",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-27T07:02:24.196495+00:00",
+    "embedding_text": "考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性…\n考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性等挑战，协同优化组织特异性启动子与新型AAV衣壳蛋白可能在一定程度上改善单基因遗传病的体内靶向递送效率，但其降低系统性免疫毒性的实际效果及克服AAV生物学局限性的能力仍需进一步验证。\n考虑到AAV载体在基因编辑应用中面临的包装容量限制与免疫原性等挑战，协同优化组织特异性启动子与新型AAV衣壳蛋白可能在一定程度上改善单基因遗传病的体内靶向递送效率，但其降低系统性免疫毒性的实际效果及克服AAV生物学局限性的能力仍需进一步验证。\nAAV衣壳蛋白序列特征与生存力预测及数据泄露排查"
+  }
+]

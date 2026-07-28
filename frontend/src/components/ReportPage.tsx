@@ -642,7 +642,7 @@ export function ReportPage({
                     <div className="px-3 py-2 border-b border-bp-border/60 bg-bp-base/50">
                       <p className="text-xs font-medium text-bp-text">{plot.title}</p>
                       {(plot.caption || plot.description) && (
-                        <p className="text-xs text-bp-muted mt-1 leading-relaxed line-clamp-4">
+                        <p className="text-xs text-bp-muted mt-1 leading-relaxed whitespace-pre-wrap">
                           {plot.caption || plot.description}
                         </p>
                       )}

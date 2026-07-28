@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { IterationRecordMock } from '@/types/iterativeExperiment';
 import env from '@/config/env';
@@ -59,10 +59,26 @@ export function IterationTimeline({ iterations }: IterationTimelineProps) {
 }
 
 function IterationCard({ iteration: it }: { iteration: IterationRecordMock }) {
-  const [openSection, setOpenSection] = useState<'analysis' | 'decision' | 'plan' | 'log' | null>(
-    'analysis',
-  );
-  const charts = it.result?.charts || [];
+  const charts = useMemo(() => {
+    const fromResult = it.result?.charts || [];
+    if (fromResult.length > 0) return fromResult;
+    // 兼容：落库时 charts 为空但分析里已有 chart_name（图可能在 charts/smoke）
+    const notes = it.analysis?.visualization_notes || [];
+    return notes
+      .map((n) => {
+        const name = (n.chart_name || '').trim();
+        if (!name) return null;
+        const file = name.replace(/^.*[\\/]/, '');
+        const rel = `smoke/${file}`;
+        return {
+          name: file,
+          path: rel,
+          note: n.description || '',
+          url: `/api/v1/iterative-experiments/charts/${rel}`,
+        };
+      })
+      .filter(Boolean) as NonNullable<typeof fromResult[number]>[];
+  }, [it.result?.charts, it.analysis?.visualization_notes]);
   const metrics = metricEntries(it.metrics || it.result?.metrics);
   const analysis = it.analysis || {};
   const decision = it.decision || { continue: true };
@@ -102,8 +118,20 @@ function IterationCard({ iteration: it }: { iteration: IterationRecordMock }) {
                 <img
                   src={chartSrc(c)}
                   alt={c.name}
-                  className="w-full h-auto object-contain bg-white"
+                  className="w-full h-auto object-contain bg-white min-h-[120px]"
                   loading="lazy"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (el.dataset.retried === '1') {
+                      el.style.display = 'none';
+                      return;
+                    }
+                    el.dataset.retried = '1';
+                    // smoke 路径失败时回退到 charts 根目录
+                    if (el.src.includes('/charts/smoke/')) {
+                      el.src = el.src.replace('/charts/smoke/', '/charts/');
+                    }
+                  }}
                 />
                 <figcaption className="px-2 py-1.5 text-[11px] text-bp-muted leading-snug">
                   <div className="text-bp-text font-medium truncate">{c.name}</div>
@@ -131,14 +159,8 @@ function IterationCard({ iteration: it }: { iteration: IterationRecordMock }) {
         </div>
       )}
 
-      {/* 分析报告 */}
-      <details
-        open={openSection === 'analysis'}
-        className="rounded-lg border border-bp-border/80 px-3 py-2"
-        onToggle={(e) => {
-          if ((e.target as HTMLDetailsElement).open) setOpenSection('analysis');
-        }}
-      >
+      {/* 分析报告 — 与决策等区块各自独立展开，互不互斥 */}
+      <details className="rounded-lg border border-bp-border/80 px-3 py-2" open>
         <summary className="text-xs font-medium text-bp-text cursor-pointer">分析报告</summary>
         <div className="mt-2 space-y-2 text-xs text-bp-muted leading-relaxed">
           {assessment && (
@@ -182,13 +204,7 @@ function IterationCard({ iteration: it }: { iteration: IterationRecordMock }) {
       </details>
 
       {/* 下轮迭代方向 */}
-      <details
-        open={openSection === 'decision'}
-        className="rounded-lg border border-bp-cyan/30 bg-bp-cyan-tint/20 px-3 py-2"
-        onToggle={(e) => {
-          if ((e.target as HTMLDetailsElement).open) setOpenSection('decision');
-        }}
-      >
+      <details className="rounded-lg border border-bp-cyan/30 bg-bp-cyan-tint/20 px-3 py-2">
         <summary className="text-xs font-medium text-bp-cyan cursor-pointer">
           迭代决策 / 下轮方向
         </summary>

@@ -1,0 +1,52 @@
+[
+  {
+    "record_id": "3c564707-8afd-4e8c-bcd6-67437c595b70_0377e8ac-5364-4fc6-8bff-d64ecbf01566",
+    "scope_key": "3c564707-8afd-4e8c-bcd6-67437c595b70",
+    "experiment_id": "0377e8ac-5364-4fc6-8bff-d64ecbf01566",
+    "title": "基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD…",
+    "hypothesis": "基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD常见遗传风险变异与多重环境因素（如母体免疫激活、出生并发症及重金属暴露），在考虑环境致病机制争议的前提下，探索基因-环境交互在表观遗传层面的表达改变，从而提升对自闭症复杂病因中遗传与环境交互致病因果推断的准确性。",
+    "research_goal": "基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD常见遗传风险变异与多重环境因素（如母体免疫激活、出生并发症及重金属暴露），在考虑环境致病机制争议的前提下，探索基因-环境交互在表观遗传层面的表达改变，从而提升对自闭症复杂病因中遗传与环境交互致病因果推断的准确性。",
+    "method_summary": "基于多组学约束与正则化因果推断的ASD基因-环境交互分析",
+    "baseline_metrics": {
+      "avg_ks_statistic": 0.413167,
+      "synthetic_gxe_coefficient": -0.0,
+      "synthetic_gxe_pvalue": 0.161808,
+      "original_gxe_coefficient": 0.026982,
+      "original_r2": 0.867936,
+      "synthetic_r2": 0.0,
+      "n_original": 20.0,
+      "n_synthetic": 1000.0,
+      "gxe_interaction_significant": 0.0,
+      "dataset_rows": 20.0,
+      "dataset_columns": 19.0,
+      "overall_score": 113.4967
+    },
+    "best_metrics": {
+      "dataset_columns": 19.0,
+      "overall_score": 113.4967,
+      "ridge_coef_grs": 2.008403,
+      "n_synthetic": 1000.0,
+      "ridge_coef_ebs": 0.858355,
+      "synthetic_gxe_coefficient": -0.0,
+      "gxe_interaction_significant": 0.0,
+      "privacy_nn_ratio": 1.466267,
+      "n_original": 20.0,
+      "dataset_rows": 20.0,
+      "original_gxe_coefficient": 0.026982,
+      "bootstrap_ci_width_grs": 2.082771,
+      "bootstrap_ci_width_ebs": 1.703948,
+      "synthetic_gxe_pvalue": 0.161808,
+      "avg_ks_statistic": 0.4286,
+      "synthetic_r2": 0.376952,
+      "original_r2": 0.867936,
+      "corr_matrix_distance": 0.693978
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "dataset_columns",
+    "success": false,
+    "status": "completed",
+    "timestamp": "2026-07-28T09:11:41.021381+00:00",
+    "embedding_text": "基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD…\n基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD常见遗传风险变异与多重环境因素（如母体免疫激活、出生并发症及重金属暴露），在考虑环境致病机制争议的前提下，探索基因-环境交互在表观遗传层面的表达改变，从而提升对自闭症复杂病因中遗传与环境交互致病因果推断的准确性。\n基于多组学约束的生成式AI模型构建的合成数据，能够整合ASD常见遗传风险变异与多重环境因素（如母体免疫激活、出生并发症及重金属暴露），在考虑环境致病机制争议的前提下，探索基因-环境交互在表观遗传层面的表达改变，从而提升对自闭症复杂病因中遗传与环境交互致病因果推断的准确性。\n基于多组学约束与正则化因果推断的ASD基因-环境交互分析"
+  }
+]

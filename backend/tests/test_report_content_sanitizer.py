@@ -153,6 +153,7 @@ def test_sanitize_chapters_drops_empty_actual_heading():
 
 def test_strip_smoke_and_paths():
     from app.services.report_content_sanitizer import (
+        academic_chart_caption,
         academic_chart_title,
         clean_iteration_summary,
         display_path_for_report,
@@ -178,6 +179,19 @@ def test_strip_smoke_and_paths():
     )
     assert "确认了" not in title
     assert "第2轮" in title
+
+    long_note = (
+        "环境参数分布热力图（对数尺度），展示10个深部生物圈环境参数在min/median/max三个统计维度下的数值分布。"
+        "由于输入数据仅1行，各参数min=median=max，热力图实际呈现的是单一值的对数变换，无法反映真实分布特征。"
+        "应关注各参数的绝对数值量级差异。"
+    )
+    short_title = academic_chart_title(name="iter_1_parameter_heatmap.png", note=long_note)
+    caption = academic_chart_caption(long_note)
+    assert len(short_title) < 120
+    assert "应关注各参" not in short_title or short_title.endswith(("。", "…"))
+    assert caption == long_note
+    assert "应关注各参数的绝对数值量级差异" in caption
+    assert not caption.endswith("应关注各参")
 
 
 def test_align_abstract_blocks_positive_on_trivial():

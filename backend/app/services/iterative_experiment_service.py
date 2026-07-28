@@ -154,7 +154,12 @@ class IterativeExperimentService:
                 return self.refresh_from_shaxiang(project_id, experiment_id)
             except Exception as exc:
                 logger.warning("get 投影刷新失败 %s: %s", experiment_id, exc)
-        return local
+        from app.integrations.shaxiang.bridge import rehydrate_experiment_charts
+
+        hydrated = rehydrate_experiment_charts(local)
+        if hydrated is not local:
+            self._upsert(project_id, hydrated)
+        return hydrated
 
     def refresh_from_shaxiang(self, project_id: str, experiment_id: str) -> Dict[str, Any]:
         require_shaxiang_enabled()
@@ -167,6 +172,9 @@ class IterativeExperimentService:
                 break
         sx_id = (self._sx_id(local) if local else "") or experiment_id
         projected = bridge.project_experiment(project_id, sx_id)
+        from app.integrations.shaxiang.bridge import rehydrate_experiment_charts
+
+        projected = rehydrate_experiment_charts(projected)
         return self._persist_projection(project_id, projected)
 
     def get_report_ids(self, project_id: str) -> List[str]:
@@ -869,19 +877,26 @@ class IterativeExperimentService:
                 continue
             seen.add(key)
             plot_id = Path(name or rel or key).stem
-            from app.services.report_content_sanitizer import academic_chart_title
+            from app.services.report_content_sanitizer import (
+                academic_chart_caption,
+                academic_chart_title,
+            )
 
+            note = str(c.get("note") or "")
             title = academic_chart_title(
                 name=name or plot_id,
-                note=str(c.get("note") or ""),
+                note=note,
                 iteration_number=int(iteration_number or 0),
                 iteration_status=str(iteration_status or ""),
             )
+            caption = academic_chart_caption(note)
             if diagnostic:
                 title = f"【反例/失败轮诊断】{title}"
             entry = {
                 "plot_id": plot_id,
                 "title": title,
+                "caption": caption,
+                "description": caption,
                 "path": str(abs_path) if abs_path else rel,
                 "file_path": str(abs_path) if abs_path else rel,
                 "url": c.get("url"),

@@ -452,6 +452,27 @@ export function ExperimentDetail({
                   </Button>
                   {autodetectPreview && (
                     <div className="rounded-lg border border-bp-border p-3 text-xs space-y-2">
+                      {(autodetectPreview.files_scanned != null ||
+                        autodetectPreview.files_used != null) && (
+                        <p className="text-bp-text">
+                          目录扫描{' '}
+                          <span className="font-medium text-bp-cyan">
+                            {autodetectPreview.files_scanned ?? '?'}
+                          </span>{' '}
+                          个数据文件，合并采用{' '}
+                          <span className="font-medium text-bp-cyan">
+                            {autodetectPreview.files_used ?? '?'}
+                          </span>{' '}
+                          个
+                          {Array.isArray(autodetectPreview.used_files) &&
+                            autodetectPreview.used_files.length > 0 && (
+                              <span className="text-bp-muted">
+                                {' '}
+                                （{autodetectPreview.used_files.join('、')}）
+                              </span>
+                            )}
+                        </p>
+                      )}
                       <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-md bg-bp-base/40 border border-bp-border/60">
                         <pre className="text-bp-muted whitespace-pre-wrap p-2 m-0">
                           {JSON.stringify(autodetectPreview, null, 2)}

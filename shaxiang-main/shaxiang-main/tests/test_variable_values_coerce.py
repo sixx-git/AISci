@@ -61,3 +61,38 @@ def test_experiment_plan_accepts_string_variable_values():
     assert plan.control_variables[0].values == [2, 96]
     assert plan.control_variables[1].values == list(range(0, 13))
     assert plan.control_variables[2].values == list(range(0, 30))
+
+
+def test_experiment_plan_accepts_hypothesis_only_pascal_case():
+    """LLM 常只返回 {'Hypothesis': {...}}，缺 title/description/hypothesis。"""
+    plan = ExperimentPlan.model_validate(
+        {
+            "Hypothesis": {
+                "statement": "时间单向流逝可由熵增与退相干过程的理论一致性解释。",
+                "rationale": "热力学与量子退相干",
+                "expected_outcome": "指标与理论趋势一致",
+            }
+        }
+    )
+    assert plan.title
+    assert plan.description
+    assert "熵增" in plan.hypothesis.statement or "时间" in plan.hypothesis.statement
+    assert plan.methodology
+
+
+def test_experiment_plan_pascal_case_top_level_fields():
+    plan = ExperimentPlan.model_validate(
+        {
+            "Title": "退相干实验",
+            "Description": "验证时间箭头",
+            "Hypothesis": {
+                "Statement": "假设陈述",
+                "Rationale": "依据",
+                "ExpectedOutcome": "预期",
+            },
+            "Methodology": "统计分析",
+        }
+    )
+    assert plan.title == "退相干实验"
+    assert plan.hypothesis.statement == "假设陈述"
+    assert plan.methodology == "统计分析"

@@ -74,6 +74,19 @@ def enrich_column_contract(metadata: dict, df=None) -> dict:
         ["label"] if "label" in columns else (non_numeric_columns[:1] if non_numeric_columns else [])
     )
 
+    # 目录多文件合并元信息（扫描数 / 实际采用数）
+    if df is not None:
+        try:
+            combine_meta = getattr(df, "attrs", {}).get("combine_meta") or {}
+        except Exception:
+            combine_meta = {}
+        if isinstance(combine_meta, dict) and combine_meta:
+            meta["combine_meta"] = combine_meta
+            meta["files_scanned"] = combine_meta.get("files_scanned")
+            meta["files_used"] = combine_meta.get("files_used")
+            meta["scanned_files"] = combine_meta.get("scanned_files")
+            meta["used_files"] = combine_meta.get("used_files")
+
     # 多模态契约
     path_cols = [
         c for c in columns

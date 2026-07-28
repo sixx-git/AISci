@@ -325,12 +325,22 @@ def enrich_tabular_for_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """加载后增强：键值透视（若有收益）+ 数值强制转换 + 分类编码兜底。"""
     if df is None or df.empty:
         return df
+    try:
+        preserved_attrs = dict(getattr(df, "attrs", {}) or {})
+    except Exception:
+        preserved_attrs = {}
     pivoted = try_pivot_key_value_table(df)
     base = coerce_numeric_like_columns(df)
     if pivoted is not None and count_numeric_columns(pivoted) > count_numeric_columns(base):
-        return pivoted
-    if count_numeric_columns(base) < 2:
+        out = pivoted
+    elif count_numeric_columns(base) < 2:
         encoded = encode_categoricals_for_analysis(base)
-        if count_numeric_columns(encoded) > count_numeric_columns(base):
-            return encoded
-    return base
+        out = encoded if count_numeric_columns(encoded) > count_numeric_columns(base) else base
+    else:
+        out = base
+    if preserved_attrs:
+        try:
+            out.attrs.update(preserved_attrs)
+        except Exception:
+            pass
+    return out

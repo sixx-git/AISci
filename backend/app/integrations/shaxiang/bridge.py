@@ -306,9 +306,15 @@ def _normalize_recs(raw: Any) -> List[Dict[str, Any]]:
 
 
 def _extract_chart_entries(result: Dict[str, Any], analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """对齐 shaxiang iteration_timeline：从 raw_output.chart_paths 等提取图表。"""
+    """对齐 shaxiang iteration_timeline：从 raw_output.chart_paths / viz notes 等提取图表。"""
+    import shutil
+
     root = shaxiang_root()
     charts_root = (root / "data" / "charts").resolve()
+    charts_root.mkdir(parents=True, exist_ok=True)
+    smoke_dir = (charts_root / "smoke").resolve()
+    smoke_dir.mkdir(parents=True, exist_ok=True)
+
     candidates: List[str] = []
 
     raw = result.get("raw_output") if isinstance(result.get("raw_output"), dict) else {}
@@ -334,27 +340,59 @@ def _extract_chart_entries(result: Dict[str, Any], analysis: Dict[str, Any]) -> 
         if not isinstance(note, dict):
             continue
         desc = (note.get("description") or "").strip()
-        if not desc:
-            continue
         name = (note.get("chart_name") or "").strip()
         if name:
             viz_notes[Path(name).name.lower()] = desc
-        viz_notes[str(i)] = desc
+            # LLM 常写裸文件名；脚本也可能把图存到 shaxiang 根目录
+            candidates.append(name)
+            candidates.append(str(root / Path(name).name))
+            candidates.append(str(charts_root / Path(name).name))
+            candidates.append(str(smoke_dir / Path(name).name))
+            candidates.append(f"data/charts/{Path(name).name}")
+            candidates.append(f"data/charts/smoke/{Path(name).name}")
+        if desc:
+            viz_notes[str(i)] = desc
+
+    def _resolve_under_charts(raw_path: str) -> Optional[Path]:
+        path = Path(raw_path)
+        search = []
+        if path.is_absolute():
+            search.append(path)
+        else:
+            search.extend(
+                [
+                    root / raw_path,
+                    Path(raw_path),
+                    charts_root / path.name,
+                    smoke_dir / path.name,
+                    root / path.name,
+                ]
+            )
+        src = next((p for p in search if p.is_file()), None)
+        if src is None:
+            return None
+        src = src.resolve()
+        try:
+            src.relative_to(charts_root)
+            return src
+        except ValueError:
+            # 散落在仓库根等处：复制进 smoke（迭代实验默认小样目录）
+            dest = smoke_dir / src.name
+            if not dest.exists() or dest.stat().st_size != src.stat().st_size:
+                shutil.copy2(src, dest)
+            return dest.resolve()
 
     out: List[Dict[str, Any]] = []
     seen: set[str] = set()
     for i, raw_path in enumerate(candidates):
-        path = Path(raw_path)
-        if not path.is_absolute():
-            path = (root / raw_path).resolve()
-        else:
-            path = path.resolve()
-        if not path.exists() or not path.is_file():
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            continue
+        path = _resolve_under_charts(raw_path.strip())
+        if path is None:
             continue
         try:
             rel = path.relative_to(charts_root).as_posix()
         except ValueError:
-            # 仅允许 charts 目录下文件
             continue
         if rel in seen:
             continue
@@ -368,6 +406,49 @@ def _extract_chart_entries(result: Dict[str, Any], analysis: Dict[str, Any]) -> 
                 "url": f"/api/v1/iterative-experiments/charts/{rel}",
             }
         )
+    return out
+
+
+def rehydrate_iteration_charts(it: Dict[str, Any]) -> Dict[str, Any]:
+    """补全已落库但 charts 为空的迭代（脚本曾把图存到仓库根目录等）。"""
+    if not isinstance(it, dict):
+        return it
+    result = it.get("result") if isinstance(it.get("result"), dict) else {}
+    analysis = it.get("analysis") if isinstance(it.get("analysis"), dict) else {}
+    existing = result.get("charts") if isinstance(result.get("charts"), list) else []
+    if existing:
+        # 仍尝试补 note
+        return it
+    recovered = _extract_chart_entries(result, analysis)
+    if not recovered:
+        return it
+    out = dict(it)
+    new_result = dict(result)
+    new_result["charts"] = recovered
+    out["result"] = new_result
+    return out
+
+
+def rehydrate_experiment_charts(exp: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(exp, dict):
+        return exp
+    iterations = exp.get("iterations")
+    if not isinstance(iterations, list) or not iterations:
+        return exp
+    changed = False
+    new_its = []
+    for it in iterations:
+        raw = it if isinstance(it, dict) else {}
+        fixed = rehydrate_iteration_charts(raw)
+        old_n = len(((raw.get("result") or {}).get("charts") or []))
+        new_n = len(((fixed.get("result") or {}).get("charts") or []))
+        if new_n > old_n:
+            changed = True
+        new_its.append(fixed)
+    if not changed:
+        return exp
+    out = dict(exp)
+    out["iterations"] = new_its
     return out
 
 

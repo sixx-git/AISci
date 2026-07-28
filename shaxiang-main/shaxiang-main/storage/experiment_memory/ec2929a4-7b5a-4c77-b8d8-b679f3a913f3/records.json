@@ -1,0 +1,38 @@
+[
+  {
+    "record_id": "ec2929a4-7b5a-4c77-b8d8-b679f3a913f3_557a3edb-5a91-4764-8582-904407337c38",
+    "scope_key": "ec2929a4-7b5a-4c77-b8d8-b679f3a913f3",
+    "experiment_id": "557a3edb-5a91-4764-8582-904407337c38",
+    "title": "引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有…",
+    "hypothesis": "引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有望合成包含极端环境适应特征的稀缺古人类渗入片段，从而为评估远古人类与类人祖先杂交片段在现代人群中的潜在致病风险提供计算框架。",
+    "research_goal": "引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有望合成包含极端环境适应特征的稀缺古人类渗入片段，从而为评估远古人类与类人祖先杂交片段在现代人群中的潜在致病风险提供计算框架。",
+    "method_summary": "基于PCA特征与标准GCN架构的群体遗传结构识别",
+    "baseline_metrics": {
+      "mlp_accuracy": 0.9,
+      "mlp_f1": 0.899878,
+      "gcn_accuracy": 0.815,
+      "gcn_f1": 0.814875,
+      "accuracy_improvement": -0.085,
+      "dataset_rows": 1000.0,
+      "dataset_columns": 5014.0,
+      "overall_score": 0.669
+    },
+    "best_metrics": {
+      "accuracy_improvement": -0.035,
+      "mlp_accuracy": 0.98,
+      "dataset_rows": 1000.0,
+      "mlp_f1": 0.979994,
+      "dataset_columns": 5014.0,
+      "gcn_accuracy": 0.945,
+      "overall_score": 0.7632,
+      "gcn_f1": 0.945934
+    },
+    "label": 1,
+    "overall_improvement_rate": 0.588235,
+    "primary_metric": "accuracy_improvement",
+    "success": true,
+    "status": "completed",
+    "timestamp": "2026-07-27T08:58:16.513875+00:00",
+    "embedding_text": "引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有…\n引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有望合成包含极端环境适应特征的稀缺古人类渗入片段，从而为评估远古人类与类人祖先杂交片段在现代人群中的潜在致病风险提供计算框架。\n引入古人类结构变异先验约束的图神经网络（GNN）生成模型，有望合成包含极端环境适应特征的稀缺古人类渗入片段，从而为评估远古人类与类人祖先杂交片段在现代人群中的潜在致病风险提供计算框架。\n基于PCA特征与标准GCN架构的群体遗传结构识别"
+  }
+]

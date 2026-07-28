@@ -237,6 +237,24 @@ def enrich_report_for_response(report: Report, db: Session) -> ReportDBResponse:
         hypotheses=hypotheses if isinstance(hypotheses, list) else [],
         experiment_design=experiment_design,
     )
+    # 历史报告：磁盘有沙箱图但 DB plots 为空时回填，避免前端「暂无实验结果图表」
+    existing_plots = extra.get("plots") if isinstance(extra.get("plots"), list) else []
+    if not existing_plots and getattr(report, "pdf_path", None):
+        try:
+            from app.services.report_plot_service import load_plots_from_report_storage
+            from sqlalchemy.orm.attributes import flag_modified
+
+            recovered = load_plots_from_report_storage(report.pdf_path)
+            if recovered:
+                extra["plots"] = recovered
+                base_meta = dict(report.extra_metadata or {})
+                base_meta["plots"] = recovered
+                report.extra_metadata = base_meta
+                flag_modified(report, "extra_metadata")
+                db.add(report)
+                db.commit()
+        except Exception as exc:
+            logger.warning("回填报告图表失败 report_id=%s: %s", getattr(report, "id", None), exc)
     return report_to_db_response(report, extra_metadata=extra)
 
 
@@ -650,13 +668,33 @@ class ReportService:
             self.db,
             charts_dir,
         )
-        from app.services.report_plot_service import prepare_plots_for_persistence
+        from app.services.report_plot_service import (
+            load_plots_from_report_storage,
+            prepare_plots_for_persistence,
+        )
 
         plots = prepare_plots_for_persistence(
             plots,
             report_file_id=db_report.pdf_path,
             keep_base64=False,
         )
+        # 项目侧未生成图时，保留迭代实验已写入 report_data.json / figures 的沙箱图
+        if not plots and db_report.pdf_path:
+            recovered = load_plots_from_report_storage(db_report.pdf_path)
+            if recovered:
+                plots = recovered
+        if not plots:
+            existing = (
+                db_report.extra_metadata.get("plots")
+                if isinstance(db_report.extra_metadata, dict)
+                else None
+            )
+            if isinstance(existing, list) and existing:
+                plots = prepare_plots_for_persistence(
+                    [p for p in existing if isinstance(p, dict)],
+                    report_file_id=db_report.pdf_path,
+                    keep_base64=False,
+                )
 
         refs = parse_report_references(db_report.references)
         lit_facts, citation_map, pipeline_verified = self._load_literature_bundle_for_report(

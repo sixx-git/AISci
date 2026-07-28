@@ -40,6 +40,14 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn(r"\Omega", escaped)
         self.assertIn("$", escaped)
 
+    def test_escape_latex_does_not_double_subscript_column_names(self):
+        text = "字段含 temperature_K, k_W_per_mK, sigma_S_per_m, seebeck_uV_per_K"
+        escaped = escape_latex(text)
+        self.assertNotIn("$k_W_per_mK$", escaped)
+        self.assertNotIn("$S_per_m$", escaped)
+        # 列名以下划线转义保留在正文，避免 Double subscript
+        self.assertIn(r"k\_W\_per\_mK", escaped)
+
     def test_escape_ensuremath_lambda_not_broken(self):
         """文献摘要常见 \\ensuremath{\\Lambda}，不得变成 \\ensuremath{$\\Lambda$\\}。"""
         text = (

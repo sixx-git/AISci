@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Optional
 from enum import Enum
 from datetime import datetime
@@ -105,6 +105,156 @@ class Hypothesis(BaseModel):
     expected_outcome: str = Field(..., description="预期结果")
     metrics_to_validate: list[str] = Field(default_factory=list, description="验证指标")
 
+    @field_validator("statement", "rationale", "expected_outcome", mode="before")
+    @classmethod
+    def _coerce_str(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v).strip()
+
+
+def _pick_alias(data: dict, *names: str) -> Any:
+    """按候选名（含大小写变体）取字段。"""
+    if not isinstance(data, dict):
+        return None
+    lower_map = {str(k).lower(): v for k, v in data.items()}
+    for name in names:
+        if name in data:
+            return data[name]
+        if name.lower() in lower_map:
+            return lower_map[name.lower()]
+    return None
+
+
+def _normalize_hypothesis_dict(raw: Any) -> dict:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return {
+            "statement": text or "待补充假设陈述",
+            "rationale": "待补充理论依据",
+            "expected_outcome": "待补充预期结果",
+            "metrics_to_validate": [],
+        }
+    if not isinstance(raw, dict):
+        return {
+            "statement": "待补充假设陈述",
+            "rationale": "待补充理论依据",
+            "expected_outcome": "待补充预期结果",
+            "metrics_to_validate": [],
+        }
+    statement = _pick_alias(
+        raw, "statement", "Statement", "claim", "Claim", "text", "hypothesis"
+    )
+    rationale = _pick_alias(
+        raw, "rationale", "Rationale", "theory", "Theory", "basis", "Basis"
+    )
+    expected = _pick_alias(
+        raw,
+        "expected_outcome",
+        "ExpectedOutcome",
+        "expected",
+        "Expected",
+        "outcome",
+        "Outcome",
+    )
+    metrics = _pick_alias(
+        raw, "metrics_to_validate", "MetricsToValidate", "metrics", "Metrics"
+    )
+    if not isinstance(metrics, list):
+        metrics = [str(metrics)] if metrics else []
+    statement_s = str(statement or "").strip() or "待补充假设陈述"
+    return {
+        "statement": statement_s,
+        "rationale": str(rationale or "").strip() or "待补充理论依据",
+        "expected_outcome": str(expected or "").strip() or "待补充预期结果",
+        "metrics_to_validate": [str(m) for m in metrics if str(m).strip()],
+    }
+
+
+def normalize_experiment_plan_payload(data: Any) -> Any:
+    """兼容 LLM 常见畸形：PascalCase 键、只返回 Hypothesis 嵌套、缺 title/description。"""
+    if not isinstance(data, dict):
+        return data
+
+    # 单键包装：{"Hypothesis": {...}} / {"experiment_plan": {...}}
+    if len(data) == 1:
+        only_key = next(iter(data.keys()))
+        only_val = data[only_key]
+        key_l = str(only_key).lower().replace("-", "_")
+        if key_l in {"hypothesis"} and isinstance(only_val, (dict, str)):
+            data = {"hypothesis": only_val}
+        elif key_l in {"experimentplan", "experiment_plan", "plan", "result", "data"} and isinstance(
+            only_val, dict
+        ):
+            data = dict(only_val)
+
+    out = dict(data)
+    # 顶层别名归一
+    alias_pairs = [
+        ("title", ("title", "Title", "experiment_title", "ExperimentTitle", "name", "Name")),
+        (
+            "description",
+            ("description", "Description", "summary", "Summary", "overview", "Overview"),
+        ),
+        ("hypothesis", ("hypothesis", "Hypothesis")),
+        (
+            "methodology",
+            ("methodology", "Methodology", "method", "Method", "methods", "Methods"),
+        ),
+        (
+            "independent_variables",
+            ("independent_variables", "IndependentVariables", "independentVariables"),
+        ),
+        (
+            "dependent_variables",
+            ("dependent_variables", "DependentVariables", "dependentVariables"),
+        ),
+        (
+            "control_variables",
+            ("control_variables", "ControlVariables", "controlVariables"),
+        ),
+        ("parameters", ("parameters", "Parameters", "params", "Params")),
+        ("analysis_script", ("analysis_script", "AnalysisScript", "script", "Script")),
+        ("script_params", ("script_params", "ScriptParams", "scriptParams")),
+        ("success_criteria", ("success_criteria", "SuccessCriteria", "successCriteria")),
+        ("risk_assessment", ("risk_assessment", "RiskAssessment", "riskAssessment")),
+        ("sample_size", ("sample_size", "SampleSize", "sampleSize")),
+    ]
+    for canon, aliases in alias_pairs:
+        if canon not in out or out.get(canon) in (None, ""):
+            picked = _pick_alias(data, *aliases)
+            if picked is not None:
+                out[canon] = picked
+
+    out["hypothesis"] = _normalize_hypothesis_dict(out.get("hypothesis"))
+    hyp_stmt = str((out.get("hypothesis") or {}).get("statement") or "").strip()
+
+    if not str(out.get("title") or "").strip():
+        out["title"] = (hyp_stmt[:48] + "…") if len(hyp_stmt) > 48 else (hyp_stmt or "数据分析实验方案")
+    if not str(out.get("description") or "").strip():
+        out["description"] = hyp_stmt or "基于上传数据的可执行分析方案"
+    if not str(out.get("methodology") or "").strip():
+        out["methodology"] = "基于绑定数据集的统计分析、指标评估与可视化验证"
+
+    # 列表字段容错
+    for list_key in (
+        "independent_variables",
+        "dependent_variables",
+        "control_variables",
+        "success_criteria",
+    ):
+        if list_key not in out or out[list_key] is None:
+            out[list_key] = []
+        elif not isinstance(out[list_key], list):
+            out[list_key] = [out[list_key]]
+
+    if not isinstance(out.get("parameters"), dict):
+        out["parameters"] = {}
+    if not isinstance(out.get("script_params"), dict):
+        out["script_params"] = {}
+
+    return out
+
 
 class ExperimentPlan(BaseModel):
     """LLM 生成的实验方案（结构化输出）"""
@@ -123,6 +273,18 @@ class ExperimentPlan(BaseModel):
     script_params: dict = Field(default_factory=dict)
     success_criteria: list[str] = Field(default_factory=list, description="成功判定标准")
     risk_assessment: str = Field("", description="风险评估")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_llm_payload(cls, data: Any) -> Any:
+        return normalize_experiment_plan_payload(data)
+
+    @field_validator("title", "description", "methodology", mode="before")
+    @classmethod
+    def _coerce_required_str(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v).strip()
 
 
 class Experiment(BaseModel):

@@ -1,0 +1,38 @@
+[
+  {
+    "record_id": "00be0ce2-1261-426f-9d8e-28ae11d30ea9_dd72f1be-a4cf-4512-85ce-139b3e1af5e7",
+    "scope_key": "00be0ce2-1261-426f-9d8e-28ae11d30ea9",
+    "experiment_id": "dd72f1be-a4cf-4512-85ce-139b3e1af5e7",
+    "title": "引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理…",
+    "hypothesis": "引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理约束嵌入生成模型，可显著提高极端环境能源管理合成数据的物理保真度，进而提升自适应能源分配算法在深空探索任务中的动力分配鲁棒性。",
+    "research_goal": "引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理约束嵌入生成模型，可显著提高极端环境能源管理合成数据的物理保真度，进而提升自适应能源分配算法在深空探索任务中的动力分配鲁棒性。",
+    "method_summary": "极低温电池内阻物理规律验证与Arrhenius基线建模",
+    "baseline_metrics": {
+      "r2": 1.0,
+      "mae": 0.0,
+      "dataset_rows": 3.0,
+      "dataset_columns": 20.0,
+      "overall_score": 0.5
+    },
+    "best_metrics": {
+      "is_small_sample": 1.0,
+      "overall_score": 0.5,
+      "dataset_columns": 20.0,
+      "r2": 1.0,
+      "ridge_r2": 0.114754,
+      "mae": 0.0,
+      "arrhenius_r2": 0.179304,
+      "arrhenius_rmse": 0.025615,
+      "linear_r2": 0.179304,
+      "linear_rmse": 0.025615,
+      "dataset_rows": 3.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "mae",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-07-28T11:24:41.614157+00:00",
+    "embedding_text": "引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理…\n引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理约束嵌入生成模型，可显著提高极端环境能源管理合成数据的物理保真度，进而提升自适应能源分配算法在深空探索任务中的动力分配鲁棒性。\n引入物理信息神经网络（PINN）将极低温下电池内阻突变等物理约束嵌入生成模型，可显著提高极端环境能源管理合成数据的物理保真度，进而提升自适应能源分配算法在深空探索任务中的动力分配鲁棒性。\n极低温电池内阻物理规律验证与Arrhenius基线建模"
+  }
+]

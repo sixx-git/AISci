@@ -333,6 +333,11 @@ class ExperimentService:
             "media_path_column": path_col,
             "sample_paths": metadata.get("sample_paths"),
             "label_distribution": metadata.get("label_distribution"),
+            "files_scanned": metadata.get("files_scanned"),
+            "files_used": metadata.get("files_used"),
+            "scanned_files": metadata.get("scanned_files"),
+            "used_files": metadata.get("used_files"),
+            "combine_meta": metadata.get("combine_meta"),
             "preview": metadata,
         }
         if recovered_profile is not None:

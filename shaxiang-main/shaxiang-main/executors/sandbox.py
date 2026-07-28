@@ -22,6 +22,36 @@ from executors.base import BaseExecutor
 from executors.data_adapter import load_data_from_config, DataConfig, get_adapter
 
 
+def normalize_chart_path(path_str: str, chart_dir: Path) -> Optional[str]:
+    """确保图表落在 chart_dir 下；脚本若写到 cwd 根目录等处则复制进来。"""
+    if not path_str or not str(path_str).strip():
+        return None
+    src = Path(str(path_str).strip())
+    if not src.is_absolute():
+        # 相对路径：先按原样，再试 cwd / chart_dir 下同名
+        candidates = [src, Path.cwd() / src, chart_dir / src.name]
+        src = next((c for c in candidates if c.is_file()), src)
+    if not src.is_file():
+        return None
+
+    chart_dir = Path(chart_dir)
+    chart_dir.mkdir(parents=True, exist_ok=True)
+    resolved_src = src.resolve()
+    resolved_dir = chart_dir.resolve()
+    try:
+        resolved_src.relative_to(resolved_dir)
+        return str(resolved_src)
+    except ValueError:
+        pass
+
+    dest = resolved_dir / resolved_src.name
+    if not dest.exists() or dest.stat().st_size != resolved_src.stat().st_size:
+        import shutil
+
+        shutil.copy2(resolved_src, dest)
+    return str(dest)
+
+
 class SandboxExecutor(BaseExecutor):
     """
     沙箱实验执行器
@@ -114,11 +144,13 @@ class SandboxExecutor(BaseExecutor):
             iteration_label=f"iter_{plan.sample_size}",
         )
 
-        # Step 4: 验证图表文件是否存在，过滤无效路径
+        # Step 4: 验证图表文件是否存在，并统一归入 chart_dir（禁止散落在仓库根目录）
         valid_charts = []
+        chart_dir = Path(self.chart_dir)
         for cp in chart_paths:
-            if Path(cp).exists():
-                valid_charts.append(cp)
+            normalized = normalize_chart_path(cp, chart_dir)
+            if normalized:
+                valid_charts.append(normalized)
 
         end_time = datetime.now().isoformat()
 

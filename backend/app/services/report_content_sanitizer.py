@@ -317,15 +317,39 @@ def humanize_error_message(text: Any, *, max_len: int = 240) -> str:
     return s[:max_len].strip()
 
 
+def _clip_at_sentence(text: str, limit: int) -> str:
+    """按句读边界截断，避免半句收尾（如「应关注各参」）。"""
+    s = (text or "").strip()
+    if not s or len(s) <= limit:
+        return s
+    cut = s[:limit]
+    for sep in ("。", "；", ";", "！", "？", "!", "?", "，", ","):
+        pos = cut.rfind(sep)
+        if pos >= int(limit * 0.55):
+            end = pos + (1 if sep in "。；;！？!?" else 0)
+            out = cut[:end].rstrip("，,")
+            return out + ("…" if end < len(s) else "")
+    return cut.rstrip("，,;；") + "…"
+
+
+def academic_chart_caption(note: str = "", *, max_len: int = 2000) -> str:
+    """完整图注：保留 visualization_notes 全文，仅在极端长度时按句界软截断。"""
+    raw = clean_iteration_summary(note)
+    if not raw:
+        return ""
+    return _clip_at_sentence(raw, max_len) if len(raw) > max_len else raw
+
+
 def academic_chart_title(
     *,
     name: str = "",
     note: str = "",
     iteration_number: int = 0,
     iteration_status: str = "",
+    max_len: int = 64,
 ) -> str:
-    """将调试 note 转为学术图表标题。"""
-    raw = clean_iteration_summary(note or name)
+    """将调试 note 转为短学术图表标题；长说明请用 academic_chart_caption。"""
+    raw = clean_iteration_summary(note or "")
     debugish = bool(
         re.search(
             r"(?i)smoke|debug|tmp|test|确[证实]了数据|单类别问题|confusion|stdout",
@@ -335,8 +359,15 @@ def academic_chart_title(
     stem = Path(str(name or "result")).stem.replace("_", " ").strip() or "实验结果"
     if not raw or debugish:
         title = f"第{iteration_number}轮实验结果：{stem}" if iteration_number else f"实验结果：{stem}"
+    elif len(raw) <= max_len:
+        title = raw
     else:
-        title = raw[:120]
+        # 优先首句作短标题，避免把整段 note 硬切到 120 字
+        first = re.split(r"[。！？!?]", raw, maxsplit=1)[0].strip()
+        if 8 <= len(first) <= max_len:
+            title = first
+        else:
+            title = _clip_at_sentence(raw, max_len)
     if str(iteration_status).lower() in {"failed", "error"}:
         title = f"[失败轮次{iteration_number}] {title}"
     return title

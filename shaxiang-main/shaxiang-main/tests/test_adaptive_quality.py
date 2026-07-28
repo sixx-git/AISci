@@ -87,3 +87,76 @@ def test_apply_quality_mode_stops_on_draft_needs_adjustment():
         result=result,
     )
     assert out.should_continue is False
+
+
+def test_moxie_like_key_join_uses_multiple_files(tmp_path: Path):
+    """同目录多 schema、共享 sol 主键时，应按键合并多文件而非只留一张。"""
+    a = tmp_path / "o2.csv"
+    b = tmp_path / "run.csv"
+    c = tmp_path / "telemetry.csv"
+    d = tmp_path / "params.csv"  # 无 sol，可不纳入
+    pd.DataFrame({"sol": [1, 2], "o2": [10.0, 20.0]}).to_csv(a, index=False)
+    pd.DataFrame({"sol": [1, 2], "power": [1.5, 2.5]}).to_csv(b, index=False)
+    pd.DataFrame({"sol": [1, 2, 3], "temp": [300, 310, 320]}).to_csv(c, index=False)
+    pd.DataFrame({"parameter": ["x"], "value": [1.0]}).to_csv(d, index=False)
+
+    pieces = [
+        TablePiece(str(a), pd.read_csv(a)),
+        TablePiece(str(b), pd.read_csv(b)),
+        TablePiece(str(c), pd.read_csv(c)),
+        TablePiece(str(d), pd.read_csv(d)),
+    ]
+    out = adaptive_combine_tables(pieces)
+    meta = out.attrs.get("combine_meta") or {}
+    assert meta.get("files_scanned") == 4
+    assert len(out) >= 2
+    assert "sol" in out.columns or out.shape[1] >= 2
+
+
+def test_battery_like_does_not_collapse_to_few_rows(tmp_path: Path):
+    """大时序表 + 小维表 + 稀疏时间戳交集时，不得被压成个位数行。"""
+    # 大事实表
+    fade = pd.DataFrame(
+        {
+            "battery_id": [f"B{i%5}" for i in range(200)],
+            "cycle_index": list(range(200)),
+            "capacity_Ahr": [1.0 + 0.01 * i for i in range(200)],
+        }
+    )
+    # 维表
+    meta = pd.DataFrame(
+        {
+            "battery_id": [f"B{i}" for i in range(5)],
+            "group": ["g0", "g1", "g0", "g1", "g0"],
+            "discharge_current_A": [1, 2, 1, 2, 1],
+        }
+    )
+    # 仅 3 个时间戳重叠的脏表（旧逻辑会用 timestamp join 压成 3 行）
+    cyc = pd.DataFrame(
+        {
+            "battery_id": ["B0", "B1", "B2"],
+            "cycle_index": [0, 1, 2],
+            "timestamp": [100, 200, 300],
+            "V_mean": [3.1, 3.2, 3.3],
+        }
+    )
+    eis = pd.DataFrame(
+        {
+            "battery_id": ["B0", "B1", "B2"],
+            "cycle_index": [0, 1, 2],
+            "timestamp": [100, 200, 300],
+            "Re_ohm": [0.1, 0.2, 0.3],
+        }
+    )
+    for name, df in (
+        ("fade.csv", fade),
+        ("meta.csv", meta),
+        ("cyc.csv", cyc),
+        ("eis.csv", eis),
+    ):
+        df.to_csv(tmp_path / name, index=False)
+
+    pieces = [TablePiece(str(p), pd.read_csv(p)) for p in sorted(tmp_path.glob("*.csv"))]
+    out = adaptive_combine_tables(pieces)
+    assert len(out) >= 100, f"unexpected collapse to {len(out)} rows"
+    assert out.select_dtypes("number").shape[1] >= 1
