@@ -1,0 +1,139 @@
+"""导出每个项目最新报告 PDF，文件名为论文题目，到指定目录。"""
+from __future__ import annotations
+
+import re
+import shutil
+import sqlite3
+import sys
+from pathlib import Path
+
+BACKEND = Path(__file__).resolve().parents[1]
+DB = BACKEND / "data" / "aiscientist.db"
+REPORTS_DIR = BACKEND / "storage" / "reports"
+DEFAULT_DST = Path(r"D:\浏览器\报告2")
+
+
+def safe_name(title: str) -> str:
+    title = (title or "").strip()
+    title = re.sub(r'[<>:"/\\|?*]', "_", title)
+    title = re.sub(r"\s+", " ", title).strip(" .")
+    return (title or "untitled")[:180]
+
+
+def resolve_pdf(pdf_path: str | None, report_id: str) -> Path | None:
+    candidates: list[Path] = []
+    if pdf_path:
+        p = Path(pdf_path)
+        candidates.append(p)
+        if not p.is_absolute():
+            candidates.append(BACKEND / pdf_path)
+            candidates.append(BACKEND / "storage" / pdf_path)
+    # 常见落点：storage/reports/<report_id>/report.pdf
+    candidates.append(REPORTS_DIR / report_id / "report.pdf")
+    # pdf_path 可能本身就是目录 id
+    if pdf_path:
+        stem = Path(str(pdf_path).replace("\\", "/")).name
+        if stem.endswith(".pdf"):
+            candidates.append(REPORTS_DIR / Path(stem).stem / "report.pdf")
+        else:
+            candidates.append(REPORTS_DIR / stem / "report.pdf")
+            candidates.append(REPORTS_DIR / stem)
+    for c in candidates:
+        try:
+            if c.is_file() and c.stat().st_size > 0:
+                return c
+        except OSError:
+            continue
+    return None
+
+
+def main() -> None:
+    dst = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_DST
+    dst.mkdir(parents=True, exist_ok=True)
+
+    if not DB.exists():
+        raise SystemExit(f"数据库不存在: {DB}")
+
+    conn = sqlite3.connect(str(DB))
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) AS n FROM projects")
+    n_projects = int(cur.fetchone()["n"])
+
+    # 每个 project 取最新一条报告（优先 updated_at，其次 created_at）
+    cur.execute(
+        """
+        SELECT r.id, r.project_id, r.paper_title, r.title, r.pdf_path,
+               r.created_at, r.updated_at, p.name AS project_name
+        FROM reports r
+        JOIN projects p ON p.id = r.project_id
+        WHERE r.id IN (
+            SELECT id FROM reports r2
+            WHERE r2.project_id = r.project_id
+            ORDER BY
+                COALESCE(r2.updated_at, r2.created_at) DESC,
+                r2.created_at DESC
+            LIMIT 1
+        )
+        ORDER BY p.name
+        """
+    )
+    # SQLite 相关子查询在 WHERE IN 里用 ORDER BY LIMIT 可能不兼容旧版本
+    # 改用 Python 侧分组更稳妥
+    cur.execute(
+        """
+        SELECT r.id, r.project_id, r.paper_title, r.title, r.pdf_path,
+               r.created_at, r.updated_at, p.name AS project_name
+        FROM reports r
+        JOIN projects p ON p.id = r.project_id
+        """
+    )
+    rows = list(cur.fetchall())
+    conn.close()
+
+    latest: dict[str, sqlite3.Row] = {}
+    for row in rows:
+        pid = row["project_id"]
+        key = (str(row["updated_at"] or ""), str(row["created_at"] or ""), str(row["id"]))
+        prev = latest.get(pid)
+        if prev is None:
+            latest[pid] = row
+            continue
+        prev_key = (str(prev["updated_at"] or ""), str(prev["created_at"] or ""), str(prev["id"]))
+        if key > prev_key:
+            latest[pid] = row
+
+    copied = 0
+    missing_pdf = 0
+    used_names: dict[str, int] = {}
+    details: list[str] = []
+
+    for pid, row in sorted(latest.items(), key=lambda kv: str(kv[1]["project_name"] or "")):
+        title = (row["paper_title"] or row["title"] or row["project_name"] or pid).strip()
+        pdf = resolve_pdf(row["pdf_path"], row["id"])
+        if pdf is None:
+            missing_pdf += 1
+            details.append(f"MISS {row['project_name']} | {title[:60]} | id={row['id']}")
+            continue
+        name = safe_name(title)
+        n = used_names.get(name, 0)
+        used_names[name] = n + 1
+        filename = f"{name}.pdf" if n == 0 else f"{name}_{n + 1}.pdf"
+        out = dst / filename
+        shutil.copy2(pdf, out)
+        copied += 1
+        details.append(f"OK {row['project_name']} -> {filename}")
+
+    print(f"projects_in_db={n_projects}")
+    print(f"projects_with_report={len(latest)}")
+    print(f"copied={copied}")
+    print(f"missing_pdf={missing_pdf}")
+    print(f"dest={dst}")
+    print(f"files_in_dest={len(list(dst.glob('*.pdf')))}")
+    for line in details:
+        print(line)
+
+
+if __name__ == "__main__":
+    main()

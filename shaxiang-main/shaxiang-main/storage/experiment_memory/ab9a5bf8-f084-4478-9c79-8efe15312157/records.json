@@ -1,0 +1,36 @@
+[
+  {
+    "record_id": "ab9a5bf8-f084-4478-9c79-8efe15312157_8c5ef1a7-cb51-4e1b-a17d-591d9b80a68b",
+    "scope_key": "ab9a5bf8-f084-4478-9c79-8efe15312157",
+    "experiment_id": "8c5ef1a7-cb51-4e1b-a17d-591d9b80a68b",
+    "title": "免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵…",
+    "hypothesis": "免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵解和谷氨酰胺分解）的耦合程度，可作为预测自身免疫病理状态下免疫稳态失衡的定量生物标志物。",
+    "research_goal": "免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵解和谷氨酰胺分解）的耦合程度，可作为预测自身免疫病理状态下免疫稳态失衡的定量生物标志物。",
+    "method_summary": "基于NF-κB耦合度评分的免疫稳态失衡预测分析",
+    "baseline_metrics": {
+      "accuracy": 0.0,
+      "macro_f1": 0.0,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 3.0,
+      "overall_score": 0.0
+    },
+    "best_metrics": {
+      "feature_std": 62.863789,
+      "effective_unique_labels": 11.0,
+      "dataset_rows": 5000.0,
+      "feature_mean": 905.2376,
+      "dataset_columns": 3.0,
+      "overall_score": 924.3409,
+      "original_unique_labels": 4566.0,
+      "macro_f1": 0.084066,
+      "accuracy": 0.86
+    },
+    "label": 1,
+    "overall_improvement_rate": 1.0,
+    "primary_metric": "accuracy",
+    "success": true,
+    "status": "completed",
+    "timestamp": "2026-07-28T18:07:08.072892+00:00",
+    "embedding_text": "免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵…\n免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵解和谷氨酰胺分解）的耦合程度，可作为预测自身免疫病理状态下免疫稳态失衡的定量生物标志物。\n免疫细胞中 NF-κB 介导的炎症反应与特定代谢途径（如糖酵解和谷氨酰胺分解）的耦合程度，可作为预测自身免疫病理状态下免疫稳态失衡的定量生物标志物。\n基于NF-κB耦合度评分的免疫稳态失衡预测分析"
+  }
+]

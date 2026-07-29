@@ -1,0 +1,43 @@
+[
+  {
+    "record_id": "51713d80-0633-4f2d-b00d-e545625d9636_69314719-25d9-451b-9056-64a65f02578c",
+    "scope_key": "51713d80-0633-4f2d-b00d-e545625d9636",
+    "experiment_id": "69314719-25d9-451b-9056-64a65f02578c",
+    "title": "构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度…",
+    "hypothesis": "构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度、挤出速度）的端到端深度强化学习数据闭环系统，能够直接将复杂处方转化为可制造的工艺指令，从而大幅降低定制药物的制造成本与周期。",
+    "research_goal": "构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度、挤出速度）的端到端深度强化学习数据闭环系统，能够直接将复杂处方转化为可制造的工艺指令，从而大幅降低定制药物的制造成本与周期。",
+    "method_summary": "基于吸收光谱聚类的定制药物处方类别划分与工艺映射基线实验",
+    "baseline_metrics": {
+      "accuracy_mean": 0.0,
+      "accuracy_std": 0.0,
+      "f1_macro": 0.0,
+      "n_samples": 20.0,
+      "n_classes": 20.0,
+      "dataset_rows": 20.0,
+      "dataset_columns": 2.0,
+      "overall_score": 8.0
+    },
+    "best_metrics": {
+      "accuracy_mean": 0.0,
+      "silhouette_score": 0.838842,
+      "best_model_accuracy": 1.0,
+      "accuracy_improvement": 0.5,
+      "best_model_f1": 1.0,
+      "n_samples": 20.0,
+      "baseline_accuracy": 0.5,
+      "accuracy_std": 0.0,
+      "dataset_rows": 20.0,
+      "n_classes": 20.0,
+      "overall_score": 8.0,
+      "f1_macro": 0.0,
+      "dataset_columns": 2.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "accuracy_mean",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-07-28T14:41:24.607420+00:00",
+    "embedding_text": "构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度…\n构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度、挤出速度）的端到端深度强化学习数据闭环系统，能够直接将复杂处方转化为可制造的工艺指令，从而大幅降低定制药物的制造成本与周期。\n构建连接个体化药物处方设计特征与3D打印工艺参数（如打印温度、挤出速度）的端到端深度强化学习数据闭环系统，能够直接将复杂处方转化为可制造的工艺指令，从而大幅降低定制药物的制造成本与周期。\n基于吸收光谱聚类的定制药物处方类别划分与工艺映射基线实验"
+  }
+]

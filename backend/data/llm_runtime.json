@@ -1,7 +1,7 @@
 {
   "use_env_api_key": true,
   "api_key_override": null,
-  "model_override": "qwen3.6-27b",
+  "model_override": "qwen3.7-flash-2026-07-15",
   "base_url_override": null,
   "use_mock_llm_override": null
 }

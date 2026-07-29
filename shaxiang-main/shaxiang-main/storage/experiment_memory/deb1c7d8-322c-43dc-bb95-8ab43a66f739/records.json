@@ -1,0 +1,37 @@
+[
+  {
+    "record_id": "deb1c7d8-322c-43dc-bb95-8ab43a66f739_09fd18eb-10a8-43ae-8ee7-79d70f21990e",
+    "scope_key": "deb1c7d8-322c-43dc-bb95-8ab43a66f739",
+    "experiment_id": "09fd18eb-10a8-43ae-8ee7-79d70f21990e",
+    "title": "结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生…",
+    "hypothesis": "结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生物学评估框架，能够明确区分“延长健康寿命（Healthspan）”与“突破绝对寿命极限（Lifespan）”的生物学边界，为抗衰老干预提供更科学的临床替代终点。",
+    "research_goal": "结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生物学评估框架，能够明确区分“延长健康寿命（Healthspan）”与“突破绝对寿命极限（Lifespan）”的生物学边界，为抗衰老干预提供更科学的临床替代终点。",
+    "method_summary": "跨尺度衰老生物学边界评估：基于GWAS汇总统计的无泄露探索性分析",
+    "baseline_metrics": {
+      "accuracy": 0.851852,
+      "f1_score": 0.8,
+      "roc_auc": 0.988889,
+      "dataset_rows": 27.0,
+      "dataset_columns": 10.0,
+      "overall_score": 0.8802
+    },
+    "best_metrics": {
+      "accuracy_std": 0.050507,
+      "dataset_rows": 27.0,
+      "baseline_accuracy": 0.851852,
+      "roc_auc": 0.988889,
+      "dataset_columns": 10.0,
+      "overall_score": 0.8802,
+      "f1_score": 0.8,
+      "f1_std": 0.181228,
+      "accuracy": 0.925926
+    },
+    "label": 1,
+    "overall_improvement_rate": 0.086956,
+    "primary_metric": "accuracy",
+    "success": true,
+    "status": "paused",
+    "timestamp": "2026-07-28T17:00:48.309687+00:00",
+    "embedding_text": "结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生…\n结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生物学评估框架，能够明确区分“延长健康寿命（Healthspan）”与“突破绝对寿命极限（Lifespan）”的生物学边界，为抗衰老干预提供更科学的临床替代终点。\n结合系统代谢网络分析与多组织表观遗传时钟，构建的跨尺度衰老生物学评估框架，能够明确区分“延长健康寿命（Healthspan）”与“突破绝对寿命极限（Lifespan）”的生物学边界，为抗衰老干预提供更科学的临床替代终点。\n跨尺度衰老生物学边界评估：基于GWAS汇总统计的无泄露探索性分析"
+  }
+]
