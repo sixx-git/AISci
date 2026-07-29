@@ -7,7 +7,7 @@ import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { BackToProjectsLink } from '@/components/workspace/BackToProjectsLink';
 import { cn } from '@/lib/utils';
-import type { ProjectMode } from '@/types';
+import type { FlSimBackend, ProjectMode } from '@/types';
 
 export function CreateProject() {
   const navigate = useNavigate();
@@ -18,6 +18,13 @@ export function CreateProject() {
   const [flExperimentProfile, setFlExperimentProfile] = useState<
     'standard_non_iid' | 'quick_iid'
   >('standard_non_iid');
+  const [flSimBackend, setFlSimBackend] = useState<FlSimBackend>('local_pack');
+  const [flSimClients, setFlSimClients] = useState(5);
+  const [flSimRounds, setFlSimRounds] = useState(10);
+  const [flSimStrategy, setFlSimStrategy] = useState<'FedAvg' | 'FedProx'>('FedAvg');
+  const [flSimPartition, setFlSimPartition] = useState<'dirichlet' | 'iid' | 'pathological'>(
+    'dirichlet',
+  );
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -67,6 +74,16 @@ export function CreateProject() {
         if (flDomains.length > 0) {
           payload.fl_domains = flDomains;
         }
+        payload.fl_sim_backend = flSimBackend;
+        payload.fl_sim_spec = {
+          num_clients: flSimClients,
+          rounds: flSimRounds,
+          strategy: flSimStrategy,
+          partition:
+            flExperimentProfile === 'quick_iid' && flSimPartition === 'dirichlet'
+              ? 'iid'
+              : flSimPartition,
+        };
       }
       const response = await projectService.createProject(payload);
       if (response.code === 200) {
@@ -237,6 +254,113 @@ export function CreateProject() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              <div className="pt-3 border-t border-bp-border space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-bp-text">仿真后端</p>
+                  <p className="text-xs text-bp-muted mt-1">
+                    单机进程内仿真，非多机真实联邦。与通用模式沙箱路径隔离。
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-start gap-2 text-sm text-bp-text cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fl_sim_backend"
+                      className="mt-1"
+                      checked={flSimBackend === 'local_pack'}
+                      onChange={() => setFlSimBackend('local_pack')}
+                    />
+                    <span>
+                      <span className="font-medium">local_pack（默认）</span>
+                      <span className="block text-xs text-bp-muted">
+                        FL Pack sklearn pilot，无需额外依赖
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm text-bp-text cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fl_sim_backend"
+                      className="mt-1"
+                      checked={flSimBackend === 'flower'}
+                      onChange={() => setFlSimBackend('flower')}
+                    />
+                    <span>
+                      <span className="font-medium">Flower</span>
+                      <span className="block text-xs text-bp-muted">
+                        单机仿真；未安装 flwr 时自动用兼容入口
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm text-bp-text cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fl_sim_backend"
+                      className="mt-1"
+                      checked={flSimBackend === 'fedml'}
+                      onChange={() => setFlSimBackend('fedml')}
+                    />
+                    <span>
+                      <span className="font-medium">FedML</span>
+                      <span className="block text-xs text-bp-muted">
+                        单机仿真；未安装 fedml 时自动用兼容入口
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                {(flSimBackend === 'flower' || flSimBackend === 'fedml') && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <label className="text-xs text-bp-muted space-y-1">
+                      <span>客户端数</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={50}
+                        value={flSimClients}
+                        onChange={(e) => setFlSimClients(Number(e.target.value) || 5)}
+                        className="input-field text-sm"
+                      />
+                    </label>
+                    <label className="text-xs text-bp-muted space-y-1">
+                      <span>通信轮次</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={200}
+                        value={flSimRounds}
+                        onChange={(e) => setFlSimRounds(Number(e.target.value) || 10)}
+                        className="input-field text-sm"
+                      />
+                    </label>
+                    <label className="text-xs text-bp-muted space-y-1">
+                      <span>策略</span>
+                      <select
+                        value={flSimStrategy}
+                        onChange={(e) => setFlSimStrategy(e.target.value as 'FedAvg' | 'FedProx')}
+                        className="input-field text-sm"
+                      >
+                        <option value="FedAvg">FedAvg</option>
+                        <option value="FedProx">FedProx</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-bp-muted space-y-1">
+                      <span>分区</span>
+                      <select
+                        value={flSimPartition}
+                        onChange={(e) =>
+                          setFlSimPartition(e.target.value as 'dirichlet' | 'iid' | 'pathological')
+                        }
+                        className="input-field text-sm"
+                      >
+                        <option value="dirichlet">Dirichlet Non-IID</option>
+                        <option value="iid">IID</option>
+                        <option value="pathological">Pathological</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
           )}

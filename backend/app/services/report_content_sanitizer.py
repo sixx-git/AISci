@@ -149,12 +149,15 @@ _BOUNDARY_BOILERPLATE = re.compile(
     r"(本节(?:验证)?为可执行的最小代理实验[^。]*。)\s*"
     r"(?:当前证据层级为阶段性[/／]?小样本[，,]?结论外推需谨慎。)?"
 )
+# 兼容 Unicode 连字/弯引号（如 ﬁrst、Szemerédi’s）
 _ENGLISH_BLEED_LINE = re.compile(
-    r"^[A-Za-z][A-Za-z0-9 ,.;:'\"()\[\]/%+\-]{40,}$"
+    r"^[A-Za-z\u00C0-\u024F\uFB00-\uFB06]"
+    r"[A-Za-z0-9\u00C0-\u024F\uFB00-\uFB06 ,.;:'\"`´’‘()\[\]/%+\-]{39,}$"
 )
 _ENGLISH_BLEED_BLOCK = re.compile(
     r"(?ms)(?:^|\n)\s*(?:Quantum systems have an exponentially[\s\S]{20,800}?)(?=\n\s*-|\n\s*[^\sA-Za-z]|\Z)"
 )
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 _UNPRINTABLE_RE = re.compile(r"[\ufffd\u0000-\u0008\u000b\u000c\u000e-\u001f]")
 
@@ -205,16 +208,37 @@ def strip_english_literature_bleed(text: str) -> str:
     """剔除中文章节中误混入的英文文献摘要行。"""
     if not text:
         return text
+    import unicodedata
+
     s = _ENGLISH_BLEED_BLOCK.sub("\n", str(text))
     lines: List[str] = []
     for line in s.splitlines():
         stripped = line.strip()
-        if _ENGLISH_BLEED_LINE.match(stripped) and not re.search(
-            r"(accuracy|baseline|metric|dataset|figure|DOI|http)", stripped, re.I
-        ):
+        if not stripped:
+            lines.append(line)
+            continue
+        # 含汉字的行保留（勿对整段做 NFKC，避免中文标点被改写）
+        if _CJK_RE.search(stripped):
+            lines.append(line)
+            continue
+        # 仅对疑似英文行做 NFKC（ﬁ→fi 等）
+        norm = unicodedata.normalize("NFKC", stripped)
+        whitelist = re.search(
+            r"(?i)\b(accuracy|baseline|metrics?|datasets?|figures?)\b|DOI\s*:|https?://",
+            norm,
+        )
+        if _ENGLISH_BLEED_LINE.match(norm) and not whitelist:
             continue
         # 标题式英文文献行：以 " - Name: English..." 形式混入
-        if re.match(r"^-\s+[A-Za-z].{10,}:\s*[A-Za-z]", stripped) and len(stripped) > 80:
+        if re.match(r"^-\s+[A-Za-z].{10,}:\s*[A-Za-z]", norm) and len(norm) > 80:
+            continue
+        letters = len(re.findall(r"[A-Za-z\u00C0-\u024F\u0370-\u03FF]", norm))
+        if (
+            len(norm) >= 40
+            and letters >= 28
+            and letters / max(len(norm), 1) >= 0.55
+            and not whitelist
+        ):
             continue
         lines.append(line)
     return "\n".join(lines).strip()

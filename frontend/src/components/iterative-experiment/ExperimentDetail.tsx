@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Trash2, Upload, FolderOpen, Sparkles,
-  Play, RefreshCw, AlertTriangle, CheckCircle2, FileCode2,
+  Play, RefreshCw, AlertTriangle, CheckCircle2, FileCode2, Network,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { cn } from '@/lib/utils';
 import { toAbsoluteDatasetUrl } from '@/lib/datasetUrls';
 import iterativeExperimentService from '@/services/iterativeExperimentService';
+import flSimulationService from '@/services/flSimulationService';
 import type {
   DataConfig,
   DataSourceType,
@@ -15,6 +16,7 @@ import type {
   RunMode,
   QualityMode,
 } from '@/types/iterativeExperiment';
+import type { FlSimBackend, FlSimulationCapabilities, FlSimulationRunResult } from '@/types';
 import { PHASE_EMOJI, PHASE_LABEL } from './phaseLabels';
 import { IterationTimeline } from './IterationTimeline';
 
@@ -123,6 +125,17 @@ export function ExperimentDetail({
     preview?: string;
   }>>([]);
   const [applyingScript, setApplyingScript] = useState<string | null>(null);
+  const [simCaps, setSimCaps] = useState<FlSimulationCapabilities | null>(null);
+  const [simBackend, setSimBackend] = useState<FlSimBackend>('local_pack');
+  const [simClients, setSimClients] = useState(5);
+  const [simRounds, setSimRounds] = useState(10);
+  const [simStrategy, setSimStrategy] = useState('FedAvg');
+  const [simPartition, setSimPartition] = useState('dirichlet');
+  const [simRunning, setSimRunning] = useState(false);
+  const [simResult, setSimResult] = useState<FlSimulationRunResult | null>(
+    () => (experiment.fl_simulation_latest as FlSimulationRunResult | null) || null,
+  );
+  const [simPanelOpen, setSimPanelOpen] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,8 +150,39 @@ export function ExperimentDetail({
       .catch(() => {
         if (!cancelled) setFlScripts([]);
       });
+    void flSimulationService.getCapabilities(projectId)
+      .then((caps) => {
+        if (cancelled) return;
+        setSimCaps(caps);
+      })
+      .catch(() => {
+        if (!cancelled) setSimCaps(null);
+      });
+    void flSimulationService.getConfig(projectId)
+      .then((cfg) => {
+        if (cancelled) return;
+        if (cfg.backend === 'local_pack' || cfg.backend === 'flower' || cfg.backend === 'fedml') {
+          setSimBackend(cfg.backend);
+        }
+        if (cfg.spec?.num_clients) setSimClients(Number(cfg.spec.num_clients));
+        if (cfg.spec?.rounds) setSimRounds(Number(cfg.spec.rounds));
+        if (cfg.spec?.strategy) setSimStrategy(String(cfg.spec.strategy));
+        if (cfg.spec?.partition) setSimPartition(String(cfg.spec.partition));
+      })
+      .catch(() => { /* ignore */ });
+    void flSimulationService.getLatest(projectId, experiment.id)
+      .then((latest) => {
+        if (!cancelled && latest.result) setSimResult(latest.result);
+      })
+      .catch(() => { /* ignore */ });
     return () => { cancelled = true; };
-  }, [projectId, isFederatedProject]);
+  }, [projectId, isFederatedProject, experiment.id]);
+
+  useEffect(() => {
+    if (experiment.fl_simulation_latest) {
+      setSimResult(experiment.fl_simulation_latest as FlSimulationRunResult);
+    }
+  }, [experiment.fl_simulation_latest]);
 
   const canShowUpload = isSandbox && phase !== 'running' && phase !== 'completed';
   const canIterate =
@@ -147,6 +191,16 @@ export function ExperimentDetail({
     || phase === 'needs_human_review'
     || (Boolean(experiment.initial_plan) && phase !== 'completed' && phase !== 'failed');
 
+  const flowerReady = Boolean(
+    simCaps?.backends?.find((b) => b.id === 'flower')?.installed,
+  );
+  const fedmlReady = Boolean(
+    simCaps?.backends?.find((b) => b.id === 'fedml')?.installed,
+  );
+  const fedmlFeatureOn = Boolean(
+    simCaps?.backends?.find((b) => b.id === 'fedml')?.enabled ?? true,
+  );
+  const simFeatureOn = Boolean(simCaps?.enabled);
   const overviewHistory = useMemo(() => {
     const rows = experiment.iterations.map((it) => ({
       n: it.iteration_number,
@@ -651,6 +705,176 @@ export function ExperimentDetail({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {isFederatedProject && simFeatureOn && (
+            <div className="mb-4 rounded-lg border border-bp-border bg-bp-surface/60 p-3 space-y-3">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between gap-2 text-left"
+                onClick={() => setSimPanelOpen((v) => !v)}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
+                  <Network className="w-4 h-4 text-bp-cyan" />
+                  联邦仿真运行
+                </div>
+                <span className="text-[11px] text-bp-muted">{simPanelOpen ? '收起' : '展开'}</span>
+              </button>
+              <p className="text-xs text-bp-muted">
+                与上方「正式全量推演」沙箱分离：此处走 FL SimulationBackend（local_pack / Flower），非通用 analysis_script。
+              </p>
+              {simPanelOpen && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-3 text-xs text-bp-text">
+                    {(['local_pack', 'flower', 'fedml'] as FlSimBackend[]).map((b) => {
+                      const disabled = b === 'fedml' && !fedmlFeatureOn;
+                      return (
+                        <label
+                          key={b}
+                          className={cn(
+                            'inline-flex items-center gap-1.5',
+                            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name="exp_fl_sim_backend"
+                            disabled={disabled}
+                            checked={simBackend === b}
+                            onChange={() => setSimBackend(b)}
+                          />
+                          {b === 'local_pack' && 'local_pack'}
+                          {b === 'flower' && `Flower${flowerReady ? ' · 已就绪' : ' · 兼容模式'}`}
+                          {b === 'fedml' && (
+                            fedmlFeatureOn
+                              ? `FedML${fedmlReady ? ' · 已就绪' : ' · 兼容模式'}`
+                              : 'FedML（已关闭）'
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <details className="rounded-md border border-bp-border px-3 py-2">
+                    <summary className="text-xs text-bp-text cursor-pointer">仿真参数</summary>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <label className="text-[11px] text-bp-muted space-y-1">
+                        <span>客户端数</span>
+                        <input
+                          type="number"
+                          min={2}
+                          max={50}
+                          value={simClients}
+                          onChange={(e) => setSimClients(Number(e.target.value) || 5)}
+                          className="input-field text-xs"
+                        />
+                      </label>
+                      <label className="text-[11px] text-bp-muted space-y-1">
+                        <span>轮次</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={200}
+                          value={simRounds}
+                          onChange={(e) => setSimRounds(Number(e.target.value) || 10)}
+                          className="input-field text-xs"
+                        />
+                      </label>
+                      <label className="text-[11px] text-bp-muted space-y-1">
+                        <span>策略</span>
+                        <select
+                          value={simStrategy}
+                          onChange={(e) => setSimStrategy(e.target.value)}
+                          className="input-field text-xs"
+                        >
+                          <option value="FedAvg">FedAvg</option>
+                          <option value="FedProx">FedProx</option>
+                        </select>
+                      </label>
+                      <label className="text-[11px] text-bp-muted space-y-1">
+                        <span>分区</span>
+                        <select
+                          value={simPartition}
+                          onChange={(e) => setSimPartition(e.target.value)}
+                          className="input-field text-xs"
+                        >
+                          <option value="dirichlet">Dirichlet</option>
+                          <option value="iid">IID</option>
+                          <option value="pathological">Pathological</option>
+                        </select>
+                      </label>
+                    </div>
+                  </details>
+                  <Button
+                    size="sm"
+                    disabled={busy || simRunning || (simBackend === 'fedml' && !fedmlFeatureOn)}
+                    onClick={async () => {
+                      setSimRunning(true);
+                      setLocalError(null);
+                      try {
+                        const payload = {
+                          backend: simBackend,
+                          num_clients: simClients,
+                          rounds: simRounds,
+                          strategy: simStrategy,
+                          partition: simPartition,
+                        };
+                        const { result, experiment: updated } = await flSimulationService.run(
+                          projectId,
+                          experiment.id,
+                          payload,
+                        );
+                        setSimResult(result);
+                        if (updated) {
+                          onExperimentUpdated?.(updated as unknown as IterativeExperiment);
+                        }
+                      } catch (err) {
+                        setLocalError(err instanceof Error ? err.message : '仿真失败');
+                      } finally {
+                        setSimRunning(false);
+                      }
+                    }}
+                  >
+                    {simRunning ? '仿真中…' : '运行仿真'}
+                  </Button>
+                  {simResult && (
+                    <div className="rounded-md border border-bp-border bg-bp-base/60 px-3 py-2 space-y-1 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={cn(
+                          'px-1.5 py-0.5 rounded text-[10px] font-medium',
+                          simResult.success
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : 'bg-amber-500/15 text-amber-400',
+                        )}
+                        >
+                          {simResult.execution_mode || 'unknown'}
+                        </span>
+                        <span className="text-bp-muted">{simResult.framework}</span>
+                        {simResult.success ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                      </div>
+                      {simResult.metrics && (
+                        <div className="text-bp-text">
+                          acc={String(simResult.metrics.global_accuracy ?? '—')}
+                          {' · '}
+                          rounds={String(simResult.metrics.communication_rounds ?? '—')}
+                          {' · '}
+                          clients={String(simResult.metrics.num_clients ?? '—')}
+                        </div>
+                      )}
+                      {simResult.error && (
+                        <p className="text-amber-400/90 break-words">{simResult.error}</p>
+                      )}
+                      {(simResult.notes || []).slice(0, 2).map((n) => (
+                        <p key={n} className="text-bp-muted">{n}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

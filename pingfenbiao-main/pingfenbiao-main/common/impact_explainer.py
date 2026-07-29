@@ -37,6 +37,28 @@ def _get_client(api_key: str):
     )
 
 
+def _as_list_str(value: Any) -> list[str]:
+    """将 authors/institutions 等字段规范为字符串列表。
+
+    OpenAlex / metadata_fetcher 常返回 [{"name": "..."}, ...]，不能直接 join。
+    """
+    if isinstance(value, list):
+        out: list[str] = []
+        for x in value:
+            if x is None:
+                continue
+            if isinstance(x, dict):
+                name = x.get("name") or x.get("display_name") or ""
+                if name:
+                    out.append(str(name))
+            else:
+                out.append(str(x))
+        return out
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
 # ---------------------------------------------------------------------------
 # 增强版 System prompt
 # ---------------------------------------------------------------------------
@@ -163,95 +185,128 @@ def explain_prediction_bias(
         temperature: 生成温度
 
     Returns:
-        偏差分析结果字典。
+        偏差分析结果字典；构建提示或 LLM 失败时返回 None（不抛异常，避免整次预测失败）。
     """
-    # 提取关键数据
-    analysis_data = impact_result.get("_analysis_data", {})
-    metadata = analysis_data.get("metadata", {})
-    citation_graph = analysis_data.get("citation_graph", {})
-    early_impact = analysis_data.get("early_impact_prediction", {})
-    paper_features = analysis_data.get("paper_features", {})
-
-    # 构建提示
-    lines = ["请对以下影响力预测结果进行偏差分析。", ""]
-
-    # 预测结果摘要
-    lines.append("=== 预测结果摘要 ===")
-    for key in ["d1_text_quality", "d2_reputation", "d3_future_potential", "d4_bias_fairness"]:
-        if key in impact_result:
-            d = impact_result[key]
-            lines.append(f"{key}: {d.get('score', 0)}/{d.get('max', 10)} - {d.get('rationale', 'N/A')[:100]}")
-
-    if "calibrated_total" in impact_result:
-        ct = impact_result["calibrated_total"]
-        lines.append(f"校准总分: {ct.get('score', 0)}/{ct.get('max', 30)}")
-        lines.append(f"校准方法: {ct.get('method', 'N/A')}")
-
-    if "calibration_details" in impact_result:
-        cd = impact_result["calibration_details"]
-        lines.append(f"原始声誉分量: {cd.get('raw_reputation_component', 'N/A')}")
-        lines.append(f"原始质量分量: {cd.get('raw_quality_component', 'N/A')}")
-        lines.append(f"声誉调整: {cd.get('reputation_adjustment', 'N/A')}")
-        lines.append(f"质量调整: {cd.get('quality_adjustment', 'N/A')}")
-
-    lines.append("")
-
-    # 关键影响因素
-    if "key_factors" in impact_result:
-        lines.append("=== 关键影响因素 ===")
-        for f in impact_result["key_factors"][:5]:
-            lines.append(f"- {f.get('factor', 'N/A')}: {f.get('impact', 'N/A')} ({f.get('magnitude', 'N/A')}) - {f.get('description', 'N/A')[:80]}")
-        lines.append("")
-
-    # 风险因素
-    if "risk_factors" in impact_result:
-        lines.append("=== 风险因素 ===")
-        for r in impact_result["risk_factors"][:5]:
-            lines.append(f"- {r.get('risk', 'N/A')}: 概率{r.get('probability', 'N/A')} - {r.get('mitigation', 'N/A')[:80]}")
-        lines.append("")
-
-    # 引用网络特征
-    if citation_graph:
-        lines.append("=== 引用网络特征 ===")
-        lines.append(f"被引次数: {citation_graph.get('network_size', {}).get('cited_by_count', 0)}")
-        lines.append(f"引用速度: {citation_graph.get('citation_velocity', 0)} 次/年")
-        lines.append(f"领域百分位: {citation_graph.get('field_percentile', 50)}%")
-        lines.append(f"引用多样性: {citation_graph.get('diversity_score', 0)}")
-        lines.append("")
-
-    # 早期预测
-    if early_impact:
-        lines.append("=== 早期影响力预测 ===")
-        lines.append(f"生命周期阶段: {early_impact.get('current_state', {}).get('life_stage', 'unknown')}")
-        lines.append(f"预测不确定性: {early_impact.get('uncertainty', {}).get('overall_level', 'unknown')}")
-        lines.append(f"置信度: {early_impact.get('confidence_level', 'unknown')}")
-        lines.append("")
-
-    # 元数据
-    lines.append("=== 论文元数据 ===")
-    lines.append(f"标题: {metadata.get('title', 'N/A')}")
-    lines.append(f"作者: {', '.join(metadata.get('authors', [])[:5])}")
-    lines.append(f"期刊: {metadata.get('journal', 'N/A')}")
-    lines.append(f"发表年份: {metadata.get('publication_year', 'N/A')}")
-    lines.append(f"引用数: {metadata.get('cited_by_count', 0)}")
-    lines.append("")
-
-    # 文本特征
-    if paper_features:
-        lines.append("=== 文本特征 ===")
-        lines.append(f"综合质量分: {paper_features.get('overall_quality_score', 0)}/100")
-        innov = paper_features.get("innovation", {})
-        lines.append(f"创新密度: {innov.get('innovation_density', 0)}")
-        lines.append(f"跨领域程度: {innov.get('cross_domain_degree', 'unknown')}")
-        lines.append("")
-
-    user_prompt = "\n".join(lines)
-    if len(user_prompt) > max_chars:
-        user_prompt = user_prompt[:max_chars] + "\n[内容截断...]"
-
-    # LLM 分析
-    client = _get_client(api_key)
     try:
+        # 提取关键数据
+        analysis_data = impact_result.get("_analysis_data", {})
+        if not isinstance(analysis_data, dict):
+            analysis_data = {}
+        metadata = analysis_data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        citation_graph = analysis_data.get("citation_graph", {})
+        early_impact = analysis_data.get("early_impact_prediction", {})
+        paper_features = analysis_data.get("paper_features", {})
+
+        # 构建提示
+        lines = ["请对以下影响力预测结果进行偏差分析。", ""]
+
+        # 预测结果摘要
+        lines.append("=== 预测结果摘要 ===")
+        for key in ["d1_text_quality", "d2_reputation", "d3_future_potential", "d4_bias_fairness"]:
+            if key in impact_result:
+                d = impact_result[key]
+                if isinstance(d, dict):
+                    lines.append(
+                        f"{key}: {d.get('score', 0)}/{d.get('max', 10)} - {str(d.get('rationale', 'N/A'))[:100]}"
+                    )
+                else:
+                    lines.append(f"{key}: {d}")
+
+        if "calibrated_total" in impact_result:
+            ct = impact_result["calibrated_total"]
+            if isinstance(ct, dict):
+                lines.append(f"校准总分: {ct.get('score', 0)}/{ct.get('max', 30)}")
+                lines.append(f"校准方法: {ct.get('method', 'N/A')}")
+            else:
+                lines.append(f"校准总分: {ct}/30")
+
+        if "calibration_details" in impact_result:
+            cd = impact_result["calibration_details"]
+            if isinstance(cd, dict):
+                lines.append(f"原始声誉分量: {cd.get('raw_reputation_component', 'N/A')}")
+                lines.append(f"原始质量分量: {cd.get('raw_quality_component', 'N/A')}")
+                lines.append(f"声誉调整: {cd.get('reputation_adjustment', 'N/A')}")
+                lines.append(f"质量调整: {cd.get('quality_adjustment', 'N/A')}")
+
+        lines.append("")
+
+        # 关键影响因素
+        if "key_factors" in impact_result:
+            lines.append("=== 关键影响因素 ===")
+            for f in (impact_result["key_factors"] or [])[:5]:
+                if isinstance(f, dict):
+                    lines.append(
+                        f"- {f.get('factor', 'N/A')}: {f.get('impact', 'N/A')} ({f.get('magnitude', 'N/A')}) - {str(f.get('description', 'N/A'))[:80]}"
+                    )
+                else:
+                    lines.append(f"- {f}")
+            lines.append("")
+
+        # 风险因素
+        if "risk_factors" in impact_result:
+            lines.append("=== 风险因素 ===")
+            for r in (impact_result["risk_factors"] or [])[:5]:
+                if isinstance(r, dict):
+                    lines.append(
+                        f"- {r.get('risk', 'N/A')}: 概率{r.get('probability', 'N/A')} - {str(r.get('mitigation', 'N/A'))[:80]}"
+                    )
+                else:
+                    lines.append(f"- {r}")
+            lines.append("")
+
+        # 引用网络特征
+        if citation_graph and isinstance(citation_graph, dict):
+            lines.append("=== 引用网络特征 ===")
+            ns = citation_graph.get("network_size")
+            ns = ns if isinstance(ns, dict) else {}
+            lines.append(f"被引次数: {ns.get('cited_by_count', 0)}")
+            lines.append(f"引用速度: {citation_graph.get('citation_velocity', 0)} 次/年")
+            lines.append(f"领域百分位: {citation_graph.get('field_percentile', 50)}%")
+            lines.append(f"引用多样性: {citation_graph.get('diversity_score', 0)}")
+            lines.append("")
+
+        # 早期影响力预测
+        if early_impact and isinstance(early_impact, dict):
+            lines.append("=== 早期影响力预测 ===")
+            cs = early_impact.get("current_state")
+            cs = cs if isinstance(cs, dict) else {}
+            unc = early_impact.get("uncertainty")
+            unc = unc if isinstance(unc, dict) else {}
+            lines.append(f"生命周期阶段: {cs.get('life_stage', 'unknown')}")
+            lines.append(f"预测不确定性: {unc.get('overall_level', 'unknown')}")
+            lines.append(f"置信度: {early_impact.get('confidence_level', 'unknown')}")
+            lines.append("")
+
+        # 元数据（authors 可能为 dict 列表）
+        if not isinstance(metadata, dict):
+            metadata = {}
+        lines.append("=== 元数据 ===")
+        authors = _as_list_str(metadata.get("authors", []))
+        lines.append(f"标题: {metadata.get('title', 'N/A')}")
+        lines.append(f"作者: {', '.join(authors[:5])}")
+        lines.append(f"期刊: {metadata.get('journal', 'N/A')}")
+        lines.append(f"发表年份: {metadata.get('publication_year', 'N/A')}")
+        lines.append(f"引用数: {metadata.get('cited_by_count', 0)}")
+        lines.append("")
+
+        # 论文特征
+        if paper_features and isinstance(paper_features, dict):
+            lines.append("=== 论文文本特征 ===")
+            lines.append(f"综合质量分: {paper_features.get('overall_quality_score', 0)}/100")
+            innov = paper_features.get("innovation")
+            innov = innov if isinstance(innov, dict) else {}
+            lines.append(f"创新密度: {innov.get('innovation_density', 0)}")
+            lines.append(f"跨领域程度: {innov.get('cross_domain_degree', 'unknown')}")
+            lines.append("")
+
+        user_prompt = "\n".join(lines)
+        if len(user_prompt) > max_chars:
+            user_prompt = user_prompt[:max_chars] + "\n[内容截断...]"
+
+        # LLM 分析
+        client = _get_client(api_key)
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -263,12 +318,10 @@ def explain_prediction_bias(
             response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content
-        result = json.loads(raw)
+        return json.loads(raw)
     except Exception as e:
-        logger.error("偏差解释 LLM 调用失败: %s", e)
+        logger.error("偏差解释失败: %s", e)
         return None
-
-    return result
 
 
 # ---------------------------------------------------------------------------

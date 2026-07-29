@@ -8,7 +8,10 @@ EXECUTION_TIER_LABELS: Dict[str, str] = {
     "real_sandbox": "真实沙箱",
     "real_sandbox_docker": "Docker 沙箱",
     "runtime_local": "本地联邦 Runtime",
-    "flower": "Flower Runtime",
+    "local_pack": "FL Pack 本地 pilot",
+    "flower": "Flower 单机仿真",
+    "fedml": "FedML 仿真",
+    "fedml_stub": "FedML（未启用）",
     "fate_compatible": "FATE 兼容 VFL",
     "csv_real": "真实 CSV 联邦",
     "csv_simulation": "CSV 仿真",
@@ -32,7 +35,11 @@ DATA_AUTHENTICITY_LABELS: Dict[str, str] = {
 def _infer_federated_tier(mode: str) -> str:
     mapping = {
         "runtime_local": "runtime_local",
+        "local_pack": "local_pack",
+        "local_fedavg_pilot": "local_pack",
         "flower": "flower",
+        "fedml": "fedml",
+        "fedml_stub": "fedml_stub",
         "fate_compatible": "fate_compatible",
         "uploaded_csv": "csv_real",
         "simulation": "csv_simulation",
@@ -47,10 +54,15 @@ def annotate_validation_execution_metadata(
     *,
     project_mode: str = "general",
 ) -> Dict[str, Any]:
-    """为 small_validation 结果附加 execution_tier 与 data_authenticity。"""
+    """为 small_validation 结果附加 execution_tier 与 data_authenticity。
+
+    federated_pilot 仅在 federated_learning 模式下参与档位推断，避免通用模式被污染。
+    """
+    from app.core.project_modes import is_federated_learning_mode
+
     sv = dict(small_validation or {})
     sb = sv.get("sandbox_execution") or {}
-    fp = sv.get("federated_pilot") or {}
+    fp = sv.get("federated_pilot") or {} if is_federated_learning_mode(project_mode) else {}
 
     execution_tier = "unknown"
     data_authenticity = "unknown"
@@ -73,14 +85,20 @@ def annotate_validation_execution_metadata(
 
     if fp:
         mode = str(fp.get("execution_mode") or "")
+        # framework_run 优先（显式仿真）
+        fr = fp.get("framework_run") if isinstance(fp.get("framework_run"), dict) else {}
+        if fr.get("execution_mode"):
+            mode = str(fr.get("execution_mode") or mode)
         execution_tier = _infer_federated_tier(mode)
         tier_notes.append(f"联邦 pilot mode={mode}")
+        if execution_tier in ("flower", "fedml", "local_pack"):
+            tier_notes.append("单机仿真/pilot，非多机真实联邦部署")
         fp_src = fp.get("data_source") or fp.get("csv_source")
         if fp_src:
             data_authenticity = str(fp_src)
         elif fp.get("merged_csv_path") or mode == "uploaded_csv":
             data_authenticity = "merged_csv"
-        elif mode == "simulation":
+        elif mode in ("simulation", "flower", "local_pack", "local_fedavg_pilot"):
             data_authenticity = "synthetic_fallback"
 
     if not fp and not sb:

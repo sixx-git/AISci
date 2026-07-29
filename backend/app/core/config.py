@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # 联邦学习 Starter Pack（资源包挂载；非多机 runtime）
     AISCI_FL_PACK_ENABLED: bool = True
     AISCI_FL_LOCAL_PILOT_ENABLED: bool = True  # Phase4: 报告合成时可跑本地 FedAvg pilot
+    # 联邦仿真后端（仅 federated_learning 模式；与通用沙箱隔离）
+    AISCI_FL_SIM_ENABLED: bool = True
+    AISCI_FL_SIM_DEFAULT_BACKEND: str = "local_pack"  # local_pack | flower | fedml
+    AISCI_FL_FLOWER_ENABLED: bool = True
+    AISCI_FL_FEDML_ENABLED: bool = True  # FedML 兼容仿真；可选 pip install fedml
     
     # 向量存储配置（主路径：Zvec 嵌入式向量库，按 project_id 分 Collection）
     # Chat 专用 Zvec Collection（与会话级临时文档 RAG 相关）

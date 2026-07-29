@@ -52,7 +52,13 @@ def calculate_composite_rating(
     best_detail = None
     if content_details:
         for d in content_details:
+            if not isinstance(d, dict):
+                continue
             pct = d.get("score_percentage", 0)
+            try:
+                pct = float(pct or 0)
+            except (TypeError, ValueError):
+                pct = 0.0
             if pct > best_content_pct:
                 best_content_pct = pct
                 best_detail = d

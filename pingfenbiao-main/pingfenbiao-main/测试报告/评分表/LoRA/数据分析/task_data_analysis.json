@@ -1,0 +1,1092 @@
+{
+  "task_id": "data_analysis_auto_v1",
+  "task_type": "data_analysis",
+  "subject": "",
+  "document_heavy": false,
+  "query": "How can the adaptation of large-scale pre-trained neural networks be optimized to minimize computational overhead and deployment complexity while maintaining performance parity with full parameter retraining? This report should investigate parameter-efficient strategies that restrict weight updates to low-dimensional representations within frozen model layers, evaluating the resulting trade-offs in trainable parameter count, memory requirements, inference latency, and downstream task accuracy across diverse architectures and application domains.",
+  "input_files": [
+    {
+      "file_id": "S1",
+      "file_name": "LoRA.pdf",
+      "relative_path": "LoRA.pdf",
+      "file_type": "pdf",
+      "description": "PDF document, 26 pages"
+    }
+  ],
+  "rubrics": {
+    "total_score": 117,
+    "dimensions": [
+      {
+        "dimension_id": "information_acquisition",
+        "dimension_name": "Information Acquisition",
+        "max_score": 21,
+        "items": [
+          {
+            "rubric_id": "R1",
+            "rubric_key": "information_acquisition.methodology.does_the_report_identify_the_primary_evaluation",
+            "competency_category": "methodology",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Does the report identify the primary evaluation metric used to assess performance parity and specify its acceptable deviation threshold relative to full retraining baselines?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [
+              "definition of the performance parity metric",
+              "numerical tolerance bound for acceptable deviation"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R2",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_mathematical_mechan",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report describe the mathematical mechanism used to constrain parameter updates within frozen network layers, i.e., representing weight adjustments as factorized projections?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "description of the factorized projection structure",
+              "specification of how frozen weights remain unchanged during adaptation"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R3",
+            "rubric_key": "information_acquisition.definition.does_the_report_distinguish_between_variables_th",
+            "competency_category": "definition",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report distinguish between variables that scale linearly with model size (e.g., trainable parameter count) and those that remain invariant regardless of architecture depth?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [
+              "identification of scaling-dependent variables",
+              "identification of architecture-invariant variables"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R4",
+            "rubric_key": "information_acquisition.evidence.does_the_report_check_the_multi_domain_datasets",
+            "competency_category": "evidence",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report check the multi-domain datasets for distribution skews or class imbalances that could confound the comparison between efficient adaptation and full retraining?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "assessment of class distribution balance",
+              "verification of feature distribution consistency across domains"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R5",
+            "rubric_key": "information_acquisition.methodology.does_the_report_state_the_configured_hyperparame",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report state the configured hyperparameters governing the projection subspace size and explicitly link them to the resulting reduction in trainable parameters?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "reported projection subspace configuration values",
+              "quantified relationship between subspace size and parameter reduction ratio"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R6",
+            "rubric_key": "information_acquisition.methodology.does_the_report_classify_the_measured_computatio",
+            "competency_category": "methodology",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report classify the measured computational overhead into distinct phases, separating training-time costs from deployment-time resource demands?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "classification of training-phase metrics (e.g., FLOPs, wall-clock time)",
+              "classification of deployment-phase metrics (e.g., storage footprint, hardware compatibility)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R7",
+            "rubric_key": "information_acquisition.evidence.does_the_report_verify_that_peak_hardware_memory",
+            "competency_category": "evidence",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report verify that peak hardware memory consumption measurements accurately reflect optimizer state allocations alongside model weights during the adaptation process?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "confirmation of optimizer state inclusion in memory accounting",
+              "clarification of whether gradient buffers are excluded or included"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R8",
+            "rubric_key": "information_acquisition.methodology.does_the_report_pinpoint_the_convergence_criteri",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report pinpoint the convergence criteria applied to determine when the adaptation training loop should terminate early?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "binary",
+            "required_elements": [
+              "specified validation loss fluctuation threshold",
+              "maximum allowed training epochs or iterations"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R9",
+            "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_initial_value_confi",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report describe the initial value configuration applied to the newly injected projection modules before any gradient descent occurs, ensuring they contribute nothing initially?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "description of the stochastic noise initialization method",
+              "description of the null-value starting configuration for the second factor"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R10",
+            "rubric_key": "information_acquisition.methodology.does_the_report_examine_the_standardized_hardwar",
+            "competency_category": "methodology",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report examine the standardized hardware benchmark configurations to confirm that forward-pass execution duration comparisons were conducted under identical input token spans and processing unit sizes?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "verification of consistent input token span settings",
+              "verification of uniform processing unit size settings"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R11",
+            "rubric_key": "information_acquisition.comparison.does_the_report_differentiate_between_the_trade",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report differentiate between the trade-off curves generated by systematically varying the projection subspace size versus those generated by altering the base model architecture?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "separate plotting or tabulation of subspace size variations",
+              "separate plotting or tabulation of architectural variations"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R12",
+            "rubric_key": "information_acquisition.evidence.does_the_report_indicate_whether_statistical_sig",
+            "competency_category": "evidence",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report indicate whether statistical significance testing was performed to validate that performance gaps remain non-significant after controlling for dataset size and random seed variations?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "reporting of p-values or confidence intervals",
+              "description of controlled variables (dataset size, initialization seeds)"
+            ],
+            "min_elements_full": 2,
+            "min_elements_half": 1
+          }
+        ]
+      },
+      {
+        "dimension_id": "scientific_reasoning",
+        "dimension_name": "Scientific Reasoning",
+        "max_score": 79,
+        "items": [
+          {
+            "rubric_id": "R13",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_quantify_the_stab",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report quantify the stabilization point of the training metric based on fluctuation below a defined threshold over consecutive iterations?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Define explicit fluctuation threshold",
+              "Track metric trajectory across consecutive iterations",
+              "Identify exact iteration where stabilization occurs"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R14",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_trace_the_traject",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Trend analysis: Does the report trace the trajectory of performance metrics across successive training epochs to identify divergence or non-convergence phenomena?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Plot metric progression over epoch sequence",
+              "Flag epochs showing monotonic degradation",
+              "Correlate divergence patterns with learning rate changes"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R15",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_analyze_why_certa",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Trend analysis: Does the report analyze why certain configurations fail to converge before reaching the maximum iteration limit?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Isolate failing configurations",
+              "Link convergence failure to hyperparameter settings",
+              "Propose mechanistic explanation for stagnation"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R16",
+            "rubric_key": "scientific_reasoning.mechanism.trend_analysis_does_the_report_demonstrate_how_t",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Trend analysis: Does the report demonstrate how the learning rate schedule influences the speed of metric convergence across different experimental configurations?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Map schedule type to convergence speed",
+              "Compare epochs-to-stabilization across schedules",
+              "Show quantitative difference in convergence velocity"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R17",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_quantify_the_imp",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report quantify the impact of increasing representation dimensionality on the reduction of trainable parameters relative to full-model baselines?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Calculate parameter ratio at each dimensionality level",
+              "Plot dimensionality vs parameter count curve",
+              "Demonstrate non-linear reduction pattern"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R18",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_analyze_why_rest",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report analyze why restricting updates to low-dimensional projections yields diminishing returns in accuracy beyond a certain capacity threshold?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Identify capacity threshold value",
+              "Explain representational bottleneck mechanism",
+              "Connect threshold crossing to accuracy plateau"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R19",
+            "rubric_key": "scientific_reasoning.limitation.factor_analysis_does_the_report_deduce_the_causa",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Factor analysis: Does the report deduce the causal relationship between hardware constraints and the observed scaling behavior of memory consumption during training?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Map hardware spec to memory usage trend",
+              "Isolate constraint-induced scaling factor",
+              "Prove causality via controlled variable isolation"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R20",
+            "rubric_key": "scientific_reasoning.comparison.factor_analysis_does_the_report_evaluate_trade_o",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Factor analysis: Does the report evaluate trade-offs between computational overhead and downstream task accuracy as key hyperparameters are systematically varied?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Define overhead metric",
+              "Define accuracy metric",
+              "Plot Pareto frontier or trade-off curve"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R21",
+            "rubric_key": "scientific_reasoning.mechanism.factor_analysis_does_the_report_compare_how_chan",
+            "competency_category": "mechanism",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Factor analysis: Does the report compare how changes in architectural depth directly correlate with proportional shifts in gradient computation costs?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Measure gradient cost per layer",
+              "Calculate correlation coefficient",
+              "Verify proportional scaling assumption"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R22",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_compare_the_ef",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report compare the efficiency profiles of parameter-efficient strategies against full-parameter retraining using consistent evaluation metrics across diverse architectures?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Apply identical metrics to both methods",
+              "Aggregate results across architectures",
+              "Compute normalized efficiency differential"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R23",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_show_that_inje",
+            "competency_category": "comparison",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Method comparison: Does the report show that injection-based adaptation methods achieve faster initial convergence compared to global weight optimization under identical training budgets?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Fix training budget parameter",
+              "Measure epochs-to-target-loss for each method",
+              "Demonstrate statistically significant speed advantage"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R24",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_infer_whether",
+            "competency_category": "comparison",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Method comparison: Does the report infer whether performance parity thresholds are maintained across different application domains when comparing adaptation techniques?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Set parity threshold value",
+              "Test threshold adherence per domain",
+              "Infer domain-independence of parity claim"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R25",
+            "rubric_key": "scientific_reasoning.comparison.method_comparison_does_the_report_trace_the_adva",
+            "competency_category": "comparison",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Method comparison: Does the report trace the advantage/disadvantage profile of each method under constrained resource conditions to justify ranking decisions?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Define constrained resource scenario",
+              "List pros/cons per method",
+              "Link profile to final ranking logic"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R26",
+            "rubric_key": "scientific_reasoning.synthesis.statistical_rigor_does_the_report_quantify_the_v",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report quantify the variance bounds around mean accuracy scores to ensure reproducibility across multiple random seeds?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Run multiple seed trials",
+              "Calculate standard deviation/variance",
+              "Report confidence bounds explicitly"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R27",
+            "rubric_key": "scientific_reasoning.synthesis.statistical_rigor_does_the_report_verify_that_p",
+            "competency_category": "synthesis",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Statistical rigor: Does the report verify that p-values and confidence intervals are correctly calculated without selective reporting practices?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Check calculation methodology",
+              "Verify no cherry-picking of significant results",
+              "Confirm alignment with predefined alpha level"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R28",
+            "rubric_key": "scientific_reasoning.synthesis.statistical_rigor_does_the_report_analyze_how_da",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Statistical rigor: Does the report analyze how dataset size variations influence the statistical power of the reported comparative results?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Vary dataset size systematically",
+              "Compute power at each size",
+              "Explain power-size relationship"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R29",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_decompos",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Error/Variance analysis: Does the report decompose total prediction error into bias and variance components to identify whether underfitting or overfitting dominates each configuration?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Calculate bias component",
+              "Calculate variance component",
+              "Attribute dominant error source per configuration"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R30",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_quantify",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report quantify the contribution of initialization randomness to overall performance variance across repeated trials?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Hold all factors constant except initialization",
+              "Measure outcome spread",
+              "Calculate percentage variance attributable to initialization"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R31",
+            "rubric_key": "scientific_reasoning.limitation.error_variance_analysis_does_the_report_identify",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Error/Variance analysis: Does the report identify outlier samples that disproportionately skew metric averages and justify their treatment or exclusion?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Apply outlier detection algorithm",
+              "Flag samples exceeding threshold",
+              "Provide justification for inclusion/exclusion"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R32",
+            "rubric_key": "scientific_reasoning.mechanism.error_variance_analysis_does_the_report_demonstr",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Error/Variance analysis: Does the report demonstrate that residual errors follow expected distributions rather than exhibiting systematic structural flaws?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Extract residuals post-prediction",
+              "Run normality/homoscedasticity test",
+              "Confirm absence of structural bias"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R33",
+            "rubric_key": "scientific_reasoning.mechanism.sensitivity_analysis_does_the_report_assess_sens",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Sensitivity analysis: Does the report assess sensitivity to hyperparameter perturbations by measuring performance degradation when key settings deviate from optimal values?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Perturb hyperparameters symmetrically/asymmetrically",
+              "Record performance delta",
+              "Compute sensitivity coefficient"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R34",
+            "rubric_key": "scientific_reasoning.mechanism.sensitivity_analysis_does_the_report_identify_ti",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report identify tipping points where minor adjustments in representation capacity cause sharp transitions in computational cost?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Scan capacity range continuously",
+              "Detect derivative discontinuity",
+              "Mark exact tipping coordinate"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R35",
+            "rubric_key": "scientific_reasoning.limitation.sensitivity_analysis_does_the_report_determine_r",
+            "competency_category": "limitation",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Sensitivity analysis: Does the report determine robustness of the adaptation strategy against noise injection in input features across different task types?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Inject controlled noise levels",
+              "Measure performance decay rate",
+              "Classify robustness tier per task"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R36",
+            "rubric_key": "scientific_reasoning.mechanism.sensitivity_analysis_does_the_report_quantify_ho",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Sensitivity analysis: Does the report quantify how variations in freezing depth affect the final model's ability to retain pre-trained knowledge?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Vary freeze boundary systematically",
+              "Measure knowledge retention proxy metric",
+              "Plot retention vs depth curve"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R37",
+            "rubric_key": "scientific_reasoning.synthesis.data_quality_validation_does_the_report_verify_t",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report verify that all reported metric values fall within physically valid ranges and exclude impossible computational estimates?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Define physical/mathematical bounds",
+              "Scan all reported values",
+              "Flag and rectify out-of-range entries"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R38",
+            "rubric_key": "scientific_reasoning.synthesis.data_quality_validation_does_the_report_check_fo",
+            "competency_category": "synthesis",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Data quality validation: Does the report check for missing entries or inconsistent formatting across benchmark datasets before aggregating results?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Audit dataset completeness",
+              "Standardize formatting conventions",
+              "Document imputation or exclusion steps"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R39",
+            "rubric_key": "scientific_reasoning.synthesis.data_quality_validation_does_the_report_trace_cr",
+            "competency_category": "synthesis",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Data quality validation: Does the report trace cross-dataset consistency by ensuring uniform preprocessing pipelines were applied to all evaluation splits?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Map preprocessing steps per dataset",
+              "Verify pipeline equivalence",
+              "Report consistency audit result"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R40",
+            "rubric_key": "scientific_reasoning.limitation.data_quality_validation_does_the_report_trace_po",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Data quality validation: Does the report trace potential data leakage pathways between training and evaluation sets that could artificially inflate performance scores?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Cross-reference train/eval sample IDs",
+              "Check feature overlap statistics",
+              "Conclude leakage presence/absence"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R41",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_connect_em",
+            "competency_category": "mechanism",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report connect empirical observations of parameter reduction to underlying linear algebra principles governing matrix rank limitations?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "State rank limitation theorem",
+              "Map empirical reduction to theorem",
+              "Explain theoretical-empirical alignment"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R42",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_verify_mat",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report verify mathematical formulas predicting memory savings against actual measured hardware consumption during training runs?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Present predictive formula",
+              "Log actual hardware metrics",
+              "Calculate formula prediction error"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R43",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_explain_wh",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report explain why injecting low-dimensional modules into frozen layers preserves gradient flow integrity better than alternative sparse update schemes?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Define gradient flow metric",
+              "Compare flow stability across schemes",
+              "Provide mechanistic explanation for superiority"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R44",
+            "rubric_key": "scientific_reasoning.limitation.theoretical_grounding_does_the_report_analyze_bo",
+            "competency_category": "limitation",
+            "role": "Critical",
+            "weight": 4,
+            "question": "Theoretical grounding: Does the report analyze boundary case scenarios where extreme compression ratios lead to catastrophic information loss, linking findings to information theory limits?",
+            "source_ids": [],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Push compression to extreme values",
+              "Measure information retention drop",
+              "Relate drop to Shannon entropy bounds"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          },
+          {
+            "rubric_id": "R45",
+            "rubric_key": "scientific_reasoning.mechanism.theoretical_grounding_does_the_report_derive_the",
+            "competency_category": "mechanism",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Theoretical grounding: Does the report derive the theoretical upper bound on achievable accuracy given fixed representation dimensions and compare it to empirical results?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "checklist",
+            "required_elements": [
+              "Formulate accuracy upper bound equation",
+              "Solve for fixed dimension constraint",
+              "Compute gap between bound and empirical score"
+            ],
+            "min_elements_full": 3,
+            "min_elements_half": 2
+          }
+        ]
+      },
+      {
+        "dimension_id": "report_synthesis",
+        "dimension_name": "Report Synthesis",
+        "max_score": 17,
+        "items": [
+          {
+            "rubric_id": "R46",
+            "rubric_key": "report_synthesis.visualization.does_the_report_include_line_charts_or_trend_plo",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report include line charts or trend plots showing the trajectory of key performance metrics over training iterations?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R47",
+            "rubric_key": "report_synthesis.visualization.does_the_report_provide_comparison_bar_charts_or",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report provide comparison bar charts or tables that clearly display performance differences across the evaluated adaptation methods?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R48",
+            "rubric_key": "report_synthesis.visualization.does_the_report_contain_clearly_labeled_figures",
+            "competency_category": "visualization",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report contain clearly labeled figures and tables with descriptive titles, axis labels, units, and legends where applicable?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R49",
+            "rubric_key": "report_synthesis.integrity.does_the_report_ensure_that_every_key_numerical",
+            "competency_category": "integrity",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report ensure that every key numerical claim in the conclusions can be directly traced back to specific data points or figures in the analysis section?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R50",
+            "rubric_key": "report_synthesis.structure.does_the_report_present_a_logical_progression_fr",
+            "competency_category": "structure",
+            "role": "Mandatory",
+            "weight": 2,
+            "question": "Does the report present a logical progression from experimental setup to data exploration, performance comparison, theoretical explanation, and final conclusions?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R51",
+            "rubric_key": "report_synthesis.integrity.does_the_report_maintain_rigorous_conclusion_sta",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report maintain rigorous conclusion standards by explicitly stating the conditions and limitations under which its findings apply, and propose actionable future directions based on the analysis?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R52",
+            "rubric_key": "report_synthesis.structure.does_the_report_derive_the_theoretical_convergen",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report derive the theoretical convergence rate for the parameter-efficient strategy and compare it with the empirical convergence observed in the data?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R53",
+            "rubric_key": "report_synthesis.structure.does_the_report_assess_the_sensitivity_of_the_re",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report assess the sensitivity of the reported trade-offs to variations in model initialization, dataset size, and evaluation metrics?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R54",
+            "rubric_key": "report_synthesis.integrity.does_the_report_falsely_claim_convergence_when_t",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report falsely claim convergence when the validation loss has not actually stabilized?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R55",
+            "rubric_key": "report_synthesis.integrity.does_the_report_misattribute_performance_differe",
+            "competency_category": "integrity",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report misattribute performance differences to architectural changes when they are actually driven by differing hyperparameter configurations?",
+            "source_ids": [],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R56",
+            "rubric_key": "report_synthesis.structure.does_the_report_begin_with_an_executive_summary",
+            "competency_category": "structure",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report begin with an executive summary that concisely outlines the primary research question, methodology, and key quantitative findings?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          },
+          {
+            "rubric_id": "R57",
+            "rubric_key": "report_synthesis.language.does_the_report_demonstrate_a_consistent_and_pre",
+            "competency_category": "language",
+            "role": "Standard",
+            "weight": 1,
+            "question": "Does the report demonstrate a consistent and precise use of domain-specific terminology throughout the analysis and discussion sections?",
+            "source_ids": [
+              "S1"
+            ],
+            "judgment_mode": "structure",
+            "required_elements": [],
+            "min_elements_full": 1,
+            "min_elements_half": 1
+          }
+        ]
+      }
+    ]
+  },
+  "generation_meta": {
+    "version": "da-v1-ocr",
+    "rubric_key_enabled": true,
+    "capability_coverage_enabled": true,
+    "ocr_enabled": true,
+    "ocr_checklist_items": 42,
+    "ocr_naked_explain_remaining": 0,
+    "dimension_stats": {
+      "information_acquisition": {
+        "item_count": 12,
+        "max_score": 21,
+        "role_distribution": {
+          "Critical": 1,
+          "Mandatory": 6,
+          "Standard": 5
+        },
+        "source_linked_ratio": 1.0,
+        "multi_source_ratio": 0.0
+      },
+      "scientific_reasoning": {
+        "item_count": 33,
+        "max_score": 79,
+        "role_distribution": {
+          "Critical": 10,
+          "Mandatory": 16,
+          "Standard": 7
+        },
+        "source_linked_ratio": 0.7575757575757576,
+        "multi_source_ratio": 0.0
+      },
+      "report_synthesis": {
+        "item_count": 12,
+        "max_score": 17,
+        "role_distribution": {
+          "Critical": 0,
+          "Mandatory": 5,
+          "Standard": 7
+        },
+        "source_linked_ratio": 0.9166666666666666,
+        "multi_source_ratio": 0.0
+      }
+    },
+    "generation_model": "qwen3.7-flash",
+    "extraction_model": "qwen3.7-flash"
+  }
+}

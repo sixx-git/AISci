@@ -133,6 +133,16 @@ export interface IterativeExperiment {
   human_feedback: string | null;
   feedback_status: 'none' | 'pending' | 'submitted' | 'applied';
   iterations: IterationRecordMock[];
+  /** 联邦仿真最近一次结果（仅 FL 项目） */
+  fl_simulation_latest?: {
+    execution_mode?: string;
+    framework?: string;
+    success?: boolean;
+    metrics?: Record<string, unknown>;
+    error?: string | null;
+    notes?: string[];
+    created_at?: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }

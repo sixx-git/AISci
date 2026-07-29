@@ -65,6 +65,18 @@ class ProjectService:
                             domains=fl_domains,
                             profile_id=fl_profile,
                         )
+                        # 联邦仿真配置（仅 FL 模式写入；与通用沙箱隔离）
+                        try:
+                            from app.services.fl_simulation import get_fl_simulation_runner
+
+                            sim_runner = get_fl_simulation_runner()
+                            sim_overrides = dict(getattr(data, "fl_sim_spec", None) or {})
+                            config["fl_simulation"] = sim_runner.build_config_blob(
+                                backend=getattr(data, "fl_sim_backend", None),
+                                spec_overrides=sim_overrides,
+                            )
+                        except Exception as sim_exc:
+                            logger.warning("[Project] 写入 fl_simulation 失败: %s", sim_exc)
                         # 研究问题模板兜底
                         if not data.research_question:
                             from app.core.project_modes import get_research_question_template

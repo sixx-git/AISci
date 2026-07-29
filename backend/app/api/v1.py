@@ -16,12 +16,14 @@ from app.api import (
     science_iteration,
     iterative_experiments,
     pingfenbiao_proxy,
+    fl_simulation,
 )
 
 router = APIRouter()
 
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
 router.include_router(iterative_experiments.router, tags=["iterative-experiments"])
+router.include_router(fl_simulation.router, tags=["fl-simulation"])
 router.include_router(pingfenbiao_proxy.router, tags=["pingfenbiao-proxy"])
 # 已淘汰 HTTP 面（非产品入口，保留模块文件但不挂载）：
 # research / chat

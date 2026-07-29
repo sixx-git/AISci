@@ -17,6 +17,58 @@ export interface ApiResponse<T = unknown> {
 
 export type ProjectMode = 'general' | 'federated_learning';
 
+export type FlSimBackend = 'local_pack' | 'flower' | 'fedml';
+
+export interface FlSimulationSpec {
+  num_clients?: number;
+  rounds?: number;
+  strategy?: string;
+  partition?: string;
+  timeout_sec?: number;
+  dirichlet_alpha?: number;
+  dataset_ref?: string;
+  backend?: FlSimBackend;
+}
+
+export interface FlSimulationConfig {
+  enabled?: boolean;
+  backend?: FlSimBackend;
+  backend_label?: string;
+  spec?: FlSimulationSpec;
+  note?: string;
+}
+
+export interface FlSimulationRunResult {
+  execution_mode?: string;
+  framework?: string;
+  spec?: FlSimulationSpec;
+  metrics?: Record<string, unknown>;
+  artifacts?: Record<string, unknown>;
+  success?: boolean;
+  error?: string | null;
+  notes?: string[];
+  run_id?: string;
+  created_at?: string;
+}
+
+export interface FlSimulationCapabilities {
+  enabled: boolean;
+  default_backend?: string;
+  note?: string;
+  backends: Array<{
+    id: string;
+    label: string;
+    enabled?: boolean;
+    installed?: boolean;
+    feature_enabled?: boolean;
+    strategies?: string[];
+    partitions?: string[];
+    note?: string;
+    install_hint?: string | null;
+    fallback?: string | null;
+  }>;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -68,6 +120,8 @@ export interface ProjectOverview {
     data_acquisition?: Record<string, unknown>;
     fl_pack_mounted?: boolean;
     fl_setting?: string;
+    fl_experiment_profile?: string;
+    fl_simulation?: FlSimulationConfig;
     fl_pack_d_applied?: {
       pack_id?: string;
       count?: number;
@@ -80,6 +134,8 @@ export interface ProjectOverview {
       scripts_count?: number;
       datasets_count?: number;
       runtime?: string;
+      experiment_profile?: { label?: string; id?: string };
+      experiment_profile_label?: string;
       summary?: {
         version?: string;
         seed_facts_count?: number;

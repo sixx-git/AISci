@@ -82,6 +82,32 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
     && project.config?.fl_pack_mounted
     && fl,
   );
+  const [flowerInstalled, setFlowerInstalled] = useState<boolean | null>(null);
+  const [fedmlInstalled, setFedmlInstalled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!flMounted) {
+      setFlowerInstalled(null);
+      setFedmlInstalled(null);
+      return;
+    }
+    let cancelled = false;
+    void import('@/services/flSimulationService').then(({ flSimulationService }) =>
+      flSimulationService.getCapabilities(project.id),
+    ).then((caps) => {
+      if (cancelled) return;
+      const flower = caps.backends?.find((b) => b.id === 'flower');
+      const fedml = caps.backends?.find((b) => b.id === 'fedml');
+      setFlowerInstalled(Boolean(flower?.installed));
+      setFedmlInstalled(Boolean(fedml?.installed));
+    }).catch(() => {
+      if (!cancelled) {
+        setFlowerInstalled(null);
+        setFedmlInstalled(null);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [flMounted, project.id]);
 
   return (
     <div className="space-y-6">
@@ -120,6 +146,40 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
                 || 'standard_non_iid',
             )}
           </p>
+          {(() => {
+            const sim = project.config?.fl_simulation;
+            if (!sim) return null;
+            const backend = String(sim.backend || 'local_pack');
+            const spec = sim.spec || {};
+            const paramNote =
+              backend === 'flower' || backend === 'fedml'
+                ? ` · ${spec.num_clients ?? '?'} clients · ${spec.rounds ?? '?'} rounds`
+                : '';
+            return (
+              <div className="mt-3 rounded-md border border-bp-border bg-bp-base/50 px-3 py-2 space-y-1">
+                <p className="text-xs text-bp-text">
+                  仿真后端：
+                  <span className="font-medium text-bp-cyan ml-1">
+                    {sim.backend_label || backend}
+                    {paramNote}
+                  </span>
+                </p>
+                <p className="text-[11px] text-bp-muted">
+                  {sim.note || '单机进程内仿真，非多机真实联邦部署'}
+                  {backend === 'flower' && flowerInstalled !== null && (
+                    <span className="ml-2 text-bp-cyan">
+                      {flowerInstalled ? 'Flower 已就绪' : '未安装 flwr（将用兼容模式）'}
+                    </span>
+                  )}
+                  {backend === 'fedml' && fedmlInstalled !== null && (
+                    <span className="ml-2 text-bp-cyan">
+                      {fedmlInstalled ? 'FedML 已就绪' : '未安装 fedml（将用兼容模式）'}
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+          })()}
           {project.config?.fl_pack_d_applied && (
             <p className="text-xs text-bp-muted mt-1">
               已自动应用 pack_d（{project.config.fl_pack_d_applied.count ?? 0} 个阶段）

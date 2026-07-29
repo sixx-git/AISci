@@ -3,6 +3,19 @@
 > **定位**：内容注入（文献种子 / 数据集元数据 / 本地可跑脚本），**不是**多机联邦 runtime。  
 > 旧 `skills/federated_experiment/` 技能栈已退役；Pipeline 阶段与 general 完全一致。
 
+## 三层能力（v1.5+）
+
+| 层 | 说明 | 配置 / 入口 |
+|----|------|-------------|
+| 1. 资源包 | 文献种子 / 数据集元数据 / 参考脚本 | `project.config.fl_pack` |
+| 2. local_pack | sklearn/numpy 本地 pilot（默认） | `fl_simulation.backend=local_pack` |
+| 3. Flower 仿真 | 单机进程内仿真（可选 flwr；未装则兼容入口） | `fl_simulation.backend=flower` |
+| 4. FedML 仿真 | 单机进程内仿真（可选 fedml；未装则兼容入口） | `fl_simulation.backend=fedml` |
+
+Flower / FedML 均默认开启（`AISCI_FL_FLOWER_ENABLED` / `AISCI_FL_FEDML_ENABLED`）；**不强制**安装重依赖，未安装时走 `*_numpy_compat` 并在 metrics 中标注。
+
+**模式隔离**：上述仿真 API / UI **仅** `project_mode=federated_learning` 可用；通用模式不挂载、不展示、调用返回 `FL_MODE_REQUIRED`。
+
 ## 目录
 
 | 路径 | 说明 |
@@ -10,9 +23,19 @@
 | `manifest.json` | 包版本与资源索引 |
 | `papers/` | 预解析文献 facts（可 seed 到项目） |
 | `datasets/` | 数据集 YAML 元数据（schema / 划分 / 下载） |
-| `scripts/` | 单机 pilot 参考脚本（sklearn/numpy，无 Flower） |
+| `scripts/` | 单机 pilot + Flower 入口脚本 |
 | `checklists/` | HFL / VFL 指标与写作清单 |
 | `failure_cases/` | 失败/反例样例（供报告讨论） |
+
+环境开关：
+
+```
+AISCI_FL_PACK_ENABLED=true
+AISCI_FL_SIM_ENABLED=true
+AISCI_FL_SIM_DEFAULT_BACKEND=local_pack
+AISCI_FL_FLOWER_ENABLED=true
+AISCI_FL_FEDML_ENABLED=true
+```
 
 ## 领域标签（v1.3+）
 
@@ -54,10 +77,9 @@
 
 1. 创建项目时选择模式 **联邦学习（资源包）**，并选 HFL / VFL。
 2. 选择实验范式档位（默认标准 Non-IID）；可选勾选经典应用 / 交叉融合领域。
-3. 系统写入 `project.config.fl_pack`（按子场景 + 领域 + 档位裁剪），并**自动应用 pack_d**。
-4. 项目概览显示「已挂载 FL Pack」版本、档位与 counts；迭代实验可一键把参考脚本写入 `analysis_script`。
-
-环境开关：`AISCI_FL_PACK_ENABLED=true`（默认开启）。
+3. 选择仿真后端（默认 `local_pack`；可选 Flower）。
+4. 系统写入 `project.config.fl_pack` 与 `fl_simulation`，并**自动应用 pack_d**。
+5. 项目概览显示 FL Pack 与仿真后端；迭代实验可一键写参考脚本或「运行仿真」。
 
 ## 重新生成资源
 

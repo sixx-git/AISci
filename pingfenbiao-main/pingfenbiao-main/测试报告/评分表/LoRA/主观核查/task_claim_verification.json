@@ -1,0 +1,824 @@
+{
+    "task_id": "claim_verification_auto_v5",
+    "task_type": "claim_verification",
+    "subject": "",
+    "document_heavy": false,
+    "query": "How effectively do parameter-efficient adaptation techniques that freeze pre-trained weights and optimize low-dimensional weight updates compare to standard fine-tuning in terms of predictive accuracy, trainable parameter count, and hardware resource requirements? The investigation should determine whether these lightweight strategies maintain or improve downstream task performance while eliminating additional inference latency and avoiding sequence length limitations inherent to alternative adaptation methods. Furthermore, the analysis must verify the consistency of these efficiency and quality trade-offs across varying model scales, architectural designs, and diverse application domains.",
+    "input_files": [
+        {
+            "file_id": "S1",
+            "file_name": "LoRA.pdf",
+            "relative_path": "LoRA.pdf",
+            "file_type": "pdf",
+            "description": "PDF document, 26 pages"
+        }
+    ],
+    "rubrics": {
+        "total_score": 82,
+        "dimensions": [
+            {
+                "dimension_id": "information_acquisition",
+                "dimension_name": "Information Acquisition",
+                "max_score": 21,
+                "items": [
+                    {
+                        "rubric_id": "R1",
+                        "rubric_key": "information_acquisition.definition.does_the_report_define_parameter_efficient_adapt",
+                        "competency_category": "definition",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report define parameter-efficient adaptation methods, i.e., that they modify large pre-trained models by freezing core parameters and introducing lightweight, low-dimensional trainable components to approximate task-specific adjustments?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Freezes core pre-trained parameters",
+                            "Introduces lightweight trainable components",
+                            "Approximates task-specific weight adjustments"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R2",
+                        "rubric_key": "information_acquisition.mechanism.does_the_report_explain_how_integration_techniqu",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report explain how integration techniques eliminate runtime computational overhead, that they algebraically combine adaptation parameters with base model weights to ensure deployment latency matches the original unmodified architecture?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Algebraically combines adaptation parameters with base weights",
+                            "Eliminates additional runtime computational overhead",
+                            "Ensures deployment latency matches the original architecture"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R3",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_describe_the_mechanism_of_implem",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report describe the mechanism of implementing optimization constraints through matrix factorization, including that it factorizes high-dimensional parameter changes into products of smaller matrices and incorporates normalization factors to maintain training stability?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Factorizes high-dimensional parameter changes into smaller matrices",
+                            "Incorporates normalization factors for stability"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R4",
+                        "rubric_key": "information_acquisition.methodology.does_the_report_identify_the_theoretical_foundat",
+                        "competency_category": "methodology",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify the theoretical foundation underlying dimensionality-reduction-based adaptation strategies, specifically that the efficacy relies on the assumption that complex model representations and their targeted modifications occupy a significantly lower intrinsic dimensional space than their nominal dimensions suggest?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Assumes model representations occupy lower intrinsic dimensional space",
+                            "Assumes targeted modifications occupy lower intrinsic dimensional space"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R5",
+                        "rubric_key": "information_acquisition.evidence.does_the_report_quantify_the_impact_of_introduci",
+                        "competency_category": "evidence",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report quantify the impact of introducing intermediate processing modules on inference speed, stating that such additions measurably increase per-inference computational time and render architectures suboptimal for real-time deployment?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Measurably increases per-inference computational time",
+                            "Renders architectures suboptimal for real-time deployment"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R6",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_evaluate_the_benefits_of_modular",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate the benefits of modular adaptation frameworks for multi-task scenarios, identifying that decoupling a shared foundational model from lightweight specialized adjustment modules minimizes storage requirements and enables rapid task transitions without complete retraining cycles?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Decouples shared foundational model from specialized adjustment modules",
+                            "Minimizes storage requirements",
+                            "Enables rapid task transitions without complete retraining"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R7",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_assess_whether_the_efficiency_an",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report assess whether the efficiency and quality trade-offs of lightweight adaptation strategies remain consistent across varying model scales, noting that performance gains and resource reductions persist regardless of the base model size?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Performance gains persist across varying model sizes",
+                            "Resource reductions persist across varying model sizes"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R8",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_examine_the_applicability_of_par",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report examine the applicability of parameter-efficient adaptation across different architectural designs, stating that the strategy preserves or enhances predictive performance across varied model architectures?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Strategy preserves predictive performance across varied architectures",
+                            "Strategy enhances predictive performance across varied architectures"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R9",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_verify_the_robustness_of_lightwe",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report verify the robustness of lightweight adaptation techniques across diverse application domains, indicating that the approach maintains comparable or superior predictive accuracy across varied tasks?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Maintains comparable predictive accuracy across varied tasks",
+                            "Achieves superior predictive accuracy across varied tasks"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R10",
+                        "rubric_key": "information_acquisition.comparison.does_the_report_summarize_the_overall_trade_offs",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report summarize the overall trade-offs between parameter-efficient adaptation and standard fine-tuning, contrasting the drastic reduction in trainable parameters and memory demands against the maintenance of downstream task performance?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Contrasts drastic reduction in trainable parameters",
+                            "Contrasts drastic reduction in memory demands",
+                            "Notes maintenance of downstream task performance"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R11",
+                        "rubric_key": "information_acquisition.limitation.does_the_report_distinguish_parameter_efficient",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report distinguish parameter-efficient adaptation techniques from alternative methods regarding sequence length constraints, identifying that algebraic integration avoids reserving input tokens for adaptation and thus prevents context window reduction?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "Algebraic integration avoids reserving input tokens for adaptation",
+                            "Prevents context window reduction compared to input-space methods"
+                        ],
+                        "min_elements_full": 2,
+                        "min_elements_half": 1
+                    }
+                ]
+            },
+            {
+                "dimension_id": "scientific_reasoning",
+                "dimension_name": "Scientific Reasoning",
+                "max_score": 45,
+                "items": [
+                    {
+                        "rubric_id": "R12",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_derive_the_boundary_conditions_u",
+                        "competency_category": "mechanism",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report derive the boundary conditions under which algebraically merging adaptation parameters with base weights successfully eliminates additional inference latency?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "condition of algebraic weight merging at deployment",
+                            "mechanism of runtime overhead elimination",
+                            "outcome of matching baseline inference latency"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R13",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_challenge_the_assumption_that_li",
+                        "competency_category": "comparison",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report challenge the assumption that lightweight adaptation strategies guarantee consistent efficiency and quality trade-offs across varying model scales and architectural designs?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "analysis of model scale variations",
+                            "evaluation of architectural design differences",
+                            "consistency check of efficiency trade-offs"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R14",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_trainable_parameter",
+                        "competency_category": "comparison",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report compare the trainable parameter counts and GPU memory requirements of lightweight adaptation strategies against standard fine-tuning approaches?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "trainable parameter count quantification",
+                            "GPU memory requirement measurement",
+                            "baseline standard fine-tuning comparison"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R15",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_identify_the_specific_operationa",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report identify the specific operational constraints where input-space adaptation methods consume processing capacity and reduce available context windows for primary tasks?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "processing capacity consumption metric",
+                            "available context window reduction",
+                            "resulting optimization complexity"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R16",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_synthesize_findings_on_how_algeb",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report synthesize findings on how algebraic integration techniques combine adaptation parameters with frozen weights to ensure deployment latency matches unmodified architectures?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "algebraic integration technique description",
+                            "combination of adaptation and frozen weights",
+                            "deployment latency equivalence proof"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R17",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_evaluate_the_performance_consist",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate the performance consistency of lightweight adaptation strategies across diverse application domains versus traditional full-parameter retraining?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "downstream task performance across domains",
+                            "lightweight strategy evaluation",
+                            "traditional retraining benchmark comparison"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R18",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_deduce_the_relationship_between",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report deduce the relationship between rank constraints in matrix factorization and the resulting reduction in trainable parameters during optimization cycles?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "condition of rank constraints",
+                            "mechanism of matrix factorization",
+                            "outcome of reduced trainable parameters"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R19",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_assess_the_impact_of_intermediat",
+                        "competency_category": "limitation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess the impact of intermediate neural network modules on single-forward-pass inference times in batch processing environments?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "intermediate module introduction",
+                            "single-forward-pass inference time increase",
+                            "batch processing environment impact"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R20",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_decoupling_foundation",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report argue that decoupling foundational models from lightweight adjustment modules enables rapid task transitions without requiring complete retraining cycles?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "modular framework decoupling",
+                            "rapid task transition capability",
+                            "elimination of complete retraining cycles"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R21",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_compare_the_scalability_of_low_d",
+                        "competency_category": "comparison",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report compare the scalability of low-dimensional trainable components against high-dimensional parameter updates as model sizes increase?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "low-dimensional component scalability",
+                            "high-dimensional parameter update scaling",
+                            "model size increase correlation"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R22",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_trace_the_logical_flow_from_the",
+                        "competency_category": "mechanism",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report trace the logical flow from the low intrinsic dimension assumption to the practical implementation of normalized matrix factorization for stable training?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "condition of low intrinsic dimension assumption",
+                            "mechanism of normalized matrix factorization",
+                            "outcome of stable training convergence"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R23",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_the_broader_implication",
+                        "competency_category": "synthesis",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the broader implications of modular adaptation frameworks on resource-efficient multi-task deployment in production environments?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "modular framework deployment implications",
+                            "resource efficiency in production",
+                            "multi-task adaptation scalability"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R24",
+                        "rubric_key": "scientific_reasoning.limitation.does_the_report_analyze_potential_edge_cases_whe",
+                        "competency_category": "limitation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report analyze potential edge cases where low-rank decomposition might fail to capture complex task-specific variations in highly heterogeneous datasets?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "edge case identification in decomposition",
+                            "complex task-specific variation capture",
+                            "heterogeneous dataset performance drop"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R25",
+                        "rubric_key": "scientific_reasoning.mechanism.does_the_report_examine_how_scaling_factors_appl",
+                        "competency_category": "mechanism",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report examine how scaling factors applied during forward pass modifications influence the convergence behavior of gradient-based optimization?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "condition of forward pass scaling factors",
+                            "mechanism of gradient modification",
+                            "outcome of optimized convergence behavior"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R26",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_conclude_whether_the_elimination",
+                        "competency_category": "synthesis",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report conclude whether the elimination of runtime computational overhead through algebraic weight merging consistently outweighs the benefits of sequential computation alternatives?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "runtime overhead elimination benefit",
+                            "algebraic weight merging advantage",
+                            "sequential computation alternative contrast"
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    },
+                    {
+                        "rubric_id": "R27",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_reconcile_conflicting_evidence_a",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report reconcile conflicting evidence across sources regarding the main claim or conclusion?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "binary",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R28",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_argue_that_absolute_or_unconditi",
+                        "competency_category": "synthesis",
+                        "role": "Critical",
+                        "weight": 4,
+                        "question": "Does the report argue that absolute or unconditional claims overstate what the reviewed evidence actually demonstrates?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "binary",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R29",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_evaluate_whether_the_empirical_e",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report evaluate whether the empirical evidence supports generalizing the main claim beyond the specific experimental settings studied?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "binary",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R30",
+                        "rubric_key": "scientific_reasoning.synthesis.does_the_report_assess_limitations_and_scope_con",
+                        "competency_category": "synthesis",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report assess limitations and scope conditions under which the main claim may not hold?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "binary",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R31",
+                        "rubric_key": "scientific_reasoning.comparison.does_the_report_address_the_following_observable",
+                        "competency_category": "comparison",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report address the following observable points?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "checklist",
+                        "required_elements": [
+                            "The report states that a single shared base model paired with multiple lightweight adaptation layers occupies less total storage than maintaining multiple independent full-model copies.",
+                            "The report notes that reusing foundational weights across different tasks eliminates redundant storage of identical parameters.",
+                            "The report directly contrasts the storage footprint of the shared-adaptation approach with that of separate fully fine-tuned instances."
+                        ],
+                        "min_elements_full": 3,
+                        "min_elements_half": 2
+                    }
+                ]
+            },
+            {
+                "dimension_id": "report_synthesis",
+                "dimension_name": "Report Synthesis",
+                "max_score": 16,
+                "items": [
+                    {
+                        "rubric_id": "R32",
+                        "rubric_key": "report_synthesis.structure.does_the_report_include_a_structured_evidence_ta",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report include a structured evidence table that clearly categorizes supporting, refuting, and neutral findings related to the claim?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R33",
+                        "rubric_key": "report_synthesis.structure.is_the_final_verdict_explicitly_stated_alongside",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Is the final verdict explicitly stated alongside a clear, step-by-step justification that synthesizes the analyzed evidence?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R34",
+                        "rubric_key": "report_synthesis.structure.does_the_report_map_each_piece_of_presented_evid",
+                        "competency_category": "structure",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report map each piece of presented evidence directly to specific sub-propositions within the main claim?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R35",
+                        "rubric_key": "report_synthesis.citation.does_the_report_accurately_attribute_the_quantit",
+                        "competency_category": "citation",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report accurately attribute the quantitative claims regarding trainable parameter reduction and GPU memory savings to Source S1 without conflating them with unrelated adaptation methods?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R36",
+                        "rubric_key": "report_synthesis.structure.does_the_report_derive_the_specific_boundary_con",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report derive the specific boundary conditions under which parameter-efficient adaptation techniques would degrade predictive accuracy compared to standard fine-tuning?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R37",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_accurately_contextualize_the_the",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report accurately contextualize the theoretical hypothesis from Source S1 regarding intrinsic dimensionality without overstating its universal applicability across all neural network types?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R38",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_correctly_interpret_the_low_rank",
+                        "competency_category": "integrity",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report correctly interpret the low-rank matrix factorization mechanism described in Source S1 without misrepresenting its mathematical formulation or training stability factors?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R39",
+                        "rubric_key": "report_synthesis.structure.does_the_report_evaluate_whether_the_experimenta",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate whether the experimental settings and benchmark configurations used in the reviewed studies are realistic enough to support reliable extrapolation to production environments?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R40",
+                        "rubric_key": "report_synthesis.recommendation.does_the_report_identify_meaningful_future_resea",
+                        "competency_category": "recommendation",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report identify meaningful future research directions or unresolved limitations that extend beyond the scope of the reviewed literature?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R41",
+                        "rubric_key": "report_synthesis.structure.does_the_report_evaluate_the_logical_self_consis",
+                        "competency_category": "structure",
+                        "role": "Standard",
+                        "weight": 1,
+                        "question": "Does the report evaluate the logical self-consistency of the evidence presented across different sources?",
+                        "source_ids": [
+                            "S1"
+                        ],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    },
+                    {
+                        "rubric_id": "R42",
+                        "rubric_key": "report_synthesis.integrity.does_the_report_use_precise_hedging_language_and",
+                        "competency_category": "integrity",
+                        "role": "Mandatory",
+                        "weight": 2,
+                        "question": "Does the report use precise hedging language and avoid unsupported superlatives (e.g., 'proven', 'guaranteed') when discussing research findings?",
+                        "source_ids": [],
+                        "judgment_mode": "structure",
+                        "required_elements": [],
+                        "min_elements_full": 1,
+                        "min_elements_half": 1
+                    }
+                ]
+            }
+        ]
+    },
+    "generation_meta": {
+        "version": "5.2-ocr",
+        "rubric_key_enabled": true,
+        "capability_coverage_enabled": true,
+        "ocr_enabled": true,
+        "ocr_checklist_items": 27,
+        "ocr_naked_explain_remaining": 0,
+        "dimension_stats": {
+            "information_acquisition": {
+                "item_count": 11,
+                "max_score": 21,
+                "role_distribution": {
+                    "Critical": 2,
+                    "Mandatory": 4,
+                    "Standard": 5
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "scientific_reasoning": {
+                "item_count": 20,
+                "max_score": 45,
+                "role_distribution": {
+                    "Critical": 5,
+                    "Mandatory": 10,
+                    "Standard": 5
+                },
+                "source_linked_ratio": 1.0,
+                "multi_source_ratio": 0.0
+            },
+            "report_synthesis": {
+                "item_count": 11,
+                "max_score": 16,
+                "role_distribution": {
+                    "Critical": 0,
+                    "Mandatory": 5,
+                    "Standard": 6
+                },
+                "source_linked_ratio": 0.45454545454545453,
+                "multi_source_ratio": 0.0
+            }
+        },
+        "generation_model": "qwen3.7-flash",
+        "extraction_model": "qwen3.7-flash",
+        "query_style": "claim",
+        "query_warnings": []
+    },
+    "calibration": {
+        "version": "2.0",
+        "issues_found": 8,
+        "issues": [
+            "information_acquisition: Mandatory 项过少 (4/11=36%, 目标 40%-60%)",
+            "information_acquisition: Standard 项过多 (5/11=45%, 目标 10%-30%)",
+            "report_synthesis: Critical 项过少 (0/11=0%, 目标 15%-35%)",
+            "report_synthesis: Standard 项过多 (6/11=55%, 目标 10%-30%)",
+            "report_synthesis: 过多评分项带有 source_ids (5/11), 综合维度应主要评估报告结构而非内容",
+            "scientific_reasoning: 分值占比 55% 不在合理范围 (55%-70%) for claim_verification",
+            "report_synthesis: 分值占比 20% 不在合理范围 (8%-18%) for claim_verification",
+            "information_acquisition: 条目数过少 (11, 目标 12-16)"
+        ],
+        "fixes_applied": [],
+        "task_type": "claim_verification"
+    }
+}

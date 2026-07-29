@@ -132,11 +132,16 @@ export function Predict() {
 
   const handleDelete = async (jobId: string) => {
     try {
-      await predictService.deleteImpact(jobId);
+      setServiceError(null);
+      // 先乐观更新侧栏，避免接口慢/历史扫描滞后造成「删了还在」
+      setHistory((prev) => prev.filter((it) => it.job_id !== jobId));
       if (selectedId === jobId) handleNew();
+      await predictService.deleteImpact(jobId);
       await loadHistory();
     } catch (err) {
       setServiceError(getErrorMessage(err, '删除失败'));
+      // 回滚：重新拉取真实历史
+      await loadHistory();
     }
   };
 
@@ -144,11 +149,13 @@ export function Predict() {
     taskType: PredictTaskType;
     files: FileList;
     apiKey: string;
+    saveDir: string;
   }) => {
     const form = new FormData();
     form.append('task_type', payload.taskType);
     form.append('query', '');
     if (payload.apiKey) form.append('api_key', payload.apiKey);
+    if (payload.saveDir) form.append('save_dir', payload.saveDir);
     Array.from(payload.files).forEach((f) => form.append('files', f));
     try {
       setServiceError(null);
@@ -193,6 +200,9 @@ export function Predict() {
     scoresData?: File | null;
     taskClaim?: File | null;
     scoresClaim?: File | null;
+    saveDirLit?: string;
+    saveDirData?: string;
+    saveDirClaim?: string;
   }) => {
     const form = new FormData();
     form.append('files', payload.pdf);
@@ -204,6 +214,9 @@ export function Predict() {
     if (payload.scoresData) form.append('scores_data', payload.scoresData);
     if (payload.taskClaim) form.append('task_claim', payload.taskClaim);
     if (payload.scoresClaim) form.append('scores_claim', payload.scoresClaim);
+    if (payload.saveDirLit) form.append('save_dir_lit', payload.saveDirLit);
+    if (payload.saveDirData) form.append('save_dir_data', payload.saveDirData);
+    if (payload.saveDirClaim) form.append('save_dir_claim', payload.saveDirClaim);
     try {
       setServiceError(null);
       const res = await predictService.impact(form);

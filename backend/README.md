@@ -119,6 +119,11 @@ HF_ENDPOINT=https://hf-mirror.com
 EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 UPLOAD_DIR=./storage/uploads
 AISCI_FL_PACK_ENABLED=true
+AISCI_FL_LOCAL_PILOT_ENABLED=true
+AISCI_FL_SIM_ENABLED=true
+AISCI_FL_SIM_DEFAULT_BACKEND=local_pack
+AISCI_FL_FLOWER_ENABLED=true
+AISCI_FL_FEDML_ENABLED=true
 ```
 
 ### 4. 启动服务
@@ -169,21 +174,22 @@ pytest tests/test_fl_starter_pack.py -q
 
 ## 联邦学习 Starter Pack
 
-定位：**内容注入**（文献种子 / 数据集元数据 / 实验范式 / 单机 pilot），**不是** Flower/FATE 多机部署。
+定位：**内容注入** + **可选单机仿真**（local_pack / Flower），**不是**多机真实联邦部署。通用模式不可见、不可调用。
 
 | 路径 | 说明 |
 |------|------|
 | `data/reference/fl/` | Pack 根目录（manifest v1.4+） |
 | `data/reference/fl/experiment_paradigms/` | 默认档位 `standard_non_iid`（Dirichlet + FedProx） |
-| `data/reference/fl/scripts/` | 含 `hfl_dirichlet_partition.py`、`hfl_baseline_compare_pilot.py` |
+| `data/reference/fl/scripts/` | pilot 脚本 + `flower_hfl_sim_entry.py` |
 | `app/services/fl_pack_service.py` | 加载、挂载、`experiment_paradigm_context` |
+| `app/services/fl_simulation/` | SimulationBackend（local_pack / flower / fedml） |
 | `prompts/presets/pack_d/` | 联邦专用三阶段 Prompt |
 
 **使用方式**
 
-1. 前端创建项目 → 模式「联邦学习」→ 实验档位默认「标准 Non-IID」
-2. 系统写入 `project.config.fl_pack` 并自动应用 pack_d
-3. 迭代实验详情 → **FL 参考脚本模板** → 一键写入 `analysis_script`
+1. 前端创建项目 → 模式「联邦学习」→ 实验档位 + 仿真后端（默认 local_pack）
+2. 系统写入 `project.config.fl_pack` 与 `fl_simulation`，并自动应用 pack_d
+3. 迭代实验详情 → **FL 参考脚本模板** 或 **联邦仿真运行**
 
 ```bash
 # 重新生成 Pack

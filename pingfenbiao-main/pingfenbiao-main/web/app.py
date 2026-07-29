@@ -26,7 +26,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from common.composite_scorer import resolve_display_composite_score  # noqa: E402
-from jobs import JobManager
+from jobs import JobManager, resolve_rubric_save_path
 from runner import ALLOWED_SUFFIXES, PACKAGES, REPORT_SUFFIXES, resolve_task_type, scores_output_path
 
 APP_DIR = Path(__file__).resolve().parent
@@ -59,6 +59,7 @@ async def api_generate(
     task_type: str = Form(...),
     query: str = Form(""),
     api_key: str = Form(""),
+    save_dir: str = Form(""),
     files: list[UploadFile] = File(...),
 ):
     if task_type not in PACKAGES:
@@ -66,6 +67,11 @@ async def api_generate(
 
     if not files:
         raise HTTPException(400, "请上传至少一个源文件")
+
+    try:
+        save_path = resolve_rubric_save_path(save_dir)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     job_id = uuid.uuid4().hex[:12]
     job_dir = WORK_DIR / job_id
@@ -101,6 +107,7 @@ async def api_generate(
             source_dir=source_dir,
             output_dir=output_dir,
             api_key=api_key.strip(),
+            save_path=save_path,
         )
 
         return {
@@ -110,6 +117,7 @@ async def api_generate(
             "task_type": task_type,
             "label": PACKAGES[task_type]["label"],
             "file_count": saved,
+            "save_path": str(save_path) if save_path else None,
             "status_url": f"/api/status/{job_id}",
         }
     except HTTPException:
@@ -234,6 +242,9 @@ async def api_impact(
     scores_data: UploadFile | None = None,
     task_claim: UploadFile | None = None,
     scores_claim: UploadFile | None = None,
+    save_dir_lit: str = Form(""),
+    save_dir_data: str = Form(""),
+    save_dir_claim: str = Form(""),
 ):
     job_id = uuid.uuid4().hex[:12]
     job_dir = WORK_DIR / job_id
@@ -245,6 +256,21 @@ async def api_impact(
     report_limit = max_report_chars if max_report_chars > 0 else 200000
     if report_limit > 2_000_000:
         raise HTTPException(400, "报告截断上限过大（最大 2000000）")
+
+    try:
+        rubric_save_paths = {
+            "literature_review": resolve_rubric_save_path(
+                save_dir_lit, default_filename="task_literature_review.json"
+            ),
+            "data_analysis": resolve_rubric_save_path(
+                save_dir_data, default_filename="task_data_analysis.json"
+            ),
+            "claim_verification": resolve_rubric_save_path(
+                save_dir_claim, default_filename="task_claim_verification.json"
+            ),
+        }
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     pdf_saved = 0
     try:
@@ -307,6 +333,7 @@ async def api_impact(
             api_key=api_key.strip(),
             preloaded_rubrics=preloaded,
             max_report_chars=report_limit,
+            rubric_save_paths=rubric_save_paths,
         )
 
         return {
@@ -393,19 +420,40 @@ async def download_impact(job_id: str):
 
 @app.delete("/api/impact/{job_id}")
 async def api_delete_impact(job_id: str):
+    """彻底删除一条影响力预测记录（整目录），避免侧栏删了数据仍残留/被迁移脚本恢复。"""
     if not job_id.isalnum() or len(job_id) != 12:
         raise HTTPException(400, "无效的 job_id")
     job_dir = WORK_DIR / job_id
-    if not job_dir.exists():
+    if not job_dir.exists() or not job_dir.is_dir():
         raise HTTPException(404, "任务不存在")
-    # 只删除汇总文件，保留文献和评分表
-    impact_report = job_dir / "output" / "impact_report.json"
-    if impact_report.exists():
-        impact_report.unlink()
-    status_file = job_dir / "status.json"
-    if status_file.exists():
-        status_file.unlink()
-    return {"ok": True, "job_id": job_id}
+
+    # 停掉可能仍在跑的后台线程登记（已完成任务通常无活跃线程）
+    try:
+        with job_manager._lock:
+            job_manager._threads.pop(job_id, None)
+    except Exception:
+        pass
+
+    try:
+        shutil.rmtree(job_dir)
+    except OSError as exc:
+        # Windows 偶发文件锁：尽量清关键文件后再删目录
+        for name in ("status.json", "output/impact_report.json"):
+            p = job_dir / name
+            try:
+                if p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        except Exception:
+            pass
+        if job_dir.exists():
+            raise HTTPException(500, f"删除失败（文件可能被占用）: {exc}") from exc
+
+    return {"ok": True, "job_id": job_id, "deleted": True}
+
 
 
 @app.get("/api/rubric/{job_id}/{task_type}")
@@ -685,6 +733,9 @@ INDEX_HTML = r"""<!DOCTYPE html>
           <input id="files" name="files" type="file" multiple accept=".pdf,.csv,.md,.txt" required />
           <p class="hint" id="file-count-gen"></p>
           <p class="hint">研究问题将根据上传文献自动生成</p>
+          <label for="save_dir">评分表保存路径（可选）</label>
+          <input id="save_dir" name="save_dir" type="text" placeholder="例如 D:\rubrics 或 D:\rubrics\task.json" autocomplete="off" />
+          <p class="hint">填写本机绝对路径；填目录则保存为该目录下的 task.json。留空仅保留在任务目录，可稍后下载。</p>
           <details class="opt-api">
             <summary>API Key（可选）</summary>
             <input type="password" id="api_key_gen" name="api_key" placeholder="DASHSCOPE_API_KEY（填写后优先使用）" autocomplete="off" />
@@ -1775,6 +1826,8 @@ $("form-generate").addEventListener("submit", async function(e){
   fd.append("task_type", $("task_type").value);
   fd.append("query", "");
   fd.append("max_report_chars", String(getMaxReportChars()));
+  var saveDir = ($("save_dir").value || "").trim().replace(/^["']+|["']+$/g, "");
+  if(saveDir) fd.append("save_dir", saveDir);
   var apiKeyGen = ($("api_key_gen").value || "").trim();
   if(apiKeyGen) fd.append("api_key", apiKeyGen);
   for(var i=0;i<fileInputGen.files.length;i++) fd.append("files", fileInputGen.files[i]);

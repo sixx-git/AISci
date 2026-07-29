@@ -27,14 +27,107 @@ from openai import OpenAI
 from .citation_graph import analyze_citation_graph
 from .early_impact import predict_early_impact
 from .impact_explainer import explain_bias_direction, should_boost
-from .metadata_fetcher import fetch_work_by_doi, fetch_work_by_title, _summarize_work
+from .metadata_fetcher import fetch_work_by_doi, fetch_work_by_title
 from .paper_feature_extraction import extract_paper_features
 
 logger = logging.getLogger(__name__)
 
+_DIM_KEYS = ("d1_text_quality", "d2_reputation", "d3_future_potential", "d4_bias_fairness")
+_DIM_MAX = {
+    "d1_text_quality": 10,
+    "d2_reputation": 10,
+    "d3_future_potential": 6,
+    "d4_bias_fairness": 4,
+}
+
+
+def _as_dict(value: Any, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    """嵌套字段可能被上游写成 str，统一成 dict 再 .get。"""
+    if isinstance(value, dict):
+        return value
+    return {} if default is None else dict(default)
+
+
+def _as_list_str(value: Any) -> list[str]:
+    if isinstance(value, list):
+        out: list[str] = []
+        for x in value:
+            if x is None:
+                continue
+            if isinstance(x, dict):
+                name = x.get("name") or x.get("display_name") or ""
+                if name:
+                    out.append(str(name))
+            else:
+                out.append(str(x))
+        return out
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_dim_block(key: str, raw: Any) -> dict[str, Any]:
+    """将 LLM 可能返回的 str/number/残缺 dict 规范为 {score, max, rationale}。"""
+    default_max = _DIM_MAX.get(key, 10)
+    if isinstance(raw, dict):
+        score = _safe_float(raw.get("score"), 0.0)
+        mx = int(_safe_float(raw.get("max"), default_max) or default_max)
+        rationale = raw.get("rationale") or raw.get("reason") or ""
+        return {
+            "score": max(0, min(mx, score)),
+            "max": mx,
+            "rationale": str(rationale) if rationale is not None else "",
+        }
+    if isinstance(raw, (int, float)):
+        score = float(raw)
+        return {"score": max(0, min(default_max, score)), "max": default_max, "rationale": ""}
+    if isinstance(raw, str):
+        # 兼容 "8/10" 或纯数字字符串
+        text = raw.strip()
+        if "/" in text:
+            left, _, right = text.partition("/")
+            score = _safe_float(left, 0.0)
+            mx = int(_safe_float(right, default_max) or default_max)
+            return {"score": max(0, min(mx, score)), "max": mx, "rationale": text}
+        score = _safe_float(text, 0.0)
+        return {"score": max(0, min(default_max, score)), "max": default_max, "rationale": text}
+    return {"score": 0, "max": default_max, "rationale": ""}
+
+
+def _normalize_calibrated_total(raw: Any, fallback_score: float | None = None) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        score = raw.get("score")
+        if score is None and fallback_score is not None:
+            score = fallback_score
+        return {
+            "score": max(0.0, min(30.0, _safe_float(score, 0.0))),
+            "max": int(_safe_float(raw.get("max"), 30) or 30),
+            "method": str(raw.get("method") or "llm"),
+        }
+    if isinstance(raw, (int, float, str)):
+        return {
+            "score": max(0.0, min(30.0, _safe_float(raw, fallback_score or 0.0))),
+            "max": 30,
+            "method": "coerced_from_scalar",
+        }
+    return {
+        "score": max(0.0, min(30.0, _safe_float(fallback_score, 0.0))),
+        "max": 30,
+        "method": "default",
+    }
+
 
 def _get_client(api_key: str):
-    key = api_key or os.getenv("DASHSCOPE_API_KEY", "")
+    from .api_key_resolve import resolve_dashscope_api_key
+
+    key, _src = resolve_dashscope_api_key(api_key)
     return OpenAI(
         api_key=key,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -176,18 +269,21 @@ def evaluate_impact(
         评估结果字典，包含分数、校准详情、偏差分析、预测信息。
     """
     # ── 1. 获取元数据 ──
+    # fetch_work_* 已返回精简摘要，切勿再 _summarize_work（concepts 已是 str 列表）
     meta = None
-    if doi:
-        raw = fetch_work_by_doi(doi)
-        if raw:
-            meta = _summarize_work(raw)
-    if not meta and title:
-        raw = fetch_work_by_title(title)
-        if raw:
-            meta = _summarize_work(raw)
+    try:
+        if doi:
+            meta = fetch_work_by_doi(doi)
+        if not meta and title:
+            meta = fetch_work_by_title(title)
+    except Exception as e:
+        logger.warning("获取论文元数据异常: %s", e)
+        meta = None
 
     if not meta:
         logger.warning("无法获取论文元数据（title=%s, doi=%s）", title, doi)
+        meta = {}
+    elif not isinstance(meta, dict):
         meta = {}
 
     # 统一字段名（兼容新旧数据）
@@ -209,18 +305,24 @@ def evaluate_impact(
     if work_id:
         try:
             citation_graph = analyze_citation_graph(work_id)
-            logger.info("引用网络分析完成: cited_by=%d", citation_graph.get("network_size", {}).get("cited_by_count", 0) if citation_graph else 0)
+            ns = _as_dict(_as_dict(citation_graph).get("network_size"))
+            logger.info(
+                "引用网络分析完成: cited_by=%d",
+                ns.get("cited_by_count", 0) if citation_graph else 0,
+            )
         except Exception as e:
             logger.warning("引用网络分析失败: %s", e)
 
     # ── 3. 早期影响力预测 ──
     early_impact = None
-    if meta.get("cited_by_count", 0) > 0 or (citation_graph and citation_graph.get("network_size", {}).get("cited_by_count", 0) > 0):
+    cg = _as_dict(citation_graph)
+    ns = _as_dict(cg.get("network_size"))
+    if meta.get("cited_by_count", 0) > 0 or ns.get("cited_by_count", 0) > 0:
         try:
-            cited_count = citation_graph.get("network_size", {}).get("cited_by_count", meta.get("cited_by_count", 0)) if citation_graph else meta.get("cited_by_count", 0)
+            cited_count = ns.get("cited_by_count", meta.get("cited_by_count", 0)) if citation_graph else meta.get("cited_by_count", 0)
             pub_year = meta.get("publication_year")
-            velocity = citation_graph.get("citation_velocity", 0) if citation_graph else 0
-            percentile = citation_graph.get("field_percentile", 50) if citation_graph else 50
+            velocity = cg.get("citation_velocity", 0) if citation_graph else 0
+            percentile = cg.get("field_percentile", 50) if citation_graph else 50
 
             if pub_year:
                 early_impact = predict_early_impact(
@@ -230,9 +332,14 @@ def evaluate_impact(
                     field_percentile=percentile,
                     venue_tier=meta.get("venue_tier", ""),
                 )
-                logger.info("早期影响力预测完成: 1年=%s, 高影响概率=%s",
-                           early_impact.get("predictions", {}).get("1_year", {}).get("predicted_citations", "N/A"),
-                           early_impact.get("high_impact_probability", {}).get("probability", "N/A"))
+                ei = _as_dict(early_impact)
+                pred_1y = _as_dict(_as_dict(ei.get("predictions")).get("1_year"))
+                hip = _as_dict(ei.get("high_impact_probability"))
+                logger.info(
+                    "早期影响力预测完成: 1年=%s, 高影响概率=%s",
+                    pred_1y.get("predicted_citations", "N/A"),
+                    hip.get("probability", "N/A"),
+                )
         except Exception as e:
             logger.warning("早期影响力预测失败: %s", e)
 
@@ -267,35 +374,58 @@ def evaluate_impact(
         logger.error("LLM 评估失败: %s", e)
         return None
 
-    # ── 7. 后处理 ──
-    # 确保数值在合理范围内
-    for key in ["d1_text_quality", "d2_reputation", "d3_future_potential", "d4_bias_fairness"]:
-        if key in result:
-            result[key]["score"] = max(0, min(result[key].get("max", 10), result[key].get("score", 0)))
+    # ── 7. 后处理：规范 LLM 可能返回的 str/标量结构，避免 .get 崩溃 ──
+    if not isinstance(result, dict):
+        logger.error("LLM 评估返回非对象: %s", type(result))
+        return None
 
-    # 计算校准总分（如果LLM没算好）
-    calibrated = result.get("calibrated_total", {})
-    if not calibrated.get("score"):
-        d1 = result.get("d1_text_quality", {}).get("score", 0)
-        d2 = result.get("d2_reputation", {}).get("score", 0)
-        d3 = result.get("d3_future_potential", {}).get("score", 0)
-        d4 = result.get("d4_bias_fairness", {}).get("score", 0)
-        # 校准公式：质量60% + 声誉40%，再乘以未来潜力因子，加上偏差分
+    for key in _DIM_KEYS:
+        result[key] = _normalize_dim_block(key, result.get(key))
+
+    calibrated_raw = result.get("calibrated_total")
+    need_recompute = True
+    if isinstance(calibrated_raw, dict) and calibrated_raw.get("score") is not None:
+        need_recompute = False
+    elif isinstance(calibrated_raw, (int, float)):
+        need_recompute = False
+    elif isinstance(calibrated_raw, str) and calibrated_raw.strip():
+        need_recompute = False
+
+    if need_recompute:
+        d1 = result["d1_text_quality"]["score"]
+        d2 = result["d2_reputation"]["score"]
+        d3 = result["d3_future_potential"]["score"]
+        d4 = result["d4_bias_fairness"]["score"]
         base = d1 * 0.6 + d2 * 0.4
         future_factor = d3 / 6.0 if d3 > 0 else 0.5
-        # 如果声誉显著高于质量，下调；如果质量显著高于声誉，上调
         rep_quality_diff = d2 - d1
         adjustment = 1.0
         if rep_quality_diff > 3:
-            adjustment = 0.9  # 声誉光环效应，下调
+            adjustment = 0.9
         elif rep_quality_diff < -3:
-            adjustment = 1.1  # 被低估的好工作，上调
+            adjustment = 1.1
         calibrated_score = round(base * future_factor * adjustment + d4, 1)
         result["calibrated_total"] = {
             "score": min(30, max(0, calibrated_score)),
             "max": 30,
-            "method": "(quality*0.6 + reputation*0.4) * future_factor * adjustment + bias_score"
+            "method": "(quality*0.6 + reputation*0.4) * future_factor * adjustment + bias_score",
         }
+    else:
+        result["calibrated_total"] = _normalize_calibrated_total(calibrated_raw)
+
+    # 关键因素 / 风险：确保为 list[dict]
+    for list_key in ("key_factors", "risk_factors"):
+        items = result.get(list_key)
+        if isinstance(items, list):
+            normalized_items = []
+            for it in items:
+                if isinstance(it, dict):
+                    normalized_items.append(it)
+                elif isinstance(it, str):
+                    normalized_items.append({"factor" if list_key == "key_factors" else "risk": it})
+            result[list_key] = normalized_items
+        elif items is not None:
+            result[list_key] = []
 
     # ── 8. 附加分析数据 ──
     result["_analysis_data"] = {
@@ -334,8 +464,8 @@ def _build_enhanced_prompt(
     # 基本信息
     lines.append("=== 基本信息 ===")
     lines.append(f"标题: {meta.get('title', 'N/A')}")
-    lines.append(f"作者: {', '.join(meta.get('authors', [])[:5])}")
-    lines.append(f"机构: {', '.join(meta.get('institutions', [])[:3])}")
+    lines.append(f"作者: {', '.join(_as_list_str(meta.get('authors'))[:5])}")
+    lines.append(f"机构: {', '.join(_as_list_str(meta.get('institutions'))[:3])}")
     lines.append(f"期刊/会议: {meta.get('journal', 'N/A')}")
     lines.append(f"发表年份: {meta.get('publication_year', 'N/A')}")
     lines.append(f"DOI: {meta.get('doi', 'N/A')}")
@@ -345,63 +475,81 @@ def _build_enhanced_prompt(
     # 引用网络分析
     if citation_graph:
         lines.append("=== 引用网络分析 ===")
-        ns = citation_graph.get("network_size", {})
+        ns = _as_dict(_as_dict(citation_graph).get("network_size"))
+        cg = _as_dict(citation_graph)
         lines.append(f"被引次数: {ns.get('cited_by_count', 0)}")
         lines.append(f"引用论文数: {ns.get('references_count', 0)}")
-        lines.append(f"引用速度: {citation_graph.get('citation_velocity', 0)} 次/年")
-        lines.append(f"领域百分位: {citation_graph.get('field_percentile', 50)}%")
-        lines.append(f"引用集中度: {citation_graph.get('concentration_ratio', 0)}")
-        lines.append(f"引用多样性: {citation_graph.get('diversity_score', 0)}")
-        lines.append(f"高影响力引用比例: {citation_graph.get('influential_ratio', 0)}")
-        lines.append(f"网络连通性: {citation_graph.get('connectivity', 0)}")
-        lines.append(f"平均引用延迟: {citation_graph.get('avg_citation_delay_years', 0)} 年")
+        lines.append(f"引用速度: {cg.get('citation_velocity', 0)} 次/年")
+        lines.append(f"领域百分位: {cg.get('field_percentile', 50)}%")
+        lines.append(f"引用集中度: {cg.get('concentration_ratio', 0)}")
+        lines.append(f"引用多样性: {cg.get('diversity_score', 0)}")
+        lines.append(f"高影响力引用比例: {cg.get('influential_ratio', 0)}")
+        lines.append(f"网络连通性: {cg.get('connectivity', 0)}")
+        lines.append(f"平均引用延迟: {cg.get('avg_citation_delay_years', 0)} 年")
         lines.append("")
 
     # 早期影响力预测
     if early_impact:
         lines.append("=== 早期影响力预测 ===")
-        cs = early_impact.get("current_state", {})
-        lines.append(f"当前状态: {cs.get('cited_count', 0)}次引用, 年龄{cs.get('age_years', 0)}年, 阶段{cs.get('life_stage', 'unknown')}")
+        ei = _as_dict(early_impact)
+        cs = _as_dict(ei.get("current_state"))
+        lines.append(
+            f"当前状态: {cs.get('cited_count', 0)}次引用, 年龄{cs.get('age_years', 0)}年, "
+            f"阶段{cs.get('life_stage', 'unknown')}"
+        )
 
-        preds = early_impact.get("predictions", {})
+        preds = _as_dict(ei.get("predictions"))
         for year in ["1_year", "3_year", "5_year"]:
-            p = preds.get(year, {})
-            lines.append(f"{year.replace('_', '')}预测: {p.get('predicted_citations', 'N/A')}次 ({p.get('method', '')})")
+            p = _as_dict(preds.get(year))
+            lines.append(
+                f"{year.replace('_', '')}预测: {p.get('predicted_citations', 'N/A')}次 "
+                f"({p.get('method', '')})"
+            )
         lines.append(f"饱和估计: {preds.get('saturation_estimate', 'N/A')}次")
         lines.append(f"增长轨迹: {preds.get('growth_trajectory', 'unknown')}")
 
-        hip = early_impact.get("high_impact_probability", {})
+        hip = _as_dict(ei.get("high_impact_probability"))
         lines.append(f"高影响概率: {hip.get('probability', 0)} ({hip.get('interpretation', 'unknown')})")
 
-        unc = early_impact.get("uncertainty", {})
+        unc = _as_dict(ei.get("uncertainty"))
         lines.append(f"预测不确定性: {unc.get('overall_level', 'unknown')}")
         lines.append("")
 
     # 论文文本特征
     if paper_features:
         lines.append("=== 论文文本特征 ===")
-        score = paper_features.get("overall_quality_score", 0)
+        pf = _as_dict(paper_features)
+        score = pf.get("overall_quality_score", 0)
         lines.append(f"综合文本质量分: {score}/100")
 
-        struct = paper_features.get("structure", {})
+        struct = _as_dict(pf.get("structure"))
         lines.append(f"文本长度: {struct.get('word_count', 0)}词, {struct.get('char_count', 0)}字符")
         lines.append(f"估计图表数: {struct.get('estimated_figures', 0)}图 + {struct.get('estimated_tables', 0)}表")
         lines.append(f"估计参考文献: {struct.get('estimated_references', 0)}篇")
-        lines.append(f"章节完整性: Abstract={struct.get('has_abstract', False)}, Methods={struct.get('has_methods', False)}, Results={struct.get('has_results', False)}")
+        lines.append(
+            f"章节完整性: Abstract={struct.get('has_abstract', False)}, "
+            f"Methods={struct.get('has_methods', False)}, Results={struct.get('has_results', False)}"
+        )
 
-        content = paper_features.get("content", {})
-        abs_info = content.get("abstract", {})
+        content = _as_dict(pf.get("content"))
+        abs_info = _as_dict(content.get("abstract"))
         lines.append(f"摘要质量: {abs_info.get('quality', 'unknown')} ({abs_info.get('length_words', 0)}词)")
-        method_info = content.get("methodology", {})
-        lines.append(f"方法论描述: {method_info.get('description_depth', 'unknown')} ({method_info.get('section_length_words', 0)}词)")
+        method_info = _as_dict(content.get("methodology"))
+        lines.append(
+            f"方法论描述: {method_info.get('description_depth', 'unknown')} "
+            f"({method_info.get('section_length_words', 0)}词)"
+        )
 
-        innov = paper_features.get("innovation", {})
-        lines.append(f"创新密度: {innov.get('innovation_density', 0)} (关键词{innov.get('innovation_keyword_count', 0)}个)")
+        innov = _as_dict(pf.get("innovation"))
+        lines.append(
+            f"创新密度: {innov.get('innovation_density', 0)} "
+            f"(关键词{innov.get('innovation_keyword_count', 0)}个)"
+        )
         lines.append(f"新颖性声明: {innov.get('novelty_claims', 0)}处")
         lines.append(f"跨领域程度: {innov.get('cross_domain_degree', 'unknown')}")
         lines.append(f"贡献项数: {innov.get('contribution_items', 0)}")
 
-        quality = paper_features.get("quality_signals", {})
+        quality = _as_dict(pf.get("quality_signals"))
         lines.append(f"透明度评分: {quality.get('transparency_score', 0)}/5")
         lines.append("")
 

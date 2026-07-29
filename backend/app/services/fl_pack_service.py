@@ -653,6 +653,11 @@ class FlPackService:
             "failure_cases": self.load_failure_cases(fl_setting=setting),
             "checklists_excerpt": self.load_checklists_text(fl_setting=setting)[:4000],
             "runtime": "local_simulation_only",
+            "simulation": {
+                "default_backend": "local_pack",
+                "available": ["local_pack", "flower", "fedml"],
+                "note": "单机仿真；flower/fedml 由 project.config.fl_simulation 选择",
+            },
             "summary": self.summary(fl_setting=setting, domains=dom),
         }
 

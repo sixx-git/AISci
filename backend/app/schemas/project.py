@@ -94,6 +94,17 @@ class ProjectCreate(BaseModel):
             "实验范式档位: standard_non_iid（默认，Dirichlet+FedProx）| quick_iid"
         ),
     )
+    fl_sim_backend: Optional[str] = Field(
+        None,
+        description="联邦仿真后端: local_pack | flower | fedml（仅 federated_learning；general 忽略）",
+    )
+    fl_sim_spec: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "联邦仿真参数: num_clients / rounds / strategy / partition / timeout_sec "
+            "（仅 federated_learning）"
+        ),
+    )
 
 
 class ProjectUpdate(BaseModel):

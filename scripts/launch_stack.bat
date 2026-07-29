@@ -59,15 +59,19 @@ if not exist "%PROJECT_ROOT%\storage\documents" mkdir "%PROJECT_ROOT%\storage\do
 if not exist "%PROJECT_ROOT%\storage\pingfenbiao_jobs" mkdir "%PROJECT_ROOT%\storage\pingfenbiao_jobs"
 if not exist "%PROJECT_ROOT%\logs" mkdir "%PROJECT_ROOT%\logs"
 
-REM 若存在旧版独立 pingfenbiao 历史，合并进统一目录（不覆盖已有）
-if exist "%PROJECT_ROOT%\..\pingfenbiao\web\_jobs" (
-    robocopy "%PROJECT_ROOT%\..\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
-)
-if exist "D:\Workplace\pingfenbiao\web\_jobs" (
-    robocopy "D:\Workplace\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
-)
-if exist "%PINGFEN_WEB%\_jobs" (
-    robocopy "%PINGFEN_WEB%\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+REM 仅当统一目录尚无任务时做一次迁移，避免每次启动把已删除记录从旧 _jobs 拷回
+set "HAS_JOBS="
+for /f %%i in ('dir /b /ad "%PINGFENBIAO_WORK_DIR%" 2^>nul') do set "HAS_JOBS=1"
+if not defined HAS_JOBS (
+    if exist "%PROJECT_ROOT%\..\pingfenbiao\web\_jobs" (
+        robocopy "%PROJECT_ROOT%\..\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+    )
+    if exist "D:\Workplace\pingfenbiao\web\_jobs" (
+        robocopy "D:\Workplace\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+    )
+    if exist "%PINGFEN_WEB%\_jobs" (
+        robocopy "%PINGFEN_WEB%\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+    )
 )
 
 REM ---- free stuck ports optionally warn ----

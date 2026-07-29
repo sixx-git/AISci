@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -21,6 +22,42 @@ from runner import (
 )
 
 MAX_LOG_LINES = 40
+# 影响力流水线中单次「生成评分表 / 打分」子进程超时（秒）
+SUBPROCESS_TIMEOUT_SEC = 3600
+
+
+def resolve_rubric_save_path(raw: str, default_filename: str = "task.json") -> Path | None:
+    """将用户填写的保存路径规范为最终 task.json 落盘路径。
+
+    - 空字符串 → None（不额外保存）
+    - 目录 → 目录/<default_filename>（目录不存在则创建）
+    - 以 .json 结尾 → 视为文件路径
+    """
+    text = (raw or "").strip().strip('"').strip("'")
+    if not text:
+        return None
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        raise ValueError("保存路径须为绝对路径（例如 D:\\\\rubrics 或 D:\\\\rubrics\\\\task.json）")
+    if path.suffix.lower() == ".json":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path.resolve()
+    path.mkdir(parents=True, exist_ok=True)
+    if not path.is_dir():
+        raise ValueError(f"保存路径不是可用目录: {path}")
+    name = (default_filename or "task.json").strip() or "task.json"
+    if not name.lower().endswith(".json"):
+        name = f"{name}.json"
+    return (path / name).resolve()
+
+
+def copy_rubric_to_save_path(result_path: Path, save_path: Path | None) -> str | None:
+    """复制生成的评分表到用户指定路径；成功返回落盘绝对路径字符串。"""
+    if save_path is None:
+        return None
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(str(result_path), str(save_path))
+    return str(save_path)
 
 GENERATE_STAGE_RULES: list[tuple[re.Pattern[str], int, str]] = [
     (re.compile(r"No query provided|generating from source", re.I), 5, "正在从文献自动生成研究问题…"),
@@ -111,6 +148,7 @@ class JobManager:
         source_dir: Path,
         output_dir: Path,
         api_key: str = "",
+        save_path: Path | None = None,
     ) -> None:
         self._start_job(
             job_id=job_id,
@@ -121,6 +159,7 @@ class JobManager:
                 "source_dir": source_dir,
                 "output_dir": output_dir,
                 "api_key": api_key,
+                "save_path": save_path,
             },
         )
 
@@ -157,6 +196,7 @@ class JobManager:
         api_key: str = "",
         preloaded_rubrics: dict[str, dict[str, Path | None]] | None = None,
         max_report_chars: int = 200000,
+        rubric_save_paths: dict[str, Path | None] | None = None,
     ) -> None:
         """启动影响力预测任务（纯 Python，不通过子进程）。"""
         started_at = _utc_now()
@@ -187,6 +227,7 @@ class JobManager:
             kwargs={
                 "preloaded_rubrics": preloaded_rubrics or {},
                 "max_report_chars": report_limit,
+                "rubric_save_paths": rubric_save_paths or {},
             },
             daemon=True,
         )
@@ -247,11 +288,14 @@ class JobManager:
         started_ts: float,
         preloaded_rubrics: dict[str, dict[str, Path | None]] | None = None,
         max_report_chars: int = 200000,
+        rubric_save_paths: dict[str, Path | None] | None = None,
     ) -> None:
         """影响力预测的独立运行逻辑（不通过子进程）。"""
         logs: list[str] = []
         progress = 2
         report_limit = max_report_chars if max_report_chars > 0 else 200000
+        save_paths = rubric_save_paths or {}
+        saved_paths: dict[str, str] = {}
 
         def _update(msg: str, pct: int):
             nonlocal progress
@@ -336,23 +380,20 @@ class JobManager:
             _update("元数据获取成功", 35)
 
             # Step 2b-prep: 获取 API key（评分表生成和打分都需要）
-            effective_api_key = api_key or os.environ.get("DASHSCOPE_API_KEY", "")
-            if not effective_api_key:
-                env_candidates = [
-                    ROOT_DIR / ".env",
-                    ROOT_DIR / "rubric-auto-gen" / ".env",
-                    ROOT_DIR / "rubric-auto-gen-2" / ".env",
-                    ROOT_DIR / "rubric-auto-gen-3" / ".env",
-                ]
-                for env_path in env_candidates:
-                    if env_path.exists():
-                        for line in env_path.read_text(encoding="utf-8").splitlines():
-                            line = line.strip()
-                            if line.startswith("DASHSCOPE_API_KEY="):
-                                effective_api_key = line.split("=", 1)[1].strip().strip("'\"")
-                                break
-                    if effective_api_key:
-                        break
+            from common.api_key_resolve import resolve_dashscope_api_key
+
+            effective_api_key, key_source = resolve_dashscope_api_key(
+                api_key, package_root=ROOT_DIR
+            )
+            if effective_api_key:
+                # 不打印 key 本身，仅记录来源便于排查 401
+                logs.append(f"API Key 来源: {key_source}（长度 {len(effective_api_key)}）")
+                os.environ["DASHSCOPE_API_KEY"] = effective_api_key
+            else:
+                logs.append(
+                    "未找到可用 API Key（DASHSCOPE_API_KEY / QWEN_API_KEY）。"
+                    "请在预测页填写，或配置 AISci/.env / pingfenbiao .env。"
+                )
 
             # Step 2b: 对三种任务类型生成评分表并打分（内容质量评估）
             _update("正在生成评分表并打分…", 40)
@@ -432,7 +473,7 @@ class JobManager:
                         score_proc = subprocess.run(
                             score_cmd, cwd=str(ROOT_DIR),
                             env=score_env,
-                            capture_output=True, text=True, timeout=600,
+                            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_SEC,
                         )
                         score_logs = (score_proc.stdout or "") + (score_proc.stderr or "")
                         for line in score_logs.strip().splitlines():
@@ -456,7 +497,7 @@ class JobManager:
                             logs.append(f"[{tt}] rubric_scores.json 未生成")
                             return None
                     except subprocess.TimeoutExpired:
-                        logs.append(f"[{tt}] 打分超时（600秒）")
+                        logs.append(f"[{tt}] 打分超时（{SUBPROCESS_TIMEOUT_SEC}秒）")
                         return None
                     except Exception as e:
                         logs.append(f"[{tt}] 打分异常: {e}")
@@ -472,7 +513,7 @@ class JobManager:
                     gen_proc = subprocess.run(
                         gen_cmd, cwd=str(ROOT_DIR),
                         env=gen_env,
-                        capture_output=True, text=True, timeout=600,
+                        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_SEC,
                     )
                     gen_logs = (gen_proc.stdout or "") + (gen_proc.stderr or "")
                     for line in gen_logs.strip().splitlines():
@@ -488,6 +529,18 @@ class JobManager:
                         logs.append(f"[{tt}] task.json 未生成")
                         return None
 
+                    save_to = save_paths.get(tt)
+                    if save_to is not None:
+                        try:
+                            dest = copy_rubric_to_save_path(task_path, Path(save_to))
+                            if dest:
+                                logs.append(f"[{tt}] 评分表已保存到: {dest}")
+                        except OSError as exc:
+                            dest = None
+                            logs.append(f"[{tt}] 评分表额外保存失败: {exc}")
+                    else:
+                        dest = None
+
                     _update(f"对 {PACKAGES[tt]['label']} 打分…", 50)
                     tt_score_output = tt_output / "self_check"
                     tt_score_output.mkdir(parents=True, exist_ok=True)
@@ -501,7 +554,7 @@ class JobManager:
                     score_proc = subprocess.run(
                         score_cmd, cwd=str(ROOT_DIR),
                         env=score_env,
-                        capture_output=True, text=True, timeout=600,
+                        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_SEC,
                     )
                     score_logs = (score_proc.stdout or "") + (score_proc.stderr or "")
                     for line in score_logs.strip().splitlines():
@@ -513,7 +566,7 @@ class JobManager:
                     if sp.exists():
                         scores_data = json.loads(sp.read_text(encoding="utf-8"))
                         logs.append(f"[{tt}] 打分完成: {scores_data.get('raw_score', 0)}/{scores_data.get('total_score', 0)}")
-                        return {
+                        out = {
                             "task_type": tt,
                             "label": PACKAGES[tt]["label"],
                             "score_percentage": scores_data.get("score_percentage", 0),
@@ -521,11 +574,14 @@ class JobManager:
                             "total_score": scores_data.get("total_score", 1),
                             "dimension_scores": scores_data.get("dimension_scores", []),
                         }
+                        if dest:
+                            out["saved_path"] = dest
+                        return out
                     else:
                         logs.append(f"[{tt}] rubric_scores.json 未生成")
                         return None
                 except subprocess.TimeoutExpired:
-                    logs.append(f"[{tt}] 超时（600秒）")
+                    logs.append(f"[{tt}] 超时（{SUBPROCESS_TIMEOUT_SEC}秒）")
                     return None
                 except Exception as e:
                     logs.append(f"[{tt}] 异常: {e}")
@@ -538,6 +594,9 @@ class JobManager:
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     if result:
+                        saved = result.pop("saved_path", None)
+                        if saved:
+                            saved_paths[result["task_type"]] = saved
                         content_scores.append(result)
 
             # 计算内容质量分（取三种评分表最高百分比）
@@ -562,12 +621,39 @@ class JobManager:
                 api_key=effective_api_key,
             )
             if impact:
-                cal_total = impact.get("calibrated_total", {})
-                logs.append(f"Impact calibrated score: {cal_total.get('score', 0)}/30")
-                logs.append(f"D1 文本质量: {impact.get('d1_text_quality', {}).get('score', 0)}/10")
-                logs.append(f"D2 声誉影响: {impact.get('d2_reputation', {}).get('score', 0)}/10")
-                logs.append(f"D3 未来潜力: {impact.get('d3_future_potential', {}).get('score', 0)}/6")
-                logs.append(f"D4 偏差公平: {impact.get('d4_bias_fairness', {}).get('score', 0)}/4")
+                def _dim_score(block: Any, default_max: int = 10) -> tuple[float, int]:
+                    if isinstance(block, dict):
+                        return float(block.get("score") or 0), int(block.get("max") or default_max)
+                    if isinstance(block, (int, float)):
+                        return float(block), default_max
+                    if isinstance(block, str):
+                        text = block.strip()
+                        if "/" in text:
+                            left, _, right = text.partition("/")
+                            try:
+                                return float(left), int(float(right))
+                            except ValueError:
+                                pass
+                        try:
+                            return float(text), default_max
+                        except ValueError:
+                            return 0.0, default_max
+                    return 0.0, default_max
+
+                cal_total = impact.get("calibrated_total")
+                if isinstance(cal_total, dict):
+                    cal_score = cal_total.get("score", 0)
+                else:
+                    cal_score = cal_total if isinstance(cal_total, (int, float, str)) else 0
+                logs.append(f"Impact calibrated score: {cal_score}/30")
+                d1s, d1m = _dim_score(impact.get("d1_text_quality"), 10)
+                d2s, d2m = _dim_score(impact.get("d2_reputation"), 10)
+                d3s, d3m = _dim_score(impact.get("d3_future_potential"), 6)
+                d4s, d4m = _dim_score(impact.get("d4_bias_fairness"), 4)
+                logs.append(f"D1 文本质量: {d1s}/{d1m}")
+                logs.append(f"D2 声誉影响: {d2s}/{d2m}")
+                logs.append(f"D3 未来潜力: {d3s}/{d3m}")
+                logs.append(f"D4 偏差公平: {d4s}/{d4m}")
                 logs.append(f"预测置信度: {impact.get('prediction_confidence', 'unknown')}")
             else:
                 logs.append("LLM 影响力评估失败")
@@ -596,8 +682,11 @@ class JobManager:
                 bias_explanation = explain_prediction_bias(impact, api_key=effective_api_key)
                 if bias_explanation:
                     logs.append("深度偏差解释生成成功")
-                    fairness = bias_explanation.get("fairness_assessment", {})
-                    logs.append(f"公平性评分: {fairness.get('overall_fairness_score', 0)}/10")
+                    fairness = bias_explanation.get("fairness_assessment")
+                    if isinstance(fairness, dict):
+                        logs.append(f"公平性评分: {fairness.get('overall_fairness_score', 0)}/10")
+                    elif fairness is not None:
+                        logs.append(f"公平性评分: {fairness}")
                 else:
                     logs.append("深度偏差解释生成失败")
             else:
@@ -653,6 +742,7 @@ class JobManager:
                         "year": metadata.get("publication_year"),
                         "citations": metadata.get("cited_by_count", 0),
                     },
+                    "saved_paths": saved_paths,
                     "logs": logs,
                 },
             )
@@ -799,6 +889,15 @@ class JobManager:
             rubrics = result.get("rubrics", {})
             total = rubrics.get("total_score", 0)
             item_count = sum(len(d.get("items", [])) for d in rubrics.get("dimensions", []))
+            saved_path: str | None = None
+            save_path = kwargs.get("save_path")
+            if save_path is not None:
+                try:
+                    saved_path = copy_rubric_to_save_path(result_path, Path(save_path))
+                    if saved_path:
+                        logs.append(f"评分表已保存到: {saved_path}")
+                except OSError as exc:
+                    logs.append(f"评分表额外保存失败: {exc}")
             self._write_status(
                 job_id,
                 {
@@ -806,7 +905,7 @@ class JobManager:
                     "job_mode": "generate",
                     "status": "completed",
                     "progress": 100,
-                    "message": "生成完成",
+                    "message": "生成完成" if not saved_path else f"生成完成，已保存到 {saved_path}",
                     "task_type": task_type,
                     "label": label,
                     "mode_label": "生成评分表",
@@ -815,6 +914,7 @@ class JobManager:
                     "total_score": total,
                     "item_count": item_count,
                     "download_url": f"/api/download/{job_id}",
+                    "saved_path": saved_path,
                     "logs": logs,
                 },
             )

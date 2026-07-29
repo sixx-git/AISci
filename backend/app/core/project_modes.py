@@ -38,6 +38,47 @@ PROJECT_MODE_LABELS_ZH = {
     ProjectMode.FEDERATED_LEARNING.value: "联邦学习（资源包）模式",
 }
 
+# 联邦仿真后端（仅 federated_learning；与通用沙箱隔离）
+FL_SIM_BACKENDS = ("local_pack", "flower", "fedml")
+FL_SIM_BACKEND_LABELS = {
+    "local_pack": "FL Pack 本地 pilot（sklearn）",
+    "flower": "Flower 单机仿真",
+    "fedml": "FedML 单机仿真",
+}
+FL_SIM_STRATEGIES = ("FedAvg", "FedProx")
+FL_SIM_PARTITIONS = ("dirichlet", "iid", "pathological")
+
+
+def empty_fl_simulation_config(
+    *,
+    backend: str = "local_pack",
+    num_clients: int = 5,
+    rounds: int = 10,
+    strategy: str = "FedAvg",
+    partition: str = "dirichlet",
+) -> Dict[str, Any]:
+    """写入 project.config.fl_simulation 的默认骨架。"""
+    b = backend if backend in FL_SIM_BACKENDS else "local_pack"
+    return {
+        "enabled": True,
+        "backend": b,
+        "backend_label": FL_SIM_BACKEND_LABELS.get(b, b),
+        "spec": {
+            "num_clients": max(2, min(int(num_clients or 5), 50)),
+            "rounds": max(1, min(int(rounds or 10), 200)),
+            "strategy": strategy if strategy in FL_SIM_STRATEGIES else "FedAvg",
+            "partition": partition if partition in FL_SIM_PARTITIONS else "dirichlet",
+            "timeout_sec": 120,
+        },
+        "note": "单机进程内仿真，非多机真实联邦部署",
+    }
+
+
+def normalize_fl_sim_backend(backend: str | None, default: str = "local_pack") -> str:
+    if backend and backend in FL_SIM_BACKENDS:
+        return backend
+    return default if default in FL_SIM_BACKENDS else "local_pack"
+
 
 def get_research_question_template(mode: str, scenario: str | None = None) -> Dict[str, str]:
     if normalize_project_mode(mode) != ProjectMode.FEDERATED_LEARNING.value:

@@ -25,6 +25,8 @@ export interface PredictJobStatus {
   rating?: Record<string, unknown>;
   total_score?: number;
   updated_at?: string;
+  saved_path?: string | null;
+  saved_paths?: Record<string, string> | null;
   [key: string]: unknown;
 }
 
@@ -92,10 +94,14 @@ export const predictService = {
   },
 
   async deleteImpact(jobId: string): Promise<void> {
-    const res = await fetch(`${BASE}/api/impact/${jobId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      await parseJson(res);
+    const res = await fetch(`${BASE}/api/impact/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+    });
+    // 200/204 都视为成功；其余走 parseJson 抛错
+    if (res.ok || res.status === 204) {
+      return;
     }
+    await parseJson(res);
   },
 
   downloadUrl(jobId: string, kind: 'task' | 'scores' | 'impact'): string {

@@ -162,12 +162,22 @@ class TestBatchScoringMock(unittest.TestCase):
     def setUp(self):
         self.scorer = Scorer(_mock_config())
 
-    @patch.object(Scorer, "_call_llm_json")
+    @patch.object(Scorer, "_call_llm_json_messages")
     def test_missing_batch_items_retried(self, mock_llm):
-        def llm_side_effect(prompt, system=""):
-            if "R2" in prompt and prompt.count("Rubric Items") == 0:
-                return {"rubric_id": "R2", "score": 1, "reason": "b"}
-            return [{"rubric_id": "R1", "score": 4, "reason": "a"}]
+        def llm_side_effect(messages):
+            # user 侧仅含评分项；报告在 system 前缀
+            user = messages[-1]["content"] if messages else ""
+            system = messages[0]["content"] if messages else ""
+            system_text = (
+                system[0]["text"]
+                if isinstance(system, list) and system
+                else str(system)
+            )
+            self.assertIn("Report to Evaluate", system_text)
+            self.assertNotIn("Report to Evaluate", user)
+            if "R2" in user and "Rubric Items" not in user:
+                return {"rubric_id": "R2", "score": 1, "reason": "b"}, {}
+            return [{"rubric_id": "R1", "score": 4, "reason": "a"}], {}
 
         mock_llm.side_effect = llm_side_effect
         batch = _sample_task()["rubrics"]["dimensions"][0]["items"]
@@ -178,12 +188,12 @@ class TestBatchScoringMock(unittest.TestCase):
         self.assertIn("R2", meta["retried_items"])
         self.assertEqual(results[1]["score"], 1.0)
 
-    @patch.object(Scorer, "_call_llm_json")
+    @patch.object(Scorer, "_call_llm_json_messages")
     def test_batch_failure_falls_back_to_single(self, mock_llm):
         mock_llm.side_effect = [
             ValueError("batch fail"),
-            {"rubric_id": "R1", "score": 2, "reason": "partial"},
-            {"rubric_id": "R2", "score": 0, "reason": "none"},
+            ({"rubric_id": "R1", "score": 2, "reason": "partial"}, {}),
+            ({"rubric_id": "R2", "score": 0, "reason": "none"}, {}),
         ]
         batch = _sample_task()["rubrics"]["dimensions"][0]["items"]
         results = self.scorer._score_batch("report", batch, {}, "")
@@ -191,6 +201,17 @@ class TestBatchScoringMock(unittest.TestCase):
         # binary 模式：LLM 给 2/4 视为「部分满足」→ 归并为 0 或满分（≥半权重→满分）
         self.assertEqual(results[0]["score"], 4.0)
         self.assertIn("binary_mode_no_half_credit", results[0].get("normalization_warnings", []))
+
+    def test_prefix_messages_put_report_in_system(self):
+        msgs = self.scorer._build_report_prefix_messages(
+            "LONG REPORT BODY", "score these items only"
+        )
+        self.assertEqual(msgs[0]["role"], "system")
+        self.assertEqual(msgs[1]["role"], "user")
+        self.assertEqual(msgs[1]["content"], "score these items only")
+        block = msgs[0]["content"][0]
+        self.assertIn("LONG REPORT BODY", block["text"])
+        self.assertEqual(block.get("cache_control"), {"type": "ephemeral"})
 
 
 class TestSourceContext(unittest.TestCase):
@@ -208,12 +229,15 @@ class TestSourceContext(unittest.TestCase):
 
 
 class TestScorerIntegrationMock(unittest.TestCase):
-    @patch.object(Scorer, "_call_llm_json")
+    @patch.object(Scorer, "_call_llm_json_messages")
     def test_end_to_end_score(self, mock_llm):
-        mock_llm.return_value = [
-            {"rubric_id": "R1", "score": 5, "reason": "over"},
-            {"rubric_id": "R2", "score": 0.5, "reason": "half"},
-        ]
+        mock_llm.return_value = (
+            [
+                {"rubric_id": "R1", "score": 5, "reason": "over"},
+                {"rubric_id": "R2", "score": 0.5, "reason": "half"},
+            ],
+            {"usage": {"prompt_tokens": 100, "cached_tokens": 80}},
+        )
         scorer = Scorer(_mock_config())
 
         report_path = ROOT / "样例/Deep交付模板/数据分析报告/self_check/report.md"
@@ -229,6 +253,10 @@ class TestScorerIntegrationMock(unittest.TestCase):
         self.assertLessEqual(result["raw_score"], result["total_score"])
         self.assertIn("scoring_meta", result)
         self.assertEqual(result["items"][0]["score"], 4.0)
+        cache_meta = result["scoring_meta"].get("report_prefix_cache") or {}
+        self.assertTrue(cache_meta.get("enabled"))
+        self.assertGreaterEqual(cache_meta.get("calls", 0), 1)
+        self.assertEqual(cache_meta.get("cached_tokens"), 80)
 
 
 if __name__ == "__main__":

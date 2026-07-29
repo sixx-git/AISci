@@ -98,11 +98,29 @@ class CitationGraphAnalyzer:
                     "title": r.get("display_name", ""),
                     "year": r.get("publication_year"),
                     "cited_by_count": r.get("cited_by_count", 0),
-                    "venue": (r.get("host_venue") or {}).get("display_name", ""),
-                    "authors": [a.get("author", {}).get("display_name", "") for a in r.get("authorships", [])[:5]],
-                    "concepts": [c.get("display_name", "") for c in r.get("concepts", [])[:5]],
+                    "venue": (r.get("host_venue") or {}).get("display_name", "")
+                    if isinstance(r.get("host_venue"), dict)
+                    else str(r.get("host_venue") or ""),
+                    "authors": [
+                        (
+                            (a.get("author") or {}).get("display_name", "")
+                            if isinstance(a, dict) and isinstance(a.get("author"), dict)
+                            else (
+                                a.get("author", "")
+                                if isinstance(a, dict)
+                                else str(a)
+                            )
+                        )
+                        for a in (r.get("authorships") or [])[:5]
+                        if isinstance(a, (dict, str))
+                    ],
+                    "concepts": [
+                        c.get("display_name", "") if isinstance(c, dict) else str(c)
+                        for c in (r.get("concepts") or [])[:5]
+                    ],
                 }
                 for r in results
+                if isinstance(r, dict)
             ]
         except requests.RequestException:
             return []
@@ -129,9 +147,12 @@ class CitationGraphAnalyzer:
                     "title": r.get("display_name", ""),
                     "year": r.get("publication_year"),
                     "cited_by_count": r.get("cited_by_count", 0),
-                    "venue": (r.get("host_venue") or {}).get("display_name", ""),
+                    "venue": (r.get("host_venue") or {}).get("display_name", "")
+                    if isinstance(r.get("host_venue"), dict)
+                    else str(r.get("host_venue") or ""),
                 }
                 for r in results
+                if isinstance(r, dict)
             ]
         except requests.RequestException:
             return []
@@ -222,15 +243,19 @@ class CitationGraphAnalyzer:
         这是一个启发式估算，非精确值。
         """
         concepts = work.get("concepts", [])
-        if not concepts:
+        if not isinstance(concepts, list) or not concepts:
             return 50.0
 
         # 取前2个概念作为领域
-        top_concepts = [c.get("id", "") for c in concepts[:2] if c.get("id")]
+        top_concepts = []
+        for c in concepts[:2]:
+            if isinstance(c, dict) and c.get("id"):
+                top_concepts.append(c["id"])
         if not top_concepts:
             return 50.0
 
         # 获取该领域的引用统计基准（取前200篇同年论文的中位数）
+        current_year = time.localtime().tm_year
         try:
             url = f"{OPENALEX_BASE}/works"
             params = {

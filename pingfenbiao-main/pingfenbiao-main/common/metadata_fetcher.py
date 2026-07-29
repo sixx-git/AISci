@@ -131,25 +131,68 @@ def fetch_work_by_title(title: str, api_key: str = "") -> Optional[dict[str, Any
         return None
 
 
+def _as_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _display_name(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("display_name") or "")
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 def _summarize_work(raw: dict[str, Any]) -> dict[str, Any]:
     """将 OpenAlex Work 对象精简为摘要字典。"""
-    host_venue = raw.get("host_venue") or {}
+    if not isinstance(raw, dict):
+        return {
+            "openalex_id": "",
+            "doi": "",
+            "title": "",
+            "publication_year": None,
+            "publication_date": "",
+            "cited_by_count": 0,
+            "open_access": False,
+            "host_venue": "",
+            "host_venue_type": "",
+            "host_venue_issn": "",
+            "authors": [],
+            "author_ids": [],
+            "institutions": [],
+            "concepts": [],
+            "type": "",
+            "referenced_works_count": 0,
+        }
+
+    host_venue = _as_mapping(raw.get("host_venue"))
     authorships = raw.get("authorships") or []
+    if not isinstance(authorships, list):
+        authorships = []
 
     authors_summary = []
     institutions_set = set()
     author_ids = []
 
     for a in authorships[:10]:  # 最多取前 10 位作者
-        author_info = a.get("author") or {}
-        name = author_info.get("display_name", "Unknown")
+        if not isinstance(a, dict):
+            if isinstance(a, str) and a.strip():
+                authors_summary.append({"name": a.strip(), "institutions": []})
+            continue
+        author_info = _as_mapping(a.get("author"))
+        name = author_info.get("display_name") or _display_name(a.get("author")) or "Unknown"
         aid = author_info.get("id", "")
         author_ids.append(aid)
 
         insts = a.get("institutions") or []
-        inst_names = [i.get("display_name", "") for i in insts if i.get("display_name")]
-        for inst_name in inst_names:
-            institutions_set.add(inst_name)
+        if not isinstance(insts, list):
+            insts = []
+        inst_names = []
+        for i in insts:
+            name_i = _display_name(i)
+            if name_i:
+                inst_names.append(name_i)
+                institutions_set.add(name_i)
 
         authors_summary.append({
             "name": name,
@@ -158,7 +201,14 @@ def _summarize_work(raw: dict[str, Any]) -> dict[str, Any]:
 
     concepts = []
     for c in (raw.get("concepts") or [])[:8]:
-        concepts.append(c.get("display_name", ""))
+        name_c = _display_name(c)
+        if name_c:
+            concepts.append(name_c)
+
+    open_access = _as_mapping(raw.get("open_access"))
+    referenced = raw.get("referenced_works") or []
+    if not isinstance(referenced, list):
+        referenced = []
 
     return {
         "openalex_id": raw.get("id", ""),
@@ -167,8 +217,8 @@ def _summarize_work(raw: dict[str, Any]) -> dict[str, Any]:
         "publication_year": raw.get("publication_year"),
         "publication_date": raw.get("publication_date", ""),
         "cited_by_count": raw.get("cited_by_count", 0),
-        "open_access": (raw.get("open_access") or {}).get("is_oa", False),
-        "host_venue": host_venue.get("display_name", ""),
+        "open_access": bool(open_access.get("is_oa", False)),
+        "host_venue": host_venue.get("display_name", "") or _display_name(raw.get("host_venue")),
         "host_venue_type": host_venue.get("type", ""),
         "host_venue_issn": host_venue.get("issn_l", ""),
         "authors": authors_summary,
@@ -176,5 +226,5 @@ def _summarize_work(raw: dict[str, Any]) -> dict[str, Any]:
         "institutions": sorted(institutions_set),
         "concepts": concepts,
         "type": raw.get("type", ""),  # article, conference-paper, etc.
-        "referenced_works_count": len(raw.get("referenced_works", [])),
+        "referenced_works_count": len(referenced),
     }

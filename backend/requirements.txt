@@ -19,6 +19,9 @@ openpyxl>=3.1.0
 duckdb>=1.0.0
 pyarrow>=14.0.0
 astropy>=6.0.0
-# Optional: pip install flwr for Flower runtime pilot (execution_mode=flower)
+# Optional: Flower / FedML FL simulation; not required for CI (numpy compat fallback)
+# pip install 'flwr>=1.8.0'
 # flwr>=1.8.0
+# pip install fedml   # heavy; optional
+# fedml
 pdfplumber>=0.11.0

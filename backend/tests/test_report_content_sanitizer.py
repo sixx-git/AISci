@@ -255,10 +255,17 @@ def test_dedupe_stage_claim_and_align_idempotent():
         "历史数据来源于 Steingroever 等人（2014）。\n"
         "Quantum systems have an exponentially large degree of freedom in the number of particles and hence provide a\n"
         "- Quantum Reservoir Computing: A Reservoir Approach Toward Quantum Machine Learning on Near-Term Quantum Devices: Quantum systems have an exponentially large degree of freedom\n"
+        "There are three major ingredients. The ﬁrst is Szemer´edi’s theorem, which as-\n"
+        "We present spectral and photometric observations of 10 Type Ia supernovae (SNe Ia) in the redshift range 0.16 z 0.62.\n"
+        "We derive Hα fluxes for a large spectroscopic sample of sources over GOODS-North and South.\n"
     )
     src_c = strip_english_literature_bleed(src)
     assert "Steingroever" in src_c
     assert "Quantum systems have an exponentially" not in src_c
+    assert "Szemer" not in src_c
+    assert "three major ingredients" not in src_c
+    assert "photometric observations" not in src_c
+    assert "Hα fluxes" not in src_c and "Hα" not in src_c
 
     refs = annotate_preprint_references(
         ["Jiaqi Huang et al..An overview{[EB/OL]}. 2025. DOI: 10.3758/xxx"]

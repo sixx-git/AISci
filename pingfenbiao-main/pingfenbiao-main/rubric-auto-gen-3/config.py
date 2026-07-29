@@ -21,9 +21,9 @@ from typing import Optional
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 默认模型选择
-DEFAULT_RUBRIC_MODEL = "qwen3.7-max"       # 评分表生成
-DEFAULT_SCORING_MODEL = "qwen3.7-max"      # 自动评分
-DEFAULT_EXTRACT_MODEL = "qwen3.7-max"      # 要点提取
+DEFAULT_RUBRIC_MODEL = "qwen3.6-plus"       # 评分表生成
+DEFAULT_SCORING_MODEL = "qwen3.6-plus"      # 自动评分
+DEFAULT_EXTRACT_MODEL = "qwen3.6-plus"      # 要点提取
 
 
 @dataclass
@@ -57,21 +57,25 @@ class Config:
     def __post_init__(self):
         """自动从环境变量或 .env 文件加载 API key。"""
         if not self.api_key:
-            # 尝试从 .env 文件加载
+            # 尝试从 .env 文件加载（兼容 DASHSCOPE / QWEN）
             env_path = Path(".env")
             if env_path.exists():
                 for line in env_path.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
-                    if line.startswith("DASHSCOPE_API_KEY="):
+                    if line.startswith("DASHSCOPE_API_KEY=") or line.startswith("QWEN_API_KEY="):
                         self.api_key = line.split("=", 1)[1].strip().strip("'\"")
-                        break
+                        if self.api_key:
+                            break
             # 回退到环境变量
             if not self.api_key:
-                self.api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+                self.api_key = (
+                    os.environ.get("DASHSCOPE_API_KEY", "")
+                    or os.environ.get("QWEN_API_KEY", "")
+                )
 
         if not self.api_key:
             raise ValueError(
-                "未找到 DASHSCOPE_API_KEY。请在 .env 文件中设置，"
+                "未找到 DASHSCOPE_API_KEY / QWEN_API_KEY。请在 .env 文件中设置，"
                 "或通过 Config(api_key='sk-xxx') 传入。"
             )
 

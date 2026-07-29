@@ -116,7 +116,81 @@ class IterativeExperimentService:
         return experiment
 
     def _persist_projection(self, project_id: str, experiment: Dict[str, Any]) -> Dict[str, Any]:
+        # 保留联邦仿真结果，避免 shaxiang 投影覆盖
+        store = _load(project_id)
+        for e in store.get("experiments") or []:
+            if e.get("id") == experiment.get("id"):
+                for key in ("fl_simulation_latest", "fl_simulation_history"):
+                    if key in e and key not in experiment:
+                        experiment[key] = e[key]
+                break
         return self._upsert(project_id, experiment)
+
+    def run_fl_simulation(
+        self,
+        project_id: str,
+        experiment_id: str,
+        *,
+        project_mode: Optional[str] = None,
+        project_config: Optional[Dict[str, Any]] = None,
+        spec_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """运行联邦仿真（仅 FL 模式）；结果写入实验 fl_simulation_latest。"""
+        from app.services.fl_simulation import get_fl_simulation_runner
+        from app.services.fl_simulation.runner import FlSimulationError
+
+        is_fl, _, _ = _resolve_project_fl_gate(project_id)
+        if not is_fl:
+            raise FlSimulationError("仅联邦学习（资源包）项目可使用仿真环境")
+
+        store = _load(project_id)
+        exp = None
+        for e in store.get("experiments") or []:
+            if e.get("id") == experiment_id:
+                exp = e
+                break
+        if not exp:
+            raise ValueError("实验不存在")
+
+        cfg = project_config if isinstance(project_config, dict) else {}
+        sim_cfg = cfg.get("fl_simulation") if isinstance(cfg.get("fl_simulation"), dict) else {}
+        mode = project_mode or "federated_learning"
+        result = get_fl_simulation_runner().run(
+            project_mode=mode,
+            project_id=project_id,
+            experiment_id=experiment_id,
+            spec_raw=spec_overrides,
+            project_sim_config=sim_cfg,
+        )
+
+        hist = list(exp.get("fl_simulation_history") or [])
+        hist.append(result)
+        exp["fl_simulation_latest"] = result
+        exp["fl_simulation_history"] = hist[-20:]
+        exp["updated_at"] = _now()
+        _save(project_id, store)
+        return {
+            "result": result,
+            "experiment": exp,
+        }
+
+    def get_fl_simulation_latest(
+        self, project_id: str, experiment_id: str
+    ) -> Dict[str, Any]:
+        is_fl, _, _ = _resolve_project_fl_gate(project_id)
+        if not is_fl:
+            from app.services.fl_simulation.runner import FlSimulationError
+
+            raise FlSimulationError("仅联邦学习（资源包）项目可使用仿真环境")
+        store = _load(project_id)
+        for e in store.get("experiments") or []:
+            if e.get("id") == experiment_id:
+                latest = e.get("fl_simulation_latest")
+                return {
+                    "result": latest if isinstance(latest, dict) else None,
+                    "history_count": len(e.get("fl_simulation_history") or []),
+                }
+        raise ValueError("实验不存在")
 
     def _sx_id(self, exp: Dict[str, Any]) -> str:
         return exp.get("shaxiang_experiment_id") or exp.get("id") or ""
@@ -1434,10 +1508,42 @@ class IterativeExperimentService:
                 )
                 small_validation["fl_context"] = fl_ctx
                 gate = fl_svc.maybe_attach_vfl_gate(fl_ctx)
+
+                # 优先使用实验上已跑过的 framework 仿真结果
+                framework_run = None
+                if isinstance(primary.get("fl_simulation_latest"), dict):
+                    framework_run = primary["fl_simulation_latest"]
+
+                sim_backend = "local_pack"
+                if isinstance(primary.get("project_config"), dict):
+                    sim = primary["project_config"].get("fl_simulation") or {}
+                    if isinstance(sim, dict) and sim.get("backend"):
+                        sim_backend = str(sim.get("backend"))
+
+                execution_mode = "local_pack"
+                if framework_run and framework_run.get("execution_mode"):
+                    execution_mode = str(framework_run.get("execution_mode"))
+                elif sim_backend in ("flower", "fedml"):
+                    execution_mode = sim_backend
+
                 small_validation["federated_pilot"] = {
                     "alignment_gate": gate,
-                    "execution_mode": "local_pack",
+                    "execution_mode": execution_mode,
                 }
+                if framework_run:
+                    small_validation["federated_pilot"]["framework_run"] = framework_run
+                    fr_metrics = framework_run.get("metrics") if isinstance(framework_run.get("metrics"), dict) else {}
+                    if framework_run.get("success") and fr_metrics and not metrics:
+                        merged_metrics = {**metrics, **{k: v for k, v in fr_metrics.items() if k != "history"}}
+                        sandbox_execution["metrics"] = merged_metrics
+                        sandbox_execution["success"] = True
+                        actual_results["sandbox_metrics"] = merged_metrics
+                        actual_results["fl_framework_sim"] = fr_metrics
+                        small_validation["artifacts"]["metrics"] = merged_metrics
+                        small_validation["results"]["result_type_summary"] = "has_actual_results"
+                        small_validation["_has_usable_evidence"] = True
+                        metrics = merged_metrics
+
                 if getattr(settings, "AISCI_FL_LOCAL_PILOT_ENABLED", True) and not metrics:
                     pilot = fl_svc.run_local_fedavg_pilot()
                     small_validation["federated_pilot"]["local_fedavg"] = pilot

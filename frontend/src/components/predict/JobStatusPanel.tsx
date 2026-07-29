@@ -84,6 +84,25 @@ export function JobStatusPanel({ status, busy }: JobStatusPanelProps) {
         </div>
       )}
 
+      {done && typeof status?.saved_path === 'string' && status.saved_path && (
+        <p className="mt-2 text-[0.78rem] text-[#166534] break-all">
+          已保存到：{status.saved_path}
+        </p>
+      )}
+
+      {done &&
+        status?.saved_paths &&
+        typeof status.saved_paths === 'object' &&
+        Object.keys(status.saved_paths).length > 0 && (
+          <div className="mt-2 text-[0.78rem] text-[#166534] space-y-1">
+            {Object.entries(status.saved_paths).map(([tt, path]) => (
+              <p key={tt} className="break-all">
+                [{tt}] 已保存到：{path}
+              </p>
+            ))}
+          </div>
+        )}
+
       {Array.isArray(status?.logs) && status.logs.length > 0 && (
         <div className="mt-2.5 max-h-[140px] overflow-y-auto bg-white border border-[#e5e5e5] rounded-md px-2.5 py-2 font-mono text-[0.68rem] leading-snug text-[#555]">
           {status.logs.slice(-40).map((line, i) => (

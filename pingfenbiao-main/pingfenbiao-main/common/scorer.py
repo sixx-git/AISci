@@ -74,19 +74,29 @@ TASK_TYPE_GUIDANCE = {
     ),
 }
 
-PROMPT_SCORE_BATCH = """\
-You are a strict academic report evaluator. Evaluate the given report against each rubric item below.
+SCORING_SYSTEM_PREAMBLE = (
+    "You are a strict academic report evaluator. "
+    "Score every item rigorously against the report provided below. "
+    "Output JSON only."
+)
+
+# 报告放在 system 前缀（跨 batch 不变）→ DashScope 显式/隐式 context cache
+PROMPT_REPORT_SYSTEM_SUFFIX = """\
+
+**Report to Evaluate** (shared across scoring batches; do not ask the user to resend it):
+---
+{report_text}
+---
+"""
+
+PROMPT_SCORE_BATCH_ITEMS = """\
+Evaluate the report already provided in the system context against each rubric item below.
 
 {task_type_guidance}
 
 **Rubric Items** ({count} items in this batch):
 {rubric_items_text}
 {shared_source_context}
-
-**Report to Evaluate**:
----
-{report_text}
----
 
 **Scoring Rules**:
 - **judgment_mode=binary**: Score ONLY 0 or full weight (no half credit). Full credit requires explicit report evidence for the verifiable proposition.
@@ -115,8 +125,50 @@ Output as JSON array:
 Output JSON only, no other text.
 """
 
-PROMPT_SCORE_SINGLE = """\
-You are a strict academic report evaluator. Evaluate whether the report satisfies the following rubric item.
+# 兼容旧单 prompt 路径 / 单条补评回退（报告仍放最前，利于隐式前缀缓存）
+PROMPT_SCORE_BATCH = """\
+You are a strict academic report evaluator. Evaluate the given report against each rubric item below.
+
+**Report to Evaluate**:
+---
+{report_text}
+---
+
+{task_type_guidance}
+
+**Rubric Items** ({count} items in this batch):
+{rubric_items_text}
+{shared_source_context}
+
+**Scoring Rules**:
+- **judgment_mode=binary**: Score ONLY 0 or full weight (no half credit). Full credit requires explicit report evidence for the verifiable proposition.
+- **judgment_mode=checklist**: List which required elements (A, B, C...) are clearly supported. Score by element count (see each item). Return `matched_elements` as letter labels.
+- **judgment_mode=structure**: Standard 0 / half / full rules for structural items.
+- Do NOT use subjective judgment like "adequately" or "sufficiently explains" — only check presence of required observable content.
+
+**Important**:
+1. Evaluate EVERY item. Do not skip any.
+2. The "reason" must cite specific content from the report as evidence.
+3. Be strict and objective. Do not give partial credit unless the report genuinely attempts to address the item.
+4. If source_ids is "none", evaluate report structure/content only — do NOT require specific source citations.
+5. If source_ids lists sources, check whether the report's claims align with what those sources support (when source excerpts are provided).
+6. Consider the item's ROLE: Critical items require the highest standard; Mandatory require clear evidence; Standard require substantive mention.
+
+Output as JSON array:
+[
+  {{
+    "rubric_id": "R1",
+    "score": 4,
+    "matched_elements": ["A", "B"],
+    "reason": "The report explicitly states in Section X that..."
+  }}
+]
+
+Output JSON only, no other text.
+"""
+
+PROMPT_SCORE_SINGLE_ITEMS = """\
+Evaluate the report already provided in the system context against the following rubric item.
 
 {task_type_guidance}
 
@@ -128,10 +180,40 @@ You are a strict academic report evaluator. Evaluate whether the report satisfie
 - Source References: {source_ids}
 {source_excerpt}
 
+Scoring:
+- Full score ({weight}): The report explicitly and thoroughly addresses the item.
+- Half score ({half}): Partial coverage or mention without depth.
+- Zero (0): Completely missing.
+
+If source_ids is "none", evaluate report quality only without requiring citations.
+
+Output as JSON:
+{{
+  "rubric_id": "{rubric_id}",
+  "score": <number>,
+  "reason": "<detailed reason citing specific report content>"
+}}
+
+Output JSON only, no other text.
+"""
+
+PROMPT_SCORE_SINGLE = """\
+You are a strict academic report evaluator. Evaluate whether the report satisfies the following rubric item.
+
 **Report to Evaluate**:
 ---
 {report_text}
 ---
+
+{task_type_guidance}
+
+**Rubric Item**:
+- ID: {rubric_id}
+- Question: {question}
+- Max Score: {weight}
+- Role: {role}
+- Source References: {source_ids}
+{source_excerpt}
 
 Scoring:
 - Full score ({weight}): The report explicitly and thoroughly addresses the item.
@@ -415,22 +497,34 @@ class Scorer:
             )
 
         scoring_meta: Dict[str, Any] = {
-            "scorer_version": "v3",
+            "scorer_version": "v4_prefix_cache",
             "task_type": task_type,
             "truncation": trunc_meta,
             "batches": 0,
             "retried_items": [],
             "warnings": [],
             "source_context_used": bool(source_map),
+            "report_prefix_cache": {
+                "enabled": True,
+                "strategy": "system_prefix_cache_control",
+                "report_chars": len(report_for_scoring),
+                "calls": 0,
+                "cache_control_fallbacks": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cached_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            },
         }
 
-        logger.info(f"共 {len(all_items)} 条评分项，分批评估...")
+        logger.info(f"共 {len(all_items)} 条评分项，分批评估（报告前缀缓存）...")
         scored_items, batch_meta = self._score_batched(
             report_for_scoring,
             all_items,
             source_map,
             task_guidance,
             output_dir,
+            scoring_meta["report_prefix_cache"],
         )
         scoring_meta["batches"] = batch_meta["batches"]
         scoring_meta["retried_items"] = batch_meta["retried_items"]
@@ -476,6 +570,7 @@ class Scorer:
         source_map: Dict[str, Any],
         task_guidance: str,
         output_dir: Optional[str],
+        cache_stats: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[dict], Dict[str, Any]]:
         scored_by_id: Dict[str, dict] = {}
         meta: Dict[str, Any] = {"batches": 0, "retried_items": [], "warnings": []}
@@ -495,7 +590,7 @@ class Scorer:
             )
 
             batch_results = self._score_batch(
-                report_text, batch, source_map, task_guidance
+                report_text, batch, source_map, task_guidance, cache_stats
             )
             merged, missing = self._merge_batch_results(batch, batch_results, meta)
 
@@ -503,7 +598,7 @@ class Scorer:
                 logger.info(f"    补评漏项: {rid}")
                 item = next(it for it in batch if it["rubric_id"] == rid)
                 single = self._score_single_with_retry(
-                    report_text, item, source_map, task_guidance
+                    report_text, item, source_map, task_guidance, cache_stats
                 )
                 merged[rid] = single
                 meta["retried_items"].append(rid)
@@ -531,34 +626,79 @@ class Scorer:
             )
         return ordered, meta
 
+    def _build_report_prefix_messages(
+        self,
+        report_text: str,
+        user_prompt: str,
+        *,
+        use_cache_control: bool = True,
+    ) -> List[dict]:
+        """构造「报告稳定前缀 + 本批评分项」messages，利于显式/隐式前缀缓存。"""
+        system_text = SCORING_SYSTEM_PREAMBLE + PROMPT_REPORT_SYSTEM_SUFFIX.format(
+            report_text=report_text
+        )
+        if use_cache_control:
+            system_content: Any = [
+                {
+                    "type": "text",
+                    "text": system_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        else:
+            system_content = system_text
+        return [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _accumulate_cache_stats(
+        self,
+        cache_stats: Optional[Dict[str, Any]],
+        call_meta: Dict[str, Any],
+    ) -> None:
+        if cache_stats is None:
+            return
+        cache_stats["calls"] = int(cache_stats.get("calls") or 0) + 1
+        if call_meta.get("cache_control_fallback"):
+            cache_stats["cache_control_fallbacks"] = (
+                int(cache_stats.get("cache_control_fallbacks") or 0) + 1
+            )
+        usage = call_meta.get("usage") or {}
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "cached_tokens",
+            "cache_creation_input_tokens",
+        ):
+            val = usage.get(key)
+            if isinstance(val, (int, float)):
+                cache_stats[key] = int(cache_stats.get(key) or 0) + int(val)
+
     def _score_batch(
         self,
         report_text: str,
         batch: List[dict],
         source_map: Dict[str, Any],
         task_guidance: str,
+        cache_stats: Optional[Dict[str, Any]] = None,
     ) -> List[dict]:
         items_text = "\n".join(
             self._fmt_item(it, source_map) for it in batch
         )
         shared_ctx = build_shared_source_context(source_map, batch)
 
-        prompt = PROMPT_SCORE_BATCH.format(
+        user_prompt = PROMPT_SCORE_BATCH_ITEMS.format(
             task_type_guidance=task_guidance,
             count=len(batch),
             rubric_items_text=items_text,
             shared_source_context=shared_ctx,
-            report_text=report_text,
         )
+        messages = self._build_report_prefix_messages(report_text, user_prompt)
 
         try:
-            results = self._call_llm_json(
-                prompt,
-                system=(
-                    "You are a strict academic report evaluator. "
-                    "Score every item rigorously. Output JSON only."
-                ),
-            )
+            results, call_meta = self._call_llm_json_messages(messages)
+            self._accumulate_cache_stats(cache_stats, call_meta)
             if isinstance(results, list) and results:
                 normalized = []
                 for row in results:
@@ -568,7 +708,6 @@ class Scorer:
                         (it for it in batch if it["rubric_id"] == row["rubric_id"]),
                         None,
                     )
-                    weight = item["weight"] if item else 1
                     score, warns, matched = normalize_item_score(item, row)
                     entry = {
                         "rubric_id": row["rubric_id"],
@@ -589,7 +728,7 @@ class Scorer:
         for it in batch:
             fallback.append(
                 self._score_single_with_retry(
-                    report_text, it, source_map, task_guidance
+                    report_text, it, source_map, task_guidance, cache_stats
                 )
             )
         return fallback
@@ -600,12 +739,13 @@ class Scorer:
         item: dict,
         source_map: Dict[str, Any],
         task_guidance: str,
+        cache_stats: Optional[Dict[str, Any]] = None,
     ) -> dict:
         last_error = None
         for attempt in range(SINGLE_RETRY_ATTEMPTS):
             try:
                 result = self._score_single(
-                    report_text, item, source_map, task_guidance
+                    report_text, item, source_map, task_guidance, cache_stats
                 )
                 if result.get("reason") != "Scoring failed":
                     return result
@@ -627,13 +767,14 @@ class Scorer:
         item: dict,
         source_map: Dict[str, Any],
         task_guidance: str,
+        cache_stats: Optional[Dict[str, Any]] = None,
     ) -> dict:
         sids = ", ".join(item.get("source_ids") or []) or "none"
         excerpt = build_source_excerpt(source_map, item.get("source_ids") or [])
         source_block = f"\n**Source Excerpts**:\n{excerpt}\n" if excerpt else ""
         half = item["weight"] / 2
 
-        prompt = PROMPT_SCORE_SINGLE.format(
+        user_prompt = PROMPT_SCORE_SINGLE_ITEMS.format(
             task_type_guidance=task_guidance,
             rubric_id=item["rubric_id"],
             question=item["question"],
@@ -641,18 +782,15 @@ class Scorer:
             role=item.get("role", "Standard"),
             source_ids=sids,
             source_excerpt=source_block,
-            report_text=report_text,
             half=half,
         )
-
-        result = self._call_llm_json(
-            prompt,
-            system="You are a strict academic report evaluator. Output JSON only.",
-        )
+        messages = self._build_report_prefix_messages(report_text, user_prompt)
+        result, call_meta = self._call_llm_json_messages(messages)
+        self._accumulate_cache_stats(cache_stats, call_meta)
         if isinstance(result, dict) and result.get("rubric_id"):
             score, warns, matched = normalize_item_score(item, result)
             entry = {
-                "rubric_id": item["rubric_id"],
+                "rubric_id": result["rubric_id"],
                 "score": score,
                 "reason": result.get("reason", ""),
                 "normalization_warnings": warns,
@@ -834,17 +972,27 @@ class Scorer:
         except OSError as e:
             logger.warning(f"无法写入 checkpoint: {e}")
 
-    def _call_llm_json(self, prompt: str, system: str = "") -> Any:
-        from pipeline.llm_utils import call_llm_json
+    def _call_llm_json_messages(
+        self, messages: List[dict]
+    ) -> Tuple[Any, Dict[str, Any]]:
+        from common.llm_runtime import call_llm_json_messages
 
-        return call_llm_json(
+        return call_llm_json_messages(
             self.client,
             self.config.scoring_model,
-            prompt,
-            system=system,
+            messages,
             temperature=self.scoring_temperature,
             max_retries=self.config.max_retries,
         )
+
+    def _call_llm_json(self, prompt: str, system: str = "") -> Any:
+        """兼容旧路径：拼成 messages 后走前缀缓存通道。"""
+        messages: List[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        result, _meta = self._call_llm_json_messages(messages)
+        return result
 
 
 def apply_scoring_options(config: Any, args: Any) -> None:

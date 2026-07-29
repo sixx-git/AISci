@@ -23,19 +23,39 @@ if not exist "%VENV_PY%" (
 )
 
 if not exist "%PINGFENBIAO_WORK_DIR%" mkdir "%PINGFENBIAO_WORK_DIR%"
-if exist "D:\Workplace\pingfenbiao\web\_jobs" (
-  robocopy "D:\Workplace\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
-)
-if exist "%PINGFEN_WEB%\_jobs" (
-  robocopy "%PINGFEN_WEB%\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+REM 仅在目标目录为空时做一次迁移，避免每次启动把已删除的任务从旧 _jobs 拷回来
+set "HAS_JOBS="
+for /f %%i in ('dir /b /ad "%PINGFENBIAO_WORK_DIR%" 2^>nul') do set "HAS_JOBS=1"
+if not defined HAS_JOBS (
+  if exist "D:\Workplace\pingfenbiao\web\_jobs" (
+    echo [INFO] Migrating jobs from D:\Workplace\pingfenbiao\web\_jobs ...
+    robocopy "D:\Workplace\pingfenbiao\web\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+  )
+  if exist "%PINGFEN_WEB%\_jobs" (
+    echo [INFO] Migrating jobs from %PINGFEN_WEB%\_jobs ...
+    robocopy "%PINGFEN_WEB%\_jobs" "%PINGFENBIAO_WORK_DIR%" /E /XO /NFL /NDL /NJH /NJS /nc /ns /np >nul 2>&1
+  )
 )
 
 if not defined DASHSCOPE_API_KEY (
-  if exist "%ROOT%\pingfenbiao-main\pingfenbiao-main\.env" (
-    echo [INFO] Using pingfenbiao .env if present
-  ) else (
-    echo [WARN] DASHSCOPE_API_KEY is not set. You can enter it on the Predict page.
+  REM 优先使用 AISci 主项目可用的 QWEN_API_KEY（与后端共用）
+  if exist "%ROOT%\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"QWEN_API_KEY=" "%ROOT%\.env"`) do (
+      if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"
+    )
   )
+)
+if not defined DASHSCOPE_API_KEY (
+  if exist "%ROOT%\pingfenbiao-main\pingfenbiao-main\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"DASHSCOPE_API_KEY=" "%ROOT%\pingfenbiao-main\pingfenbiao-main\.env"`) do (
+      if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"
+    )
+  )
+)
+if defined DASHSCOPE_API_KEY (
+  echo [INFO] DashScope API Key loaded for pingfenbiao
+) else (
+  echo [WARN] DASHSCOPE_API_KEY / QWEN_API_KEY not found. Enter key on Predict page if needed.
 )
 
 echo Job dir: %PINGFENBIAO_WORK_DIR%
