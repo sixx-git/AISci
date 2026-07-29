@@ -352,6 +352,20 @@ def _replace_unicode_math(text: str) -> str:
     return "".join(out)
 
 
+def _normalize_scientific_notation(text: str) -> str:
+    """将 3·10^12 / 3x10^12 等写成行内公式，避免 ^ 被转成 \\textasciicircum{}。"""
+    if not text:
+        return text
+    s = text
+    s = re.sub(
+        r"(?<!\$)(\d+)\s*[·⋅•×xX]\s*10\^(\d+)(?!\$)",
+        r"$\1\\cdot 10^{\2}$",
+        s,
+    )
+    s = re.sub(r"(?<![\w$])10\^(\d+)(?!\$)", r"$10^{\1}$", s)
+    return s
+
+
 def escape_latex(text: Any) -> str:
     """转义 LaTeX 特殊字符，保留 $...$ 行内公式与已有安全 LaTeX 命令。"""
     if text is None:
@@ -364,6 +378,8 @@ def escape_latex(text: Any) -> str:
     s = _normalize_windows_paths_for_latex(s)
     # 必须先规范化 ensuremath，再做 Unicode/$ 提升，否则会拆出 \\ensuremath{$...$\\}
     s = _normalize_ensuremath_to_inline_math(s)
+    # 科学计数法须在 · → $\\cdot$ 之前处理，否则会变成 3$\\cdot$10\\textasciicircum{}12
+    s = _normalize_scientific_notation(s)
     s = _replace_unicode_math(s)
     # 指标名中的下划线：在非数学片段中由 _escape_plain_latex 转义为 \_
     s = _promote_inline_math(s)
@@ -415,7 +431,15 @@ def _is_valid_reference_text(ref: str) -> bool:
     text = (ref or "").strip()
     if len(text) < 12:
         return False
-    return not any(marker in text for marker in _INVALID_REFERENCE_MARKERS)
+    if any(marker in text for marker in _INVALID_REFERENCE_MARKERS):
+        return False
+    # 拒收「期刊名, 卷 (年), 页码」这类被当成题名的碎片（非论文标题）
+    if re.match(
+        r"^[A-Za-z][A-Za-z\s.&'\-]+,\s*\d+\s*\(\d{4}\)\s*,\s*\d+",
+        text,
+    ):
+        return False
+    return True
 
 
 def _workflow_figure_block() -> str:
@@ -1202,14 +1226,19 @@ def _format_authors_for_citation(authors: Any) -> str:
 
 
 def _reference_type_marker(item: Dict[str, Any]) -> str:
-    """文献类型标识：M 专著 / J 期刊 / J/OL 电子期刊 / EB/OL 电子资源。"""
+    """文献类型标识：M 专著 / J 期刊 / J/OL 电子期刊 / EB/OL 电子资源。
+
+    注意：有 DOI 或 doi.org 链接的正式论文应标 [J]，不能仅因存在网页 URL
+    就误标为 [EB/OL]（检索源常把期刊论文的 landing page 填进 source_url）。
+    """
     if item.get("publisher") or item.get("publisher_location"):
         return "M"
     url = str(item.get("source_url") or item.get("url") or "").lower()
     source = str(item.get("source") or "").lower()
+    doi = str(item.get("doi") or "").strip()
     if "arxiv" in url or source == "arxiv":
         return "J/OL"
-    if item.get("journal"):
+    if item.get("journal") or doi or "doi.org/" in url:
         return "J"
     if url:
         return "EB/OL"

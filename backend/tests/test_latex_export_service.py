@@ -356,6 +356,38 @@ class TestLatexExportService(unittest.TestCase):
         self.assertIn("[J]", line)
         self.assertNotIn("{[J]}", line)
 
+    def test_doi_url_not_marked_eb_ol(self):
+        from app.services.latex_export_service import _reference_type_marker
+
+        self.assertEqual(
+            _reference_type_marker(
+                {
+                    "title": "Partial regularity",
+                    "doi": "10.1002/cpa.3160350604",
+                    "source_url": "https://doi.org/10.1002/cpa.3160350604",
+                }
+            ),
+            "J",
+        )
+        line = _format_reference_gbt7714(
+            {
+                "authors": "Luis Caffarelli",
+                "title": "Partial regularity",
+                "year": "1982",
+                "doi": "10.1002/cpa.3160350604",
+                "source_url": "https://doi.org/10.1002/cpa.3160350604",
+            }
+        )
+        self.assertIn("[J]", line)
+        self.assertNotIn("[EB/OL]", line)
+
+    def test_escape_scientific_notation_in_title(self):
+        from app.services.latex_export_service import escape_latex
+
+        out = escape_latex("The Riemann hypothesis is true up to 3·10^12")
+        self.assertIn(r"$3\cdot 10^{12}$", out)
+        self.assertNotIn(r"\textasciicircum{}", out)
+
     def test_collect_bibliography_skips_chapter_reparse_when_structured(self):
         chapters = {
             "references": [

@@ -1,4 +1,8 @@
-"""导出每个项目最新报告 PDF，文件名为论文题目，到指定目录。"""
+"""导出每个项目最新报告 PDF，文件名为论文题目，到指定目录。
+
+最新判定：优先 created_at（新生成报告），再 version，再 updated_at，再 id。
+注意：不可把 updated_at=NULL 当成最早，否则会误选旧版。
+"""
 from __future__ import annotations
 
 import re
@@ -28,9 +32,7 @@ def resolve_pdf(pdf_path: str | None, report_id: str) -> Path | None:
         if not p.is_absolute():
             candidates.append(BACKEND / pdf_path)
             candidates.append(BACKEND / "storage" / pdf_path)
-    # 常见落点：storage/reports/<report_id>/report.pdf
     candidates.append(REPORTS_DIR / report_id / "report.pdf")
-    # pdf_path 可能本身就是目录 id
     if pdf_path:
         stem = Path(str(pdf_path).replace("\\", "/")).name
         if stem.endswith(".pdf"):
@@ -47,12 +49,31 @@ def resolve_pdf(pdf_path: str | None, report_id: str) -> Path | None:
     return None
 
 
+def latest_key(row: sqlite3.Row) -> tuple:
+    """越大越新。created_at 优先，避免 updated_at 批量回写把旧报告顶上来。"""
+    created = str(row["created_at"] or "")
+    updated = str(row["updated_at"] or "") or created
+    try:
+        version = int(row["version"] or 0)
+    except (TypeError, ValueError):
+        version = 0
+    return (created, version, updated, str(row["id"]))
+
+
 def main() -> None:
     dst = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_DST
+    clear = "--clear" in sys.argv
     dst.mkdir(parents=True, exist_ok=True)
 
     if not DB.exists():
         raise SystemExit(f"数据库不存在: {DB}")
+
+    if clear:
+        removed = 0
+        for p in dst.glob("*.pdf"):
+            p.unlink()
+            removed += 1
+        print(f"cleared_old_pdfs={removed}")
 
     conn = sqlite3.connect(str(DB))
     conn.row_factory = sqlite3.Row
@@ -61,30 +82,10 @@ def main() -> None:
     cur.execute("SELECT COUNT(*) AS n FROM projects")
     n_projects = int(cur.fetchone()["n"])
 
-    # 每个 project 取最新一条报告（优先 updated_at，其次 created_at）
     cur.execute(
         """
         SELECT r.id, r.project_id, r.paper_title, r.title, r.pdf_path,
-               r.created_at, r.updated_at, p.name AS project_name
-        FROM reports r
-        JOIN projects p ON p.id = r.project_id
-        WHERE r.id IN (
-            SELECT id FROM reports r2
-            WHERE r2.project_id = r.project_id
-            ORDER BY
-                COALESCE(r2.updated_at, r2.created_at) DESC,
-                r2.created_at DESC
-            LIMIT 1
-        )
-        ORDER BY p.name
-        """
-    )
-    # SQLite 相关子查询在 WHERE IN 里用 ORDER BY LIMIT 可能不兼容旧版本
-    # 改用 Python 侧分组更稳妥
-    cur.execute(
-        """
-        SELECT r.id, r.project_id, r.paper_title, r.title, r.pdf_path,
-               r.created_at, r.updated_at, p.name AS project_name
+               r.version, r.created_at, r.updated_at, p.name AS project_name
         FROM reports r
         JOIN projects p ON p.id = r.project_id
         """
@@ -95,13 +96,8 @@ def main() -> None:
     latest: dict[str, sqlite3.Row] = {}
     for row in rows:
         pid = row["project_id"]
-        key = (str(row["updated_at"] or ""), str(row["created_at"] or ""), str(row["id"]))
         prev = latest.get(pid)
-        if prev is None:
-            latest[pid] = row
-            continue
-        prev_key = (str(prev["updated_at"] or ""), str(prev["created_at"] or ""), str(prev["id"]))
-        if key > prev_key:
+        if prev is None or latest_key(row) > latest_key(prev):
             latest[pid] = row
 
     copied = 0
@@ -109,12 +105,14 @@ def main() -> None:
     used_names: dict[str, int] = {}
     details: list[str] = []
 
-    for pid, row in sorted(latest.items(), key=lambda kv: str(kv[1]["project_name"] or "")):
-        title = (row["paper_title"] or row["title"] or row["project_name"] or pid).strip()
+    for _pid, row in sorted(latest.items(), key=lambda kv: str(kv[1]["project_name"] or "")):
+        title = (row["paper_title"] or row["title"] or row["project_name"] or row["id"]).strip()
         pdf = resolve_pdf(row["pdf_path"], row["id"])
         if pdf is None:
             missing_pdf += 1
-            details.append(f"MISS {row['project_name']} | {title[:60]} | id={row['id']}")
+            details.append(
+                f"MISS {row['project_name']} | v{row['version']} | {title[:60]} | id={row['id']}"
+            )
             continue
         name = safe_name(title)
         n = used_names.get(name, 0)
@@ -123,7 +121,9 @@ def main() -> None:
         out = dst / filename
         shutil.copy2(pdf, out)
         copied += 1
-        details.append(f"OK {row['project_name']} -> {filename}")
+        details.append(
+            f"OK {row['project_name']} | v{row['version']} | created={row['created_at']} -> {filename}"
+        )
 
     print(f"projects_in_db={n_projects}")
     print(f"projects_with_report={len(latest)}")

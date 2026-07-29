@@ -130,6 +130,15 @@ def _replace_markdown_refs(md: str, lines: List[str]) -> str:
     return md
 
 
+_GARBAGE_TITLE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z\s.&'\-]+,\s*\d+\s*\(\d{4}\)\s*,\s*\d+"
+)
+_EB_DOI_RE = re.compile(
+    r"\[EB/OL\].{0,120}(?:DOI\s*:|doi\.org|\b10\.\d{4,}/)",
+    flags=re.I | re.S,
+)
+
+
 def _needs_fix(tex: str, lines: List[str]) -> bool:
     blob = "\n".join(lines) + "\n" + tex
     markers = ("{[J]}", "{[M]}", "{[J/OL]}", "{[EB/OL]}", r"\{[J]\}", r"\{[M]\}", "<i>", "</i>", "<sub>", "<em>")
@@ -139,16 +148,101 @@ def _needs_fix(tex: str, lines: List[str]) -> bool:
         return True
     if ".." in blob:
         return True
+    if _EB_DOI_RE.search(blob):
+        return True
+    if r"\textasciicircum{}" in tex:
+        return True
     return False
 
 
-def fix_one(folder: Path, *, compile_pdf: bool) -> Dict[str, Any]:
+def _sanitize_structured_list(items: Any) -> List[Dict[str, Any]]:
+    """清洗 citation_map / verified_references：去 HTML、拒伪题名、去重。"""
+    if not isinstance(items, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        title = clean_reference_text(item.get("title") or item.get("paper_title") or "")
+        if not title or _GARBAGE_TITLE_RE.match(title):
+            continue
+        item["title"] = title
+        item["paper_title"] = title
+        if isinstance(item.get("authors"), str):
+            item["authors"] = clean_reference_text(item["authors"])
+        elif isinstance(item.get("authors"), list):
+            item["authors"] = [
+                clean_reference_text(a) for a in item["authors"] if clean_reference_text(a)
+            ]
+        if item.get("journal"):
+            item["journal"] = clean_reference_text(item["journal"])
+        doi = str(item.get("doi") or "").strip().lower()
+        doi = doi.replace("https://doi.org/", "").replace("http://doi.org/", "").strip("/")
+        if doi:
+            item["doi"] = doi
+        key = f"doi:{doi}" if doi else f"title:{title.lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def _latest_report_folders() -> List[Path]:
+    """每个项目最新报告对应的 storage/reports 目录。"""
+    if not DB_PATH.exists():
+        return []
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT r.id, r.project_id, r.pdf_path, r.version, r.created_at, r.updated_at
+        FROM reports r
+        """
+    ).fetchall()
+    conn.close()
+
+    def _key(row: sqlite3.Row) -> tuple:
+        created = str(row["created_at"] or "")
+        updated = str(row["updated_at"] or "") or created
+        try:
+            version = int(row["version"] or 0)
+        except (TypeError, ValueError):
+            version = 0
+        return (created, version, updated, str(row["id"]))
+
+    latest: Dict[str, sqlite3.Row] = {}
+    for row in rows:
+        pid = row["project_id"]
+        prev = latest.get(pid)
+        if prev is None or _key(row) > _key(prev):
+            latest[pid] = row
+
+    folders: List[Path] = []
+    for row in latest.values():
+        folder_id = row["pdf_path"] or row["id"]
+        folder = REPORTS_DIR / str(folder_id)
+        if folder.is_dir():
+            folders.append(folder)
+    return sorted(folders, key=lambda p: p.name)
+
+
+def fix_one(folder: Path, *, compile_pdf: bool, force: bool = False) -> Dict[str, Any]:
     result: Dict[str, Any] = {"id": folder.name, "changed": False, "compiled": False, "error": None}
     data_path = folder / "report_data.json"
     data = _load_json(data_path)
     if not data:
         result["error"] = "no_report_data"
         return result
+
+    # 先清洗结构化文献，再重建 GB/T
+    verified = _sanitize_structured_list(data.get("verified_references"))
+    citation = _sanitize_structured_list(data.get("citation_map"))
+    if verified or citation:
+        data["verified_references"] = verified or citation
+        data["citation_map"] = citation or verified
 
     lines, items = _rebuild_reference_lines(data)
     if not lines:
@@ -160,9 +254,14 @@ def fix_one(folder: Path, *, compile_pdf: bool) -> Dict[str, Any]:
     old_lines = list((data.get("chapters") or {}).get("references") or [])
     old_blob = "\n".join(str(x) for x in old_lines)
     new_blob = "\n".join(lines)
-    tex_dirty = bool(re.search(r"\\\{\[[A-Z]", tex) or "<i>" in tex or "{[J]}" in tex)
-    if old_blob == new_blob and not tex_dirty and _THEBIB_RE.search(tex):
-        # tex 可能仍是旧 escape；只要有 thebibliography 且内容与 lines 不一致则继续
+    tex_dirty = bool(
+        re.search(r"\\\{\[[A-Z]", tex)
+        or "<i>" in tex
+        or "{[J]}" in tex
+        or _EB_DOI_RE.search(tex)
+        or r"\textasciicircum{}" in tex
+    )
+    if not force and old_blob == new_blob and not tex_dirty and _THEBIB_RE.search(tex):
         preview = _build_thebibliography_section(items if items else [{"note": x} for x in lines])
         if preview.strip() in tex.replace("\r\n", "\n"):
             result["error"] = "already_clean"
@@ -195,7 +294,6 @@ def fix_one(folder: Path, *, compile_pdf: bool) -> Dict[str, Any]:
     if bib_content:
         bib_path.write_text(bib_content + "\n", encoding="utf-8")
     elif items:
-        # 无 structured 时用 items 落 bib
         bib_content, _ = _build_references_bib({"references": lines})
         if bib_content:
             bib_path.write_text(bib_content + "\n", encoding="utf-8")
@@ -234,9 +332,14 @@ def main() -> None:
     parser.add_argument("--sync-db", action="store_true", help="同步数据库 references 字段")
     parser.add_argument("--limit", type=int, default=0, help="仅处理前 N 个（调试）")
     parser.add_argument("--only-dirty", action="store_true", help="仅处理含脏标记的报告")
+    parser.add_argument("--latest-only", action="store_true", help="仅处理每个项目最新报告")
+    parser.add_argument("--force", action="store_true", help="强制重建书目（即使看似已干净）")
     args = parser.parse_args()
 
-    folders = sorted([d for d in REPORTS_DIR.iterdir() if d.is_dir()], key=lambda p: p.name)
+    if args.latest_only:
+        folders = _latest_report_folders()
+    else:
+        folders = sorted([d for d in REPORTS_DIR.iterdir() if d.is_dir()], key=lambda p: p.name)
     if args.limit:
         folders = folders[: args.limit]
 
@@ -248,26 +351,45 @@ def main() -> None:
             stats["errors"] += 1
             print(f"[skip] {folder.name}: no json")
             continue
-        if args.only_dirty:
+        if args.only_dirty and not args.force:
             old_refs = list((data.get("chapters") or {}).get("references") or [])
             tex = ""
             tex_path = folder / "report.tex"
             if tex_path.exists():
                 tex = tex_path.read_text(encoding="utf-8", errors="replace")
-            if not _needs_fix(tex, [str(x) for x in old_refs if isinstance(x, str)]):
-                stats["skipped"] += 1
-                continue
+            # 结构化脏（HTML / DOI+无刊名导致的 EB/OL）也算需要修
+            structured_blob = json.dumps(
+                {
+                    "v": data.get("verified_references") or [],
+                    "c": data.get("citation_map") or [],
+                },
+                ensure_ascii=False,
+            )
+            if not _needs_fix(
+                tex + "\n" + structured_blob,
+                [str(x) for x in old_refs if isinstance(x, str)],
+            ):
+                # 章节行含 [EB/OL]+DOI 已在 _needs_fix；再查 structured HTML
+                if "<i>" not in structured_blob and "<sub>" not in structured_blob and "[EB/OL]" not in (
+                    "\n".join(str(x) for x in old_refs)
+                ):
+                    stats["skipped"] += 1
+                    continue
 
-        info = fix_one(folder, compile_pdf=args.compile)
+        info = fix_one(folder, compile_pdf=args.compile, force=args.force)
         if info.get("changed"):
             stats["changed"] += 1
             print(f"[ok] {folder.name} refs={info.get('n_refs')} compiled={info.get('compiled')}")
             if args.sync_db:
-                lines = (( _load_json(folder / "report_data.json") or {}).get("chapters") or {}).get("references") or []
+                lines = ((_load_json(folder / "report_data.json") or {}).get("chapters") or {}).get(
+                    "references"
+                ) or []
                 if isinstance(lines, list) and sync_db(folder.name, lines):
                     stats["db_synced"] += 1
             if info.get("compiled"):
                 stats["compiled"] += 1
+            if info.get("compile_warning"):
+                print(f"  warn: {str(info.get('compile_warning'))[:200]}")
         else:
             stats["skipped"] += 1
             if info.get("error") not in (None, "already_clean"):
