@@ -16,7 +16,9 @@ from app.core.database import get_db
 from app.integrations.shaxiang.bridge import ShaxiangBridgeError, shaxiang_root
 from app.schemas.common import success_response, error_response
 from app.services.iterative_experiment_jobs import (
+    KIND_APPLY_FL_SCRIPT,
     KIND_DESIGN_SCRIPT,
+    KIND_REDESIGN,
     KIND_RUN_TO_COMPLETION,
     get_ie_job_store,
 )
@@ -128,7 +130,7 @@ async def create_experiment(project_id: str, body: CreateExperimentBody, db: Ses
 
 @router.get("/projects/{project_id}/iterative-experiments/jobs/{job_id}")
 async def get_experiment_job(project_id: str, job_id: str):
-    """轮询长任务状态（design-script / run-to-completion）。"""
+    """轮询长任务状态（design-script / apply-fl-script / redesign / run-to-completion）。"""
     try:
         job = get_ie_job_store().get(job_id)
         if not job or job.project_id != project_id:
@@ -329,14 +331,24 @@ async def list_fl_pack_scripts(project_id: str):
 
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/apply-fl-script")
 async def apply_fl_script(project_id: str, experiment_id: str, body: ApplyFlScriptBody):
+    """以 FL 模板为反馈设计/重设计脚本：后台任务 + 轮询（与 design-script 同协议）。"""
     try:
-        exp = await run_blocking(
-            get_iterative_experiment_service().apply_fl_script_template,
-            project_id,
-            experiment_id,
-            body.script_id,
+        script_id = body.script_id
+
+        def _runner():
+            return get_iterative_experiment_service().apply_fl_script_template(
+                project_id, experiment_id, script_id
+            )
+
+        job = await run_blocking(
+            _start_long_job,
+            project_id=project_id,
+            experiment_id=experiment_id,
+            kind=KIND_APPLY_FL_SCRIPT,
+            runner=_runner,
+            message="基于 FL 模板设计脚本已启动（后台执行）",
         )
-        return success_response(exp)
+        return success_response(job, message="基于 FL 模板设计已启动，后台执行中")
     except Exception as e:
         return _err(e)
 
@@ -421,13 +433,23 @@ async def submit_feedback(project_id: str, experiment_id: str, body: FeedbackBod
 
 @router.post("/projects/{project_id}/iterative-experiments/{experiment_id}/redesign")
 async def redesign(project_id: str, experiment_id: str, body: FeedbackBody):
+    """基于人工反馈重设计脚本：后台任务 + 轮询（与 design-script 同协议）。"""
     try:
-        exp = await run_blocking(
-            get_iterative_experiment_service().redesign_from_feedback,
-            project_id,
-            experiment_id,
-            body.feedback,
+        feedback = body.feedback
+
+        def _runner():
+            return get_iterative_experiment_service().redesign_from_feedback(
+                project_id, experiment_id, feedback
+            )
+
+        job = await run_blocking(
+            _start_long_job,
+            project_id=project_id,
+            experiment_id=experiment_id,
+            kind=KIND_REDESIGN,
+            runner=_runner,
+            message="基于反馈重设计脚本已启动（后台执行）",
         )
-        return success_response(exp)
+        return success_response(job, message="基于反馈重设计已启动，后台执行中")
     except Exception as e:
         return _err(e)

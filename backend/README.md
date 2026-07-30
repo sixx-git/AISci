@@ -60,12 +60,19 @@ backend/
 | POST | `/api/v1/agents/hypotheses/{id}/evidence-chain/iterate` | 证据链迭代修正 |
 | GET | `/api/v1/agents/hypotheses/{id}/provenance-timeline` | 假设溯源时间线 |
 | * | `/api/v1/iterative-experiments/*` | 迭代实验 CRUD / 运行 |
-| GET | `/api/v1/projects/{id}/fl-pack/scripts` | FL 参考脚本模板 |
-| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 一键写入 analysis_script |
-| POST | `/api/v1/feedback/submit` | Feedback Hub 约束 |
+| GET | `/api/v1/projects/{id}/fl-pack/scripts` | FL 参考脚本模板（仅联邦模式有内容） |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 以模板为反馈 → 后台 job → LLM 设计脚本 |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/redesign` | 人工反馈重设计脚本（后台 job） |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/design-script` | 设计脚本（后台 job） |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/run-to-completion` | 自动跑完（后台 job） |
+| GET | `/api/v1/projects/{id}/iterative-experiments/jobs/{job_id}` | 轮询长任务 |
+| * | `/api/v1/human-loop/*` | 工作流阶段人工审核 / 对话 / HITL |
+| POST | `/api/v1/feedback/submit` | Feedback Hub 约束（legacy；主路径已迁 human-loop） |
 | GET/POST | `/api/v1/pingfenbiao/*` | 预测服务 BFF |
 
-> `datasets` / `data_finder` / `kg` / `multimodal` 独立路由文件已删除；相关逻辑若仍存在，多在 `services/` 与 Pipeline 内部调用。
+**迭代实验长任务 `kind`**：`design_script` | `redesign` | `apply_fl_script` | `run_to_completion`。启动接口立即返回 `job_id`，前端轮询至 `succeeded`/`failed`。
+
+> `datasets` / `data_finder` / `kg` / `multimodal` 独立路由文件已删除；`research` / `chat` 保留文件但默认未挂入 `v1` OpenAPI 主面。
 
 ## 持久化目录
 
@@ -139,12 +146,14 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Pipeline
 
-阶段顺序执行，每个阶段记录 input/output、Prompt、模型参数、Token 用量与耗时。Discovery 模式下支持多轮迭代，并写入：
+阶段顺序执行，每个阶段记录 input/output、Prompt、模型参数、Token 用量与耗时。运行时以 **人工主导** 为主（`iteration_mode: human`）；历史 Discovery 自动环结果仍可在 `extra_metadata` / UI 只读面板中查看：
 
 - `extra_metadata.quality_trend` — CQS 质量趋势
 - `extra_metadata.closed_loop_events` — 闭环事件
 - `extra_metadata.closed_loop_decisions` — 闭环决策
 - `storage/audit/{run_id}.jsonl` — 完整审计链
+
+**模式闸口**：`project_mode=federated_learning` 才挂载 FL Pack / pack_d / 仿真 API；通用模式不注入 FL 文案与模板。创建后切换模式会同步挂载或剥离 Pack 配置。
 
 ## 测试
 
@@ -189,7 +198,7 @@ pytest tests/test_fl_starter_pack.py -q
 
 1. 前端创建项目 → 模式「联邦学习」→ 实验档位 + 仿真后端（默认 local_pack）
 2. 系统写入 `project.config.fl_pack` 与 `fl_simulation`，并自动应用 pack_d
-3. 迭代实验详情 → **FL 参考脚本模板** 或 **联邦仿真运行**
+3. 迭代实验详情 → **基于模板重新设计脚本**（后台 job + LLM）或 **联邦仿真控制台**（与沙箱 analysis_script 路径独立）
 
 ```bash
 # 重新生成 Pack

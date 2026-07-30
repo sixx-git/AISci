@@ -27,6 +27,7 @@ export function CreateProject() {
   );
   const [formData, setFormData] = useState({
     name: '',
+    research_question: '',
     description: '',
   });
 
@@ -62,9 +63,13 @@ export function CreateProject() {
 
     setLoading(true);
     try {
+      const researchQuestion = formData.research_question.trim();
+      const description = formData.description.trim();
       const payload: Record<string, unknown> = {
         name: formData.name,
-        description: formData.description,
+        // 研究问题优先；未填时可用描述作为研究问题（非模板）
+        research_question: researchQuestion || description || undefined,
+        description: description || undefined,
         project_mode: projectMode,
       };
       if (projectMode === 'federated_learning') {
@@ -76,7 +81,7 @@ export function CreateProject() {
         }
         payload.fl_sim_backend = flSimBackend;
         payload.fl_sim_spec = {
-          num_clients: flSimClients,
+          num_clients: Math.max(2, Math.min(flSimClients || 2, 50)),
           rounds: flSimRounds,
           strategy: flSimStrategy,
           partition:
@@ -313,13 +318,20 @@ export function CreateProject() {
                 {(flSimBackend === 'flower' || flSimBackend === 'fedml') && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <label className="text-xs text-bp-muted space-y-1">
-                      <span>客户端数</span>
+                      <span>客户端数（最少 2）</span>
                       <input
                         type="number"
                         min={2}
                         max={50}
                         value={flSimClients}
-                        onChange={(e) => setFlSimClients(Number(e.target.value) || 5)}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (!Number.isFinite(n)) {
+                            setFlSimClients(2);
+                            return;
+                          }
+                          setFlSimClients(Math.max(2, Math.min(Math.trunc(n), 50)));
+                        }}
                         className="input-field text-sm"
                       />
                     </label>
@@ -385,7 +397,20 @@ export function CreateProject() {
 
           <div>
             <label className="block text-sm font-medium text-bp-text mb-2">
-              项目描述
+              研究问题
+            </label>
+            <textarea
+              value={formData.research_question}
+              onChange={(e) => setFormData({ ...formData, research_question: e.target.value })}
+              placeholder="描述你希望 AI 科学家帮你探索的核心科学问题…"
+              rows={3}
+              className="input-field min-h-[80px]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-bp-text mb-2">
+              项目描述 <span className="text-bp-muted font-normal">（可选）</span>
             </label>
             <textarea
               value={formData.description}

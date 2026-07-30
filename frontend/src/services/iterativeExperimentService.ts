@@ -70,6 +70,11 @@ async function pollJobUntilDone(
 }
 
 export const iterativeExperimentService = {
+  /** 轮询已启动的后台任务直至完成（页面恢复 active-job 时使用）。 */
+  async pollJob(projectId: string, jobId: string): Promise<IterativeExperiment> {
+    return pollJobUntilDone(projectId, jobId, '后台任务失败');
+  },
+
   async list(projectId: string): Promise<{
     experiments: IterativeExperiment[];
     reportExperimentIds: string[];
@@ -264,11 +269,21 @@ export const iterativeExperimentService = {
     experimentId: string,
     scriptId: string,
   ): Promise<IterativeExperiment> {
-    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+    /** 以 FL 模板为反馈，后台设计/重设计脚本（与 designScript 同协议）。 */
+    const { data } = await api.post<ApiResponse<IterativeExperimentJob | IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/apply-fl-script`,
       { script_id: scriptId },
+      { timeout: JOB_START_TIMEOUT_MS },
     );
-    return unwrap(data, '应用 FL 脚本失败');
+    const payload = unwrap(data, '基于 FL 模板设计脚本失败');
+    if (payload && typeof payload === 'object' && 'job_id' in payload && (payload as IterativeExperimentJob).job_id) {
+      return pollJobUntilDone(
+        projectId,
+        (payload as IterativeExperimentJob).job_id,
+        '基于 FL 模板设计脚本失败',
+      );
+    }
+    return payload as IterativeExperiment;
   },
 
   async setRunMode(
@@ -338,12 +353,20 @@ export const iterativeExperimentService = {
     experimentId: string,
     feedback: string,
   ): Promise<IterativeExperiment> {
-    const { data } = await api.post<ApiResponse<IterativeExperiment>>(
+    const { data } = await api.post<ApiResponse<IterativeExperimentJob | IterativeExperiment>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}/redesign`,
       { feedback },
-      { timeout: LONG_OP_TIMEOUT_MS },
+      { timeout: JOB_START_TIMEOUT_MS },
     );
-    return unwrap(data, '重设计脚本失败');
+    const payload = unwrap(data, '重设计脚本失败');
+    if (payload && typeof payload === 'object' && 'job_id' in payload && (payload as IterativeExperimentJob).job_id) {
+      return pollJobUntilDone(
+        projectId,
+        (payload as IterativeExperimentJob).job_id,
+        '重设计脚本失败',
+      );
+    }
+    return payload as IterativeExperiment;
   },
 };
 

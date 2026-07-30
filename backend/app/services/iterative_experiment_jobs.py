@@ -13,6 +13,8 @@ CHINA_TZ = timezone(timedelta(hours=8))
 
 KIND_DESIGN_SCRIPT = "design_script"
 KIND_RUN_TO_COMPLETION = "run_to_completion"
+KIND_APPLY_FL_SCRIPT = "apply_fl_script"
+KIND_REDESIGN = "redesign"
 
 
 def _now() -> str:

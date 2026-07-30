@@ -85,11 +85,52 @@ export function IterativeExperimentPage({
       await fn();
       await reload();
     } catch (err: unknown) {
+      // 长任务超时后后端可能已完成：仍刷新一次
+      try {
+        await reload();
+      } catch {
+        /* ignore */
+      }
       setError(getErrorMessage(err, '操作失败'));
     } finally {
       setBusy(false);
     }
   };
+
+  // 进入详情时恢复进行中的后台 job（设计脚本 / 重设计 / FL 模板 / 自动跑完）
+  useEffect(() => {
+    if (!selectedId || view !== 'detail') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const job = await iterativeExperimentService.getActiveJob(projectId, selectedId);
+        if (cancelled || !job?.job_id) return;
+        if (job.status !== 'queued' && job.status !== 'running') return;
+        setBusy(true);
+        setError(null);
+        try {
+          await iterativeExperimentService.pollJob(projectId, job.job_id);
+          if (!cancelled) await reload();
+        } catch (err: unknown) {
+          if (!cancelled) {
+            try {
+              await reload();
+            } catch {
+              /* ignore */
+            }
+            setError(getErrorMessage(err, '后台任务失败'));
+          }
+        } finally {
+          if (!cancelled) setBusy(false);
+        }
+      } catch {
+        /* 无 active job 或接口不可用 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedId, view, reload]);
 
   const handleGenerateReport = useCallback(async () => {
     if (reportIds.length === 0) {

@@ -1,14 +1,21 @@
 # 存储目录
 
-项目运行时数据持久化目录，部分路径由 `backend/.env` 配置（如 `UPLOAD_DIR`、`VECTOR_STORE_PATH`）。
+项目运行时数据持久化目录。根目录 `storage/` 与 `backend/storage/` 分工不同：
+
+| 位置 | 典型内容 |
+|------|----------|
+| `storage/`（仓库根） | audit / evidence_chains / catalog / data_finder / feedback / pingfenbiao_jobs |
+| `backend/storage/` | 向量索引、上传文件、报告产物、`iterative_experiments/{project_id}.json` |
+
+部分路径由 `backend/.env` 配置（如 `UPLOAD_DIR`、`VECTOR_STORE_PATH`、`VECTOR_BACKEND`）。
 
 ## 目录说明
 
 | 路径 | 内容 |
 |------|------|
-| `faiss_index/` | FAISS 向量索引（文献 chunk 嵌入） |
+| `vector_indexes/` 等 | 向量索引（默认 **zvec**；若检测到旧 FAISS 目录会走兼容读路径） |
 | `uploads/` | 用户上传的 PDF / DOCX / TXT / MD / CSV |
-| `reports/` | 生成的研究报告 Markdown 与 PDF |
+| `reports/` | 生成的研究报告 Markdown / PDF / `report_data.json` |
 | `audit/` | Pipeline 闭环审计链 `{run_id}.jsonl`（events / decisions / quality_trend 条目） |
 | `evidence_chains/` | 假设结构化证据链 `{project_id}/{hypothesis_id}.json` |
 | `catalog/` | 项目 Data Catalog `{project_id}/data_catalog.json` |

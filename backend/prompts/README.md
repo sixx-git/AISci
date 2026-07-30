@@ -24,7 +24,7 @@
 - **Feedback Hub**：Pipeline 启动前会将 `global_constraints` 注入部分阶段的上下文。
 - **Verifiable Spec**：假设生成后由 `iterative_science.attach_verifiable_specs_to_hypotheses` 附加（联邦模式走 FL 分支）。
 - **证据链迭代**：假设修订由 `HypothesisRevisionSkill` 完成，非本目录主文件。
-- **Discovery 迭代**：多轮 refine 复用上述 Prompt，输入含上一轮 snapshot 与 Decision Log 摘要。
+- **Discovery 迭代**：自动多轮 refine 已退役；旧 run 的 snapshot / Decision Log 仍可只读复用上述 Prompt 展示。
 
 ## 范式预设库（Prompt Presets）
 

@@ -163,4 +163,4 @@ class LoopDryRunRequest(BaseModel):
     round_num: int = Field(default=2, ge=1, le=5, description="Discovery 轮次")
     hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="可选：模拟 Accept 判断")
     small_validation: Optional[Dict[str, Any]] = Field(default=None)
-    project_mode: str = Field(default="standard", description="standard | general")
+    project_mode: str = Field(default="general", description="general | federated_learning")

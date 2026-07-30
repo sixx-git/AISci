@@ -77,15 +77,7 @@ class ProjectService:
                             )
                         except Exception as sim_exc:
                             logger.warning("[Project] 写入 fl_simulation 失败: %s", sim_exc)
-                        # 研究问题模板兜底
-                        if not data.research_question:
-                            from app.core.project_modes import get_research_question_template
-
-                            tpl = get_research_question_template(mode, fl_setting)
-                            if tpl.get("research_question"):
-                                data.research_question = tpl["research_question"]
-                            if not data.research_domain and tpl.get("research_domain"):
-                                data.research_domain = tpl["research_domain"]
+                        # 不再自动写入研究问题模板；由用户在创建页/研究问题页填写
             except Exception as exc:
                 logger.warning("[Project] 挂载 FL Starter Pack 失败: %s", exc)
 
@@ -111,33 +103,87 @@ class ProjectService:
         self.db.commit()
         self.db.refresh(project)
 
-        # 联邦模式：自动应用 pack_d 全部阶段预设
-        if mode == "federated_learning":
-            try:
-                from app.services.prompt_preset_service import PromptPresetService
+        # 仅 Pack 实际挂载成功时应用 pack_d，避免「FL 标签 + 无资源」混用
+        if mode == "federated_learning" and bool((config or {}).get("fl_pack_mounted")):
+            self._apply_fl_pack_d(project)
 
-                preset_svc = PromptPresetService(self.db)
-                applied = preset_svc.apply_preset(
-                    project_id,
-                    "pack_d",
-                    "",
-                    apply_all_stages=True,
-                )
-                cfg = dict(project.config or {})
-                cfg["fl_pack_d_applied"] = {
-                    "pack_id": "pack_d",
-                    "count": applied.get("count"),
-                    "stages": [a.get("stage") for a in (applied.get("applied") or [])],
-                }
-                project.config = cfg
-                self.db.add(project)
-                self.db.commit()
-                self.db.refresh(project)
-                logger.info("[Project] 已自动应用 pack_d: %s", applied.get("count"))
-            except Exception as exc:
-                logger.warning("[Project] 自动应用 pack_d 失败: %s", exc)
-        
         return project
+
+    def _apply_fl_pack_d(self, project: Project) -> None:
+        """联邦模式：应用 pack_d 全阶段预设（需已挂载 Pack）。"""
+        try:
+            from app.services.prompt_preset_service import PromptPresetService
+
+            preset_svc = PromptPresetService(self.db)
+            applied = preset_svc.apply_preset(
+                project.id,
+                "pack_d",
+                "",
+                apply_all_stages=True,
+            )
+            cfg = dict(project.config or {})
+            cfg["fl_pack_d_applied"] = {
+                "pack_id": "pack_d",
+                "count": applied.get("count"),
+                "stages": [a.get("stage") for a in (applied.get("applied") or [])],
+            }
+            project.config = cfg
+            self.db.add(project)
+            self.db.commit()
+            self.db.refresh(project)
+            logger.info("[Project] 已自动应用 pack_d: %s", applied.get("count"))
+        except Exception as exc:
+            logger.warning("[Project] 自动应用 pack_d 失败: %s", exc)
+
+    def _strip_fl_config(self, config: Optional[dict]) -> dict:
+        """通用模式：剥离 FL Pack / 仿真相关 config，防止残留泄漏。"""
+        cfg = dict(config or {})
+        for key in (
+            "fl_pack",
+            "fl_pack_mounted",
+            "fl_setting",
+            "fl_experiment_profile",
+            "fl_domains",
+            "fl_simulation",
+            "fl_pack_d_applied",
+        ):
+            cfg.pop(key, None)
+        return cfg
+
+    def _mount_fl_on_existing(
+        self,
+        project: Project,
+        *,
+        fl_setting: str = "hfl",
+        fl_domains: Optional[list] = None,
+        fl_profile: str = "standard_non_iid",
+    ) -> None:
+        """general → FL：挂载 Pack + 仿真配置 + pack_d。"""
+        from app.core.config import get_settings
+        from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
+
+        config = dict(project.config or {})
+        if fl_pack_enabled() and get_settings().AISCI_FL_PACK_ENABLED:
+            svc = get_fl_pack_service()
+            if svc.available():
+                config = svc.mount_to_project_config(
+                    config,
+                    fl_setting=fl_setting or "hfl",
+                    domains=fl_domains,
+                    profile_id=fl_profile or "standard_non_iid",
+                )
+                try:
+                    from app.services.fl_simulation import get_fl_simulation_runner
+
+                    config["fl_simulation"] = get_fl_simulation_runner().build_config_blob()
+                except Exception as sim_exc:
+                    logger.warning("[Project] 写入 fl_simulation 失败: %s", sim_exc)
+        project.config = config or None
+        self.db.add(project)
+        self.db.commit()
+        self.db.refresh(project)
+        if bool((project.config or {}).get("fl_pack_mounted")):
+            self._apply_fl_pack_d(project)
     
     def get_project(self, project_id: str) -> Optional[Project]:
         """获取项目详情"""
@@ -201,16 +247,27 @@ class ProjectService:
                 config["data_acquisition"] = merged_acq
             project.config = config
 
+        mode_changed_to: Optional[str] = None
         if "project_mode" in update_data and update_data["project_mode"] is not None:
             pm = update_data["project_mode"]
-            update_data["project_mode"] = normalize_project_mode(pm.value if hasattr(pm, "value") else pm)
+            new_mode = normalize_project_mode(pm.value if hasattr(pm, "value") else pm)
+            old_mode = normalize_project_mode(getattr(project, "project_mode", None))
+            update_data["project_mode"] = new_mode
+            if new_mode != old_mode:
+                mode_changed_to = new_mode
         for field, value in update_data.items():
             setattr(project, field, value)
-        
+
+        # 模式切换时同步 Pack / 仿真资源，避免标签与能力脱节
+        if mode_changed_to == "general":
+            project.config = self._strip_fl_config(project.config)
+        elif mode_changed_to == "federated_learning":
+            self._mount_fl_on_existing(project)
+
         project.updated_at = datetime.now()
         self.db.commit()
         self.db.refresh(project)
-        
+
         return project
     
     def delete_project(self, project_id: str) -> bool:

@@ -829,6 +829,7 @@ export function ProjectWorkspace() {
             : projectModeLabel
         }
         currentStage={resolvedCurrentStage}
+        researchQuestion={resolvedResearchQuestion || project.research_question}
         description={project.description}
         createdAtLabel={formatDate(project.created_at)}
         onUploadLiterature={() => navigate(`/projects/${project.id}?tab=literature`)}

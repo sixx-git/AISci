@@ -81,6 +81,7 @@ def normalize_fl_sim_backend(backend: str | None, default: str = "local_pack") -
 
 
 def get_research_question_template(mode: str, scenario: str | None = None) -> Dict[str, str]:
+    """可选「建议填充」文案；创建项目不再自动写入。当前无调用方，保留供未来显式建议 API。"""
     if normalize_project_mode(mode) != ProjectMode.FEDERATED_LEARNING.value:
         return {}
     sc = (scenario or "hfl").lower()

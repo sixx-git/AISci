@@ -547,22 +547,29 @@ class IterativeExperimentService:
             if cand.exists():
                 cfg = {**cfg, "source_path": str(cand.resolve())}
         try:
-            fl_feedback = None
+            user_fb = (exp.get("human_feedback") or "").strip()
+            fl_ctx = ""
+            is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
             try:
                 from app.services.fl_pack_service import fl_pack_enabled, get_fl_pack_service
 
-                is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
                 if fl_pack_enabled() and is_fl:
-                    fl_feedback = get_fl_pack_service().scripts_context_for_llm(
-                        fl_setting=setting, profile_id=profile_id
-                    )
-                else:
-                    # 通用模式显式传空串，清空历史误注入的 FL Pack 反馈，避免再次污染脚本
-                    fl_feedback = ""
+                    fl_ctx = (
+                        get_fl_pack_service().scripts_context_for_llm(
+                            fl_setting=setting, profile_id=profile_id
+                        )
+                        or ""
+                    ).strip()
             except Exception:
-                fl_feedback = ""
+                fl_ctx = ""
+            # 合并用户已提交反馈 + FL 范式上下文；通用模式无用户反馈时传空串清 FL 残留
+            parts = [p for p in (user_fb, fl_ctx) if p]
+            if parts:
+                merged_feedback = "\n\n".join(parts)
+            else:
+                merged_feedback = "" if not is_fl else None
             projected = bridge.design_script(
-                project_id, self._sx_id(exp), cfg, human_feedback=fl_feedback
+                project_id, self._sx_id(exp), cfg, human_feedback=merged_feedback
             )
         except ShaxiangBridgeError:
             raise
@@ -604,25 +611,113 @@ class IterativeExperimentService:
     def apply_fl_script_template(
         self, project_id: str, experiment_id: str, script_id: str
     ) -> Dict[str, Any]:
-        """将 FL Pack 参考脚本写入实验 analysis_script（仅联邦项目）。"""
+        """以 FL Pack 参考脚本为反馈，结合已绑定数据与实验设想，由 LLM 设计/重设计脚本。
+
+        不再把模板原文直接写入 analysis_script。
+        """
         require_shaxiang_enabled()
-        is_fl, _, _ = _resolve_project_fl_gate(project_id)
+        from app.integrations.shaxiang import bridge
+        from app.integrations.shaxiang.bridge import ShaxiangBridgeError
+        from app.services.fl_pack_service import get_fl_pack_service
+
+        is_fl, setting, profile_id = _resolve_project_fl_gate(project_id)
         if not is_fl:
             raise ValueError("当前项目为通用模式，不可应用 FL 参考脚本模板")
-        from app.integrations.shaxiang import bridge
-        from app.services.fl_pack_service import get_fl_pack_service
 
         exp = self.get(project_id, experiment_id)
         if not exp:
             raise ValueError("实验不存在")
+        if exp.get("executor_type") == "sandbox" and not exp.get("data_config"):
+            raise ValueError("请先绑定数据，再基于 FL 模板让模型设计可证伪实验脚本")
+
         meta = get_fl_pack_service().read_script_content(script_id)
-        projected = bridge.apply_analysis_script(
-            project_id,
-            self._sx_id(exp),
-            meta["content"],
-            title=f"FL模板: {meta.get('recommended_when') or meta.get('id')}",
-            methodology=f"FL Starter Pack · {meta.get('path')}",
+        content = (meta.get("content") or "").strip()
+        # 控制反馈体积，避免撑爆设计提示
+        max_chars = 12000
+        if len(content) > max_chars:
+            content = content[:max_chars] + "\n\n# ... [template truncated] ..."
+
+        when = meta.get("recommended_when") or meta.get("id") or script_id
+        path = meta.get("path") or meta.get("id") or script_id
+        hypothesis = (exp.get("hypothesis") or "").strip()
+        plan = exp.get("initial_plan") if isinstance(exp.get("initial_plan"), dict) else {}
+        plan_title = (plan.get("title") or "").strip()
+        plan_method = (plan.get("methodology") or "").strip()
+
+        paradigm = ""
+        try:
+            paradigm = get_fl_pack_service().build_experiment_paradigm_context(
+                fl_setting=setting, profile_id=profile_id
+            )
+        except Exception:
+            paradigm = ""
+
+        feedback_parts = [
+            "【任务】请把下列 FL 参考脚本当作范式参考（非直接粘贴执行），"
+            "结合本实验已绑定的真实数据列/路径、假设与实验设想，"
+            "生成一份可在当前沙箱跑通、能证伪或支持假设的新 analysis_script。",
+            "要求：适配实际数据文件与列名；保留参考脚本中有价值的划分/基线/联邦对比思路；"
+            "输出完整可执行 Python，不要原样照搬模板里的硬编码路径或假数据。",
+            "",
+            f"【参考模板】{when}",
+            f"路径: {path} · setting={meta.get('setting') or setting}",
+        ]
+        if hypothesis:
+            feedback_parts.extend(["", "【实验假设 / 设想】", hypothesis])
+        if plan_title or plan_method:
+            feedback_parts.extend(
+                [
+                    "",
+                    "【当前方案摘要】",
+                    f"title: {plan_title or '（无）'}",
+                    f"methodology: {plan_method or '（无）'}",
+                ]
+            )
+        if paradigm:
+            feedback_parts.extend(["", "【实验范式上下文】", paradigm[:3000]])
+        feedback_parts.extend(
+            [
+                "",
+                "【参考脚本正文】",
+                "```python",
+                content,
+                "```",
+            ]
         )
+        feedback = "\n".join(feedback_parts)
+
+        cfg = exp.get("data_config") if isinstance(exp.get("data_config"), dict) else None
+        has_plan_script = bool(
+            (plan.get("analysis_script") or "").strip()
+            or (exp.get("analysis_script") or "").strip()
+        )
+
+        try:
+            if has_plan_script:
+                # 先写入反馈，再重设计（与人工反馈路径一致）
+                try:
+                    bridge.submit_feedback(project_id, self._sx_id(exp), feedback)
+                except Exception as fb_exc:
+                    logger.warning("[FL] 写入模板反馈失败（继续重设计）: %s", fb_exc)
+                projected = bridge.redesign_script(
+                    project_id, self._sx_id(exp), feedback=feedback
+                )
+            else:
+                if not isinstance(cfg, dict) or not (
+                    cfg.get("source_path") or cfg.get("file_name")
+                ):
+                    raise ValueError("尚未绑定可用数据，无法基于 FL 模板设计脚本")
+                projected = bridge.design_script(
+                    project_id, self._sx_id(exp), cfg, human_feedback=feedback
+                )
+        except ShaxiangBridgeError:
+            raise
+        except ValueError:
+            raise
+        except Exception as exc:
+            logger.exception("基于 FL 模板设计脚本失败")
+            raise RuntimeError(str(exc) or f"基于 FL 模板设计脚本失败: {exc}") from exc
+
         return self._persist_projection(project_id, projected)
 
     def set_run_mode(self, project_id: str, experiment_id: str, run_mode: str) -> Dict[str, Any]:

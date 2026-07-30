@@ -850,52 +850,15 @@ def apply_analysis_script(
     title: Optional[str] = None,
     methodology: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """将参考脚本直接写入 initial_plan.analysis_script（不跑 LLM 设计）。"""
+    """已废弃：禁止直接粘贴模板到 analysis_script。
 
-    def _inner() -> Dict[str, Any]:
-        from schemas.experiment import ExperimentPlan, Hypothesis
-
-        svc = get_service()
-        experiment = svc.repository.get_experiment(experiment_id)
-        if not experiment:
-            raise ValueError(f"实验不存在: {experiment_id}")
-        content = (script_content or "").strip()
-        if len(content) < 40:
-            raise ValueError("脚本内容过短")
-
-        plan = experiment.initial_plan
-        if plan is None:
-            plan = ExperimentPlan(
-                title=title or "FL Starter Pack 参考脚本",
-                description="由 FL Starter Pack 模板注入",
-                hypothesis=Hypothesis(
-                    statement=experiment.hypothesis or "FL pilot",
-                    rationale="starter pack template",
-                    expected_outcome="metrics.json",
-                ),
-                methodology=methodology or "local FL pilot template",
-                analysis_script=content,
-                parameters={"script": content},
-                success_criteria=["写出 metrics.json"],
-            )
-        else:
-            if hasattr(plan, "model_copy"):
-                plan = plan.model_copy(deep=True)
-            plan.analysis_script = content
-            params = dict(getattr(plan, "parameters", None) or {})
-            params["script"] = content
-            plan.parameters = params
-            if title:
-                plan.title = title
-            if methodology:
-                plan.methodology = methodology
-        experiment.initial_plan = plan
-        if experiment.phase in {"created", "data_recommended", "data_uploaded", "hypothesis_submitted"}:
-            experiment.phase = "script_designed"
-        svc.repository.update_experiment(experiment)
-        return project_experiment(project_id, experiment_id)
-
-    return _run_in_shaxiang(_inner)
+    请改用 iterative_experiment_service.apply_fl_script_template
+    （以模板为反馈，经 LLM design/redesign）。
+    """
+    raise RuntimeError(
+        "apply_analysis_script 已废弃：请使用 apply_fl_script_template / "
+        "design_script / redesign_script，禁止直接粘贴模板到 analysis_script"
+    )
 
 
 def design_script(

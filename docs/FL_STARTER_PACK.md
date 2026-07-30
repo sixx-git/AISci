@@ -79,7 +79,7 @@ AISCI_FL_FEDML_ENABLED=true
 2. 选择实验范式档位（默认标准 Non-IID）；可选勾选经典应用 / 交叉融合领域。
 3. 选择仿真后端（默认 `local_pack`；可选 Flower）。
 4. 系统写入 `project.config.fl_pack` 与 `fl_simulation`，并**自动应用 pack_d**。
-5. 项目概览显示 FL Pack 与仿真后端；迭代实验可一键写参考脚本或「运行仿真」。
+5. 项目概览显示 FL Pack 与仿真后端；迭代实验可将参考脚本作为反馈驱动 LLM 设计新脚本，或使用「联邦仿真控制台」。
 
 ## 重新生成资源
 

@@ -10,6 +10,7 @@ interface ProjectWorkspaceHeaderProps {
   researchField: string;
   projectModeLabel: string;
   currentStage: string;
+  researchQuestion?: string;
   description?: string;
   createdAtLabel: string;
   onUploadLiterature: () => void;
@@ -22,6 +23,7 @@ export function ProjectWorkspaceHeader({
   researchField,
   projectModeLabel,
   currentStage,
+  researchQuestion,
   description,
   createdAtLabel,
   onUploadLiterature,
@@ -39,6 +41,7 @@ export function ProjectWorkspaceHeader({
             researchField={researchField}
             projectModeLabel={projectModeLabel}
             currentStage={currentStage}
+            researchQuestion={researchQuestion}
             description={description}
             createdAtLabel={createdAtLabel}
           />

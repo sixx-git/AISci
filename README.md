@@ -19,14 +19,16 @@
                                     
 ```
 
-标准 Pipeline 为 **7 阶段**。系统另支持 **Discovery 多轮迭代**、**HITL 人工审核 Gate**、**综合质量分 CQS（0–100）**、**完整审计链导出**，以及顶栏 **预测**（基于 pingfenbiao 的评分表 / 科学影响力预测）。
+标准 Pipeline 为 **7 阶段**（人工主导）。另支持 **HITL 人工审核 Gate**、**综合质量分 CQS（0–100）**、**完整审计链导出**，以及顶栏 **预测**（pingfenbiao 评分表 / 科学影响力）。历史 **Discovery 自动多轮迭代** 已退役，旧 run 仅只读展示。
+
+主交付路径：工作流跑至假设评审 → **迭代实验 Tab**（绑数据 → 设计脚本 → 执行/反馈）→ 报告生成。项目模式分 **通用** 与 **联邦学习（Starter Pack，内容注入 + 可选单机仿真，非多机 runtime）**，二者由 `project_mode` 闸口隔离。
 
 ### 8 条设计原则
 
 | # | 原则 |
 |---|------|
 | 1 | 后端 Python + FastAPI，前端 React + Vite + TailwindCSS |
-| 2 | 向量检索 FAISS，本地数据库 SQLite |
+| 2 | 向量检索默认 **zvec**（可兼容检测旧 FAISS 索引），本地数据库 SQLite |
 | 3 | 模型调用通过 Qwen API 封装，API Key 仅从 `.env` 读取 |
 | 4 | 每个 Agent 独立类 + Prompt 模板 + 输入/输出 JSON Schema |
 | 5 | 所有科学事实和参考文献必须绑定来源，禁止虚构引用 |
@@ -167,7 +169,7 @@ python scripts\check_e2e.py
 | 图表 | recharts |
 | 数据库 | SQLite（默认） / MySQL（可选） |
 | ORM | SQLAlchemy 2.0 |
-| 向量检索 | FAISS (faiss-cpu) |
+| 向量检索 | zvec（默认；可检测兼容旧 FAISS 索引） |
 | 嵌入模型 | Sentence-Transformers |
 | 大模型 | Qwen（阿里云百炼 / DashScope） |
 | PDF 解析 | PyMuPDF |
@@ -372,7 +374,7 @@ Skill 作为 Agent 调用的工具层，按子领域组织（完整列表见 `ba
 | 可选档位 | 快速验证（IID + 三基线） |
 | 领域种子 | 金融 / 医疗康养 / 边缘 / 工业 / 交通，以及 DP、CV、NLP、多语言、FedLLM、LoRA 异构等 |
 | pack_d | 自动应用联邦专用假设 / 实验设计 / 小样验证 Prompt |
-| 迭代实验 | 详情页 **FL 参考脚本模板** → 一键写入 `analysis_script`（优先 Dirichlet 划分与 baseline 对比脚本） |
+| 迭代实验 | 详情页 **FL 参考脚本模板** → 后台 job 以模板为反馈，由 LLM **设计/重设计** `analysis_script`（非直接粘贴）；另有独立 **联邦仿真控制台** |
 
 环境开关：`AISCI_FL_PACK_ENABLED=true`（默认开启）。重新生成资源：
 
@@ -399,7 +401,7 @@ pytest tests/test_fl_starter_pack.py -q
 | **5** | 图表分层 + 文献自动入库 | 图表 VLM 抽取/复核、Zenodo/NCBI GEO 检索、文献库 ↔ Data Finder |
 | **6** | Feedback Hub + Catalog | 全局约束注入、Multimodal → 证据链、Data Catalog、Entity 对齐 |
 | **7** | 溯源 + 审计链 | 假设溯源时间线 Tab、LLM 深度假设修订、审计链 jsonl 导出、`data_citation_id` 追溯 |
-| **FL** | 联邦学习 Starter Pack | 内容注入（非多机 runtime）：seed facts、领域标签、**实验范式**（默认 Dirichlet + FedProx）、迭代实验一键套用脚本；见 [docs/FL_STARTER_PACK.md](./docs/FL_STARTER_PACK.md) |
+| **FL** | 联邦学习 Starter Pack | 内容注入 + 可选单机仿真（非多机 runtime）；模板经 LLM 设计脚本，非直接粘贴；见 [docs/FL_STARTER_PACK.md](./docs/FL_STARTER_PACK.md) |
 | **8** | 数据获取增强 | 外部数据源连接器、补充材料/图表抽取、Release Gate、分阶段集成测试（见 [docs/DATA_ACQUISITION.md](./docs/DATA_ACQUISITION.md)） |
 | **9** | Prompt 范式预设 | pack_a/b/c/d 多套预设、项目内 Prompt 管理 Tab、一键应用 API |
 
@@ -414,7 +416,9 @@ pytest tests/test_fl_starter_pack.py -q
 | GET/POST | `/api/v1/pingfenbiao/*` | 预测服务 BFF 代理（转发至本机 :8765） |
 | * | `/api/v1/iterative-experiments/*` | 项目级迭代实验 CRUD / 运行 / 报告勾选 |
 | GET | `/api/v1/projects/{id}/fl-pack/scripts` | 列出 FL 参考脚本模板（按档位排序） |
-| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 一键将 FL 模板写入 `analysis_script` |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/apply-fl-script` | 以 FL 模板为反馈，后台 job 驱动 LLM 设计/重设计脚本 |
+| POST | `/api/v1/projects/{id}/iterative-experiments/{eid}/redesign` | 基于人工反馈重设计脚本（后台 job） |
+| POST | `/api/v1/human-loop/*` | 智能体工作流阶段人工审核 / 对话 / 从此阶段重跑 |
 
 审计链持久化路径：`storage/audit/{run_id}.jsonl`。
 
@@ -522,7 +526,7 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 | Node.js | ≥ 18 |
 | pnpm | ≥ 9 |
 
-> ⚠️ 暂不建议 Python 3.13——FAISS、sentence-transformers 等依赖可能存在兼容问题。
+> ⚠️ 暂不建议 Python 3.13——部分向量/嵌入依赖可能存在兼容问题。
 
 ---
 
@@ -532,13 +536,15 @@ pytest tests/test_batch1_quality_hitl.py tests/test_batch2_verifiable_spec.py \
 
 ```
 项目：AISci — Qwen 多智能体科研系统（d:\Workplace\AISci）
-栈：FastAPI + React/Vite/Tailwind + FAISS + SQLite
+栈：FastAPI + React/Vite/Tailwind + zvec + SQLite
 Pipeline 7 阶段：问题理解→文献→知识缺口→假设→评估→迭代实验→报告
-闭环：Discovery 迭代 / HITL / CQS / 审计链 storage/audit/{run_id}.jsonl
+闭环：人工主导迭代实验 + HITL / CQS / 审计链；Discovery 自动环已退役（旧 run 只读）
 前端：/ 首页 | /predict 预测(BFF) | /documents 文献 | /reports 报告 | /projects/:id 工作台
-关键路径：pipeline_service.py | iterative_experiment_service.py | pingfenbiao_proxy.py | predict/
+关键路径：pipeline_service.py | iterative_experiment_service.py | stage_human_loop_service.py | pingfenbiao_proxy.py
 原则：最小改动、中文回复、禁止虚构引用、不擅自 git commit
-联邦：project_mode=federated_learning → fl_pack v1.4+ / pack_d / 默认 standard_non_iid；docs/FL_STARTER_PACK.md
+模式闸口：project_mode=general | federated_learning；FL→fl_pack/pack_d/仿真，通用模式不泄漏 Pack
+长任务 job：design_script | redesign | apply_fl_script | run_to_completion（轮询 jobs/{job_id}）
+联邦：docs/FL_STARTER_PACK.md；研究问题由用户填写，不自动套模板
 任务：（在此填写）
 ```
 

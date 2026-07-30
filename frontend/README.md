@@ -48,8 +48,8 @@ pnpm build        # 生产构建
 | `PipelineProgress.tsx` | 阶段进度条 |
 | `ClosedLoopTimeline.tsx` | CQS 趋势、闭环事件/决策、审计链导出 |
 | `HitlGateModal.tsx` / `HitlGateContinueBar.tsx` | HITL Gate 弹窗与继续条 |
-| `DiscoveryLoopPanel.tsx` | Discovery 迭代与因果链 |
-| `StageHumanLoopPanel.tsx` | 阶段级人工审核 |
+| `DiscoveryLoopPanel.tsx` | 历史 Discovery run 只读展示（自动环已退役） |
+| `StageHumanLoopPanel.tsx` | 阶段级人工审核（工作流主 HITL 入口） |
 
 ### 假设与证据
 
@@ -69,9 +69,14 @@ pnpm build        # 生产构建
 | 组件 / 页面 | 说明 |
 |------|------|
 | `iterative-experiment/*` | 迭代实验列表与详情（shaxiang 桥接） |
-| `ExperimentDetail.tsx` | 数据绑定、脚本设计、运行；**FL 参考脚本模板**一键写入 |
+| `ExperimentDetail.tsx` | 数据绑定、脚本设计、运行；**FL 模板 → 后台 job → LLM 设计脚本**（非一键粘贴）；独立联邦仿真控制台 |
 | `CreateProject.tsx` | 联邦模式：HFL/VFL、标准 Non-IID 档位、领域勾选 |
 | `ProjectWorkspace.tsx` | 概览展示已挂载 FL Pack 版本与实验档位 |
+| `StageHumanLoopPanel.tsx` | 智能体工作流：阶段输出编辑 / 对话修订 / 从此阶段重跑 |
+
+人工反馈两路：
+- **迭代实验 Tab**：`submitFeedback`（存反馈）/ `redesignFromFeedback`（立即重设计，后台 job）/ `applyFlScript`（模板作反馈）
+- **智能体工作流 Tab**：`human-loop` 阶段保存、对话、HITL Gate 继续、`rerun-from-stage`
 
 专题文档：[FL_STARTER_PACK.md](../docs/FL_STARTER_PACK.md)、[FL_EXPERIMENT_PARADIGMS.md](../docs/FL_EXPERIMENT_PARADIGMS.md)。
 
@@ -91,9 +96,10 @@ pnpm build        # 生产构建
 |------|----------|
 | `pipelineService.ts` | Pipeline 运行、状态、审计链导出 |
 | `hypothesisService.ts` | 假设列表、证据链、溯源时间线 |
-| `iterativeExperimentService.ts` | 迭代实验 CRUD / 运行 / `listFlScriptTemplates` / `applyFlScript` |
+| `iterativeExperimentService.ts` | 迭代实验 CRUD / 长任务 job 轮询（`designScript` / `redesignFromFeedback` / `applyFlScript` / `runToCompletion`） / `listFlScriptTemplates` |
+| `humanLoopService.ts` | 工作流阶段人工反馈、对话、HITL Gate、从此阶段重跑 |
 | `literatureService.ts` | 文献检索与导入 |
-| `projectService.ts` | 项目管理（含 `fl_setting` / `fl_domains` / `fl_experiment_profile`） |
+| `projectService.ts` | 项目管理（含 `fl_setting` / `fl_domains` / `fl_experiment_profile`；模式切换会同步 Pack） |
 | `reportService.ts` | 报告下载 |
 | `predictService.ts` | 预测页 BFF |
 

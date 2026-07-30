@@ -28,4 +28,4 @@ pip install 'flwr>=1.8.0'   # Flower
 pip install fedml           # FedML（较重，可不装）
 ```
 
-在迭代实验中：将脚本路径与注释中的成功标准复制到 `analysis_script`，或使用「联邦仿真运行」面板。
+在迭代实验中：使用「基于模板重新设计脚本」（`apply-fl-script` 后台 job，LLM 适配真实数据），或使用「联邦仿真控制台」运行 local_pack / Flower / FedML。**不要**把模板原文直接粘贴进 `analysis_script`。

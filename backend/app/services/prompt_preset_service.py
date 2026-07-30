@@ -101,6 +101,15 @@ class PromptPresetService:
         if not pack:
             raise ValueError(f"未知范式包: {pack_id}")
 
+        # 与 catalog 一致：联邦专用包不可应用到通用项目
+        if pack.get("requires_federated"):
+            from app.core.project_modes import is_federated_learning_mode
+            from app.models.project import Project
+
+            proj = self.db.query(Project).filter(Project.id == project_id).first()
+            if not proj or not is_federated_learning_mode(getattr(proj, "project_mode", None)):
+                raise ValueError(f"范式包 {pack_id} 仅适用于联邦学习模式项目")
+
         stages_map: Dict[str, List[Dict[str, Any]]] = pack.get("stages") or {}
         targets: List[str] = []
         if apply_all_stages:

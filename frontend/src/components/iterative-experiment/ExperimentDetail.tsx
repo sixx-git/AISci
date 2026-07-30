@@ -117,6 +117,10 @@ export function ExperimentDetail({
   );
   const [feedback, setFeedback] = useState(experiment.human_feedback || '');
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFeedback(experiment.human_feedback || '');
+  }, [experiment.id, experiment.human_feedback]);
   const [flScripts, setFlScripts] = useState<Array<{
     id: string;
     path?: string;
@@ -662,8 +666,9 @@ export function ExperimentDetail({
                 <FileCode2 className="w-4 h-4 text-bp-cyan" />
                 FL 参考脚本模板
               </div>
-              <p className="text-xs text-bp-muted">
-                一点即可写入当前方案的 analysis_script（单机模拟，非多机联邦）
+              <p className="text-xs text-bp-muted leading-relaxed">
+                不会直接替换 analysis_script。点击后会把该模板当作「反馈」，结合已绑定数据与实验假设，
+                让大模型重新设计可证伪的新脚本（与「基于反馈重新设计脚本」同路径）。
               </p>
               <div className="space-y-2">
                 {flScripts.map((s) => (
@@ -694,13 +699,27 @@ export function ExperimentDetail({
                           );
                           onExperimentUpdated?.(updated);
                         } catch (err) {
-                          setLocalError(err instanceof Error ? err.message : '应用脚本失败');
+                          // 长任务若前端超时，后端可能已完成：强制拉取一次最新实验
+                          try {
+                            const latest = await iterativeExperimentService.get(
+                              projectId,
+                              experiment.id,
+                            );
+                            if (latest) onExperimentUpdated?.(latest);
+                          } catch {
+                            /* ignore refresh failure */
+                          }
+                          setLocalError(
+                            err instanceof Error
+                              ? err.message
+                              : '基于 FL 模板设计脚本失败',
+                          );
                         } finally {
                           setApplyingScript(null);
                         }
                       }}
                     >
-                      {applyingScript === s.id ? '写入中…' : '应用到 analysis_script'}
+                      {applyingScript === s.id ? '设计中（可等待）…' : '基于模板重新设计脚本'}
                     </Button>
                   </div>
                 ))}
@@ -709,68 +728,105 @@ export function ExperimentDetail({
           )}
 
           {isFederatedProject && simFeatureOn && (
-            <div className="mb-4 rounded-lg border border-bp-border bg-bp-surface/60 p-3 space-y-3">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between gap-2 text-left"
-                onClick={() => setSimPanelOpen((v) => !v)}
-              >
-                <div className="flex items-center gap-2 text-sm font-medium text-bp-text">
-                  <Network className="w-4 h-4 text-bp-cyan" />
-                  联邦仿真运行
+            <div className="mb-4 rounded-lg border border-dashed border-violet-500/40 bg-violet-500/5 p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-bp-text">
+                    <Network className="w-4 h-4 text-violet-400 shrink-0" />
+                    联邦仿真控制台
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300">
+                      独立通道
+                    </span>
+                  </div>
+                  <p className="text-xs text-bp-muted mt-1 leading-relaxed">
+                    只控制下方「仿真模式 / 仿真参数」。不走 analysis_script，也不同于上方的
+                    「正式全量推演」与「执行下一轮」沙箱按钮。
+                  </p>
                 </div>
-                <span className="text-[11px] text-bp-muted">{simPanelOpen ? '收起' : '展开'}</span>
-              </button>
-              <p className="text-xs text-bp-muted">
-                与上方「正式全量推演」沙箱分离：此处走 FL SimulationBackend（local_pack / Flower），非通用 analysis_script。
-              </p>
+                <button
+                  type="button"
+                  className="text-[11px] text-bp-muted hover:text-bp-text shrink-0"
+                  onClick={() => setSimPanelOpen((v) => !v)}
+                >
+                  {simPanelOpen ? '收起' : '展开'}
+                </button>
+              </div>
+
               {simPanelOpen && (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-3 text-xs text-bp-text">
-                    {(['local_pack', 'flower', 'fedml'] as FlSimBackend[]).map((b) => {
-                      const disabled = b === 'fedml' && !fedmlFeatureOn;
-                      return (
-                        <label
-                          key={b}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-bp-text">仿真模式</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {([
+                        {
+                          id: 'local_pack' as FlSimBackend,
+                          title: 'FL Pack 本地',
+                          desc: 'sklearn pilot（默认）',
+                          ready: true,
+                          disabled: false,
+                        },
+                        {
+                          id: 'flower' as FlSimBackend,
+                          title: 'Flower',
+                          desc: flowerReady ? '已安装 flwr' : '兼容模式',
+                          ready: flowerReady,
+                          disabled: false,
+                        },
+                        {
+                          id: 'fedml' as FlSimBackend,
+                          title: 'FedML',
+                          desc: !fedmlFeatureOn
+                            ? '功能已关闭'
+                            : fedmlReady
+                              ? '已安装 fedml'
+                              : '兼容模式',
+                          ready: fedmlReady,
+                          disabled: !fedmlFeatureOn,
+                        },
+                      ]).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={opt.disabled}
+                          onClick={() => setSimBackend(opt.id)}
                           className={cn(
-                            'inline-flex items-center gap-1.5',
-                            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                            'text-left rounded-lg border px-3 py-2.5 transition-colors',
+                            opt.disabled && 'opacity-45 cursor-not-allowed',
+                            simBackend === opt.id
+                              ? 'border-violet-400/60 bg-violet-500/15 ring-1 ring-violet-400/30'
+                              : 'border-bp-border bg-bp-base/50 hover:border-violet-400/35',
                           )}
                         >
-                          <input
-                            type="radio"
-                            name="exp_fl_sim_backend"
-                            disabled={disabled}
-                            checked={simBackend === b}
-                            onChange={() => setSimBackend(b)}
-                          />
-                          {b === 'local_pack' && 'local_pack'}
-                          {b === 'flower' && `Flower${flowerReady ? ' · 已就绪' : ' · 兼容模式'}`}
-                          {b === 'fedml' && (
-                            fedmlFeatureOn
-                              ? `FedML${fedmlReady ? ' · 已就绪' : ' · 兼容模式'}`
-                              : 'FedML（已关闭）'
-                          )}
-                        </label>
-                      );
-                    })}
+                          <div className="text-xs font-medium text-bp-text">{opt.title}</div>
+                          <div className="text-[11px] text-bp-muted mt-0.5">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <details className="rounded-md border border-bp-border px-3 py-2">
-                    <summary className="text-xs text-bp-text cursor-pointer">仿真参数</summary>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
+
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-bp-text">仿真参数</div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 rounded-lg border border-bp-border bg-bp-base/40 p-3">
                       <label className="text-[11px] text-bp-muted space-y-1">
-                        <span>客户端数</span>
+                        <span>客户端数（≥2）</span>
                         <input
                           type="number"
                           min={2}
                           max={50}
                           value={simClients}
-                          onChange={(e) => setSimClients(Number(e.target.value) || 5)}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            if (!Number.isFinite(n)) {
+                              setSimClients(2);
+                              return;
+                            }
+                            setSimClients(Math.max(2, Math.min(Math.trunc(n), 50)));
+                          }}
                           className="input-field text-xs"
                         />
                       </label>
                       <label className="text-[11px] text-bp-muted space-y-1">
-                        <span>轮次</span>
+                        <span>通信轮次</span>
                         <input
                           type="number"
                           min={1}
@@ -781,7 +837,7 @@ export function ExperimentDetail({
                         />
                       </label>
                       <label className="text-[11px] text-bp-muted space-y-1">
-                        <span>策略</span>
+                        <span>聚合策略</span>
                         <select
                           value={simStrategy}
                           onChange={(e) => setSimStrategy(e.target.value)}
@@ -792,7 +848,7 @@ export function ExperimentDetail({
                         </select>
                       </label>
                       <label className="text-[11px] text-bp-muted space-y-1">
-                        <span>分区</span>
+                        <span>数据分区</span>
                         <select
                           value={simPartition}
                           onChange={(e) => setSimPartition(e.target.value)}
@@ -804,42 +860,53 @@ export function ExperimentDetail({
                         </select>
                       </label>
                     </div>
-                  </details>
-                  <Button
-                    size="sm"
-                    disabled={busy || simRunning || (simBackend === 'fedml' && !fedmlFeatureOn)}
-                    onClick={async () => {
-                      setSimRunning(true);
-                      setLocalError(null);
-                      try {
-                        const payload = {
-                          backend: simBackend,
-                          num_clients: simClients,
-                          rounds: simRounds,
-                          strategy: simStrategy,
-                          partition: simPartition,
-                        };
-                        const { result, experiment: updated } = await flSimulationService.run(
-                          projectId,
-                          experiment.id,
-                          payload,
-                        );
-                        setSimResult(result);
-                        if (updated) {
-                          onExperimentUpdated?.(updated as unknown as IterativeExperiment);
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-violet-500/20">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="!border-violet-400/40 !text-violet-200 hover:!bg-violet-500/10"
+                      icon={<Network className="w-3.5 h-3.5" />}
+                      disabled={busy || simRunning || (simBackend === 'fedml' && !fedmlFeatureOn)}
+                      onClick={async () => {
+                        setSimRunning(true);
+                        setLocalError(null);
+                        try {
+                          const payload = {
+                            backend: simBackend,
+                            num_clients: simClients,
+                            rounds: simRounds,
+                            strategy: simStrategy,
+                            partition: simPartition,
+                          };
+                          const { result, experiment: updated } = await flSimulationService.run(
+                            projectId,
+                            experiment.id,
+                            payload,
+                          );
+                          setSimResult(result);
+                          if (updated) {
+                            onExperimentUpdated?.(updated as unknown as IterativeExperiment);
+                          }
+                        } catch (err) {
+                          setLocalError(err instanceof Error ? err.message : '仿真失败');
+                        } finally {
+                          setSimRunning(false);
                         }
-                      } catch (err) {
-                        setLocalError(err instanceof Error ? err.message : '仿真失败');
-                      } finally {
-                        setSimRunning(false);
-                      }
-                    }}
-                  >
-                    {simRunning ? '仿真中…' : '运行仿真'}
-                  </Button>
+                      }}
+                    >
+                      {simRunning ? '联邦仿真中…' : '运行联邦仿真'}
+                    </Button>
+                    <span className="text-[11px] text-bp-muted">
+                      不会触发下方「执行下一轮」沙箱迭代
+                    </span>
+                  </div>
+
                   {simResult && (
-                    <div className="rounded-md border border-bp-border bg-bp-base/60 px-3 py-2 space-y-1 text-xs">
+                    <div className="rounded-lg border border-violet-500/25 bg-bp-base/60 px-3 py-2 space-y-1 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-medium text-violet-300">最近一次仿真结果</span>
                         <span className={cn(
                           'px-1.5 py-0.5 rounded text-[10px] font-medium',
                           simResult.success
@@ -881,8 +948,11 @@ export function ExperimentDetail({
           {experiment.initial_plan && (
             <details className="mb-4 rounded-lg border border-bp-border px-3 py-2">
               <summary className="text-sm text-bp-text cursor-pointer">
-                当前方案: {experiment.initial_plan.title}
+                当前 analysis_script 方案: {experiment.initial_plan.title}
               </summary>
+              <p className="text-[11px] text-bp-muted mt-1">
+                供下方「执行下一轮」沙箱使用；与上方「联邦仿真控制台」相互独立。
+              </p>
               <p className="text-xs text-bp-muted mt-2">{experiment.initial_plan.methodology}</p>
               <pre className="mt-2 text-[11px] text-bp-muted overflow-x-auto max-h-40 bg-bp-base p-2 rounded">
                 {experiment.initial_plan.analysis_script}
@@ -908,6 +978,9 @@ export function ExperimentDetail({
                 自动运行至完成
               </Button>
             )}
+            <span className="self-center text-[11px] text-bp-muted">
+              沙箱迭代（analysis_script）
+            </span>
           </div>
 
           {overviewHistory.rows.length > 0 && (
@@ -946,7 +1019,7 @@ export function ExperimentDetail({
           <div className="pt-3 border-t border-bp-border">
             <h5 className="text-sm font-medium text-bp-text mb-1">人工反馈</h5>
             <p className="text-xs text-bp-muted mb-2">
-              写入后进入下一轮脚本迭代；也可立即「基于反馈重新设计脚本」。
+              「提交反馈」在第 2 轮及以后执行迭代时才会完整重设计脚本；第 1 轮或需立即生效请用「基于反馈重新设计脚本」。
             </p>
             <textarea
               value={feedback}

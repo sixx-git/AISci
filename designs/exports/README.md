@@ -4,6 +4,8 @@
 
 对照表与差异标注见 [`aisci-ui-acceptance.md`](../aisci-ui-acceptance.md)。
 
+> **历史帧（产品已下线，仅设计稿保留）**：07 知识图谱、08 数据集、11 实验设计，以及 08b/08c/08d/08e 独立反馈/目录/多模态/DataFinder Tab。当前工作台主链为：概览 · 研究问题 · 文献库 · 智能体工作流 · 候选假设 · **迭代实验** · 研究报告。
+
 | 文件 | Frame | 节点 ID |
 |------|-------|---------|
 | `Ktnbv.png` | 00-Design System | `Ktnbv` |
