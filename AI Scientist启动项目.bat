@@ -18,10 +18,13 @@ echo =============================================
 echo     Select Launch Mode:
 echo =============================================
 echo.
-echo     1. Quick Start (Backend + Frontend)
-echo     2. Full Start (Backend + Frontend + Pingfenbiao)
-echo     3. Full Start + Tunnel (with Cloudflare)
+echo     1. Quick Start ^(Backend + Frontend^)
+echo     2. Full Start ^(Backend + Frontend + Predict/Pingfenbiao^)
+echo     3. Full Start + Tunnel ^(with Cloudflare^)
 echo.
+echo =============================================
+echo     First time? Run scripts\setup_backend.bat
+echo               then scripts\setup_frontend.bat
 echo =============================================
 set /p "choice=Enter option [1/2/3]: "
 

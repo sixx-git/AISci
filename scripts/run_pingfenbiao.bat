@@ -38,7 +38,14 @@ if not defined HAS_JOBS (
 )
 
 if not defined DASHSCOPE_API_KEY (
-  REM 优先使用 AISci 主项目可用的 QWEN_API_KEY（与后端共用）
+  REM 优先 backend\.env（与 uvicorn 实际读取一致），再回退根目录 .env
+  if exist "%ROOT%\backend\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"QWEN_API_KEY=" "%ROOT%\backend\.env"`) do (
+      if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"
+    )
+  )
+)
+if not defined DASHSCOPE_API_KEY (
   if exist "%ROOT%\.env" (
     for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"QWEN_API_KEY=" "%ROOT%\.env"`) do (
       if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"

@@ -45,7 +45,7 @@
 ### Windows
 
 ```batch
-scripts\setup_backend.bat          # 创建 venv + 安装依赖
+scripts\setup_backend.bat          # 创建根目录 venv + 安装 backend\requirements.txt
 scripts\setup_frontend.bat         # pnpm install
 
 # 复制 .env.example → backend\.env 并填入你的 QWEN_API_KEY

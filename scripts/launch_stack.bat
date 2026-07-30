@@ -54,6 +54,7 @@ if not exist "%PROJECT_ROOT%\backend\.env" (
 )
 
 if not exist "%PROJECT_ROOT%\data" mkdir "%PROJECT_ROOT%\data"
+if not exist "%PROJECT_ROOT%\backend\data" mkdir "%PROJECT_ROOT%\backend\data"
 if not exist "%PROJECT_ROOT%\storage" mkdir "%PROJECT_ROOT%\storage"
 if not exist "%PROJECT_ROOT%\storage\documents" mkdir "%PROJECT_ROOT%\storage\documents"
 if not exist "%PROJECT_ROOT%\storage\pingfenbiao_jobs" mkdir "%PROJECT_ROOT%\storage\pingfenbiao_jobs"
@@ -130,7 +131,22 @@ if "!PORT_BUSY!"=="1" (
 )
 
 REM 必须传入 PINGFENBIAO_WORK_DIR，否则会落到空的 web\_jobs
-start "Pingfenbiao Service" /D "%PINGFEN_WEB%" cmd /k "set PINGFENBIAO_WORK_DIR=%PINGFENBIAO_WORK_DIR%&& "%VENV_PY%" -m uvicorn app:app --host 127.0.0.1 --port 8765"
+REM 尽量带上 DASHSCOPE_API_KEY（与 run_pingfenbiao.bat 对齐，优先 backend\.env）
+if not defined DASHSCOPE_API_KEY (
+    if exist "%PROJECT_ROOT%\backend\.env" (
+        for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"QWEN_API_KEY=" "%PROJECT_ROOT%\backend\.env"`) do (
+            if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"
+        )
+    )
+)
+if not defined DASHSCOPE_API_KEY (
+    if exist "%PROJECT_ROOT%\.env" (
+        for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"QWEN_API_KEY=" "%PROJECT_ROOT%\.env"`) do (
+            if not defined DASHSCOPE_API_KEY set "DASHSCOPE_API_KEY=%%B"
+        )
+    )
+)
+start "Pingfenbiao Service" /D "%PINGFEN_WEB%" cmd /k "set PINGFENBIAO_WORK_DIR=%PINGFENBIAO_WORK_DIR%&& set DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY%&& "%VENV_PY%" -m uvicorn app:app --host 127.0.0.1 --port 8765"
 echo Waiting for pingfenbiao ...
 call :wait_url "http://127.0.0.1:8765/api/impact/history" 45
 if errorlevel 1 (
