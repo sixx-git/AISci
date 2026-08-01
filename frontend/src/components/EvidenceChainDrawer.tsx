@@ -1,9 +1,9 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import {
   X, FileText, BookOpen, Hash, Link2, Gauge, ShieldAlert, CheckCircle2, History,
-  Compass, FlaskConical, Database,
+  Compass, FlaskConical, Database, ChevronDown, ChevronRight, Eye, EyeOff,
 } from 'lucide-react';
-import type { EvidenceChain, EvidenceItem as EvidenceItemType, HypothesisProvenance } from '@/types';
+import type { EvidenceChain, EvidenceItem as EvidenceItemType, HypothesisProvenance, LiteratureGroundingItem } from '@/types';
 
 interface EvidenceChainDrawerProps {
   open: boolean;
@@ -67,6 +67,77 @@ function ChainEvidenceBlock({ title, items, emptyHint }: { title: string; items:
   );
 }
 
+function LiteratureGroundingSection({ literature }: { literature?: LiteratureGroundingItem[] }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const count = literature?.length || 0;
+
+  const toggleExpand = (key: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center gap-1.5 text-sm font-semibold text-bp-text mb-2 hover:text-bp-cyan transition-colors"
+      >
+        {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        <BookOpen className="w-4 h-4" />
+        文献依据 ({count})
+      </button>
+      {!collapsed && (
+        count === 0 ? (
+          <p className="text-xs text-bp-muted pl-6">尚未绑定 supporting_fact_ids</p>
+        ) : (
+          <div className="space-y-1.5 pl-1">
+            {literature?.map((lit, idx) => {
+              const key = `${lit.fact_id ?? ''}-${idx}`;
+              const expanded = expandedIds.has(key);
+              const content = lit.content || lit.quote_text || '(无内容)';
+              return (
+                <div
+                  key={key}
+                  className="rounded-bp border border-bp-border bg-bp-panel-glass text-xs overflow-hidden"
+                >
+                  <div className="flex items-center justify-between gap-2 p-2.5">
+                    <span className="font-mono text-bp-text truncate">
+                      fact: {lit.fact_id || `#${idx}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(key)}
+                      className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-bp-cyan hover:bg-bp-cyan-tint transition-colors"
+                    >
+                      {expanded ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span>{expanded ? '收起' : '查看'}</span>
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div className="px-2.5 pb-2.5 pt-1 border-t border-bp-border space-y-1">
+                      <p className="text-bp-text leading-relaxed">{content}</p>
+                      {lit.source_title && (
+                        <p className="text-bp-muted">来源：{lit.source_title}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+    </section>
+  );
+}
+
 function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance | null; loading?: boolean }) {
   if (loading) {
     return <p className="text-sm text-bp-muted py-8 text-center">加载假设溯源...</p>;
@@ -112,25 +183,7 @@ function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance 
         </div>
       </section>
 
-      <section>
-        <h4 className="text-sm font-semibold text-bp-text mb-2 flex items-center gap-1.5">
-          <BookOpen className="w-4 h-4" />
-          文献依据 ({grounding.literature?.length || 0})
-        </h4>
-        {(grounding.literature?.length || 0) === 0 ? (
-          <p className="text-xs text-bp-muted">尚未绑定 supporting_fact_ids</p>
-        ) : (
-          <div className="space-y-2">
-            {grounding.literature?.map((lit) => (
-              <div key={lit.fact_id} className="p-3 rounded-bp border border-bp-border bg-bp-panel-glass text-xs">
-                <p className="text-bp-text mb-1">{lit.content || lit.quote_text}</p>
-                {lit.source_title && <p className="text-bp-muted">{lit.source_title}</p>}
-                {lit.fact_id && <p className="text-bp-muted font-mono mt-1">fact: {lit.fact_id}</p>}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <LiteratureGroundingSection literature={grounding.literature} />
 
       {(grounding.data?.length || 0) > 0 && (
         <section>
@@ -139,8 +192,8 @@ function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance 
             数据依据 ({grounding.data?.length || 0})
           </h4>
           <div className="space-y-2">
-            {grounding.data?.slice(0, 8).map((d) => (
-              <div key={d.table_id || d.source_title} className="p-2 rounded border border-bp-border text-xs text-bp-muted">
+            {grounding.data?.slice(0, 8).map((d, idx) => (
+              <div key={`${d.table_id ?? ''}-${d.source_title ?? ''}-${idx}`} className="p-2 rounded border border-bp-border text-xs text-bp-muted">
                 <span className="text-bp-text">{d.source_title || d.table_id}</span>
                 {d.row_count != null && <span className="ml-2">· {d.row_count} 行</span>}
                 {d.extraction_method && <span className="ml-2">· {d.extraction_method}</span>}

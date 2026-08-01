@@ -1,4 +1,4 @@
-﻿import { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { ClosedLoopDecision, ClosedLoopEvent } from '@/types';
 import { cn } from '@/lib/utils';
@@ -18,8 +18,8 @@ const NODES: GraphNode[] = [
   { id: 'ensemble_review', label: '集成评审', lane: 'discovery' },
   { id: 'discovery_refine', label: 'Discovery 迭代', lane: 'discovery' },
   { id: 'discovery_literature_refresh', label: '文献刷新', lane: 'discovery' },
-  { id: 'hypothesis_generation', label: '假设生成', lane: 'discovery' },
-  { id: 'data_gap_loop', label: 'Gap 补搜', lane: 'gap' },
+  { id: 'hypothesis_tree', label: '假设生成', lane: 'discovery' },
+  { id: 'data_gap_enrichment', label: 'Gap 补搜', lane: 'gap' },
   { id: 'knowledge_gap', label: '知识缺口', lane: 'gap' },
   { id: 'teaching_auto_refinement', label: 'Teaching 精化', lane: 'teaching' },
   { id: 'evidence_reasoning_loop', label: '证据链迭代', lane: 'evidence' },
@@ -28,12 +28,12 @@ const NODES: GraphNode[] = [
 const STATIC_EDGES: Array<{ from: string; to: string; label?: string }> = [
   { from: 'ensemble_review', to: 'discovery_refine', label: '未 Accept' },
   { from: 'discovery_refine', to: 'discovery_literature_refresh', label: '回退' },
-  { from: 'discovery_literature_refresh', to: 'hypothesis_generation' },
-  { from: 'hypothesis_generation', to: 'ensemble_review' },
-  { from: 'data_gap_loop', to: 'knowledge_gap' },
-  { from: 'knowledge_gap', to: 'hypothesis_generation' },
-  { from: 'teaching_auto_refinement', to: 'hypothesis_generation' },
-  { from: 'evidence_reasoning_loop', to: 'hypothesis_generation' },
+  { from: 'discovery_literature_refresh', to: 'hypothesis_tree' },
+  { from: 'hypothesis_tree', to: 'ensemble_review' },
+  { from: 'data_gap_enrichment', to: 'knowledge_gap' },
+  { from: 'knowledge_gap', to: 'hypothesis_tree' },
+  { from: 'teaching_auto_refinement', to: 'hypothesis_tree' },
+  { from: 'evidence_reasoning_loop', to: 'hypothesis_tree' },
 ];
 
 const LANE_LABELS: Record<GraphNode['lane'], string> = {

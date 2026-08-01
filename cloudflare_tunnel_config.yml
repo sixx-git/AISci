@@ -4,7 +4,7 @@ metrics: 127.0.0.1:8080
 
 ingress:
   - hostname: aisci.yourdomain.com
-    service: http://localhost:3000
+    service: http://localhost:5173
     originRequest:
       httpHostHeader: aisci.yourdomain.com
       http2Origin: true

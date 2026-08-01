@@ -1,6 +1,7 @@
 """
 智能体 API
 """
+import json
 import logging
 from fastapi import APIRouter, Depends
 from typing import Optional, List
@@ -370,9 +371,7 @@ async def iterate_hypothesis_evidence_chain(
                 code=400,
             )
 
-        supporting_ids = list(hypo.supporting_fact_ids or [])
-        if isinstance(supporting_ids, str):
-            supporting_ids = parse_json_list(supporting_ids) or []
+        supporting_ids = parse_json_list(hypo.supporting_fact_ids) or []
 
         hypo_dict = {
             "hypothesis": hypo.hypothesis,
@@ -403,7 +402,10 @@ async def iterate_hypothesis_evidence_chain(
         if enriched.get("hypothesis"):
             update_payload["hypothesis"] = enriched["hypothesis"]
         if enriched.get("supporting_fact_ids") is not None:
-            update_payload["supporting_fact_ids"] = enriched["supporting_fact_ids"]
+            sids = enriched["supporting_fact_ids"]
+            if isinstance(sids, list):
+                sids = json.dumps(sids, ensure_ascii=False)
+            update_payload["supporting_fact_ids"] = sids
         if enriched.get("evidence_level"):
             update_payload["evidence_level"] = enriched["evidence_level"]
         if update_payload:

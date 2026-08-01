@@ -77,8 +77,8 @@ else
     echo -e "${GREEN}[OK] Backend is up${NC}"
 fi
 
-if curl -fsS -o /dev/null --connect-timeout 2 "http://127.0.0.1:3000/" 2>/dev/null; then
-    echo -e "${GREEN}[OK] Frontend already responding on :3000${NC}"
+if curl -fsS -o /dev/null --connect-timeout 2 "http://127.0.0.1:5173/" 2>/dev/null; then
+    echo -e "${GREEN}[OK] Frontend already responding on :5173${NC}"
 else
     if ! command -v pnpm &> /dev/null; then
         echo -e "${RED}错误: 未找到 pnpm${NC}"
@@ -91,7 +91,7 @@ else
     ) &
     FRONTEND_PID=$!
     echo -e "${GREEN}等待前端...${NC}"
-    if ! wait_url "http://127.0.0.1:3000/" 60; then
+    if ! wait_url "http://127.0.0.1:5173/" 60; then
         echo -e "${RED}前端未在时限内就绪${NC}"
         [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null || true
         kill "$FRONTEND_PID" 2>/dev/null || true
@@ -106,7 +106,7 @@ echo -e "${BLUE}  服务已就绪${NC}"
 echo -e "${BLUE}=============================================${NC}"
 echo -e "  Backend:  http://localhost:8000"
 echo -e "  API Docs: http://localhost:8000/docs"
-echo -e "  Frontend: http://localhost:3000"
+echo -e "  Frontend: http://localhost:5173"
 echo ""
 echo -e "${YELLOW}按 Ctrl+C 停止本脚本拉起的服务${NC}"
 echo ""

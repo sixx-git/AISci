@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { loopConfigKey } from '@/lib/storageKeys';
@@ -13,6 +13,8 @@ export interface LoopConfigState {
   enableProConAdversarial: boolean;
   adversarialMode: AdversarialMode;
   conChallengeMaxRounds: number;
+  evidenceReasoningMaxRounds: number;
+  enableGapSearch: boolean;
 }
 
 export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
@@ -23,6 +25,8 @@ export const DEFAULT_LOOP_CONFIG: LoopConfigState = {
   enableProConAdversarial: false,
   adversarialMode: 'off',
   conChallengeMaxRounds: 2,
+  evidenceReasoningMaxRounds: 1,
+  enableGapSearch: false,
 };
 
 const VALID_ADVERSARIAL_MODES = new Set<AdversarialMode>(['off', 'single_group', 'multi_group']);
@@ -61,6 +65,14 @@ export function normalizeLoopConfig(raw: unknown): LoopConfigState {
       4,
       DEFAULT_LOOP_CONFIG.conChallengeMaxRounds,
     ),
+    evidenceReasoningMaxRounds: clampInt(
+      src.evidenceReasoningMaxRounds,
+      1,
+      5,
+      DEFAULT_LOOP_CONFIG.evidenceReasoningMaxRounds,
+    ),
+    enableGapSearch:
+      typeof src.enableGapSearch === 'boolean' ? src.enableGapSearch : DEFAULT_LOOP_CONFIG.enableGapSearch,
   };
 }
 
@@ -98,6 +110,8 @@ export function loopConfigToRunOptions(config: LoopConfigState): Record<string, 
     enable_science_iteration_observe: true,
     pause_after_hypothesis_review: true,
     enable_teaching_auto_refinement: false,
+    evidence_reasoning_max_rounds: normalized.evidenceReasoningMaxRounds,
+    enable_gap_search: normalized.enableGapSearch,
   };
 }
 
@@ -210,6 +224,31 @@ export function LoopConfigPanel({
             )}
           </>
         )}
+
+        <Field label="证据链迭代轮数">
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={value.evidenceReasoningMaxRounds}
+            onChange={(e) =>
+              patch({ evidenceReasoningMaxRounds: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })
+            }
+            disabled={disabled}
+            className="input-field py-1.5 px-2 text-sm w-16"
+          />
+        </Field>
+
+        <label className="flex items-center gap-2 text-xs text-bp-muted cursor-pointer pb-1">
+          <input
+            type="checkbox"
+            checked={value.enableGapSearch}
+            onChange={(e) => patch({ enableGapSearch: e.target.checked })}
+            disabled={disabled}
+            className="rounded border-bp-border"
+          />
+          Gap 补搜
+        </label>
       </div>
     </div>
   );

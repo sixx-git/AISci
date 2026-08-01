@@ -69,8 +69,8 @@ bash scripts/run_dev.sh
 
 | 地址 | 说明 |
 |------|------|
-| http://localhost:3000 | 前端界面 |
-| http://localhost:3000/predict | 预测（评分表 / 影响力；需另启 pingfenbiao :8765） |
+| http://localhost:5173 | 前端界面 |
+| http://localhost:5173/predict | 预测（评分表 / 影响力；需另启 pingfenbiao :8765） |
 | http://localhost:8000/docs | Swagger API 文档 |
 | http://localhost:8000/redoc | ReDoc API 文档 |
 
@@ -92,7 +92,7 @@ $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";"
 
 ```bash
 # 启动前端和后端后，新开终端执行
-cloudflared tunnel --url http://localhost:3000
+cloudflared tunnel --url http://localhost:5173
 ```
 
 启动后会输出类似以下的公网地址：
@@ -132,7 +132,7 @@ server: {
 
 - 独立服务默认监听 `127.0.0.1:8765`
 - 前端经 AISci 后端 BFF：`/api/v1/pingfenbiao/*` → `:8765/*`（走现有 `/api` 代理，不依赖 Vite 专用 `/pingfenbiao` 反代）
-- 需同时启动：**AISci 后端 :8000** + **pingfenbiao :8765** + **前端 :3000**
+- 需同时启动：**AISci 后端 :8000** + **pingfenbiao :8765** + **前端 :5173**
 
 ```batch
 # 新开终端（需 DASHSCOPE_API_KEY，可写在 pingfenbiao-main/pingfenbiao-main/.env）

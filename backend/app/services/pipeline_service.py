@@ -2398,7 +2398,13 @@ class PipelineService:
             main_contradiction=str(pu.get("main_contradiction") or "")[:500],
             expected_output_summary=expected_summary,
         )
-        return self._safe_model_dump(result)
+        kg_result = self._safe_model_dump(result)
+        gaps = kg_result.get("knowledge_gaps", [])
+        self._record_closed_loop_event(
+            "knowledge_gap",
+            detail={"gap_count": len(gaps) if isinstance(gaps, list) else 0},
+        )
+        return kg_result
     
     def _exec_hypothesis_generation(
         self,

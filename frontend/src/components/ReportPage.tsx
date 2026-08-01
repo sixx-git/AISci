@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History, Code2 } from 'lucide-react';
 import { Card } from './Card';
@@ -747,49 +747,7 @@ export function ReportPage({
               literatureCount={literatureCount}
             />
 
-            <Card title="人在回路 · 报告" subtitle="导师评审 · 多轮追问 · 局部修订">
-              <button
-                type="button"
-                onClick={handleMentorReview}
-                disabled={mentorBusy}
-                className="w-full flex items-center justify-center gap-2 text-xs py-2 mb-3 rounded-bp border border-bp-yellow/30 bg-bp-yellow/10 text-bp-yellow hover:bg-bp-yellow/15 disabled:opacity-50"
-              >
-                {mentorBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GraduationCap className="w-3.5 h-3.5" />}
-                导师式评审
-              </button>
-              <textarea
-                className="w-full min-h-[48px] rounded-lg bg-bp-base/70 border border-bp-border text-xs text-bp-text p-2 mb-2"
-                placeholder="导师评审补充说明（可选）"
-                value={mentorNotes}
-                onChange={(e) => setMentorNotes(e.target.value)}
-              />
-              {mentorReview && (
-                <div className="mb-3 p-2 rounded-bp border border-bp-yellow/20 bg-bp-yellow/5 text-xs space-y-1.5 max-h-48 overflow-y-auto">
-                  {mentorReview.overall_assessment && (
-                    <p className="text-bp-yellow/90">{mentorReview.overall_assessment}</p>
-                  )}
-                  {mentorReview.readiness_score != null && (
-                    <p className="text-bp-muted">就绪度：{mentorReview.readiness_score}/10</p>
-                  )}
-                  {mentorReview.weaknesses?.length > 0 && (
-                    <div>
-                      <p className="text-bp-muted mb-0.5">不足</p>
-                      <ul className="list-disc pl-4 text-bp-text">
-                        {mentorReview.weaknesses.slice(0, 4).map((w) => <li key={w}>{w}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                  {mentorReview.revision_suggestions?.length > 0 && (
-                    <div>
-                      <p className="text-bp-muted mb-0.5">修订建议</p>
-                      <ul className="list-disc pl-4 text-bp-text">
-                        {mentorReview.revision_suggestions.slice(0, 4).map((s) => <li key={s}>{s}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
+            <Card title="人在回路 · 报告" subtitle="多轮追问 · 局部修订">
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"

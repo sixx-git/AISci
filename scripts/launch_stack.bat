@@ -157,15 +157,15 @@ if errorlevel 1 (
 
 :start_frontend
 echo =============================================
-echo   Starting Frontend ^(:3000^)...
+echo   Starting Frontend ^(:5173^)...
 echo =============================================
 
-call :port_in_use 3000
+call :port_in_use 5173
 if "!PORT_BUSY!"=="1" (
-    echo [WARN] Port 3000 already in use. Reusing existing Vite if responding.
-    call :wait_url "http://127.0.0.1:3000/" 5
+    echo [WARN] Port 5173 already in use. Reusing existing Vite if responding.
+    call :wait_url "http://127.0.0.1:5173/" 5
     if errorlevel 1 (
-        echo [ERROR] Port 3000 busy but not responding. Close the old Frontend window and retry.
+        echo [ERROR] Port 5173 busy but not responding. Close the old Frontend window and retry.
         exit /b 1
     )
     goto after_frontend
@@ -180,7 +180,7 @@ if errorlevel 1 (
 start "AI Scientist Frontend" /D "%PROJECT_ROOT%\frontend" cmd /k "pnpm dev"
 
 echo Waiting for frontend ...
-call :wait_url "http://127.0.0.1:3000/" 60
+call :wait_url "http://127.0.0.1:5173/" 60
 if errorlevel 1 (
     echo [ERROR] Frontend did not start in time. Check the Frontend window.
     exit /b 1
@@ -199,7 +199,7 @@ where cloudflared >nul 2>&1
 if errorlevel 1 (
     echo [WARN] cloudflared not installed. Run: winget install Cloudflare.cloudflared
 ) else (
-    start "Cloudflare Tunnel" cmd /k "cloudflared tunnel --url http://127.0.0.1:3000"
+    start "Cloudflare Tunnel" cmd /k "cloudflared tunnel --url http://127.0.0.1:5173"
     echo [OK] Tunnel window opened — copy the https://*.trycloudflare.com URL from that window
 )
 
@@ -210,10 +210,10 @@ echo   Services ready
 echo =============================================
 echo   Backend:    http://localhost:8000
 echo   API Docs:   http://localhost:8000/docs
-echo   Frontend:   http://localhost:3000
+echo   Frontend:   http://localhost:5173
 if /i not "%MODE%"=="quick" (
     echo   Pingfenbiao: http://localhost:8765
-    echo   Predict:    http://localhost:3000/predict
+    echo   Predict:    http://localhost:5173/predict
 )
 if /i "%MODE%"=="full-tunnel" (
     echo   Tunnel:     see "Cloudflare Tunnel" window
@@ -223,7 +223,7 @@ echo   Tip: Keep Backend/Frontend windows open. Close them to stop.
 echo.
 
 timeout /t 2 /nobreak >nul
-start http://localhost:3000
+start http://localhost:5173
 exit /b 0
 
 REM ============================================================================

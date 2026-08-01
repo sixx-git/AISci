@@ -18,7 +18,7 @@
 ```bash
 cd frontend
 pnpm install
-pnpm dev          # http://localhost:3000
+pnpm dev          # http://localhost:5173
 pnpm build        # 生产构建
 ```
 

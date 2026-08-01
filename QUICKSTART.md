@@ -35,7 +35,7 @@ scripts\run_dev.bat
 
 顶栏「预测」依赖独立服务 **pingfenbiao**（默认 `127.0.0.1:8765`）。前端经 AISci 后端 BFF：`/api/v1/pingfenbiao/*` → `:8765`（走 `/api` 代理，不依赖 Vite 专用 `/pingfenbiao` 反代）。
 
-需同时启动：**后端 :8000** + **pingfenbiao :8765** + **前端 :3000**。
+需同时启动：**后端 :8000** + **pingfenbiao :8765** + **前端 :5173**。
 
 ```batch
 # 新开终端
@@ -77,8 +77,8 @@ bash scripts/run_dev.sh
 
 | 地址 | 说明 |
 |------|------|
-| http://localhost:3000 | 前端界面 |
-| http://localhost:3000/predict | 预测（评分表 / 影响力，需 pingfenbiao :8765） |
+| http://localhost:5173 | 前端界面 |
+| http://localhost:5173/predict | 预测（评分表 / 影响力，需 pingfenbiao :8765） |
 | http://localhost:8000/docs | Swagger API 文档 |
 | http://localhost:8000/redoc | ReDoc API 文档 |
 

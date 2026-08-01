@@ -1,6 +1,7 @@
 """科学自迭代 — 溯源、编排、会话聚合"""
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -61,6 +62,25 @@ def _fact_lookup(facts: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
+def _parse_list_field(val: Any) -> List[str]:
+    """将数据库中可能存储为 JSON 字符串的字段安全解析为 list。
+
+    支持三种输入：None / list / JSON 字符串。确保返回 List[str]。
+    """
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return [str(x) for x in val if x]
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed if x]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return []
+
+
 def build_reasoning_chain(
     pu: Dict[str, Any],
     kg: Dict[str, Any],
@@ -117,9 +137,9 @@ def build_hypothesis_provenance(
 
     hypo_dict = {
         "hypothesis": hypo.hypothesis,
-        "supporting_fact_ids": list(hypo.supporting_fact_ids or []),
-        "data_evidence_ids": list(getattr(hypo, "data_evidence_ids", None) or []),
-        "dataset_field_refs": list(getattr(hypo, "dataset_field_refs", None) or []),
+        "supporting_fact_ids": _parse_list_field(hypo.supporting_fact_ids),
+        "data_evidence_ids": _parse_list_field(getattr(hypo, "data_evidence_ids", None)),
+        "dataset_field_refs": _parse_list_field(getattr(hypo, "dataset_field_refs", None)),
         "evidence_level": hypo.evidence_level or "medium",
         "validation_target": getattr(hypo, "validation_target", "") or "",
         "expected_measurable_effect": getattr(hypo, "expected_measurable_effect", "") or "",
@@ -161,7 +181,8 @@ def build_hypothesis_provenance(
     fact_map = _fact_lookup(facts)
 
     literature: List[LiteratureGroundingItem] = []
-    for fid in hypo_dict.get("supporting_fact_ids") or []:
+    sfids = _parse_list_field(hypo_dict.get("supporting_fact_ids"))
+    for fid in sfids:
         f = fact_map.get(str(fid), {})
         literature.append(LiteratureGroundingItem(
             fact_id=str(fid),
@@ -174,9 +195,7 @@ def build_hypothesis_provenance(
 
     # 仅绑定到本假设的数据证据；不再把项目全部表格塞给每条假设
     data_items: List[DataGroundingItem] = []
-    bound_data_ids = {
-        str(x) for x in (hypo_dict.get("data_evidence_ids") or []) if x
-    }
+    bound_data_ids = set(_parse_list_field(hypo_dict.get("data_evidence_ids")))
     for tbl in (df_results.get("extracted_tables") or [])[:24]:
         if not isinstance(tbl, dict):
             continue
