@@ -1,0 +1,856 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>图4-1 证据链迭代推理引擎流程图</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <svg
+        viewBox="0 0 680 600"
+        width="680"
+        height="600"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="580"
+          rx="4"
+          fill="#FAFAFA"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="36"
+          rx="4"
+          fill="#D9E2F3"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <text
+          x="340"
+          y="33"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="14"
+          font-weight="bold"
+          fill="#000000"
+        >
+          证据链迭代推理引擎流程图（核心创新）
+        </text>
+        <rect
+          x="24"
+          y="56"
+          width="130"
+          height="200"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#B87333"
+          stroke-width="1"
+        />
+        <rect
+          x="24"
+          y="56"
+          width="130"
+          height="24"
+          rx="3"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="1"
+        />
+        <text
+          x="89"
+          y="72"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          Fact 白名单数据库
+        </text>
+        <rect
+          x="34"
+          y="88"
+          width="110"
+          height="22"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.5"
+        />
+        <text
+          x="89"
+          y="102"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          fact_id: F001
+        </text>
+        <rect
+          x="34"
+          y="114"
+          width="110"
+          height="22"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.5"
+        />
+        <text
+          x="89"
+          y="128"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          fact_id: F002
+        </text>
+        <rect
+          x="34"
+          y="140"
+          width="110"
+          height="22"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.5"
+        />
+        <text
+          x="89"
+          y="154"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          fact_id: F003
+        </text>
+        <rect
+          x="34"
+          y="166"
+          width="110"
+          height="22"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.5"
+        />
+        <text
+          x="89"
+          y="180"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          fact_id: F004
+        </text>
+        <text
+          x="89"
+          y="210"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+          font-style="italic"
+        >
+          仅允许引用白名单内 fact
+        </text>
+        <text
+          x="89"
+          y="222"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+          font-style="italic"
+        >
+          有效防幻觉引用
+        </text>
+        <rect
+          x="180"
+          y="56"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#E6F1FB"
+          stroke="#2E86AB"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="74"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          步骤 1：提取科学声明
+        </text>
+        <text
+          x="280"
+          y="88"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Extract Scientific Claims from Hypothesis
+        </text>
+        <line
+          x1="280"
+          y1="100"
+          x2="280"
+          y2="112"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="112"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#E6F1FB"
+          stroke="#2E86AB"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="130"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          步骤 2：检索支持证据
+        </text>
+        <text
+          x="280"
+          y="144"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Retrieve Supporting Evidence
+        </text>
+        <line
+          x1="280"
+          y1="156"
+          x2="280"
+          y2="168"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="168"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#D4ECEA"
+          stroke="#1D9E75"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="186"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#085041"
+        >
+          步骤 3：检索反证据
+        </text>
+        <text
+          x="280"
+          y="200"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Retrieve Counter-Evidence
+        </text>
+        <line
+          x1="280"
+          y1="212"
+          x2="280"
+          y2="224"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="224"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="242"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          步骤 4：立场分类
+        </text>
+        <text
+          x="280"
+          y="256"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Stance Classification: SUPPORT / REFUTE / NEUTRAL
+        </text>
+        <line
+          x1="280"
+          y1="268"
+          x2="280"
+          y2="280"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <polygon
+          points="280,280 340,310 280,340 220,310"
+          fill="#E1F5EE"
+          stroke="#0F6E56"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="304"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#085041"
+        >
+          收敛判断
+        </text>
+        <text
+          x="280"
+          y="316"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#555555"
+        >
+          支持存在且无反证？
+        </text>
+        <line
+          x1="340"
+          y1="310"
+          x2="400"
+          y2="310"
+          stroke="#0F6E56"
+          stroke-width="1.5"
+        />
+        <text
+          x="370"
+          y="304"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#0F6E56"
+        >
+          YES
+        </text>
+        <line
+          x1="280"
+          y1="340"
+          x2="280"
+          y2="352"
+          stroke="#D85A30"
+          stroke-width="1"
+        />
+        <text
+          x="288"
+          y="348"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#D85A30"
+        >
+          NO
+        </text>
+        <rect
+          x="180"
+          y="352"
+          width="200"
+          height="52"
+          rx="4"
+          fill="#FFFFFF"
+          stroke="#B87333"
+          stroke-width="2"
+        />
+        <text
+          x="280"
+          y="372"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          步骤 5：Fact 白名单约束检查
+        </text>
+        <text
+          x="280"
+          y="386"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Constraint Check: ONLY fact_id from whitelist
+        </text>
+        <text
+          x="280"
+          y="398"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#C0392B"
+          font-weight="bold"
+        >
+          核心创新：LLM 修订时仅能引用白名单内 fact
+        </text>
+        <line
+          x1="154"
+          y1="156"
+          x2="180"
+          y2="378"
+          stroke="#B87333"
+          stroke-width="1"
+          stroke-dasharray="3,2"
+        />
+        <line
+          x1="280"
+          y1="404"
+          x2="280"
+          y2="416"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="416"
+          width="200"
+          height="52"
+          rx="4"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="436"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          步骤 6：假设修订
+        </text>
+        <text
+          x="280"
+          y="450"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Hypothesis Revision (LLM or Rule-Based)
+        </text>
+        <text
+          x="280"
+          y="462"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          LLM 修订失败 → 规则修订降级
+        </text>
+        <line
+          x1="280"
+          y1="468"
+          x2="280"
+          y2="480"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="480"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#E1F5EE"
+          stroke="#0F6E56"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="498"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#085041"
+        >
+          步骤 7：证据接地与引用完整性
+        </text>
+        <text
+          x="280"
+          y="512"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Evidence Grounding &amp; Citation Completeness
+        </text>
+        <line
+          x1="280"
+          y1="524"
+          x2="280"
+          y2="536"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr4)"
+        />
+        <rect
+          x="180"
+          y="536"
+          width="200"
+          height="44"
+          rx="4"
+          fill="#EAF3DE"
+          stroke="#639922"
+          stroke-width="1"
+        />
+        <text
+          x="280"
+          y="554"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#27500A"
+        >
+          步骤 8：证据链构建
+        </text>
+        <text
+          x="280"
+          y="568"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Evidence Chain Construction → 输出修订假设
+        </text>
+        <line
+          x1="400"
+          y1="310"
+          x2="460"
+          y2="310"
+          stroke="#0F6E56"
+          stroke-width="1.5"
+        />
+        <line
+          x1="460"
+          y1="310"
+          x2="460"
+          y2="558"
+          stroke="#0F6E56"
+          stroke-width="1.5"
+        />
+        <line
+          x1="460"
+          y1="558"
+          x2="380"
+          y2="558"
+          stroke="#0F6E56"
+          stroke-width="1.5"
+          marker-end="url(#arr4)"
+        />
+        <text
+          x="470"
+          y="440"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#0F6E56"
+        >
+          直接收敛
+        </text>
+        <text
+          x="470"
+          y="452"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#0F6E56"
+        >
+          终止迭代
+        </text>
+        <rect
+          x="400"
+          y="56"
+          width="250"
+          height="200"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#6B5B95"
+          stroke-width="1"
+        />
+        <rect
+          x="400"
+          y="56"
+          width="250"
+          height="24"
+          rx="3"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="1"
+        />
+        <text
+          x="525"
+          y="72"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          迭代控制面板
+        </text>
+        <text
+          x="415"
+          y="95"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#333333"
+        >
+          迭代参数：
+        </text>
+        <text
+          x="415"
+          y="110"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 最大迭代轮数：max_iter = N
+        </text>
+        <text
+          x="415"
+          y="124"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 收敛条件：支持证据 ∧ ¬反证据
+        </text>
+        <text
+          x="415"
+          y="138"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 每轮生成：修订假设 + 证据链摘要
+        </text>
+        <text
+          x="415"
+          y="158"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#333333"
+        >
+          质量指标：
+        </text>
+        <text
+          x="415"
+          y="173"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 证据覆盖率：≥ 80%
+        </text>
+        <text
+          x="415"
+          y="187"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 引用准确率：100%（白名单约束）
+        </text>
+        <text
+          x="415"
+          y="201"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          • 立场一致性：支持/反驳/中立
+        </text>
+        <path
+          d="M 380 558 Q 520 558 520 480 Q 520 420 400 420"
+          fill="none"
+          stroke="#6B5B95"
+          stroke-width="1.5"
+          stroke-dasharray="5,3"
+        />
+        <text
+          x="520"
+          y="490"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          迭代回路
+        </text>
+        <text
+          x="520"
+          y="502"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          （返回步骤 2）
+        </text>
+        <rect
+          x="400"
+          y="420"
+          width="250"
+          height="72"
+          rx="3"
+          fill="#FAFAFA"
+          stroke="#888780"
+          stroke-width="0.8"
+        />
+        <rect
+          x="400"
+          y="420"
+          width="250"
+          height="20"
+          rx="3"
+          fill="#E8E8E8"
+          stroke="#888780"
+          stroke-width="0.8"
+        />
+        <text
+          x="525"
+          y="434"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#444441"
+        >
+          双路径降级机制（Dual-Path Fallback）
+        </text>
+        <text
+          x="415"
+          y="455"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          路径 A：LLM 智能修订 → 生成新假设文本
+        </text>
+        <text
+          x="415"
+          y="470"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          路径 B：规则修订降级 → 基于白名单做保守修正
+        </text>
+        <text
+          x="415"
+          y="485"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          当 LLM 修订触发幻觉或偏离约束时，自动降级到路径 B
+        </text>
+        <defs>
+          <marker
+            id="arr4"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path
+              d="M2 1 L8 5 L2 9"
+              fill="none"
+              stroke="#888888"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </body>
+</html>

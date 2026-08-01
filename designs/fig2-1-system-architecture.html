@@ -1,0 +1,907 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>图2-1 系统整体架构图</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <svg
+        viewBox="0 0 680 520"
+        width="680"
+        height="520"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="500"
+          rx="4"
+          fill="#FAFAFA"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="36"
+          rx="4"
+          fill="#D9E2F3"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <text
+          x="340"
+          y="33"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="14"
+          font-weight="bold"
+          fill="#000000"
+        >
+          AISci 系统整体架构图（三层设计）
+        </text>
+        <rect
+          x="24"
+          y="56"
+          width="632"
+          height="90"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <rect
+          x="24"
+          y="56"
+          width="632"
+          height="24"
+          rx="3"
+          fill="#D6E4F0"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <text
+          x="34"
+          y="72"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#185FA5"
+        >
+          第一层：前端展示层（Presentation Layer）
+        </text>
+        <rect
+          x="40"
+          y="90"
+          width="180"
+          height="42"
+          rx="3"
+          fill="#E6F1FB"
+          stroke="#4A6FA5"
+          stroke-width="0.8"
+        />
+        <text
+          x="130"
+          y="107"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          React + Vite Web UI
+        </text>
+        <text
+          x="130"
+          y="122"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          用户交互界面（问题输入、结果展示）
+        </text>
+        <rect
+          x="240"
+          y="90"
+          width="180"
+          height="42"
+          rx="3"
+          fill="#E6F1FB"
+          stroke="#4A6FA5"
+          stroke-width="0.8"
+        />
+        <text
+          x="330"
+          y="107"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          API Gateway（FastAPI）
+        </text>
+        <text
+          x="330"
+          y="122"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          RESTful API + WebSocket 实时推送
+        </text>
+        <rect
+          x="440"
+          y="90"
+          width="180"
+          height="42"
+          rx="3"
+          fill="#E6F1FB"
+          stroke="#4A6FA5"
+          stroke-width="0.8"
+        />
+        <text
+          x="530"
+          y="107"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          WebSocket 实时通道
+        </text>
+        <text
+          x="530"
+          y="122"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Pipeline 进度推送 + HITL 交互
+        </text>
+        <line
+          x1="340"
+          y1="146"
+          x2="340"
+          y2="158"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr2)"
+        />
+        <rect
+          x="24"
+          y="160"
+          width="632"
+          height="260"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <rect
+          x="24"
+          y="160"
+          width="632"
+          height="24"
+          rx="3"
+          fill="#D4ECEA"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <text
+          x="34"
+          y="176"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#0F6E56"
+        >
+          第二层：核心服务层（Core Service Layer）
+        </text>
+        <rect
+          x="40"
+          y="194"
+          width="290"
+          height="210"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.6"
+        />
+        <rect
+          x="40"
+          y="194"
+          width="290"
+          height="20"
+          rx="2"
+          fill="#E1F5EE"
+          stroke="#CCCCCC"
+          stroke-width="0.6"
+        />
+        <text
+          x="185"
+          y="208"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#085041"
+        >
+          智能体编排（6 个 Agent）
+        </text>
+        <rect
+          x="52"
+          y="224"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#3D7A5B"
+          stroke-width="0.6"
+        />
+        <text
+          x="114"
+          y="238"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#085041"
+        >
+          问题理解 Agent
+        </text>
+        <text
+          x="114"
+          y="250"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Question Decomposition
+        </text>
+        <rect
+          x="192"
+          y="224"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#3D7A5B"
+          stroke-width="0.6"
+        />
+        <text
+          x="254"
+          y="238"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#085041"
+        >
+          文献挖掘 Agent
+        </text>
+        <text
+          x="254"
+          y="250"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Literature Retrieval
+        </text>
+        <rect
+          x="52"
+          y="270"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#6B5B95"
+          stroke-width="0.6"
+        />
+        <text
+          x="114"
+          y="284"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          假设生成 Agent
+        </text>
+        <text
+          x="114"
+          y="296"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Hypothesis Generation
+        </text>
+        <rect
+          x="192"
+          y="270"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#6B5B95"
+          stroke-width="0.6"
+        />
+        <text
+          x="254"
+          y="284"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          假设评审 Agent
+        </text>
+        <text
+          x="254"
+          y="296"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Hypothesis Review
+        </text>
+        <rect
+          x="52"
+          y="316"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#B87333"
+          stroke-width="0.6"
+        />
+        <text
+          x="114"
+          y="330"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#633806"
+        >
+          实验规划 Agent
+        </text>
+        <text
+          x="114"
+          y="342"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Experiment Planning
+        </text>
+        <rect
+          x="192"
+          y="316"
+          width="125"
+          height="36"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#B87333"
+          stroke-width="0.6"
+        />
+        <text
+          x="254"
+          y="330"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#633806"
+        >
+          报告撰写 Agent
+        </text>
+        <text
+          x="254"
+          y="342"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Report Writing
+        </text>
+        <rect
+          x="52"
+          y="362"
+          width="265"
+          height="30"
+          rx="2"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="0.6"
+          stroke-dasharray="3,2"
+        />
+        <text
+          x="184"
+          y="380"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#633806"
+        >
+          Pipeline 编排器（Pipeline Orchestrator）
+        </text>
+        <rect
+          x="345"
+          y="280"
+          width="40"
+          height="40"
+          rx="20"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="0.8"
+        />
+        <text
+          x="365"
+          y="298"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          反馈
+        </text>
+        <text
+          x="365"
+          y="310"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          中心
+        </text>
+        <rect
+          x="400"
+          y="194"
+          width="240"
+          height="210"
+          rx="2"
+          fill="#FAFAFA"
+          stroke="#CCCCCC"
+          stroke-width="0.6"
+        />
+        <rect
+          x="400"
+          y="194"
+          width="240"
+          height="20"
+          rx="2"
+          fill="#EEEDFE"
+          stroke="#CCCCCC"
+          stroke-width="0.6"
+        />
+        <text
+          x="520"
+          y="208"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          技能系统（8 项 Skill）
+        </text>
+        <rect
+          x="412"
+          y="224"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="464"
+          y="238"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          证据链推理
+        </text>
+        <text
+          x="464"
+          y="249"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Evidence Chain
+        </text>
+        <rect
+          x="530"
+          y="224"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="582"
+          y="238"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          反事实预演
+        </text>
+        <text
+          x="582"
+          y="249"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Counterfactual
+        </text>
+        <rect
+          x="412"
+          y="266"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="464"
+          y="280"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          数据发现
+        </text>
+        <text
+          x="464"
+          y="291"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Data Finder
+        </text>
+        <rect
+          x="530"
+          y="266"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="582"
+          y="280"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          FL 实验仿真
+        </text>
+        <text
+          x="582"
+          y="291"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          FL Simulation
+        </text>
+        <rect
+          x="412"
+          y="308"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="464"
+          y="322"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          多模态处理
+        </text>
+        <text
+          x="464"
+          y="333"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Multimodal
+        </text>
+        <rect
+          x="530"
+          y="308"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="582"
+          y="322"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          人在回路
+        </text>
+        <text
+          x="582"
+          y="333"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Human-in-the-Loop
+        </text>
+        <rect
+          x="412"
+          y="350"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="464"
+          y="364"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          质量评分
+        </text>
+        <text
+          x="464"
+          y="375"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          Quality Scoring
+        </text>
+        <rect
+          x="530"
+          y="350"
+          width="105"
+          height="32"
+          rx="2"
+          fill="#FFFFFF"
+          stroke="#7F77DD"
+          stroke-width="0.6"
+        />
+        <text
+          x="582"
+          y="364"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          LaTeX 导出
+        </text>
+        <text
+          x="582"
+          y="375"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#666666"
+        >
+          LaTeX Export
+        </text>
+        <line
+          x1="340"
+          y1="420"
+          x2="340"
+          y2="432"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr2)"
+        />
+        <rect
+          x="24"
+          y="434"
+          width="632"
+          height="60"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <rect
+          x="24"
+          y="434"
+          width="632"
+          height="24"
+          rx="3"
+          fill="#E8E8E8"
+          stroke="#BBBBBB"
+          stroke-width="0.8"
+        />
+        <text
+          x="34"
+          y="450"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#444441"
+        >
+          第三层：数据与基础设施层（Data &amp; Infrastructure）
+        </text>
+        <rect
+          x="40"
+          y="466"
+          width="140"
+          height="20"
+          rx="2"
+          fill="#F1EFE8"
+          stroke="#888780"
+          stroke-width="0.6"
+        />
+        <text
+          x="110"
+          y="479"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          fill="#444441"
+        >
+          SQLite + zvec 向量库
+        </text>
+        <rect
+          x="195"
+          y="466"
+          width="140"
+          height="20"
+          rx="2"
+          fill="#F1EFE8"
+          stroke="#888780"
+          stroke-width="0.6"
+        />
+        <text
+          x="265"
+          y="479"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          fill="#444441"
+        >
+          HuggingFace / Zenodo
+        </text>
+        <rect
+          x="350"
+          y="466"
+          width="140"
+          height="20"
+          rx="2"
+          fill="#F1EFE8"
+          stroke="#888780"
+          stroke-width="0.6"
+        />
+        <text
+          x="420"
+          y="479"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          fill="#444441"
+        >
+          Science-125 问题库
+        </text>
+        <rect
+          x="505"
+          y="466"
+          width="140"
+          height="20"
+          rx="2"
+          fill="#F1EFE8"
+          stroke="#888780"
+          stroke-width="0.6"
+        />
+        <text
+          x="575"
+          y="479"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          fill="#444441"
+        >
+          LaTeX 模板引擎
+        </text>
+        <defs>
+          <marker
+            id="arr2"
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto"
+          >
+            <path d="M0 0 L10 5 L0 10 Z" fill="#888888" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,890 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>图3-1 七阶段Pipeline流程图</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <svg
+        viewBox="0 0 680 480"
+        width="680"
+        height="480"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="460"
+          rx="4"
+          fill="#FAFAFA"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <rect
+          x="10"
+          y="10"
+          width="660"
+          height="36"
+          rx="4"
+          fill="#D9E2F3"
+          stroke="#999999"
+          stroke-width="1"
+        />
+        <text
+          x="340"
+          y="33"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="14"
+          font-weight="bold"
+          fill="#000000"
+        >
+          AISci 七阶段 Pipeline 流程图
+        </text>
+        <rect
+          x="30"
+          y="60"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#E6F1FB"
+          stroke="#2E86AB"
+          stroke-width="1"
+        />
+        <text
+          x="100"
+          y="82"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          阶段 1
+        </text>
+        <text
+          x="100"
+          y="100"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          问题理解
+        </text>
+        <text
+          x="100"
+          y="118"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Question Understanding
+        </text>
+        <text
+          x="100"
+          y="132"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          问题分解 · 子问题生成
+        </text>
+        <line
+          x1="170"
+          y1="100"
+          x2="190"
+          y2="100"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="190"
+          y="60"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#E6F1FB"
+          stroke="#2E86AB"
+          stroke-width="1"
+        />
+        <text
+          x="260"
+          y="82"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          阶段 2
+        </text>
+        <text
+          x="260"
+          y="100"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#1B2A4A"
+        >
+          文献挖掘
+        </text>
+        <text
+          x="260"
+          y="118"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Literature Mining
+        </text>
+        <text
+          x="260"
+          y="132"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          多源检索 · 知识图谱构建
+        </text>
+        <line
+          x1="330"
+          y1="100"
+          x2="350"
+          y2="100"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="350"
+          y="60"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#D4ECEA"
+          stroke="#1D9E75"
+          stroke-width="1"
+        />
+        <text
+          x="420"
+          y="82"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#085041"
+        >
+          阶段 3
+        </text>
+        <text
+          x="420"
+          y="100"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#085041"
+        >
+          知识缺口分析
+        </text>
+        <text
+          x="420"
+          y="118"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Knowledge Gap Analysis
+        </text>
+        <text
+          x="420"
+          y="132"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          前沿领域 · 研究空白识别
+        </text>
+        <line
+          x1="490"
+          y1="100"
+          x2="510"
+          y2="100"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="510"
+          y="60"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="1"
+        />
+        <text
+          x="580"
+          y="82"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          阶段 4
+        </text>
+        <text
+          x="580"
+          y="100"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          假设生成
+        </text>
+        <text
+          x="580"
+          y="118"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Hypothesis Generation
+        </text>
+        <text
+          x="580"
+          y="132"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          候选假设 · 可验证声明
+        </text>
+        <line
+          x1="580"
+          y1="140"
+          x2="580"
+          y2="170"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="510"
+          y="170"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="1"
+        />
+        <text
+          x="580"
+          y="192"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          阶段 5
+        </text>
+        <text
+          x="580"
+          y="210"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          假设评审
+        </text>
+        <text
+          x="580"
+          y="228"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Hypothesis Review
+        </text>
+        <text
+          x="580"
+          y="242"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          证据链 · 反事实预演
+        </text>
+        <line
+          x1="510"
+          y1="210"
+          x2="490"
+          y2="210"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="350"
+          y="170"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="1"
+        />
+        <text
+          x="420"
+          y="192"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#633806"
+        >
+          阶段 6
+        </text>
+        <text
+          x="420"
+          y="210"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          迭代实验
+        </text>
+        <text
+          x="420"
+          y="228"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Iterative Experiment
+        </text>
+        <text
+          x="420"
+          y="242"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          FL 仿真 · 数据验证
+        </text>
+        <line
+          x1="350"
+          y1="210"
+          x2="330"
+          y2="210"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="190"
+          y="170"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="1"
+        />
+        <text
+          x="260"
+          y="192"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#633806"
+        >
+          阶段 7
+        </text>
+        <text
+          x="260"
+          y="210"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          报告生成
+        </text>
+        <text
+          x="260"
+          y="228"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          Report Generation
+        </text>
+        <text
+          x="260"
+          y="242"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="7"
+          fill="#888888"
+        >
+          LaTeX 编译 · 质量审计
+        </text>
+        <line
+          x1="190"
+          y1="210"
+          x2="170"
+          y2="210"
+          stroke="#888888"
+          stroke-width="1"
+          marker-end="url(#arr3)"
+        />
+        <rect
+          x="30"
+          y="170"
+          width="140"
+          height="80"
+          rx="4"
+          fill="#EAF3DE"
+          stroke="#639922"
+          stroke-width="1"
+          stroke-dasharray="4,2"
+        />
+        <text
+          x="100"
+          y="202"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="11"
+          font-weight="bold"
+          fill="#27500A"
+        >
+          最终输出
+        </text>
+        <text
+          x="100"
+          y="222"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="9"
+          fill="#555555"
+        >
+          结构化研究报告
+        </text>
+        <text
+          x="100"
+          y="238"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#888888"
+        >
+          12 字段 + LaTeX PDF
+        </text>
+        <rect
+          x="350"
+          y="265"
+          width="300"
+          height="40"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#B87333"
+          stroke-width="0.8"
+          stroke-dasharray="3,2"
+        />
+        <text
+          x="500"
+          y="282"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#633806"
+        >
+          反事实预演层（Counterfactual Preview L0）
+        </text>
+        <text
+          x="500"
+          y="296"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          FALSIFY 过滤器：可证伪 + 有证据支撑 + 能指导实验 → 保留
+        </text>
+        <polygon
+          points="100,280 130,295 100,310 70,295"
+          fill="#FAECE7"
+          stroke="#D85A30"
+          stroke-width="0.8"
+        />
+        <text
+          x="100"
+          y="292"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="8"
+          font-weight="bold"
+          fill="#993C1D"
+        >
+          HITL
+        </text>
+        <text
+          x="100"
+          y="302"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#993C1D"
+        >
+          人工审核
+        </text>
+
+        <path
+          d="M 100 310 Q 40 350 100 390 Q 340 430 580 390 Q 640 350 580 310"
+          fill="none"
+          stroke="#6B5B95"
+          stroke-width="1.5"
+          stroke-dasharray="5,3"
+        />
+        <text
+          x="340"
+          y="425"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="9"
+          font-weight="bold"
+          fill="#3C3489"
+        >
+          科学自迭代回路（Science Iteration Loop）
+        </text>
+        <text
+          x="340"
+          y="438"
+          text-anchor="middle"
+          font-family="Microsoft YaHei, sans-serif"
+          font-size="8"
+          fill="#555555"
+        >
+          基于实验结果与人工反馈 → 在任意阶段进行迭代运行
+        </text>
+        <rect
+          x="30"
+          y="330"
+          width="620"
+          height="50"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="#888780"
+          stroke-width="0.8"
+        />
+        <rect
+          x="30"
+          y="330"
+          width="620"
+          height="20"
+          rx="3"
+          fill="#E8E8E8"
+          stroke="#888780"
+          stroke-width="0.8"
+        />
+        <text
+          x="340"
+          y="344"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="10"
+          font-weight="bold"
+          fill="#444441"
+        >
+          布尔质量门禁系统（Boolean Quality Gating System）— 11 道阶段特定 Gate
+        </text>
+        <rect
+          x="40"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#E1F5EE"
+          stroke="#3D7A5B"
+          stroke-width="0.5"
+        />
+        <text
+          x="66"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#085041"
+        >
+          问题分解
+        </text>
+        <rect
+          x="98"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#E1F5EE"
+          stroke="#3D7A5B"
+          stroke-width="0.5"
+        />
+        <text
+          x="124"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#085041"
+        >
+          文献覆盖
+        </text>
+        <rect
+          x="156"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#E1F5EE"
+          stroke="#3D7A5B"
+          stroke-width="0.5"
+        />
+        <text
+          x="182"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#085041"
+        >
+          知识缺口
+        </text>
+        <rect
+          x="214"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="0.5"
+        />
+        <text
+          x="240"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#3C3489"
+        >
+          假设新颖
+        </text>
+        <rect
+          x="272"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#EEEDFE"
+          stroke="#6B5B95"
+          stroke-width="0.5"
+        />
+        <text
+          x="298"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#3C3489"
+        >
+          假设可验
+        </text>
+        <rect
+          x="330"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#FAECE7"
+          stroke="#D85A30"
+          stroke-width="0.5"
+        />
+        <text
+          x="356"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#993C1D"
+        >
+          证据链
+        </text>
+        <rect
+          x="388"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#FAECE7"
+          stroke="#D85A30"
+          stroke-width="0.5"
+        />
+        <text
+          x="414"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#993C1D"
+        >
+          反事实
+        </text>
+        <rect
+          x="446"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="0.5"
+        />
+        <text
+          x="472"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#633806"
+        >
+          实验规划
+        </text>
+        <rect
+          x="504"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#FAEEDA"
+          stroke="#B87333"
+          stroke-width="0.5"
+        />
+        <text
+          x="530"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#633806"
+        >
+          可执行性
+        </text>
+        <rect
+          x="562"
+          y="356"
+          width="52"
+          height="18"
+          rx="2"
+          fill="#EAF3DE"
+          stroke="#639922"
+          stroke-width="0.5"
+        />
+        <text
+          x="588"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#27500A"
+        >
+          引用完整
+        </text>
+        <rect
+          x="620"
+          y="356"
+          width="22"
+          height="18"
+          rx="2"
+          fill="#EAF3DE"
+          stroke="#639922"
+          stroke-width="0.5"
+        />
+        <text
+          x="631"
+          y="368"
+          text-anchor="middle"
+          font-family="SimHei, sans-serif"
+          font-size="7"
+          fill="#27500A"
+        >
+          ...
+        </text>
+        <defs>
+          <marker
+            id="arr3"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path
+              d="M2 1 L8 5 L2 9"
+              fill="none"
+              stroke="#888888"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </body>
+</html>
