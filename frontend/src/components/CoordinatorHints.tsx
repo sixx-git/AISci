@@ -79,8 +79,11 @@ export function CoordinatorHints({
   onViewDetail,
   compact = false,
 }: CoordinatorHintsProps) {
-  const pendingHints = hints.filter((h) => h.action?.type !== 'auto');
-  const autoHints = hints.filter((h) => h.action?.type === 'auto');
+  // 过滤掉"检查通过"的提示，只显示有实际问题的
+  const actionableHints = hints.filter((h) => h.action?.type !== 'auto' && h.action?.type !== 'pass');
+  const pendingHints = actionableHints.filter((h) => h.action?.type === 'hint');
+  const autoHints = actionableHints.filter((h) => h.action?.type === 'auto');
+  const passedCount = hints.filter((h) => h.action?.type === 'pass' || (h.severity === 'info' && !h.remediation)).length;
 
   return (
     <Card
@@ -92,11 +95,19 @@ export function CoordinatorHints({
       }
       subtitle="阶段检查与补救建议"
     >
-      {hints.length === 0 ? (
+      {actionableHints.length === 0 ? (
         <div className="text-center py-4">
           <Brain className="w-6 h-6 mx-auto mb-2 opacity-30 text-bp-muted" />
-          <p className="text-sm text-bp-muted">暂无待处理提示</p>
-          <p className="text-xs text-bp-muted mt-1">Pipeline 运行后将自动显示检查结果</p>
+          <p className="text-sm text-bp-muted">
+            {hints.length > 0
+              ? `已检查 ${passedCount} 个阶段，全部通过，无待处理问题`
+              : '暂无待处理提示'}
+          </p>
+          <p className="text-xs text-bp-muted mt-1">
+            {hints.length > 0
+              ? '大家长 Agent 对 Pipeline 各阶段进行了质量检查'
+              : 'Pipeline 运行后将自动显示检查结果'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

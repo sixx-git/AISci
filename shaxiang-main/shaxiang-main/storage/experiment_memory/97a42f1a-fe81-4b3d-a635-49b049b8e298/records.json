@@ -1,0 +1,40 @@
+[
+  {
+    "record_id": "97a42f1a-fe81-4b3d-a635-49b049b8e298_3a50ed88-e108-44f7-ac77-ea41053dc7ee",
+    "scope_key": "97a42f1a-fe81-4b3d-a635-49b049b8e298",
+    "experiment_id": "3a50ed88-e108-44f7-ac77-ea41053dc7ee",
+    "title": "在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户…",
+    "hypothesis": "在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户端本地优化标签映射函数，可能实现跨设备标签分布对齐，但需验证该方法在异构数据环境下的实际有效性及通信开销影响。",
+    "research_goal": "在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户端本地优化标签映射函数，可能实现跨设备标签分布对齐，但需验证该方法在异构数据环境下的实际有效性及通信开销影响。",
+    "method_summary": "联邦物联网动态标签原型库引导的跨设备标签分布对齐实验",
+    "baseline_metrics": {
+      "accuracy_fedavg": 0.072899,
+      "f1_macro_fedavg": 0.041939,
+      "accuracy_fedproto": 0.072899,
+      "f1_macro_fedproto": 0.041939,
+      "num_clients": 5.0,
+      "num_classes": 34.0,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 15.0,
+      "overall_score": 6.5383
+    },
+    "best_metrics": {
+      "dataset_columns": 15.0,
+      "overall_score": 6.5383,
+      "f1_macro_fedavg": 0.041939,
+      "accuracy_fedproto": 0.072899,
+      "f1_macro_fedproto": 0.041939,
+      "dataset_rows": 5000.0,
+      "accuracy_fedavg": 0.072899,
+      "num_clients": 5.0,
+      "num_classes": 34.0
+    },
+    "label": 0,
+    "overall_improvement_rate": 0.0,
+    "primary_metric": "dataset_columns",
+    "success": false,
+    "status": "paused",
+    "timestamp": "2026-08-04T13:35:21.237595+00:00",
+    "embedding_text": "在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户…\n在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户端本地优化标签映射函数，可能实现跨设备标签分布对齐，但需验证该方法在异构数据环境下的实际有效性及通信开销影响。\n在联邦物联网场景中，通过服务器端构建动态标签原型库并引导客户端本地优化标签映射函数，可能实现跨设备标签分布对齐，但需验证该方法在异构数据环境下的实际有效性及通信开销影响。\n联邦物联网动态标签原型库引导的跨设备标签分布对齐实验"
+  }
+]

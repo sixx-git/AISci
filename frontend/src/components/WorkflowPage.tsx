@@ -1648,7 +1648,7 @@ export function WorkflowPage({
 
       {/* 大家长 Agent 提示 */}
       {effectiveRunId && (
-        <CollapsiblePanel title="🧠 大家长 Agent" subtitle="阶段检查与补救建议" defaultOpen={false} className="mb-6">
+        <CollapsiblePanel title="🧠 大家长 Agent" subtitle="阶段检查与补救建议" defaultOpen={true} className="mb-6">
           {coordinatorLoading && (
             <div className="text-center py-2 text-sm text-bp-muted">加载中…</div>
           )}

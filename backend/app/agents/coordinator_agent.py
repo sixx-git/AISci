@@ -97,6 +97,13 @@ STAGE_ERROR_PATTERNS: Dict[str, List[Dict[str, Any]]] = {
             "remediation": "hint_revise_report",
             "message_template": "报告缺失多个必要章节: {missing_sections}",
         },
+        {
+            "id": "rg_content_quality",
+            "severity": "high",
+            "condition": lambda d: d.get("content_quality", {}).get("has_issues", False),
+            "remediation": "auto_fix_report",
+            "message_template": "报告内容存在质量问题: {content_quality[detail]}",
+        },
     ],
 }
 
@@ -146,6 +153,11 @@ REMEDIATION_ACTIONS: Dict[str, Dict[str, Any]] = {
         "type": "auto",
         "suggestion": "continue",
         "description": "自动跳过并继续",
+    },
+    "auto_fix_report": {
+        "type": "auto",
+        "suggestion": "fix_report",
+        "description": "自动修复报告内容问题（乱码/截断/标点重复）",
     },
 }
 
@@ -258,6 +270,44 @@ class CoordinatorAgent:
                 logger.warning(f"规则匹配异常 [{pattern.get('id')}]: {e}")
         return None
 
+    # ── 异常检测 ──
+
+    def _has_anomaly(self, stage: str, snapshot: Dict[str, Any]) -> bool:
+        """检测阶段结果是否有异常数据（预定义规则未覆盖的异常）"""
+        if stage == "problem_understanding":
+            # 研究问题为空或关键词全部为空
+            rq = snapshot.get("research_question", "")
+            keywords = snapshot.get("keywords", [])
+            if not rq or len(rq.strip()) < 10:
+                return True
+            if all(not k.strip() for k in keywords if isinstance(k, str)):
+                return True
+        elif stage == "literature_mining":
+            # 有 facts 但全部无有效内容
+            facts = snapshot.get("facts", [])
+            if facts and all(not f.get("content", "") for f in facts if isinstance(f, dict)):
+                return True
+        elif stage == "knowledge_gap":
+            # 有 gaps 但全部无描述
+            gaps = snapshot.get("knowledge_gaps", [])
+            if gaps and all(not g.get("description", "") for g in gaps if isinstance(g, dict)):
+                return True
+        elif stage == "hypothesis_generation":
+            # 假设全部 evidence_level 为空或 unknown
+            hypotheses = snapshot.get("hypotheses", [])
+            if hypotheses and all(
+                isinstance(h, dict) and h.get("evidence_level", "unknown") in ("unknown", "")
+                for h in hypotheses
+            ):
+                return True
+        elif stage == "report_generation":
+            # 报告质量分异常低（<60 但未被规则命中）
+            quality = snapshot.get("quality_score", 100)
+            issues = snapshot.get("critical_issues", [])
+            if quality < 60 and not issues:
+                return True
+        return False
+
     # ── 决策 ──
 
     def decide_remediation(self, stage: str, snapshot: Dict[str, Any]) -> Dict[str, Any]:
@@ -281,14 +331,28 @@ class CoordinatorAgent:
             self._hints.append(decision)
             return decision
 
-        # 未匹配预定义规则 → 不报错（正常通过）
+        # 未匹配预定义规则 → 尝试检测异常
+        if self._has_anomaly(stage, snapshot):
+            # 同步情况下无法调用 async，标记为需 LLM 分析
+            return {
+                "source": "anomaly_detected",
+                "stage": stage,
+                "severity": "medium",
+                "message": f"阶段 {stage} 存在异常数据，已标记待 LLM 兜底分析",
+                "remediation": "llm_analysis",
+                "action": {"type": "hint", "suggestion": "llm_analysis", "description": "数据异常，建议 LLM 兜底分析"},
+                "snapshot": snapshot,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        # 无异常 → 正常通过
         return {
             "source": "passed",
             "stage": stage,
             "severity": "info",
             "message": "阶段检查通过",
             "remediation": None,
-            "action": {"type": "auto", "suggestion": "continue"},
+            "action": {"type": "pass", "suggestion": "continue", "description": "检查通过"},
             "snapshot": snapshot,
             "timestamp": datetime.now().isoformat(),
         }
@@ -359,12 +423,92 @@ class CoordinatorAgent:
                 "timestamp": datetime.now().isoformat(),
             }
 
+    # ── 报告内容质量检查（乱码/截断/标点重复）──
+
+    @staticmethod
+    def check_report_content_quality(chapters: Dict[str, Any]) -> Dict[str, Any]:
+        """检查报告章节内容是否存在乱码、截断、标点符号重复等问题"""
+        import re
+        issues = []
+        issue_count = 0
+
+        for ch_name, ch_content in chapters.items():
+            if not isinstance(ch_content, str) or not ch_content.strip():
+                continue
+
+            # 1. 乱码检测：常见乱码字符
+            garbled_chars = re.compile(
+                '[' +
+                chr(0xFFFD) + chr(0xFFFE) + chr(0xFFFF) +  # 替换字符/非法字符
+                '\u0000-\u0008\u000e-\u001f' +             # 控制字符
+                ']'
+            )
+            garbled_matches = garbled_chars.findall(ch_content)
+            if garbled_matches:
+                issues.append({
+                    "chapter": ch_name,
+                    "type": "garbled",
+                    "detail": f"发现 {len(garbled_matches)} 处乱码字符",
+                    "sample": ch_content[:min(len(ch_content), 50)],
+                })
+                issue_count += 1
+                continue  # 跳过后续检查，避免重复
+
+            # 2. 截断检测：文本以不完整句子结束
+            lines = ch_content.strip().split("\n")
+            last_line = lines[-1].strip() if lines else ""
+            if last_line:
+                # 如果最后一行不是以句号/感叹号/问号/右括号/引号结束，且长度 > 50，可能是截断
+                truncated_endings = r'[^。！？」》"\']$'
+                if len(last_line) > 50 and re.search(truncated_endings, last_line[-1]):
+                    issues.append({
+                        "chapter": ch_name,
+                        "type": "truncated",
+                        "detail": "章节末尾可能被截断（最后一行不以句号等结束）",
+                        "sample": last_line[-80:],
+                    })
+                    issue_count += 1
+
+            # 3. 标点符号重复检测
+            repeat_pats = [
+                (r'。{2,}', '句号重复'),
+                (r'，{2,}', '逗号重复'),
+                (r'！{2,}', '感叹号重复'),
+                (r'？{2,}', '问号重复'),
+                (r'；{2,}', '分号重复'),
+                (r'、{2,}', '顿号重复'),
+                (r'\.{3,}', '英文句点重复'),
+                (r',{2,}', '英文逗号重复'),
+            ]
+            for pat, label in repeat_pats:
+                matches = re.findall(pat, ch_content)
+                if matches:
+                    issues.append({
+                        "chapter": ch_name,
+                        "type": "repeated_punctuation",
+                        "detail": f"发现 {len(matches)} 处{label}",
+                        "sample": matches[0][:20],
+                    })
+                    issue_count += 1
+                    break  # 每个章节每个类型只报一次
+
+        return {
+            "has_issues": issue_count > 0,
+            "issue_count": issue_count,
+            "issues": issues[:10],  # 最多报 10 条
+            "detail": f"发现 {issue_count} 个内容质量问题" if issue_count > 0 else "内容质量正常",
+        }
+
     # ── 报告后专项检查 ──
 
     def check_report_post(self, report_result: Dict[str, Any]) -> Dict[str, Any]:
-        """报告生成后的专项检查（基于现有质量检查结果）"""
+        """报告生成后的专项检查（基于现有质量检查结果 + 内容质量检查）"""
         quality = report_result.get("quality_check", {})
         reviewer = report_result.get("review", {})
+        chapters = report_result.get("chapters", {})
+
+        # 内容质量检查（乱码/截断/标点重复）
+        content_quality = self.check_report_content_quality(chapters)
 
         snapshot = {
             "quality_score": quality.get("score", 100),
@@ -375,6 +519,7 @@ class CoordinatorAgent:
             "review_score": reviewer.get("review_score", 0),
             "publish_ready": reviewer.get("publish_ready", False),
             "weaknesses": reviewer.get("weaknesses", []),
+            "content_quality": content_quality,
         }
 
         decision = self.decide_remediation("report_generation", snapshot)
@@ -382,6 +527,7 @@ class CoordinatorAgent:
             "quality_score": snapshot["quality_score"],
             "publish_ready": snapshot["publish_ready"],
             "review_score": snapshot["review_score"],
+            "content_quality": content_quality,
         }
         return decision
 

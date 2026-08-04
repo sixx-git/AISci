@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   X, FileText, BookOpen, Hash, Link2, Gauge, ShieldAlert, CheckCircle2, History,
-  Compass, FlaskConical, Database, ChevronDown, ChevronRight, Eye, EyeOff,
+  Compass, FlaskConical, Database, ChevronDown, ChevronRight, Eye, EyeOff, ChevronUp,
 } from 'lucide-react';
 import type { EvidenceChain, EvidenceItem as EvidenceItemType, HypothesisProvenance, LiteratureGroundingItem } from '@/types';
 
@@ -231,6 +231,8 @@ function OriginTab({ provenance, loading }: { provenance?: HypothesisProvenance 
 }
 
 function VerificationTab({ provenance, loading }: { provenance?: HypothesisProvenance | null; loading?: boolean }) {
+  const [expandedCheck, setExpandedCheck] = useState<number | null>(null);
+
   if (loading) {
     return <p className="text-sm text-bp-muted py-8 text-center">加载验证规格...</p>;
   }
@@ -267,16 +269,37 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
         <section>
           <h4 className="text-sm font-semibold text-bp-text mb-2">验证检查项</h4>
           <div className="space-y-2">
-            {v.verification_checks.map((chk, i) => (
-              <div key={i} className="p-2 rounded border border-bp-border text-xs flex items-start gap-2">
-                {chk.passed === true && <CheckCircle2 className="w-3.5 h-3.5 text-bp-green shrink-0 mt-0.5" />}
-                {chk.passed === false && <ShieldAlert className="w-3.5 h-3.5 text-danger-400 shrink-0 mt-0.5" />}
-                <div>
-                  <p className="text-bp-text">{String(chk.check || chk.name || `检查 ${i + 1}`)}</p>
-                  {!!chk.detail && <p className="text-bp-muted mt-0.5">{String(chk.detail)}</p>}
+            {v.verification_checks.map((chk, i) => {
+              const isExpanded = expandedCheck === i;
+              const hasExtraData = Object.keys(chk).length > 3 || (!chk.check && !chk.name && !chk.detail && Object.keys(chk).length > 0);
+              return (
+                <div key={i} className="p-2 rounded border border-bp-border text-xs">
+                  <div className="flex items-start gap-2">
+                    {chk.passed === true && <CheckCircle2 className="w-3.5 h-3.5 text-bp-green shrink-0 mt-0.5" />}
+                    {chk.passed === false && <ShieldAlert className="w-3.5 h-3.5 text-danger-400 shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-bp-text">{String(chk.check || chk.name || `检查 ${i + 1}`)}</p>
+                      {!!chk.detail && <p className="text-bp-muted mt-0.5">{String(chk.detail)}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCheck(isExpanded ? null : i)}
+                      className="shrink-0 text-bp-muted hover:text-bp-cyan transition-colors mt-0.5"
+                      title={isExpanded ? '收起详情' : '查看详情'}
+                    >
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <div className="mt-2 pt-2 border-t border-bp-border">
+                      <pre className="text-xs text-bp-text bg-black/30 p-2 rounded overflow-x-auto max-h-40">
+{JSON.stringify(chk, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

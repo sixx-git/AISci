@@ -2137,8 +2137,8 @@ class PipelineService:
 
         # 自动执行补救
         action = decision.get("action", {})
+        suggestion = action.get("suggestion")
         if action.get("type") == "auto":
-            suggestion = action.get("suggestion")
             if suggestion == "iterate_evidence":
                 # 在后台线程执行（非阻塞主流程）
                 import threading
@@ -2148,6 +2148,25 @@ class PipelineService:
                     daemon=True,
                 )
                 thread.start()
+            elif suggestion == "fix_report":
+                # 自动修复报告内容问题（乱码/截断/标点重复）
+                import threading
+                thread = threading.Thread(
+                    target=self._auto_fix_report_sync,
+                    args=(stage, result, project_id),
+                    daemon=True,
+                )
+                thread.start()
+
+        # ── LLM 兜底分析：异常数据转异步 LLM 分析 ──
+        if decision.get("source") == "anomaly_detected" or decision.get("remediation") == "llm_analysis":
+            import threading
+            thread = threading.Thread(
+                target=self._coordinator_llm_analysis_sync,
+                args=(stage, result, research_question, project_id),
+                daemon=True,
+            )
+            thread.start()
 
         # 记录闭环事件
         if decision.get("remediation"):
@@ -2158,6 +2177,143 @@ class PipelineService:
                 next_stage=stage,
                 metadata={"severity": decision.get("severity", "info")},
             )
+
+    def _coordinator_check_all_stages(
+        self,
+        results: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+    ) -> None:
+        """Pipeline 完成后，对所有阶段补全大家长检查（覆盖缓存阶段）"""
+        existing_stages = {h.get("stage") for h in self._coordinator_hints}
+        for stage_def in STAGE_DEFS:
+            stage_key = stage_def["key"]
+            if stage_key in existing_stages:
+                continue
+            stage_result = results.get(stage_key)
+            if not stage_result or not isinstance(stage_result, dict):
+                continue
+            try:
+                self._coordinator_check(stage_key, stage_result, research_question, project_id)
+            except Exception as e:
+                logger.warning(f"[大家长] 补全检查失败 stage={stage_key}: {e}")
+
+    def _coordinator_llm_analysis_sync(
+        self,
+        stage: str,
+        result: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+    ) -> None:
+        """大家长 Agent LLM 兜底分析（后台线程）"""
+        try:
+            import asyncio
+            coordinator = self._get_coordinator()
+            snapshot = coordinator.build_error_snapshot(stage, result)
+            loop = asyncio.new_event_loop()
+            decision = loop.run_until_complete(
+                coordinator.analyze_unexpected_error(stage, snapshot, coordinator.context)
+            )
+            loop.close()
+            # 更新 hint 记录（替换之前 anomaly_detected 占位）
+            new_hint = {
+                "id": f"{stage}_llm_{datetime.now().isoformat()}",
+                "stage": stage,
+                "severity": decision.get("severity", "info"),
+                "message": decision.get("message", ""),
+                "remediation": decision.get("remediation"),
+                "action": decision.get("action", {}),
+                "source": decision.get("source", "llm_analysis"),
+                "timestamp": decision.get("timestamp", datetime.now().isoformat()),
+            }
+            # 替换同 stage 的占位 hint
+            for i, h in enumerate(self._coordinator_hints):
+                if h.get("stage") == stage and h.get("source") == "anomaly_detected":
+                    self._coordinator_hints[i] = new_hint
+                    break
+            else:
+                self._coordinator_hints.append(new_hint)
+        except Exception as e:
+            logger.warning(f"[大家长] LLM 兜底分析失败 stage={stage}: {e}")
+
+    def _auto_fix_report_sync(
+        self,
+        stage: str,
+        result: Dict[str, Any],
+        project_id: str,
+    ) -> None:
+        """自动修复报告内容问题（乱码/截断/标点重复）"""
+        try:
+            chapters = result.get("chapters", {})
+            if not chapters or not isinstance(chapters, dict):
+                return
+
+            # 收集需要修复的问题
+            from app.agents.coordinator_agent import CoordinatorAgent
+            quality = CoordinatorAgent.check_report_content_quality(chapters)
+            if not quality.get("has_issues"):
+                return
+
+            import asyncio
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(
+                self._auto_fix_report_async(chapters, quality.get("issues", []), project_id)
+            )
+            loop.close()
+        except Exception as e:
+            logger.warning(f"[大家长] 自动修复报告失败: {e}")
+
+    async def _auto_fix_report_async(
+        self,
+        chapters: Dict[str, Any],
+        issues: List[Dict[str, Any]],
+        project_id: str,
+    ) -> None:
+        """异步：调用 LLM 修复报告章节中的内容问题"""
+        try:
+            from app.services.llm_runtime import qwen_structured_chat
+
+            # 按章节分组问题
+            chapter_issues: Dict[str, List[Dict[str, Any]]] = {}
+            for issue in issues:
+                ch = issue.get("chapter", "")
+                if ch not in chapter_issues:
+                    chapter_issues[ch] = []
+                chapter_issues[ch].append(issue)
+
+            # 逐章节修复
+            fixed_chapters = {}
+            for ch_name, ch_issues in chapter_issues.items():
+                content = chapters.get(ch_name, "")
+                if not isinstance(content, str) or not content.strip():
+                    continue
+
+                issue_desc = "; ".join(
+                    f"{i.get('type')}: {i.get('detail')}" for i in ch_issues
+                )
+
+                prompt = f"""你是一个科研报告修复助手。请修复以下章节文本中的质量问题，保持原有内容和风格不变。
+
+章节名称: {ch_name}
+问题描述: {issue_desc}
+
+原始内容:
+{content[:3000]}
+
+请修复并返回完整的修复后内容（仅返回修复后的文本，不要额外说明）。"""
+
+                fixed = await qwen_structured_chat(
+                    prompt=prompt,
+                    model="qwen-plus",
+                    system_prompt="你是科研报告修复助手，只返回修复后的文本内容。",
+                )
+                if fixed and len(fixed.strip()) > 10:
+                    fixed_chapters[ch_name] = fixed.strip()
+
+            if fixed_chapters:
+                logger.info(f"[大家长] 自动修复报告完成: 修复了 {len(fixed_chapters)} 个章节")
+        except Exception as e:
+            logger.warning(f"[大家长] 自动修复报告内容失败: {e}")
 
     def _auto_evidence_iteration_sync(
         self,
@@ -3225,6 +3381,14 @@ class PipelineService:
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.output_data = safe_results
         self.db_pipeline_run.current_stage = None
+        # ── 大家长 Agent：补全缓存阶段的检查 ──
+        try:
+            if self._run_options.get("enable_coordinator_agent", True):
+                research_question = self.db_pipeline_run.research_question or ""
+                project_id = self.db_pipeline_run.project_id
+                self._coordinator_check_all_stages(results, research_question, project_id)
+        except Exception as e:
+            logger.warning(f"[大家长] 补全检查失败: {e}")
         # ── 持久化大家长提示到 output_data ──
         if self._coordinator_hints:
             safe_results["coordinator_hints"] = self._coordinator_hints
@@ -3327,6 +3491,14 @@ class PipelineService:
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.error_message = error
         self.db_pipeline_run.current_stage = None
+        # ── 持久化大家长提示到 output_data（即使失败也保留）──
+        if self._coordinator_hints:
+            try:
+                output_data = self.db_pipeline_run.output_data if isinstance(self.db_pipeline_run.output_data, dict) else {}
+                output_data["coordinator_hints"] = self._coordinator_hints
+                self.db_pipeline_run.output_data = output_data
+            except Exception:
+                logger.warning(f"[Pipeline] 失败时持久化大家长提示失败 run_id={self.run_id}")
         if failed_stage_name:
             try:
                 self.db_pipeline_run.failed_stage = DB_PipelineStage(failed_stage_name)
