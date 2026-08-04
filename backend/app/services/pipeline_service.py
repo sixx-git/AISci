@@ -108,6 +108,9 @@ class PipelineService:
         self._fed_campaign_discovery_done: set = set()
         self._iteration_snapshots: List[Dict[str, Any]] = []
         self._executability_blocked: bool = False
+        # ── 大家长 Agent (CoordinatorAgent) ──
+        self._coordinator = None  # 延迟初始化，避免循环导入
+        self._coordinator_hints: List[Dict[str, Any]] = []
 
     def _apply_executability_gate(
         self,
@@ -2043,6 +2046,15 @@ class PipelineService:
                     f"[Pipeline] 研究问题字段回填失败 stage={stage_key} run_id={self.run_id}: {backfill_err}"
                 )
 
+            # ── 大家长 Agent 阶段检查 ──
+            try:
+                if self._run_options.get("enable_coordinator_agent", True):
+                    self._coordinator_check(stage_key, full_output, research_question, project_id)
+            except Exception as coord_err:
+                logger.warning(
+                    f"[Pipeline] 大家长检查失败 stage={stage_key} run_id={self.run_id}: {coord_err}"
+                )
+
             if getattr(self, "_rerun_single_stage_only", False) and idx == getattr(self, "_start_idx", 0):
                 if not getattr(self, "_in_place_rerun", False):
                     self._restore_downstream_from_parent_run(idx, results, stages)
@@ -2087,7 +2099,137 @@ class PipelineService:
         db_stage.token_count = last_call.total_tokens
         db_stage.duration_ms = last_call.duration_ms
         self.db.commit()
-    
+
+    def _get_coordinator(self):
+        """懒加载 CoordinatorAgent"""
+        if self._coordinator is None:
+            from app.agents.coordinator_agent import CoordinatorAgent
+            self._coordinator = CoordinatorAgent(db=self.db)
+        return self._coordinator
+
+    def _coordinator_check(
+        self,
+        stage: str,
+        result: Dict[str, Any],
+        research_question: str,
+        project_id: str,
+    ) -> None:
+        """大家长 Agent 阶段检查（同步）"""
+        coordinator = self._get_coordinator()
+        coordinator.update_context("research_question", research_question)
+        coordinator.update_stage_result(stage, result)
+
+        snapshot = coordinator.build_error_snapshot(stage, result)
+        decision = coordinator.decide_remediation(stage, snapshot)
+
+        # 记录提示
+        hint_entry = {
+            "id": f"{stage}_{datetime.now().isoformat()}",
+            "stage": stage,
+            "severity": decision.get("severity", "info"),
+            "message": decision.get("message", ""),
+            "remediation": decision.get("remediation"),
+            "action": decision.get("action", {}),
+            "source": decision.get("source", "predefined"),
+            "timestamp": decision.get("timestamp", datetime.now().isoformat()),
+        }
+        self._coordinator_hints.append(hint_entry)
+
+        # 自动执行补救
+        action = decision.get("action", {})
+        if action.get("type") == "auto":
+            suggestion = action.get("suggestion")
+            if suggestion == "iterate_evidence":
+                # 在后台线程执行（非阻塞主流程）
+                import threading
+                thread = threading.Thread(
+                    target=self._auto_evidence_iteration_sync,
+                    args=(research_question, project_id),
+                    daemon=True,
+                )
+                thread.start()
+
+        # 记录闭环事件
+        if decision.get("remediation"):
+            self._record_closed_loop_decision(
+                trigger=f"coordinator_{stage}_check",
+                action=decision.get("remediation", "pass"),
+                reason=decision.get("message", "")[:300],
+                next_stage=stage,
+                metadata={"severity": decision.get("severity", "info")},
+            )
+
+    def _auto_evidence_iteration_sync(
+        self,
+        research_question: str,
+        project_id: str,
+    ) -> None:
+        """低证据假设自动证据链迭代（同步版本，后台线程使用）"""
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(
+                self._auto_evidence_iteration(research_question, project_id)
+            )
+            loop.close()
+        except Exception as e:
+            logger.warning(f"自动证据链迭代（线程）失败: {e}")
+
+    async def _auto_evidence_iteration(
+        self,
+        research_question: str,
+        project_id: str,
+    ) -> None:
+        """低证据假设自动证据链迭代"""
+        hypotheses = self._stage_results.get("hypothesis_generation", {}).get("hypotheses", [])
+        low_evidence = [
+            h for h in hypotheses
+            if isinstance(h, dict) and h.get("evidence_level") == "low"
+        ]
+        if not low_evidence:
+            return
+
+        try:
+            from app.services.evidence_reasoning_service import get_evidence_reasoning_service
+
+            er_service = get_evidence_reasoning_service(self.db)
+            lit_mining = self._stage_results.get("literature_mining") or {}
+
+            updated = await er_service.run_for_hypotheses(
+                hypotheses=low_evidence,
+                research_question=research_question,
+                literature_mining=lit_mining,
+                max_rounds=2,
+            )
+
+            if updated:
+                # 回写修订后的假设
+                all_hypotheses = self._stage_results.get("hypothesis_generation", {}).get("hypotheses", [])
+                updated_ids = {h.get("hypothesis_id") for h in updated if isinstance(h, dict)}
+                merged = []
+                for h in all_hypotheses:
+                    hid = h.get("hypothesis_id") if isinstance(h, dict) else None
+                    if hid and hid in updated_ids:
+                        # 找到对应的修订版本
+                        revised = next((u for u in updated if isinstance(u, dict) and u.get("hypothesis_id") == hid), h)
+                        merged.append(revised)
+                    else:
+                        merged.append(h)
+
+                if merged:
+                    self._stage_results["hypothesis_generation"]["hypotheses"] = merged
+                    self._stage_results["hypothesis_generation"]["auto_iterated"] = True
+
+                self._record_closed_loop_decision(
+                    trigger="coordinator_auto_evidence_iteration",
+                    action="iterate_evidence",
+                    reason=f"自动迭代修正 {len(updated)} 条低证据假设",
+                    next_stage="hypothesis_review",
+                    metadata={"hypotheses_revised": len(updated)},
+                )
+        except Exception as e:
+            logger.warning(f"自动证据链迭代失败: {e}")
+
     def _build_stage_input(self, idx: int, results: Dict[str, Any], research_question: str, project_id: str) -> Dict[str, Any]:
         """构建阶段输入数据"""
         project_mode = self._get_project_mode(project_id)
@@ -3083,6 +3225,10 @@ class PipelineService:
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.output_data = safe_results
         self.db_pipeline_run.current_stage = None
+        # ── 持久化大家长提示到 output_data ──
+        if self._coordinator_hints:
+            safe_results["coordinator_hints"] = self._coordinator_hints
+            self.db_pipeline_run.output_data = safe_results
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
         meta["auxiliary_results"] = {
             k: safe_results[k]

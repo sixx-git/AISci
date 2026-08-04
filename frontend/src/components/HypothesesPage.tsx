@@ -78,6 +78,7 @@ export function HypothesesPage({
   const [provenance, setProvenance] = useState<HypothesisProvenance | null>(null);
   const [provenanceLoading, setProvenanceLoading] = useState(false);
   const [iteratingId, setIteratingId] = useState<string | null>(null);
+  const [iterateError, setIterateError] = useState<string | null>(null);
   const [hypothesisTree, setHypothesisTree] = useState<HypothesisTreeData | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
@@ -216,6 +217,7 @@ export function HypothesesPage({
 
   const handleIterateEvidence = useCallback(async (id: string) => {
     setIteratingId(id);
+    setIterateError(null);
     try {
       const res = await hypothesisService.iterateEvidenceChain(id);
       if (res.code === 200 && res.data?.evidence_chain) {
@@ -231,10 +233,14 @@ export function HypothesesPage({
         }
         showAlert('证据链迭代修正完成');
       } else {
-        showAlert(res.message || '迭代修正失败');
+        const msg = res.message || '迭代修正失败';
+        setIterateError(msg);
+        showAlert(msg, 8000);
       }
-    } catch {
-      showAlert('迭代修正失败，请检查后端服务');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '迭代修正失败，请检查后端服务';
+      setIterateError(msg);
+      showAlert(msg, 8000);
     } finally {
       setIteratingId(null);
     }
@@ -358,8 +364,34 @@ export function HypothesesPage({
       </div>
 
       {alertMsg && (
-        <div className="mb-4 px-4 py-2.5 rounded-lg bg-bp-cyan-tint border border-bp-cyan/20 text-sm text-bp-cyan animate-pulse">
+        <div className={`mb-4 px-4 py-2.5 rounded-lg border text-sm animate-pulse ${
+          iterateError
+            ? 'bg-danger-500/10 border-danger-500/30 text-danger-400'
+            : 'bg-bp-cyan-tint border-bp-cyan/20 text-bp-cyan'
+        }`}>
           {alertMsg}
+        </div>
+      )}
+
+      {iterateError && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-danger-500/10 border border-danger-500/30">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-danger-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-danger-400 mb-1">迭代修正失败</p>
+              <p className="text-sm text-bp-text">{iterateError}</p>
+              <p className="text-xs text-bp-muted mt-2">
+                请先运行 Pipeline 的「文献挖掘」阶段或上传相关领域论文，确保项目有文献事实后再进行迭代修正。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIterateError(null)}
+              className="text-bp-muted hover:text-bp-text transition-colors shrink-0"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

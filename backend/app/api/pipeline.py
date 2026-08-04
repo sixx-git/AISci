@@ -670,3 +670,36 @@ async def export_audit_chain(
     meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
     bundle = get_audit_chain_service().export_audit_bundle(run_id, meta=meta)
     return ResponseModel(code=200, message="导出成功", data=bundle)
+
+
+@router.get("/coordinator-hints/{run_id}")
+async def get_coordinator_hints(
+    run_id: str,
+    db: Session = Depends(get_db),
+):
+    """获取大家长 Agent 提示列表"""
+    run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Pipeline 运行记录未找到")
+
+    output_data = run.output_data if isinstance(run.output_data, dict) else {}
+    coordinator_hints = output_data.get("coordinator_hints", [])
+
+    # 也检查 extra_metadata 中的闭环决策记录
+    extra_meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
+    decisions = extra_meta.get("closed_loop_decisions", [])
+    coordinator_decisions = [
+        d for d in decisions
+        if isinstance(d, dict) and d.get("trigger", "").startswith("coordinator_")
+    ]
+
+    return ResponseModel(
+        code=200,
+        message="获取成功",
+        data={
+            "run_id": run_id,
+            "hints": coordinator_hints,
+            "coordinator_decisions": coordinator_decisions,
+            "hint_count": len(coordinator_hints),
+        },
+    )

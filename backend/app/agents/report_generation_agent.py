@@ -383,6 +383,38 @@ class ReportGenerationAgent:
                 result["verified_references"] = verified_references
             self._write_report_json(result)
 
+            # ── 大家长 Agent 报告后专项检查 ──
+            try:
+                from app.agents.coordinator_agent import CoordinatorAgent
+                coordinator = CoordinatorAgent(db=self.db)
+                coordinator_result = result.get("compliance_check", {})
+                reviewer_data = result.get("skill_outputs", {}).get("report_reviewer", {}).get("data", {})
+                proposal_data = result.get("skill_outputs", {}).get("proposal_logic_review", {}).get("data", {})
+
+                report_check_data = {
+                    "quality_score": coordinator_result.get("score", 100),
+                    "critical_issues": coordinator_result.get("critical_issues", []),
+                    "missing_sections": coordinator_result.get("missing_fields", []),
+                    "has_references": bool(result.get("verified_references", [])),
+                    "refs_verified": coordinator_result.get("references_verified", 0),
+                    "review_score": reviewer_data.get("review_score", 0),
+                    "publish_ready": reviewer_data.get("publish_ready", False),
+                    "weaknesses": reviewer_data.get("weaknesses", []),
+                    "proposal_issues": proposal_data.get("issues", []),
+                }
+                coordinator_decision = coordinator.check_report_post(report_check_data)
+                result["coordinator_check"] = {
+                    "decision": coordinator_decision,
+                    "stage": "report_generation_post",
+                    "timestamp": coordinator_decision.get("timestamp", ""),
+                }
+                logger.info(
+                    f"[大家长] 报告后检查完成: severity={coordinator_decision.get('severity')} "
+                    f"message={coordinator_decision.get('message', '')[:100]}"
+                )
+            except Exception as coord_err:
+                logger.warning(f"[大家长] 报告后检查失败: {coord_err}")
+
             logger.info("研究报告生成完成")
             return result
 

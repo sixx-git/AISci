@@ -38,6 +38,124 @@
 
 ---
 
+## 🎯 三大核心创新机制
+
+### 创新一：多轮证据链迭代机制
+
+**问题背景**：现有 AI 科研辅助流程通常将文献检索、观点生成和论文撰写串联处理，信息在长上下文中逐步传递，容易出现事实混淆、引用失配和证据链断裂，导致最终结论难以追溯。
+
+**解决方案**：在每次运行过程中动态提取文献中的结构化知识，形成带有来源标识的 **Fact 白名单**。各智能体在涉及科学事实和引用的环节均依托 Fact 白名单开展推理、假设生成与报告撰写；当证据不足或出现知识缺口时，系统可通过 **大家长 Agent** 自动触发文献挖掘补充新的 Fact，或通过沙箱实验获得新的验证结果，为相关事实和假设提供实验支持。对于证据级别为 low 的假设，系统还可自动触发证据链迭代（IterativeHypothesisLoopSkill）进行修订。
+
+**技术实现**：
+
+| 环节 | 实现模块 | 说明 |
+|------|----------|------|
+| **Fact 提取** | `LiteratureMiningAgent` | 从文献中提取结构化知识，每条 Fact 绑定唯一 `fact_id` 和 `source_chunk_id` |
+| **Fact 白名单校验** | `HypothesisGenerationAgent._validate_and_normalize_result()` | 验证 `supporting_fact_ids` 只引用真实存在的 fact，确保假设不虚构引用 |
+| **证据不足检测** | `CoordinatorAgent` + `PipelineService._coordinator_check()` | 大家长 Agent 检测证据是否充足，不足时触发自动补救或提示用户 |
+| **自动证据链迭代** | `PipelineService._auto_evidence_iteration()` | 低证据假设自动触发 `IterativeHypothesisLoopSkill` 进行修订 |
+| **沙箱验证** | `IterativeExperimentService` | 通过 smoke/full 运行模式获得实验验证结果 |
+| **证据链迭代** | `evidence_reasoning_service.py` + `hypothesis_provenance.py` | 多轮证据推理与假设溯源 |
+| **审计追踪** | `audit_chain_service.py` | 记录完整的审计链，支持回放与复核 |
+
+**数据流向**：
+```
+文献 → Fact 白名单 → 假设生成(引用 fact_id) → 假设评审 → 迭代实验(验证) → 事实回填
+                                                                          ↓
+                                                                   证据不足? → 补充文献挖掘 → 新增 Fact → 重新生成假设
+```
+
+---
+
+### 创新二："知识库对齐"与"小样本测试"驱动的双重过滤机制
+
+**问题背景**：在假设生成和实验方案设计阶段，缺乏有效的前置验证机制，导致缺乏事实依据的假设或难以执行的实验方案进入正式流程，浪费时间和算力。
+
+**解决方案**：通过知识证据约束与实验可执行性预检的双重过滤，在正式实验前排除缺乏依据或难以执行的方案。
+
+**过滤器 1：知识库对齐过滤器**
+- **核心逻辑**：以 Fact 白名单作为评价假设的核心证据，假设必须能够回溯到有效 Fact
+- **实现**：
+  - `HypothesisGenerationAgent`：自动标注 `evidence_level`（low/medium/high），基于 supporting_fact_ids 数量
+  - `HypothesisGenerationAgent._detect_question_domain()`：偏题检测，标记 `off_topic`
+  - `HypothesisReviewAgent`：对偏题假设扣分 40%，`_select_primary()` 排除偏题和低证据假设
+  - 无事实依据的假设标记为"不通过"，进入修订流程
+
+**过滤器 2：小样本预检过滤器**
+- **核心逻辑**：识别数据集元数据和字段结构，在正式运行前生成小规模测试数据集，执行 LLM 生成的实验脚本
+- **实现**：
+  - `IterativeExperimentService.verify_data()`：识别数据集元数据和字段结构
+  - `IterativeExperimentService` smoke_only 模式：生成小规模测试集并执行脚本
+  - `experiment_sanity_check_skill`：实验方案合理性检查
+  - 脚本运行失败、输出不符合预期、方案未体现假设可验证性 → 驳回并触发重新生成
+
+**双重过滤流程**：
+```
+假设生成 → [知识库对齐] → 通过? → [小样本预检] → 通过? → 正式实验
+                         ↓                ↓                  ↓
+                        驳回            驳回            驳回
+                         ↓                ↓                  ↓
+                    假设修订         脚本重设计        方案重生成
+                         ↓                ↓                  ↓
+                    ←────────────────────────────────────────→
+                              反馈约束注入
+```
+
+---
+
+### 创新三：协调式质量评估与门禁控制机制
+
+**问题背景**：流水线式工作流中容易出现记忆漂移和信息丢失，各阶段生成内容缺乏统一的质量评估和约束传递机制，导致多智能体协作的连续性、可控性和可审计性不足。
+
+**解决方案**：由 **CoordinatorAgent（大家长 Agent）** 承担协调者角色，维护项目上下文，统筹各专业智能体执行，并对各环节生成内容执行阶段特定的质量评估和门禁控制。
+
+**大家长 Agent 核心能力**：
+
+| 能力 | 实现模块 | 说明 |
+|------|----------|------|
+| **上下文维护** | `CoordinatorAgent._context` | 维护研究问题、Fact 白名单快照、假设版本历史、门禁结果、补救动作记录 |
+| **预定义错误模式** | `CoordinatorAgent.STAGE_ERROR_PATTERNS` | 6 大阶段共 12+ 条预定义错误规则（严重/高/中/低四级） |
+| **自动补救触发** | `CoordinatorAgent.decide_remediation()` | 匹配预定义规则 → 自动选择补救动作（自动执行 / 提示用户） |
+| **LLM 兜底分析** | `CoordinatorAgent.analyze_unexpected_error()` | 预定义规则未匹配时，调用 LLM 做开放性错误分析 |
+| **报告后专项检查** | `CoordinatorAgent.check_report_post()` | 报告生成后汇总质量检查、评审、提案逻辑审查结果，输出补救建议 |
+| **闭环决策记录** | `PipelineService._record_closed_loop_decision()` | 记录完整的补救决策轨迹，支持审计追溯 |
+
+**预定义错误规则示例**：
+
+| 阶段 | 错误 ID | 严重程度 | 触发条件 | 补救动作 |
+|------|---------|---------|---------|---------|
+| 文献挖掘 | `lm_no_facts` | critical | facts_count == 0 | 提示导入文献 |
+| 假设生成 | `hg_all_off_topic` | critical | 全部假设偏题 | 提示补充文献 |
+| 假设生成 | `hg_all_low_evidence` | medium | 全部假设 evidence_level=low | **自动触发证据链迭代** |
+| 假设评审 | `hr_no_primary` | critical | 无合格主假设 | 提示修订假设 |
+| 报告生成 | `rg_low_quality` | critical | quality_score < 60 | 提示修订报告 |
+| 报告生成 | `rg_no_refs_verified` | high | 引用未经核验 | 提示核验引用 |
+
+**协调流程**：
+```
+研究问题 → [大家长：上下文初始化] → 问题理解
+                              ↓
+                         [大家长：阶段检查] ← 匹配预定义规则
+                              ↓                    ↓
+                         文献挖掘          未匹配 → LLM 兜底分析
+                              ↓                    ↓
+                         [大家长：自动/提示] → 补救动作
+                              ↓
+                         知识缺口 → [大家长：证据不足?] → 提示补搜
+                              ↓
+                         假设生成 → [大家长：低证据?] → 自动证据链迭代
+                              ↓
+                         假设评审 → [大家长：无主假设?] → 提示修订
+                              ↓
+                         迭代实验 → [小样本预检] → 脚本重设计
+                              ↓
+                         报告生成 → [大家长：报告后专项检查] → 提示修订
+                              ↓
+                         [审计链导出 + 补救决策轨迹]
+```
+
+---
+
 ## 🚀 快速开始
 
 **详细分步说明**请查看 [QUICKSTART.md](./QUICKSTART.md)。

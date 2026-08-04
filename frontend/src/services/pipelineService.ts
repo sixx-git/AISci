@@ -56,4 +56,20 @@ export const pipelineService = {
     const { data } = await api.post<ApiResponse<Record<string, unknown>>>('/pipeline/loop-dry-run', body);
     return data;
   },
+
+  /** GET /api/v1/pipeline/coordinator-hints/:runId — 获取大家长提示 */
+  async getCoordinatorHints(runId: string): Promise<ApiResponse<{
+    run_id: string;
+    hints: Array<Record<string, unknown>>;
+    coordinator_decisions: Array<Record<string, unknown>>;
+    hint_count: number;
+  }>> {
+    const { data } = await api.get<ApiResponse<{
+      run_id: string;
+      hints: Array<Record<string, unknown>>;
+      coordinator_decisions: Array<Record<string, unknown>>;
+      hint_count: number;
+    }>>(`/pipeline/coordinator-hints/${runId}`);
+    return data;
+  },
 };

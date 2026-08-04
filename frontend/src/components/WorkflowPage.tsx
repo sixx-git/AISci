@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Send, AlertTriangle, Brain, BookOpen, GitBranch, Lightbulb, ShieldCheck, FlaskConical, FileText, RefreshCw, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/Card';
@@ -19,6 +19,7 @@ import {
 } from '@/components/LoopConfigPanel';
 import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
 import { RunHistoryPanel } from '@/components/RunHistoryPanel';
+import { CoordinatorHints, type CoordinatorHint } from '@/components/CoordinatorHints';
 import { HitlGateModal } from '@/components/HitlGateModal';
 import { ReportPdfPreview, ReportPreviewHeader } from '@/components/ReportPdfPreview';
 import { Button } from '@/components/Button';
@@ -660,6 +661,8 @@ export function WorkflowPage({
     return loopConfigToRunOptions(saved);
   }, [projectId]);
   const [showHitlModal, setShowHitlModal] = useState(false);
+  const [coordinatorHints, setCoordinatorHints] = useState<CoordinatorHint[]>([]);
+  const [coordinatorLoading, setCoordinatorLoading] = useState(false);
   const [hitlGateInfo, setHitlGateInfo] = useState<HitlGateInfo | null>(null);
   const [hitlGateRunId, setHitlGateRunId] = useState<string | null>(null);
 
@@ -1344,6 +1347,37 @@ export function WorkflowPage({
   // ========== 计算状态摘要 ==========
   const effectiveRunId = currentRunId ?? latestRunId;
   const effectiveHitlRunId = hitlGateRunId ?? effectiveRunId;
+
+  // ========== 大家长 Agent 提示加载 ==========
+  useEffect(() => {
+    if (!effectiveRunId) {
+      setCoordinatorHints([]);
+      return;
+    }
+    let cancelled = false;
+    setCoordinatorLoading(true);
+    pipelineService.getCoordinatorHints(effectiveRunId).then((res) => {
+      if (cancelled) return;
+      if (res.code === 200 && res.data) {
+        const rawHints = res.data.hints || [];
+        setCoordinatorHints(rawHints.map((h, i) => ({
+          id: String((h.id as string) || `${effectiveRunId}_${i}`),
+          stage: (h.stage as string) || '',
+          severity: ((h.severity as string) || 'info') as CoordinatorHint['severity'],
+          message: (h.message as string) || '',
+          remediation: (h.remediation as string) || null,
+          action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
+          source: (h.source as string) || 'predefined',
+          timestamp: (h.timestamp as string) || new Date().toISOString(),
+        })));
+      }
+    }).catch(() => {
+      if (!cancelled) setCoordinatorHints([]);
+    }).finally(() => {
+      if (!cancelled) setCoordinatorLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [effectiveRunId]);
   const isHitlGatePaused = Boolean(
     projectId
     && effectiveHitlRunId
@@ -1608,6 +1642,28 @@ export function WorkflowPage({
             projectId={projectId}
             latestRunId={effectiveRunId}
             refreshKey={completedCount + (effectiveRunId?.length ?? 0)}
+          />
+        </CollapsiblePanel>
+      )}
+
+      {/* 大家长 Agent 提示 */}
+      {effectiveRunId && (
+        <CollapsiblePanel title="🧠 大家长 Agent" subtitle="阶段检查与补救建议" defaultOpen={false} className="mb-6">
+          {coordinatorLoading && (
+            <div className="text-center py-2 text-sm text-bp-muted">加载中…</div>
+          )}
+          <CoordinatorHints
+            hints={coordinatorHints}
+            onRerunStage={(stage) => {
+              const nodeId = Object.entries(NODE_ID_TO_STAGE).find(([, s]) => s === stage)?.[0];
+              if (nodeId) {
+                handleSelect(nodeId);
+                handleRerunCurrentStage(nodeId);
+              }
+            }}
+            onViewDetail={() => {
+              // 简单展开：无需特殊处理
+            }}
           />
         </CollapsiblePanel>
       )}

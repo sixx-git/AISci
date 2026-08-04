@@ -1,9 +1,9 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   children: React.ReactNode;
-  title?: string;
+  title?: React.ReactNode;
   subtitle?: string;
   /** 是否启用 hover 高亮和发光效果 */
   hover?: boolean;

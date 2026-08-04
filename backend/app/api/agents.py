@@ -367,7 +367,7 @@ async def iterate_hypothesis_evidence_chain(
         literature_mining = get_literature_mining_output(db, hypo.project_id) or {}
         if not literature_mining.get("facts") and not literature_mining.get("citation_map"):
             return error(
-                "项目尚无文献挖掘结果，请先运行 Pipeline 的文献挖掘阶段后再迭代修正",
+                "请补充事实，请先运行 Pipeline 的文献挖掘阶段或者上传相关领域论文后再迭代修正",
                 code=400,
             )
 
