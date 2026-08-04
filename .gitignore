@@ -111,14 +111,26 @@ frontend-debug-files/
 
 # =========================
 # Dataset / export outputs (local, do not commit)
+# 仓库根 output/ 目录：含 PDF/DOCX/PPTX 报告、125 题数据集、示意图、草稿等，
+# 全部为本地产物，禁止提交。前导 '/' 锚定仓库根，避免误伤子目录同名文件夹。
 # =========================
-output/
+/output/
 out/
 *.sdf.gz
 chembl_37.sdf.gz
 
 # pingfenbiao job workspace
 pingfenbiao-main/**/web/_jobs/
+
+# =========================
+# Local working directories / assets (do not commit)
+# .workbuddy/  — 本地 AI 助手记忆与 docx 备份
+# _ppt_assets/ — PPT 本地背景图素材
+# _cmp/        — PPT 版本对比图与脚本（含 v4/v5/v6/v7 等迭代产物）
+# =========================
+/.workbuddy/
+/_ppt_assets/
+/_cmp/
 
 # =========================
 # OS files

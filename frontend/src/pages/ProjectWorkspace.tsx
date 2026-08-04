@@ -260,31 +260,16 @@ function LiteratureTab({ projectId }: { projectId: string }) {
   return <LiteratureLibrary projectId={projectId} compact />;
 }
 
-function WorkflowTab({ projectId, researchQuestion, questionSource, onPipelineCompleted, onPipelineStarted, onHumanLoopUpdated }: {
+function WorkflowTab({ projectId, onPipelineCompleted, onPipelineStarted, onHumanLoopUpdated }: {
   projectId: string;
-  researchQuestion: string;
-  questionSource?: 'backend' | 'localStorage' | 'none';
   onPipelineCompleted?: (result: PipelineRunResult) => void;
   onPipelineStarted?: (runId: string) => void;
   onHumanLoopUpdated?: (stage: string) => void;
 }) {
   return (
     <div className="space-y-4">
-      {researchQuestion && questionSource === 'localStorage' && (
-        <div className="px-4 py-2 rounded-bp bg-bp-yellow/10 border border-bp-yellow/20 text-sm text-bp-yellow flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          研究问题来自本地草稿，建议保存到后端
-        </div>
-      )}
-      {researchQuestion && questionSource === 'backend' && (
-        <div className="px-4 py-2 rounded-bp bg-bp-green/10 border border-bp-green/20 text-sm text-bp-green flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          研究问题已从项目配置读取
-        </div>
-      )}
       <WorkflowPage
         projectId={projectId}
-        researchQuestion={researchQuestion}
         compact
         onPipelineCompleted={onPipelineCompleted}
         onPipelineStarted={onPipelineStarted}
@@ -768,8 +753,6 @@ export function ProjectWorkspace() {
         return (
           <WorkflowTab
             projectId={id}
-            researchQuestion={resolvedResearchQuestion}
-            questionSource={questionSource}
             onPipelineCompleted={handlePipelineCompleted}
             onPipelineStarted={handlePipelineStarted}
             onHumanLoopUpdated={() => setRevalidateKey((k) => k + 1)}

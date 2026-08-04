@@ -1,5 +1,6 @@
 """
 Pipeline 服务 - 负责按顺序执行各个 Agent
+v3 - 修复 detail->payload 参数名 (force reload)
 """
 import copy
 import uuid
@@ -2402,7 +2403,7 @@ class PipelineService:
         gaps = kg_result.get("knowledge_gaps", [])
         self._record_closed_loop_event(
             "knowledge_gap",
-            detail={"gap_count": len(gaps) if isinstance(gaps, list) else 0},
+            payload={"gap_count": len(gaps) if isinstance(gaps, list) else 0},
         )
         return kg_result
     

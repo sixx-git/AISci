@@ -1065,7 +1065,34 @@ export function ExperimentDetail({
       {phase === 'completed' && (
         <Card title="实验已完成">
           <p className="text-sm text-bp-green mb-3">本实验已完成迭代。可在列表中勾选「用于报告」以纳入报告生成。</p>
-          <IterationTimeline iterations={experiment.iterations} />
+
+          {/* 即使实验已完成，也允许查看之前的实验方案与脚本 */}
+          {experiment.initial_plan && (
+            <details className="mb-4 rounded-lg border border-bp-border bg-bp-base/40 px-3 py-2">
+              <summary className="text-sm text-bp-text cursor-pointer">
+                查看实验方案与脚本: {experiment.initial_plan.title}
+              </summary>
+              <p className="text-[11px] text-bp-muted mt-1">
+                本实验在脚本设计阶段产出的 analysis_script，供回顾参考。
+              </p>
+              <p className="text-xs text-bp-muted mt-2">{experiment.initial_plan.methodology}</p>
+              <pre className="mt-2 text-[11px] text-bp-muted overflow-x-auto max-h-72 bg-bp-base p-2 rounded">
+                {experiment.initial_plan.analysis_script}
+              </pre>
+            </details>
+          )}
+
+          <div className="mb-4">
+            <IterationTimeline iterations={experiment.iterations} />
+          </div>
+
+          {experiment.human_feedback && (
+            <details className="mt-3 rounded-lg border border-bp-border bg-bp-base/40 px-3 py-2">
+              <summary className="text-sm text-bp-text cursor-pointer">查看历史反馈</summary>
+              <p className="text-xs text-bp-muted mt-2 whitespace-pre-wrap">{experiment.human_feedback}</p>
+              <p className="text-[11px] text-bp-muted mt-1">反馈状态: {experiment.feedback_status}</p>
+            </details>
+          )}
         </Card>
       )}
     </div>
