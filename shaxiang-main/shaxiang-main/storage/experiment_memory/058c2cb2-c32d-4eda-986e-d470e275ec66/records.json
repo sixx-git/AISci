@@ -1,0 +1,41 @@
+[
+  {
+    "record_id": "058c2cb2-c32d-4eda-986e-d470e275ec66_b3a2bf1b-ac5c-44bd-905b-1f60ed636b61",
+    "scope_key": "058c2cb2-c32d-4eda-986e-d470e275ec66",
+    "experiment_id": "b3a2bf1b-ac5c-44bd-905b-1f60ed636b61",
+    "title": "在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的…",
+    "hypothesis": "在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的生成-真实数据分布差异量化指标，需考虑通信开销与数据异构性限制，可有效指导Sim-to-Real泛化优化，降低模型性能衰减。",
+    "research_goal": "在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的生成-真实数据分布差异量化指标，需考虑通信开销与数据异构性限制，可有效指导Sim-to-Real泛化优化，降低模型性能衰减。",
+    "method_summary": "联邦学习下MMD与对抗验证量化Sim-to-Real分布差异及泛化优化（改进版）",
+    "baseline_metrics": {
+      "mmd_score": 0.0,
+      "adversarial_auc": 0.489184,
+      "federated_accuracy": 0.0768,
+      "federated_f1_macro": 0.039662,
+      "communication_rounds": 10.0,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 15.0,
+      "overall_score": 2.1211
+    },
+    "best_metrics": {
+      "mmd_score": 0.128992,
+      "adversarial_auc": 0.525505,
+      "mmd_p_value": 0.05,
+      "overall_score": 2.6621,
+      "n_clients": 5.0,
+      "federated_f1_macro": 0.039662,
+      "noise_intensity": 0.5,
+      "dataset_rows": 5000.0,
+      "dataset_columns": 15.0,
+      "communication_rounds": 15.0,
+      "federated_accuracy": 0.0768
+    },
+    "label": 1,
+    "overall_improvement_rate": 1.0,
+    "primary_metric": "mmd_score",
+    "success": true,
+    "status": "paused",
+    "timestamp": "2026-08-05T06:11:01.440124+00:00",
+    "embedding_text": "在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的…\n在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的生成-真实数据分布差异量化指标，需考虑通信开销与数据异构性限制，可有效指导Sim-to-Real泛化优化，降低模型性能衰减。\n在联邦学习框架下，构建基于最大均值差异（MMD）与对抗验证的生成-真实数据分布差异量化指标，需考虑通信开销与数据异构性限制，可有效指导Sim-to-Real泛化优化，降低模型性能衰减。\n联邦学习下MMD与对抗验证量化Sim-to-Real分布差异及泛化优化（改进版）"
+  }
+]

@@ -1415,6 +1415,13 @@ class PipelineService:
         if getattr(self, "_checkpoint_was_loaded", False):
             start_idx = self._repair_checkpoint_results(results, start_idx)
 
+        # ── 主动协调：就绪检查 ──
+        try:
+            if self._run_options.get("enable_coordinator_agent", True):
+                self._proactive_check_readiness(project_id, research_question)
+        except Exception as readiness_err:
+            logger.warning(f"[主动协调] 就绪检查失败: {readiness_err}")
+
         for idx, d in enumerate(STAGE_DEFS):
             if idx < start_idx:
                 key = d["key"]
@@ -2050,6 +2057,8 @@ class PipelineService:
             try:
                 if self._run_options.get("enable_coordinator_agent", True):
                     self._coordinator_check(stage_key, full_output, research_question, project_id)
+                    # 主动协调：阶段建议
+                    self._proactive_suggest_stage(stage_key, full_output, project_id)
             except Exception as coord_err:
                 logger.warning(
                     f"[Pipeline] 大家长检查失败 stage={stage_key} run_id={self.run_id}: {coord_err}"
@@ -2131,9 +2140,14 @@ class PipelineService:
             "remediation": decision.get("remediation"),
             "action": decision.get("action", {}),
             "source": decision.get("source", "predefined"),
+            "pattern_id": decision.get("pattern_id"),
+            "extra": decision.get("extra"),
             "timestamp": decision.get("timestamp", datetime.now().isoformat()),
         }
         self._coordinator_hints.append(hint_entry)
+
+        # ── 实时持久化 hints 到数据库（避免 Pipeline 暂停时丢失）──
+        self._persist_coordinator_hints()
 
         # 自动执行补救
         action = decision.get("action", {})
@@ -2198,6 +2212,243 @@ class PipelineService:
             except Exception as e:
                 logger.warning(f"[大家长] 补全检查失败 stage={stage_key}: {e}")
 
+    # ── 主动协调 ──
+
+    def _save_proactive_advice(
+        self,
+        project_id: str,
+        advice_type: str,
+        severity: str,
+        title: str,
+        message: str,
+        stage: Optional[str] = None,
+        suggestion: Optional[str] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """保存主动协调建议到数据库"""
+        try:
+            from app.models.coordinator import CoordinatorAdvice
+            import uuid
+
+            advice = CoordinatorAdvice(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                advice_type=advice_type,
+                stage=stage,
+                severity=severity,
+                title=title,
+                message=message,
+                suggestion=suggestion,
+                extra_data=extra_data,
+                status="pending",
+                source="proactive",
+            )
+            self.db.add(advice)
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"[主动协调] 保存建议失败: {e}")
+
+    def _proactive_suggest_stage(
+        self,
+        stage: str,
+        result: Dict[str, Any],
+        project_id: str,
+    ) -> None:
+        """主动协调：阶段建议（非阻塞）"""
+        try:
+            coordinator = self._get_coordinator()
+            strategy = coordinator.suggest_stage_strategy(stage, result)
+            for suggestion in strategy.get("suggestions", []):
+                self._save_proactive_advice(
+                    project_id=project_id,
+                    advice_type="stage_strategy",
+                    severity=suggestion.get("severity", "info"),
+                    title=suggestion.get("title", ""),
+                    message=suggestion.get("message", ""),
+                    stage=stage,
+                    suggestion=suggestion.get("action"),
+                )
+                logger.info(
+                    f"[主动协调] 阶段建议 stage={stage} "
+                    f"type={suggestion.get('type')} severity={suggestion.get('severity')}"
+                )
+        except Exception as e:
+            logger.warning(f"[主动协调] 阶段建议失败 stage={stage}: {e}")
+
+    def _proactive_check_readiness(
+        self,
+        project_id: str,
+        research_question: str,
+    ) -> None:
+        """主动协调：Pipeline 启动前就绪检查（非阻塞）"""
+        try:
+            # 收集项目信息
+            from app.models.project import Project
+            from app.models.research import Evidence
+            from app.models.pipeline import PipelineRun, PipelineStatus as DB_PipelineStatus
+
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            if not project:
+                return
+
+            literature_facts = self.db.query(Evidence).filter(
+                Evidence.project_id == project_id,
+                Evidence.source_type == "literature",
+            ).all()
+
+            previous_runs = self.db.query(PipelineRun).filter(
+                PipelineRun.project_id == project_id,
+            ).order_by(PipelineRun.created_at.desc()).limit(5).all()
+
+            project_info = {
+                "research_question": research_question or project.description or "",
+                "literature_facts": [{"id": f.id} for f in literature_facts],
+                "config": project.extra_metadata or {},
+                "previous_runs": [
+                    {"status": r.status.value if hasattr(r.status, 'value') else r.status,
+                     "failed_stage": r.failed_stage}
+                    for r in previous_runs
+                ],
+            }
+
+            coordinator = self._get_coordinator()
+            readiness = coordinator.check_project_readiness(project_info)
+
+            # 保存问题
+            for issue in readiness.get("issues", []):
+                self._save_proactive_advice(
+                    project_id=project_id,
+                    advice_type="readiness",
+                    severity=issue.get("severity", "high"),
+                    title=f"就绪检查: {issue.get('type', '未知')}",
+                    message=issue.get("message", ""),
+                    suggestion="fix_readiness",
+                )
+
+            # 保存警告
+            for warning in readiness.get("warnings", []):
+                self._save_proactive_advice(
+                    project_id=project_id,
+                    advice_type="readiness",
+                    severity=warning.get("severity", "low"),
+                    title=f"就绪提醒: {warning.get('type', '未知')}",
+                    message=warning.get("message", ""),
+                    suggestion="review_readiness",
+                )
+
+            # 更新 ProactiveContext
+            from app.models.coordinator import ProactiveContext
+            ctx = self.db.query(ProactiveContext).filter(
+                ProactiveContext.project_id == project_id
+            ).first()
+            if not ctx:
+                ctx = ProactiveContext(project_id=project_id)
+                self.db.add(ctx)
+            ctx.last_readiness_check = readiness
+            ctx.last_readiness_at = datetime.now(timezone.utc)
+            self.db.commit()
+
+            logger.info(f"[主动协调] 就绪检查完成: ready={readiness['is_ready']}")
+        except Exception as e:
+            logger.warning(f"[主动协调] 就绪检查失败: {e}")
+
+    def _persist_coordinator_hints(self) -> None:
+        """实时持久化大家长 hints 到数据库（双重保障）
+
+        注意：此方法可能从后台 daemon 线程调用，使用独立数据库会话避免线程安全问题。
+        """
+        if not self._coordinator_hints or not self.db_pipeline_run:
+            return
+        project_id = self.db_pipeline_run.project_id
+        try:
+            # 1. 保存到 coordinator_advice 表（独立持久化，不会被 output_data 覆盖）
+            #    使用独立数据库会话，避免与主线程的会话冲突
+            self._save_hints_to_advice_table(self._coordinator_hints, project_id)
+        except Exception as e:
+            logger.warning(f"[大家长] 实时持久化 hints 失败: {e}")
+
+    def _save_hints_to_advice_table(
+        self, hints: List[Dict[str, Any]], project_id: str
+    ) -> None:
+        """将 hints 保存到 coordinator_advice 表（增量更新，保留后台线程写入的 fix_status）"""
+        from app.core.database import SessionLocal
+        from app.models.coordinator import CoordinatorAdvice
+        import uuid
+
+        if SessionLocal is None:
+            from app.core.database import init_db
+            init_db()
+
+        db = SessionLocal()
+        try:
+            # 获取已有记录中的 hint_id → 记录映射（用于保留 fix_status）
+            existing = db.query(CoordinatorAdvice).filter(
+                CoordinatorAdvice.project_id == project_id,
+                CoordinatorAdvice.advice_type == "stage_check",
+            ).all()
+            existing_by_hint_id: Dict[str, CoordinatorAdvice] = {}
+            for rec in existing:
+                ed = rec.extra_data or {}
+                hid = ed.get("hint_id", "")
+                if hid:
+                    existing_by_hint_id[hid] = rec
+
+            seen_hint_ids: set = set()
+            for hint in hints:
+                hint_id = hint.get("id", "")
+                seen_hint_ids.add(hint_id)
+
+                action = hint.get("action", {})
+                extra = {
+                    "action": action,
+                    "source": hint.get("source", "predefined"),
+                    "pattern_id": hint.get("pattern_id"),
+                    "hint_id": hint_id,
+                    "fix_status": hint.get("fix_status"),
+                    "fix_detail": hint.get("fix_detail"),
+                }
+
+                if hint_id in existing_by_hint_id:
+                    # 更新已有记录（保留已有 fix_status 如果新数据没有）
+                    rec = existing_by_hint_id[hint_id]
+                    rec.stage = hint.get("stage", "")
+                    rec.severity = hint.get("severity", "info")
+                    rec.title = (hint.get("message", "") or "")[:255]
+                    rec.message = hint.get("message", "") or ""
+                    rec.suggestion = hint.get("remediation", "") or ""
+                    # 合并 fix_status：新数据有则用新数据，否则保留旧数据
+                    existing_extra = dict(rec.extra_data or {})
+                    existing_extra.update({k: v for k, v in extra.items() if v is not None})
+                    rec.extra_data = existing_extra
+                else:
+                    # 插入新记录
+                    advice = CoordinatorAdvice(
+                        id=str(uuid.uuid4()),
+                        project_id=project_id,
+                        advice_type="stage_check",
+                        stage=hint.get("stage", ""),
+                        severity=hint.get("severity", "info"),
+                        title=(hint.get("message", "") or "")[:255],
+                        message=hint.get("message", "") or "",
+                        suggestion=hint.get("remediation", "") or "",
+                        extra_data=extra,
+                        status="pending",
+                        source="stage_check",
+                    )
+                    db.add(advice)
+
+            # 删除不在当前 hints 中的残留记录（旧阶段检查结果）
+            for hint_id, rec in existing_by_hint_id.items():
+                if hint_id not in seen_hint_ids:
+                    db.delete(rec)
+
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
+
     def _coordinator_llm_analysis_sync(
         self,
         stage: str,
@@ -2233,6 +2484,8 @@ class PipelineService:
                     break
             else:
                 self._coordinator_hints.append(new_hint)
+            # 持久化 LLM 分析结果
+            self._persist_coordinator_hints()
         except Exception as e:
             logger.warning(f"[大家长] LLM 兜底分析失败 stage={stage}: {e}")
 
@@ -2242,7 +2495,14 @@ class PipelineService:
         result: Dict[str, Any],
         project_id: str,
     ) -> None:
-        """自动修复报告内容问题（乱码/截断/标点重复）"""
+        """自动修复报告内容问题（乱码/截断/标点重复）
+
+        在后台 daemon 线程中运行，使用独立数据库会话避免线程安全问题。
+        修复结果直接持久化到数据库，不依赖 Pipeline 主流程的内存状态。
+        """
+        import threading
+
+        run_id = self.run_id
         try:
             chapters = result.get("chapters", {})
             if not chapters or not isinstance(chapters, dict):
@@ -2254,24 +2514,140 @@ class PipelineService:
             if not quality.get("has_issues"):
                 return
 
+            logger.info(f"[大家长] 自动修复报告开始: {len(quality.get('issues', []))} 个问题")
+
             import asyncio
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(
+            fixed_chapters = loop.run_until_complete(
                 self._auto_fix_report_async(chapters, quality.get("issues", []), project_id)
             )
             loop.close()
+
+            # 回写修复后的内容到 result（如果 Pipeline 还在运行，随完成一起持久化）
+            if fixed_chapters:
+                for ch_name, fixed_content in fixed_chapters.items():
+                    result["chapters"][ch_name] = fixed_content
+                logger.info(f"[大家长] 自动修复完成: 修复了 {len(fixed_chapters)} 个章节")
+
+                # ── 直接持久化修复后的 chapters 到数据库（独立会话）──
+                self._persist_fixed_chapters_to_db(run_id, fixed_chapters)
+
+                # ── 更新 hint 状态为「已修复」──
+                for hint in self._coordinator_hints:
+                    if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
+                        hint["fix_status"] = "completed"
+                        hint["fix_detail"] = f"已修复 {len(fixed_chapters)} 个章节: {', '.join(fixed_chapters.keys())}"
+                        hint["message"] = "报告内容质量问题已自动修复"
+                        break
+                # 持久化更新后的 hints
+                self._persist_coordinator_hints()
+            else:
+                logger.warning(f"[大家长] 自动修复未产生有效结果")
+                for hint in self._coordinator_hints:
+                    if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
+                        hint["fix_status"] = "failed"
+                        hint["fix_detail"] = "LLM 未返回有效修复内容"
+                        break
+                self._persist_coordinator_hints()
         except Exception as e:
             logger.warning(f"[大家长] 自动修复报告失败: {e}")
+            # 即使失败也更新 hint 状态
+            for hint in self._coordinator_hints:
+                if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
+                    hint["fix_status"] = "failed"
+                    hint["fix_detail"] = f"修复失败: {str(e)[:100]}"
+                    break
+            self._persist_coordinator_hints()
+
+    def _persist_fixed_chapters_to_db(self, run_id: str, fixed_chapters: Dict[str, str]) -> None:
+        """将修复后的章节内容直接写入数据库（使用独立会话，避免线程安全问题）"""
+        try:
+            from app.core.database import SessionLocal
+            from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStage
+            from app.models.project import Report
+            from sqlalchemy.orm.attributes import flag_modified
+
+            if SessionLocal is None:
+                from app.core.database import init_db
+                init_db()
+
+            db = SessionLocal()
+            try:
+                # 先通过 run_id 找到 PipelineRun 的 PK id
+                run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+                if not run:
+                    logger.warning(f"[大家长] 未找到 run_id={run_id} 对应的 PipelineRun")
+                    return
+
+                # 1. 更新 PipelineStageExecution 的 output_data
+                stage_exec = db.query(PipelineStageExecution).filter(
+                    PipelineStageExecution.pipeline_run_id == run.id,
+                    PipelineStageExecution.stage == PipelineStage.REPORT_GENERATION,
+                ).first()
+
+                if stage_exec and stage_exec.output_data and isinstance(stage_exec.output_data, dict):
+                    chapters = stage_exec.output_data.get("chapters", {})
+                    if isinstance(chapters, dict):
+                        chapters.update(fixed_chapters)
+                        stage_exec.output_data["chapters"] = chapters
+                        flag_modified(stage_exec, "output_data")
+                        db.commit()
+                        logger.info(f"[大家长] 修复内容已写入 stage_execution output_data")
+
+                # 2. 更新 PipelineRun 的 output_data
+                if run.output_data and isinstance(run.output_data, dict):
+                    report_data = run.output_data.get("report_generation", {})
+                    if isinstance(report_data, dict):
+                        chapters = report_data.get("chapters", {})
+                        if isinstance(chapters, dict):
+                            chapters.update(fixed_chapters)
+                            report_data["chapters"] = chapters
+                            flag_modified(run, "output_data")
+                            db.commit()
+                            logger.info(f"[大家长] 修复内容已写入 pipeline_run output_data")
+
+                # 3. 更新 Report 模型（确保报告页展示修复后的内容）
+                report = db.query(Report).filter(
+                    Report.project_id == run.project_id
+                ).order_by(Report.created_at.desc()).first()
+                if report:
+                    # 章节名到 Report 列名的映射
+                    CHAPTER_TO_REPORT_COLUMN = {
+                        "problem_statement": "problem_statement",
+                        "rationale": "rationale",
+                        "technical_details": "technical_details",
+                        "datasets": "datasets",
+                        "source": "source",
+                        "target": "target",
+                        "methods": "methods",
+                        "experiments": "experiments",
+                        "results": "results",
+                        "references": "references",
+                    }
+                    updated_any = False
+                    for ch_name, fixed_content in fixed_chapters.items():
+                        col_name = CHAPTER_TO_REPORT_COLUMN.get(ch_name)
+                        if col_name and hasattr(report, col_name):
+                            setattr(report, col_name, fixed_content)
+                            updated_any = True
+                    if updated_any:
+                        db.commit()
+                        logger.info(f"[大家长] 修复内容已写入 Report 模型: {len(fixed_chapters)} 个章节")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"[大家长] 持久化修复内容到数据库失败: {e}")
 
     async def _auto_fix_report_async(
         self,
         chapters: Dict[str, Any],
         issues: List[Dict[str, Any]],
         project_id: str,
-    ) -> None:
-        """异步：调用 LLM 修复报告章节中的内容问题"""
+    ) -> Dict[str, str]:
+        """异步：调用 LLM 修复报告章节中的内容问题，返回 {章节名: 修复后内容}"""
+        fixed_chapters: Dict[str, str] = {}
         try:
-            from app.services.llm_runtime import qwen_structured_chat
+            from app.services.qwen_client import qwen_chat
 
             # 按章节分组问题
             chapter_issues: Dict[str, List[Dict[str, Any]]] = {}
@@ -2282,7 +2658,6 @@ class PipelineService:
                 chapter_issues[ch].append(issue)
 
             # 逐章节修复
-            fixed_chapters = {}
             for ch_name, ch_issues in chapter_issues.items():
                 content = chapters.get(ch_name, "")
                 if not isinstance(content, str) or not content.strip():
@@ -2297,23 +2672,39 @@ class PipelineService:
 章节名称: {ch_name}
 问题描述: {issue_desc}
 
+修复要求：
+1. 仔细检查并修复所有标点符号重复问题（如"。。"、"，，"、"！！"等），确保每种标点只出现一次
+2. 移除所有 LaTeX 转义残留字符（如反斜杠加下划线、反斜杠加大括号、反斜杠加百分号等），将其转换为正常文本
+3. 如果文本明显被截断，补充完整；如果存在乱码，清理或替换
+
 原始内容:
 {content[:3000]}
 
 请修复并返回完整的修复后内容（仅返回修复后的文本，不要额外说明）。"""
 
-                fixed = await qwen_structured_chat(
+                fixed = qwen_chat(
                     prompt=prompt,
-                    model="qwen-plus",
-                    system_prompt="你是科研报告修复助手，只返回修复后的文本内容。",
+                    system_prompt="你是科研报告修复助手，只返回修复后的文本内容。务必修复所有标点重复和LaTeX转义残留。",
                 )
                 if fixed and len(fixed.strip()) > 10:
+                    # 后处理：强制替换标点重复和 LaTeX 转义残留
+                    import re
+                    fixed = re.sub(r'。{2,}', '。', fixed)
+                    fixed = re.sub(r'，{2,}', '，', fixed)
+                    fixed = re.sub(r'！{2,}', '！', fixed)
+                    fixed = re.sub(r'？{2,}', '？', fixed)
+                    fixed = re.sub(r'；{2,}', '；', fixed)
+                    fixed = re.sub(r'、{2,}', '、', fixed)
+                    fixed = re.sub(r'\.{3,}', '...', fixed)  # 英文省略号保留3个点
+                    fixed = re.sub(r',{2,}', ', ', fixed)
+                    fixed = re.sub(r'\\([_%#&\${}])', r'\1', fixed)  # 移除 LaTeX 转义反斜杠（如 \_ → _）
                     fixed_chapters[ch_name] = fixed.strip()
 
             if fixed_chapters:
                 logger.info(f"[大家长] 自动修复报告完成: 修复了 {len(fixed_chapters)} 个章节")
         except Exception as e:
             logger.warning(f"[大家长] 自动修复报告内容失败: {e}")
+        return fixed_chapters
 
     def _auto_evidence_iteration_sync(
         self,
@@ -3389,10 +3780,16 @@ class PipelineService:
                 self._coordinator_check_all_stages(results, research_question, project_id)
         except Exception as e:
             logger.warning(f"[大家长] 补全检查失败: {e}")
-        # ── 持久化大家长提示到 output_data ──
+        # ── 持久化大家长提示 ──
         if self._coordinator_hints:
             safe_results["coordinator_hints"] = self._coordinator_hints
             self.db_pipeline_run.output_data = safe_results
+            # 也保存到 coordinator_advice 表（独立持久化通道）
+            try:
+                project_id = self.db_pipeline_run.project_id
+                self._save_hints_to_advice_table(self._coordinator_hints, project_id)
+            except Exception as e:
+                logger.warning(f"[大家长] 最终持久化 hints 到 advice 表失败: {e}")
         meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
         meta["auxiliary_results"] = {
             k: safe_results[k]
@@ -3491,12 +3888,15 @@ class PipelineService:
         self.db_pipeline_run.total_duration_ms = total_duration_ms
         self.db_pipeline_run.error_message = error
         self.db_pipeline_run.current_stage = None
-        # ── 持久化大家长提示到 output_data（即使失败也保留）──
+        # ── 持久化大家长提示（即使失败也保留）──
         if self._coordinator_hints:
             try:
                 output_data = self.db_pipeline_run.output_data if isinstance(self.db_pipeline_run.output_data, dict) else {}
                 output_data["coordinator_hints"] = self._coordinator_hints
                 self.db_pipeline_run.output_data = output_data
+                # 也保存到 coordinator_advice 表
+                project_id = self.db_pipeline_run.project_id
+                self._save_hints_to_advice_table(self._coordinator_hints, project_id)
             except Exception:
                 logger.warning(f"[Pipeline] 失败时持久化大家长提示失败 run_id={self.run_id}")
         if failed_stage_name:

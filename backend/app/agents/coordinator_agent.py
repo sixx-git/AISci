@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +242,10 @@ class CoordinatorAgent:
             snapshot["missing_sections"] = result.get("missing_sections", [])
             snapshot["has_references"] = result.get("has_references", False)
             snapshot["refs_verified"] = result.get("refs_verified", 0)
+            # 内容质量检查（乱码/截断/标点重复）
+            chapters = result.get("chapters", {})
+            if chapters:
+                snapshot["content_quality"] = self.check_report_content_quality(chapters)
 
         return snapshot
 
@@ -367,7 +371,7 @@ class CoordinatorAgent:
     ) -> Dict[str, Any]:
         """当预定义规则未匹配且存在异常时，调用 LLM 做开放性错误分析"""
         try:
-            from app.services.llm_runtime import qwen_structured_chat
+            from app.services.qwen_client import qwen_chat
 
             prompt = f"""你是一个科研项目的协调者（大家长 Agent），负责分析各阶段的错误。
 
@@ -387,9 +391,8 @@ class CoordinatorAgent:
 输出 JSON:
 {{"severity": "...", "remediation": "...", "message": "...", "auto": false}}"""
 
-            llm_result = await qwen_structured_chat(
+            llm_result = qwen_chat(
                 prompt=prompt,
-                model="qwen-plus",
                 system_prompt="你是科研协调者，只输出 JSON。",
             )
             analysis = json.loads(llm_result)
@@ -454,6 +457,29 @@ class CoordinatorAgent:
                 issue_count += 1
                 continue  # 跳过后续检查，避免重复
 
+            # 1.5 LaTeX 转义残留检测（如 \_ 等）
+            latex_escape_pats = [
+                (r'\\_', '反斜杠加下划线转义'),
+                (r'\\\{', '反斜杠加大括号转义'),
+                (r'\\\}', '反斜杠加闭大括号转义'),
+                (r'\\%', '反斜杠加百分号转义'),
+                (r'\\#', '反斜杠加井号转义'),
+                (r'\\&', '反斜杠加and符号转义'),
+                (r'\\\$', '反斜杠加美元符转义'),
+                (r'\\\\', '连续反斜杠转义'),
+            ]
+            for pat, label in latex_escape_pats:
+                matches = re.findall(pat, ch_content)
+                if matches:
+                    issues.append({
+                        "chapter": ch_name,
+                        "type": "latex_escape",
+                        "detail": f"发现 {len(matches)} 处{label}",
+                        "sample": matches[0][:30],
+                    })
+                    issue_count += 1
+                    break  # 每个章节每个类型只报一次
+
             # 2. 截断检测：文本以不完整句子结束
             lines = ch_content.strip().split("\n")
             last_line = lines[-1].strip() if lines else ""
@@ -503,22 +529,20 @@ class CoordinatorAgent:
 
     def check_report_post(self, report_result: Dict[str, Any]) -> Dict[str, Any]:
         """报告生成后的专项检查（基于现有质量检查结果 + 内容质量检查）"""
-        quality = report_result.get("quality_check", {})
-        reviewer = report_result.get("review", {})
         chapters = report_result.get("chapters", {})
 
         # 内容质量检查（乱码/截断/标点重复）
         content_quality = self.check_report_content_quality(chapters)
 
         snapshot = {
-            "quality_score": quality.get("score", 100),
-            "critical_issues": quality.get("critical_issues", []),
-            "missing_sections": quality.get("missing_fields", []) + quality.get("missing_sections", []),
-            "has_references": bool(report_result.get("references", [])),
-            "refs_verified": quality.get("references_verified", 0),
-            "review_score": reviewer.get("review_score", 0),
-            "publish_ready": reviewer.get("publish_ready", False),
-            "weaknesses": reviewer.get("weaknesses", []),
+            "quality_score": report_result.get("quality_score", 100),
+            "critical_issues": report_result.get("critical_issues", []),
+            "missing_sections": report_result.get("missing_sections", []),
+            "has_references": report_result.get("has_references", False),
+            "refs_verified": report_result.get("refs_verified", 0),
+            "review_score": report_result.get("review_score", 0),
+            "publish_ready": report_result.get("publish_ready", False),
+            "weaknesses": report_result.get("weaknesses", []),
             "content_quality": content_quality,
         }
 
@@ -551,6 +575,176 @@ class CoordinatorAgent:
             "action": action,
             "timestamp": datetime.now().isoformat(),
         })
+
+    # ── 主动协调 ──
+
+    def check_project_readiness(self, project_info: Dict[str, Any]) -> Dict[str, Any]:
+        """检查项目是否具备运行 Pipeline 的基本条件"""
+        issues = []
+        warnings = []
+
+        # 1. 研究问题检查
+        rq = project_info.get("research_question", "")
+        if not rq or len(rq.strip()) < 20:
+            issues.append({
+                "type": "research_question",
+                "severity": "high",
+                "message": "研究问题描述过短（<20字），建议补充详细描述",
+            })
+        elif len(rq.strip()) < 50:
+            warnings.append({
+                "type": "research_question",
+                "severity": "low",
+                "message": "研究问题描述偏短，建议补充更多上下文",
+            })
+
+        # 2. 文献检查
+        literature_count = len(project_info.get("literature_facts", []))
+        if literature_count == 0:
+            issues.append({
+                "type": "literature",
+                "severity": "high",
+                "message": "未导入任何文献，Pipeline 需要文献数据支撑",
+            })
+        elif literature_count < 3:
+            warnings.append({
+                "type": "literature",
+                "severity": "medium",
+                "message": f"文献数量偏少（{literature_count}篇），建议导入更多文献",
+            })
+
+        # 3. 项目配置检查
+        config = project_info.get("config", {})
+        if not config.get("llm_model"):
+            warnings.append({
+                "type": "config",
+                "severity": "medium",
+                "message": "未配置 LLM 模型，将使用默认模型",
+            })
+
+        # 4. 历史运行检查
+        prev_runs = project_info.get("previous_runs", [])
+        if prev_runs:
+            last_run = prev_runs[-1] if isinstance(prev_runs, list) else None
+            if last_run and last_run.get("status") == "failed":
+                warnings.append({
+                    "type": "history",
+                    "severity": "low",
+                    "message": f"上次 Pipeline 运行失败（{last_run.get('failed_stage', '未知阶段')}），建议先修复问题",
+                })
+
+        is_ready = len(issues) == 0
+        return {
+            "is_ready": is_ready,
+            "issues": issues,
+            "warnings": warnings,
+            "summary": "项目就绪，可运行 Pipeline" if is_ready else f"存在 {len(issues)} 个问题待解决",
+            "check_time": datetime.now().isoformat(),
+        }
+
+    def suggest_stage_strategy(
+        self,
+        current_stage: str,
+        stage_results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """基于已完成阶段的结果，主动建议下一阶段的执行策略"""
+        suggestions = []
+
+        if current_stage == "literature_mining":
+            facts = stage_results.get("facts", [])
+            if len(facts) < 3:
+                suggestions.append({
+                    "type": "gap_search",
+                    "severity": "medium",
+                    "title": "建议启用知识缺口补搜",
+                    "message": f"文献事实仅 {len(facts)} 条，建议在知识缺口阶段启用补搜功能",
+                    "action": "enable_gap_search",
+                })
+
+        elif current_stage == "knowledge_gap":
+            gaps = stage_results.get("knowledge_gaps", [])
+            if not gaps:
+                suggestions.append({
+                    "type": "proceed_directly",
+                    "severity": "info",
+                    "title": "未检测到知识缺口",
+                    "message": "可跳过知识缺口阶段，直接进入假设生成",
+                    "action": "skip_to_hypothesis",
+                })
+
+        elif current_stage == "hypothesis_generation":
+            hypotheses = stage_results.get("hypotheses", [])
+            off_topic = sum(1 for h in hypotheses if isinstance(h, dict) and h.get("off_topic"))
+            total = len(hypotheses)
+            if total > 0 and off_topic / total > 0.5:
+                suggestions.append({
+                    "type": "review_carefully",
+                    "severity": "high",
+                    "title": "偏题假设比例较高",
+                    "message": f"偏题假设占比 {off_topic}/{total}，建议在假设评审阶段严格筛选",
+                    "action": "strict_review",
+                })
+
+        elif current_stage == "report_generation":
+            quality = stage_results.get("quality_score", 100)
+            if quality < 70:
+                suggestions.append({
+                    "type": "quality_check",
+                    "severity": "medium",
+                    "title": "报告质量偏低",
+                    "message": f"报告质量评分 {quality}，建议检查后手动修订",
+                    "action": "review_report",
+                })
+
+        return {
+            "stage": current_stage,
+            "suggestions": suggestions,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def detect_stalled_stages(
+        self,
+        stage_timestamps: Dict[str, Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """检测 Pipeline 是否卡在某个阶段过久"""
+        now = datetime.now()
+        stalled = []
+
+        for stage_name, info in stage_timestamps.items():
+            started_at = info.get("started_at")
+            if not started_at:
+                continue
+
+            if isinstance(started_at, str):
+                try:
+                    started_at = datetime.fromisoformat(started_at)
+                except (ValueError, TypeError):
+                    continue
+
+            elapsed_minutes = (now - started_at).total_seconds() / 60
+
+            # 阶段超时阈值（分钟）
+            thresholds = {
+                "problem_understanding": 10,
+                "literature_mining": 30,
+                "knowledge_gap": 15,
+                "hypothesis_generation": 20,
+                "hypothesis_review": 15,
+                "iterative_experiment": 60,
+                "report_generation": 30,
+            }
+            threshold = thresholds.get(stage_name, 30)
+
+            if elapsed_minutes > threshold:
+                stalled.append({
+                    "stage": stage_name,
+                    "elapsed_minutes": round(elapsed_minutes, 1),
+                    "threshold_minutes": threshold,
+                    "severity": "medium" if elapsed_minutes > threshold * 2 else "low",
+                    "message": f"阶段 {stage_name} 已运行 {round(elapsed_minutes)} 分钟（阈值 {threshold} 分钟）",
+                })
+
+        return stalled
 
     # ── 状态序列化 ──
 

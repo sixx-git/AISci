@@ -72,4 +72,44 @@ export const pipelineService = {
     }>>(`/pipeline/coordinator-hints/${runId}`);
     return data;
   },
+
+  // ── 主动协调 ──
+
+  /** GET /api/v1/pipeline/coordinator/advice/:projectId — 获取主动协调建议 */
+  async getCoordinatorAdvice(projectId: string, status?: string, adviceType?: string): Promise<ApiResponse<{
+    project_id: string;
+    advice_list: Array<Record<string, unknown>>;
+    count: number;
+  }>> {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (adviceType) params.set('advice_type', adviceType);
+    const qs = params.toString();
+    const { data } = await api.get(`/pipeline/coordinator/advice/${projectId}${qs ? '?' + qs : ''}`);
+    return data;
+  },
+
+  /** POST /api/v1/pipeline/coordinator/advice/:adviceId/ack — 确认建议 */
+  async acknowledgeAdvice(adviceId: string): Promise<ApiResponse<{ id: string }>> {
+    const { data } = await api.post(`/pipeline/coordinator/advice/${adviceId}/ack`);
+    return data;
+  },
+
+  /** POST /api/v1/pipeline/coordinator/advice/:adviceId/dismiss — 忽略建议 */
+  async dismissAdvice(adviceId: string): Promise<ApiResponse<{ id: string }>> {
+    const { data } = await api.post(`/pipeline/coordinator/advice/${adviceId}/dismiss`);
+    return data;
+  },
+
+  /** GET /api/v1/pipeline/coordinator/readiness/:projectId — 获取项目就绪状态 */
+  async getProjectReadiness(projectId: string): Promise<ApiResponse<{
+    is_ready: boolean;
+    issues: Array<Record<string, unknown>>;
+    warnings: Array<Record<string, unknown>>;
+    summary: string;
+    check_time: string;
+  }>> {
+    const { data } = await api.get(`/pipeline/coordinator/readiness/${projectId}`);
+    return data;
+  },
 };

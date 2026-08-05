@@ -33,6 +33,10 @@ from app.models.pipeline import (
     PipelineStage,
     PromptStatus,
 )
+from app.models.coordinator import (
+    CoordinatorAdvice,
+    ProactiveContext,
+)
 
 __all__ = [
     'Base',
@@ -61,4 +65,6 @@ __all__ = [
     'PipelineStatus',
     'PipelineStage',
     'PromptStatus',
+    'CoordinatorAdvice',
+    'ProactiveContext',
 ]

@@ -685,6 +685,41 @@ async def get_coordinator_hints(
     output_data = run.output_data if isinstance(run.output_data, dict) else {}
     coordinator_hints = output_data.get("coordinator_hints", [])
 
+    # ── 从 coordinator_advice 表读取 stage_check 记录（独立持久化，更可靠）──
+    from app.models.coordinator import CoordinatorAdvice
+
+    project_id = run.project_id
+    advice_records = (
+        db.query(CoordinatorAdvice)
+        .filter(
+            CoordinatorAdvice.project_id == project_id,
+            CoordinatorAdvice.advice_type == "stage_check",
+        )
+        .order_by(CoordinatorAdvice.created_at.asc())
+        .all()
+    )
+
+    if advice_records:
+        # 将 advice 记录转换为 hint 格式
+        advice_hints = []
+        for adv in advice_records:
+            extra = adv.extra_data or {}
+            advice_hints.append({
+                "id": extra.get("hint_id", adv.id),
+                "stage": adv.stage or "",
+                "severity": adv.severity,
+                "message": adv.message,
+                "remediation": adv.suggestion or "",
+                "action": extra.get("action", {}),
+                "source": extra.get("source", "stage_check"),
+                "pattern_id": extra.get("pattern_id"),
+                "fix_status": extra.get("fix_status"),
+                "fix_detail": extra.get("fix_detail"),
+                "timestamp": adv.created_at.isoformat() if adv.created_at else "",
+            })
+        # 优先使用 advice 表的数据（更可靠），如果为空则回退到 output_data
+        coordinator_hints = advice_hints
+
     # 也检查 extra_metadata 中的闭环决策记录
     extra_meta = run.extra_metadata if isinstance(run.extra_metadata, dict) else {}
     decisions = extra_meta.get("closed_loop_decisions", [])
@@ -703,3 +738,133 @@ async def get_coordinator_hints(
             "hint_count": len(coordinator_hints),
         },
     )
+
+
+# ── 主动协调 ──
+
+
+@router.get("/coordinator/advice/{project_id}")
+async def get_coordinator_advice(
+    project_id: str,
+    status: Optional[str] = None,
+    advice_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """获取项目的主动协调建议列表"""
+    from app.models.coordinator import CoordinatorAdvice
+
+    query = db.query(CoordinatorAdvice).filter(
+        CoordinatorAdvice.project_id == project_id
+    )
+    if status:
+        query = query.filter(CoordinatorAdvice.status == status)
+    if advice_type:
+        query = query.filter(CoordinatorAdvice.advice_type == advice_type)
+    query = query.order_by(CoordinatorAdvice.created_at.desc()).limit(50)
+
+    advice_list = []
+    for a in query.all():
+        advice_list.append({
+            "id": a.id,
+            "project_id": a.project_id,
+            "advice_type": a.advice_type,
+            "stage": a.stage,
+            "severity": a.severity,
+            "title": a.title,
+            "message": a.message,
+            "suggestion": a.suggestion,
+            "extra_data": a.extra_data,
+            "status": a.status,
+            "source": a.source,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "acknowledged_at": a.acknowledged_at.isoformat() if a.acknowledged_at else None,
+            "dismissed_at": a.dismissed_at.isoformat() if a.dismissed_at else None,
+        })
+
+    return ResponseModel(code=200, message="获取成功", data={
+        "project_id": project_id,
+        "advice_list": advice_list,
+        "count": len(advice_list),
+    })
+
+
+@router.post("/coordinator/advice/{advice_id}/ack")
+async def acknowledge_coordinator_advice(
+    advice_id: str,
+    db: Session = Depends(get_db),
+):
+    """确认主动协调建议"""
+    from app.models.coordinator import CoordinatorAdvice
+
+    advice = db.query(CoordinatorAdvice).filter(CoordinatorAdvice.id == advice_id).first()
+    if not advice:
+        raise HTTPException(status_code=404, detail="建议记录未找到")
+
+    advice.status = "acknowledged"
+    advice.acknowledged_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return ResponseModel(code=200, message="已确认", data={"id": advice_id})
+
+
+@router.post("/coordinator/advice/{advice_id}/dismiss")
+async def dismiss_coordinator_advice(
+    advice_id: str,
+    db: Session = Depends(get_db),
+):
+    """忽略主动协调建议"""
+    from app.models.coordinator import CoordinatorAdvice
+
+    advice = db.query(CoordinatorAdvice).filter(CoordinatorAdvice.id == advice_id).first()
+    if not advice:
+        raise HTTPException(status_code=404, detail="建议记录未找到")
+
+    advice.status = "dismissed"
+    advice.dismissed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return ResponseModel(code=200, message="已忽略", data={"id": advice_id})
+
+
+@router.get("/coordinator/readiness/{project_id}")
+async def get_project_readiness(
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """获取项目就绪状态检查"""
+    # 收集项目信息
+    from app.models.project import Project
+    from app.models.research import Evidence
+    from app.models.pipeline import PipelineRun, PipelineStatus as DB_PipelineStatus
+    from app.agents.coordinator_agent import CoordinatorAgent
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目未找到")
+
+    # 获取文献数据
+    literature_facts = db.query(Evidence).filter(
+        Evidence.project_id == project_id,
+        Evidence.source_type == "literature",
+    ).all()
+
+    # 获取历史运行记录
+    previous_runs = db.query(PipelineRun).filter(
+        PipelineRun.project_id == project_id,
+    ).order_by(PipelineRun.created_at.desc()).limit(5).all()
+
+    project_info = {
+        "research_question": project.description or "",
+        "literature_facts": [{"id": f.id} for f in literature_facts],
+        "config": project.extra_metadata or {},
+        "previous_runs": [
+            {"status": r.status.value if hasattr(r.status, 'value') else r.status,
+             "failed_stage": r.failed_stage}
+            for r in previous_runs
+        ],
+    }
+
+    coordinator = CoordinatorAgent()
+    result = coordinator.check_project_readiness(project_info)
+
+    return ResponseModel(code=200, message="获取成功", data=result)

@@ -401,6 +401,7 @@ class ReportGenerationAgent:
                     "publish_ready": reviewer_data.get("publish_ready", False),
                     "weaknesses": reviewer_data.get("weaknesses", []),
                     "proposal_issues": proposal_data.get("issues", []),
+                    "chapters": result.get("chapters", {}),
                 }
                 coordinator_decision = coordinator.check_report_post(report_check_data)
                 result["coordinator_check"] = {

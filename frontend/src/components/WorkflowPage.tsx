@@ -20,6 +20,7 @@ import {
 import { WorkflowAdvancedLinks } from '@/components/WorkflowAdvancedLinks';
 import { RunHistoryPanel } from '@/components/RunHistoryPanel';
 import { CoordinatorHints, type CoordinatorHint } from '@/components/CoordinatorHints';
+import { ProactiveAdvicePanel } from '@/components/ProactiveAdvicePanel';
 import { HitlGateModal } from '@/components/HitlGateModal';
 import { ReportPdfPreview, ReportPreviewHeader } from '@/components/ReportPdfPreview';
 import { Button } from '@/components/Button';
@@ -1368,6 +1369,10 @@ export function WorkflowPage({
           remediation: (h.remediation as string) || null,
           action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
           source: (h.source as string) || 'predefined',
+          pattern_id: (h.pattern_id as string) || undefined,
+          fix_status: ((h.fix_status as string) || undefined) as CoordinatorHint['fix_status'],
+          fix_detail: (h.fix_detail as string) || undefined,
+          extra: (h.extra as CoordinatorHint['extra']) || undefined,
           timestamp: (h.timestamp as string) || new Date().toISOString(),
         })));
       }
@@ -1378,6 +1383,38 @@ export function WorkflowPage({
     });
     return () => { cancelled = true; };
   }, [effectiveRunId]);
+
+  // ── 大家长 Agent 提示轮询（Pipeline 运行中动态刷新）──
+  useEffect(() => {
+    if (!effectiveRunId) return;
+    const isRunning = pipelineRunStatus === 'RUNNING' || runState === 'running' || runState === 'polling';
+    if (!isRunning) return;
+
+    const poll = setInterval(() => {
+      pipelineService.getCoordinatorHints(effectiveRunId).then((res) => {
+        if (res.code === 200 && res.data) {
+          const rawHints = res.data.hints || [];
+          setCoordinatorHints(rawHints.map((h, i) => ({
+            id: String((h.id as string) || `${effectiveRunId}_${i}`),
+            stage: (h.stage as string) || '',
+            severity: ((h.severity as string) || 'info') as CoordinatorHint['severity'],
+            message: (h.message as string) || '',
+            remediation: (h.remediation as string) || null,
+            action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
+            source: (h.source as string) || 'predefined',
+            pattern_id: (h.pattern_id as string) || undefined,
+            fix_status: ((h.fix_status as string) || undefined) as CoordinatorHint['fix_status'],
+            fix_detail: (h.fix_detail as string) || undefined,
+            extra: (h.extra as CoordinatorHint['extra']) || undefined,
+            timestamp: (h.timestamp as string) || new Date().toISOString(),
+          })));
+        }
+      }).catch(() => { /* ignore polling errors */ });
+    }, 5000); // 5 秒轮询
+
+    return () => clearInterval(poll);
+  }, [effectiveRunId, pipelineRunStatus, runState]);
+
   const isHitlGatePaused = Boolean(
     projectId
     && effectiveHitlRunId
@@ -1646,9 +1683,9 @@ export function WorkflowPage({
         </CollapsiblePanel>
       )}
 
-      {/* 大家长 Agent 提示 */}
-      {effectiveRunId && (
-        <CollapsiblePanel title="🧠 大家长 Agent" subtitle="阶段检查与补救建议" defaultOpen={true} className="mb-6">
+      {/* 大家长 Agent 提示 + 主动协调建议 */}
+      {(effectiveRunId || projectId) && (
+        <CollapsiblePanel title="🧠 大家长 Agent" subtitle="阶段检查、补救建议与主动协调" defaultOpen={true} className="mb-6">
           {coordinatorLoading && (
             <div className="text-center py-2 text-sm text-bp-muted">加载中…</div>
           )}
@@ -1665,6 +1702,9 @@ export function WorkflowPage({
               // 简单展开：无需特殊处理
             }}
           />
+          <div className="mt-4 border-t border-bp-cyan-dim pt-4">
+            {projectId && <ProactiveAdvicePanel projectId={projectId} compact />}
+          </div>
         </CollapsiblePanel>
       )}
 
