@@ -6,8 +6,6 @@ import copy
 import uuid
 import json
 import logging
-import os
-import threading
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
@@ -36,13 +34,12 @@ from app.models.project import Report, Project, ProjectStatus
 from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.core.pipeline_modes import (
     PipelineMode,
-    normalize_pipeline_mode,
     resolve_run_options,
-    ENSEMBLE_ACCEPT_SCORE,
     HITL_GATE_STAGE_LABELS,
 )
-from app.core.pipeline_exceptions import HitlGatePause, SingleStageRerunComplete, LiteratureNotFoundError
+from app.core.pipeline_exceptions import HitlGatePause, UserPause, SingleStageRerunComplete, LiteratureNotFoundError
 from app.core.quality_scoring import enrich_quality_trend_entry
+from app.core.iterative_science import actions_to_feedback_constraints
 from app.services.loops.closed_loop_helpers import infer_quality_trend_entries
 from app.core.execution_metadata import annotate_validation_execution_metadata
 from app.services.hypothesis_service import HypothesisService
@@ -163,7 +160,11 @@ class PipelineService:
                 project_id=self.db_pipeline_run.project_id,
             )
         except Exception:
-            pass
+            logger.exception(
+                "审计链写入失败 run_id=%s type=%s",
+                getattr(self.db_pipeline_run, "run_id", None),
+                record_type,
+            )
 
     def _record_closed_loop_decision(
         self,
@@ -203,7 +204,14 @@ class PipelineService:
         try:
             self.db.commit()
         except Exception:
-            pass
+            logger.exception(
+                "闭环决策 commit 失败 run_id=%s",
+                getattr(self.db_pipeline_run, "run_id", None),
+            )
+            try:
+                self.db.rollback()
+            except Exception:
+                logger.exception("闭环决策 rollback 失败")
 
     def start_pipeline_async(self, request: PipelineRunRequest) -> str:
         """
@@ -245,12 +253,28 @@ class PipelineService:
         rerun_mode: str = "single_stage",
         human_feedback: str = "",
         run_options: Optional[Dict[str, Any]] = None,
+        *,
+        in_place: bool = False,
     ) -> str:
-        """从指定阶段重新运行：single_stage 原地更新同一 run；from_stage_onward 分叉新 run。"""
+        """从指定阶段重新运行。
+
+        - single_stage：原地只重跑该阶段
+        - from_stage_onward + in_place=False：分叉新 run，从该阶段跑到结束
+        - from_stage_onward + in_place=True：同一 run 从该阶段跑到结束
+        """
         if rerun_mode not in ("single_stage", "from_stage_onward"):
             raise ValueError(f"无效 rerun_mode: {rerun_mode}")
         if rerun_mode == "single_stage":
             return self._prepare_in_place_single_stage_rerun(
+                project_id=project_id,
+                run_id=parent_run_id,
+                from_stage=from_stage,
+                use_human_modified_output=use_human_modified_output,
+                human_feedback=human_feedback,
+                run_options=run_options,
+            )
+        if in_place:
+            return self._prepare_in_place_from_stage_onward_rerun(
                 project_id=project_id,
                 run_id=parent_run_id,
                 from_stage=from_stage,
@@ -426,6 +450,157 @@ class PipelineService:
         )
         return run_id
 
+    def _prepare_in_place_from_stage_onward_rerun(
+        self,
+        project_id: str,
+        run_id: str,
+        from_stage: str,
+        use_human_modified_output: bool = True,
+        human_feedback: str = "",
+        run_options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """同一 run 从指定阶段起重跑至结束（重置该阶段及下游输出）。"""
+        stage_aliases = {"data_acquisition": "knowledge_gap"}
+        from_stage = stage_aliases.get(from_stage, from_stage)
+        if from_stage not in STAGE_KEY_ORDER:
+            raise ValueError(f"无效 stage: {from_stage}")
+
+        run = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == run_id).first()
+        if not run:
+            raise ValueError(f"run 未找到: {run_id}")
+        if run.project_id != project_id:
+            raise ValueError("project_id 与 run 不匹配")
+
+        if run_options is not None:
+            run.input_data = self._merge_run_input_options(
+                run.input_data if isinstance(run.input_data, dict) else {},
+                run_options,
+            )
+            flag_modified(run, "input_data")
+
+        start_idx = STAGE_KEY_ORDER.index(from_stage)
+        human_loop = StageHumanLoopService(self.db)
+        stage_rows = (
+            self.db.query(DB_PipelineStageExecution)
+            .filter(DB_PipelineStageExecution.pipeline_run_id == run.id)
+            .order_by(DB_PipelineStageExecution.stage_order)
+            .all()
+        )
+        stage_map = {
+            (s.stage.value if hasattr(s.stage, "value") else str(s.stage)): s for s in stage_rows
+        }
+        target_exec = stage_map.get(from_stage)
+        if not target_exec:
+            raise ValueError(f"阶段 {from_stage} 不存在于 run {run_id}")
+
+        for idx in range(start_idx, len(STAGE_DEFS)):
+            key = STAGE_DEFS[idx]["key"]
+            exec_row = stage_map.get(key)
+            if not exec_row:
+                continue
+            if exec_row.output_data is not None or get_stage_meta(exec_row).get("human_modified_output") is not None:
+                self._archive_stage_output_for_rerun(exec_row, from_stage)
+            exec_row.status = DB_PipelineStatus.PENDING
+            exec_row.started_at = None
+            exec_row.completed_at = None
+            exec_row.duration_ms = None
+            exec_row.error_message = None
+            exec_row.output_data = None
+            ds_meta = get_stage_meta(exec_row)
+            if key != from_stage:
+                ds_meta["stale_after_upstream_rerun"] = from_stage
+            else:
+                ds_meta.pop("stale_after_upstream_rerun", None)
+            exec_row.extra_metadata = ds_meta
+            flag_modified(exec_row, "extra_metadata")
+
+        feedback_constraints: List[str] = []
+        downstream_ctx = human_loop.summarize_downstream_context_for_rerun(run, from_stage)
+        for c in downstream_ctx:
+            if c and c not in feedback_constraints:
+                feedback_constraints.append(c)
+        if human_feedback and human_feedback.strip():
+            feedback_constraints.append(human_feedback.strip())
+            try:
+                from app.services.feedback_hub_service import get_feedback_hub_service
+
+                get_feedback_hub_service(self.db).record_hitl_feedback(
+                    project_id,
+                    stage=from_stage,
+                    message=human_feedback.strip(),
+                    trigger_rerun=True,
+                )
+            except Exception as fb_err:
+                logger.warning("[Rerun] Feedback Hub 记录失败: %s", fb_err)
+
+        run.version = (run.version or 1) + 1
+        run.status = DB_PipelineStatus.PENDING
+        run.current_stage = from_stage
+        run.error_message = None
+        run.failed_stage = None
+
+        if isinstance(run.output_data, dict):
+            trimmed = {
+                k: v
+                for k, v in run.output_data.items()
+                if k not in STAGE_KEY_ORDER or STAGE_KEY_ORDER.index(k) < start_idx
+            }
+            run.output_data = trimmed
+            flag_modified(run, "output_data")
+
+        meta = dict(run.extra_metadata or {})
+        meta.update(
+            {
+                "rerun_from_stage": from_stage,
+                "rerun_mode": "from_stage_onward",
+                "in_place_rerun": True,
+                "use_human_modified_output": use_human_modified_output,
+                "feedback_constraints": feedback_constraints,
+                "rerun_downstream_context": downstream_ctx,
+                "downstream_stale_from": from_stage,
+            }
+        )
+        meta.pop("pipeline_checkpoint", None)
+        meta.pop("parent_run_id", None)
+
+        gate = dict(meta.get("hitl_gate") or {})
+        if gate.get("paused") or from_stage == "literature_mining":
+            cleared = list(gate.get("cleared_stages") or [])
+            if from_stage not in cleared:
+                cleared.append(from_stage)
+            gate["paused"] = False
+            gate["resumed"] = True
+            gate["cleared_stages"] = cleared
+            gate["last_action"] = "continue"
+            gate["resume_phase"] = (
+                "after_problem_understanding"
+                if from_stage == "literature_mining"
+                else gate.get("resume_phase")
+            )
+            gate["continued_at"] = datetime.now(CHINA_TZ).isoformat()
+            meta["hitl_gate"] = gate
+
+        run.extra_metadata = meta
+        flag_modified(run, "extra_metadata")
+        self.db.commit()
+
+        self.run_id = run_id
+        self.db_pipeline_run = run
+        self._start_idx = start_idx
+        self._seeded_results = human_loop.seed_results_from_run(run, from_stage, use_human_modified_output)
+        self._rerun_single_stage_only = False
+        self._in_place_rerun = True
+        self._parent_run_id_for_rerun = None
+        for s in stage_rows:
+            self.db_stage_executions[s.stage_order] = s
+        logger.info(
+            "[Pipeline] 原地从阶段起续跑已准备 run_id=%s from=%s version=%s",
+            run_id,
+            from_stage,
+            run.version,
+        )
+        return run_id
+
     def _prepare_fork_rerun_from_stage(
         self,
         project_id: str,
@@ -587,6 +762,18 @@ class PipelineService:
         research_question = self.db_pipeline_run.research_question or ""
         project_id = self.db_pipeline_run.project_id or ""
 
+        output_data = (
+            self.db_pipeline_run.output_data
+            if isinstance(self.db_pipeline_run.output_data, dict)
+            else {}
+        )
+        if output_data.get("coordinator_hints"):
+            self._coordinator_hints = list(output_data.get("coordinator_hints") or [])
+        else:
+            loaded_hints = self.load_coordinator_hints(self.db, self.db_pipeline_run)
+            if loaded_hints:
+                self._coordinator_hints = loaded_hints
+
         existing_stages = (
             self.db.query(DB_PipelineStageExecution)
             .filter(DB_PipelineStageExecution.pipeline_run_id == self.db_pipeline_run.id)
@@ -604,7 +791,8 @@ class PipelineService:
                 meta["rerun_from_stage"],
                 meta.get("use_human_modified_output", True),
             )
-            self._rerun_single_stage_only = True
+            # single_stage 只跑一阶段；from_stage_onward 从该阶段跑到结束
+            self._rerun_single_stage_only = meta.get("rerun_mode", "single_stage") == "single_stage"
             self._in_place_rerun = True
             self._parent_run_id_for_rerun = None
             for c in meta.get("feedback_constraints") or []:
@@ -647,17 +835,33 @@ class PipelineService:
             gate["checkpoint_consumed"] = True
             meta = dict(meta)
             meta["hitl_gate"] = gate
+            user_pause = dict(meta.get("user_pause") or {})
+            if user_pause:
+                user_pause["paused"] = False
+                user_pause["requested"] = False
+                user_pause["checkpoint_consumed"] = True
+                meta["user_pause"] = user_pause
             self.db_pipeline_run.extra_metadata = meta
             flag_modified(self.db_pipeline_run, "extra_metadata")
             try:
                 self.db.commit()
             except Exception:
-                pass
-            logger.info(
-                "[Pipeline] 已加载 HITL checkpoint run_id=%s phase=%s",
-                run_id,
-                cp.get("resume_phase"),
-            )
+                logger.exception(
+                    "[Pipeline] HITL checkpoint commit 失败 run_id=%s phase=%s",
+                    run_id,
+                    cp.get("resume_phase"),
+                )
+                try:
+                    self.db.rollback()
+                except Exception:
+                    logger.exception("[Pipeline] HITL checkpoint rollback 失败")
+                self._checkpoint_resume = None
+            else:
+                logger.info(
+                    "[Pipeline] 已加载 HITL checkpoint run_id=%s phase=%s",
+                    run_id,
+                    cp.get("resume_phase"),
+                )
 
         set_prompt_project_id(project_id)
         self._run_pipeline_stages(research_question, project_id)
@@ -1167,6 +1371,9 @@ class PipelineService:
     def _resume_phase_to_start_idx(self, resume_phase: str) -> int:
         # 与 STAGE_DEFS 下标对齐（0..6）；超出 len 表示后续不再执行
         mapping = {
+            "after_problem_understanding": 1,
+            "after_literature_mining": 2,
+            "after_knowledge_gap": 3,
             "after_hypothesis_generation": 4,
             "after_hypothesis_review": 5,
             "after_iterative_experiment": 6,
@@ -1478,6 +1685,7 @@ class PipelineService:
                     lambda: self._exec_literature_mining_stage(
                         project_id, research_question, results
                     ))
+                self._pause_for_literature_pdf_handoff(results)
 
             # ── 阶段 3: KnowledgeGapAgent ──
             if start_idx <= 2:
@@ -1487,6 +1695,10 @@ class PipelineService:
                         project_id,
                         results.get("problem_understanding"),
                     ))
+                try:
+                    self._try_gap_literature_enrichment(project_id, research_question, results)
+                except Exception as gap_err:
+                    logger.warning(f"Gap 文献补搜失败: {gap_err}")
             
             # ── 阶段 4: HypothesisGenerationAgent ──
             if start_idx <= 3:
@@ -1713,6 +1925,34 @@ class PipelineService:
                 failed_stage=None,
             )
 
+        except UserPause as pause:
+            pipeline_end = datetime.now(CHINA_TZ)
+            total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
+            logger.info(
+                f"[Pipeline] 用户暂停 run_id={self.run_id} stage={pause.stage_key}"
+            )
+            meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+            return PipelineRunResult(
+                pipeline_id=self.run_id,
+                project_id=project_id,
+                research_question=research_question,
+                status=PipelineStatus.PAUSED,
+                stages=stages,
+                total_duration=total_duration_ms / 1000.0,
+                problem_understanding=results.get('problem_understanding'),
+                literature_mining=results.get('literature_mining'),
+                knowledge_gap=results.get('knowledge_gap'),
+                hypothesis_generation=results.get('hypothesis_generation'),
+                hypothesis_review=results.get('hypothesis_review'),
+                **self._flatten_ed_sv_fields(results),
+                report_generation=results.get('report_generation'),
+                run_id=self.run_id,
+                extra_metadata=meta,
+                created_at=pipeline_start,
+                completed_at=pipeline_end,
+                failed_stage=None,
+            )
+
         except SingleStageRerunComplete as done:
             pipeline_end = datetime.now(CHINA_TZ)
             total_duration_ms = int((pipeline_end - pipeline_start).total_seconds() * 1000)
@@ -1819,6 +2059,114 @@ class PipelineService:
             return False
         return True
 
+    def _should_pause_after_literature_mining(self) -> bool:
+        if not self._run_options.get("pause_after_literature_mining", True):
+            return False
+        start_idx = getattr(self, "_start_idx", 0) or 0
+        if start_idx > 1:
+            return False
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if self.db_pipeline_run and isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        if meta.get("rerun_from_stage") in {
+            "knowledge_gap",
+            "hypothesis_generation",
+            "hypothesis_review",
+            "iterative_experiment",
+            "report_generation",
+        }:
+            return False
+        return True
+
+    @staticmethod
+    def _literature_has_retrievable_papers(results: Dict[str, Any]) -> bool:
+        lm = results.get("literature_mining") or {}
+        if not isinstance(lm, dict):
+            return False
+        if lm.get("retrieved_papers") or lm.get("source_papers"):
+            return True
+        if int(lm.get("literature_search_count") or 0) > 0:
+            return True
+        if int(lm.get("literature_import_count") or lm.get("imported_documents") or 0) > 0:
+            return True
+        if int(lm.get("literature_selected_count") or 0) > 0:
+            return True
+        if int(lm.get("candidate_references_count") or 0) > 0:
+            return True
+        discovery = ((lm.get("skill_outputs") or {}).get("literature_discovery") or {}).get("data") or {}
+        if isinstance(discovery, dict) and (
+            discovery.get("papers") or discovery.get("total") or discovery.get("candidate_count")
+        ):
+            return True
+        return False
+
+    def _pause_for_literature_pdf_handoff(self, results: Dict[str, Any]) -> None:
+        """文献挖掘检索到论文后暂停，引导用户下载 PDF 并上传解析。"""
+        if not self._should_pause_after_literature_mining():
+            return
+        if not self._literature_has_retrievable_papers(results):
+            return
+        stage_key = "literature_mining"
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        gate = dict(meta.get("hitl_gate") or {})
+        cleared = list(gate.get("cleared_stages") or [])
+        if stage_key in cleared:
+            return
+
+        resume_phase = f"after_{stage_key}"
+        lm = results.get("literature_mining") or {}
+        paper_count = int(
+            lm.get("literature_selected_count")
+            or lm.get("candidate_references_count")
+            or len(lm.get("retrieved_papers") or [])
+            or 0
+        )
+        gate.update({
+            "paused": True,
+            "stage": stage_key,
+            "stage_label": HITL_GATE_STAGE_LABELS.get(stage_key, stage_key),
+            "resume_phase": resume_phase,
+            "paused_at": datetime.now(CHINA_TZ).isoformat(),
+            "cleared_stages": cleared,
+            "handoff": "literature_library",
+            "paper_count": paper_count,
+            "hint": "请下载检索到的论文 PDF，上传到文献库并完成解析后再继续流水线",
+        })
+        meta["hitl_gate"] = gate
+        meta["pipeline_checkpoint"] = {
+            "results": self._checkpoint_safe_results(results),
+            "resume_phase": resume_phase,
+            "kind": "literature_pdf_handoff",
+        }
+        self.db_pipeline_run.status = DB_PipelineStatus.HUMAN_REVIEW_REQUIRED
+        self.db_pipeline_run.current_stage = stage_key
+        self.db_pipeline_run.extra_metadata = meta
+        flag_modified(self.db_pipeline_run, "extra_metadata")
+        self.db.commit()
+        self._record_closed_loop_event(
+            "hitl_gate_pause",
+            {
+                "stage": stage_key,
+                "stage_label": gate.get("stage_label"),
+                "summary": (
+                    f"文献挖掘已检索到约 {paper_count} 篇相关论文："
+                    "请前往「文献库」下载 PDF、上传解析后继续流水线"
+                ),
+                "quality_trend_entry": {
+                    "stage": "hitl_gate",
+                    "score": 6.0,
+                    "label": stage_key,
+                },
+            },
+        )
+        raise HitlGatePause(stage_key)
+
     def _pause_for_feasibility_handoff(self, results: Dict[str, Any]) -> None:
         """可行性评估完成后暂停 Pipeline，引导用户前往「迭代实验」页。"""
         if not self._run_options.get("pause_after_hypothesis_review", True):
@@ -1886,6 +2234,151 @@ class PipelineService:
         from app.services.data_finder_slim import slim_results_for_checkpoint
 
         return slim_results_for_checkpoint(results)
+
+    def _is_user_pause_requested(self) -> bool:
+        """从 DB 重新读取 user_pause.requested（跨请求写入）。"""
+        if not self.db_pipeline_run:
+            return False
+        try:
+            self.db.refresh(self.db_pipeline_run)
+        except Exception:
+            try:
+                self.db.expire(self.db_pipeline_run)
+                self.db.refresh(self.db_pipeline_run)
+            except Exception:
+                return False
+        meta = self.db_pipeline_run.extra_metadata if isinstance(self.db_pipeline_run.extra_metadata, dict) else {}
+        up = meta.get("user_pause") or {}
+        return bool(up.get("requested"))
+
+    def _apply_user_pause(self, stage_key: str, results: Dict[str, Any]) -> None:
+        """写入暂停检查点并将 run 标为 paused，随后抛出 UserPause。"""
+        resume_phase = f"after_{stage_key}"
+        meta = (
+            dict(self.db_pipeline_run.extra_metadata)
+            if isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        up = dict(meta.get("user_pause") or {})
+        up.update({
+            "requested": False,
+            "paused": True,
+            "stage": stage_key,
+            "resume_phase": resume_phase,
+            "paused_at": datetime.now(CHINA_TZ).isoformat(),
+        })
+        meta["user_pause"] = up
+        meta["pipeline_checkpoint"] = {
+            "results": self._checkpoint_safe_results(results),
+            "resume_phase": resume_phase,
+            "kind": "user_pause",
+        }
+        self.db_pipeline_run.status = DB_PipelineStatus.PAUSED
+        self.db_pipeline_run.current_stage = stage_key
+        self.db_pipeline_run.extra_metadata = meta
+        flag_modified(self.db_pipeline_run, "extra_metadata")
+        self.db.commit()
+        self._record_closed_loop_event(
+            "user_pause",
+            {
+                "stage": stage_key,
+                "resume_phase": resume_phase,
+                "summary": f"用户暂停：已完成「{stage_key}」，可继续运行后续阶段",
+            },
+        )
+        raise UserPause(stage_key)
+
+    def _maybe_honor_user_pause_before_stage(self, idx: int, results: Dict[str, Any]) -> None:
+        """下一阶段开始前检查：若用户已点暂停，则停在上一阶段之后。"""
+        if not self._is_user_pause_requested():
+            return
+        if idx <= 0:
+            return
+        prev_key = STAGE_DEFS[idx - 1]["key"]
+        self._apply_user_pause(prev_key, results)
+
+    def _maybe_honor_user_pause_after_stage(self, stage_key: str, results: Dict[str, Any]) -> None:
+        if self._is_user_pause_requested():
+            self._apply_user_pause(stage_key, results)
+
+    @staticmethod
+    def request_user_pause(db: Session, run_id: str) -> Dict[str, Any]:
+        """API：标记暂停请求（协作式，当前阶段结束后生效）。"""
+        run = db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == run_id).first()
+        if not run:
+            raise ValueError("Pipeline 运行记录未找到")
+        status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+        if status_val != DB_PipelineStatus.RUNNING.value:
+            raise ValueError(f"仅运行中的 Pipeline 可暂停（当前状态: {status_val}）")
+        meta = dict(run.extra_metadata) if isinstance(run.extra_metadata, dict) else {}
+        up = dict(meta.get("user_pause") or {})
+        if up.get("requested"):
+            return {
+                "run_id": run_id,
+                "accepted": True,
+                "already_requested": True,
+                "status": status_val,
+                "message": "暂停请求已登记，当前阶段结束后生效",
+            }
+        up["requested"] = True
+        up["requested_at"] = datetime.now(CHINA_TZ).isoformat()
+        meta["user_pause"] = up
+        run.extra_metadata = meta
+        flag_modified(run, "extra_metadata")
+        db.commit()
+        return {
+            "run_id": run_id,
+            "accepted": True,
+            "already_requested": False,
+            "status": status_val,
+            "message": "已请求暂停，将在当前阶段结束后停止",
+        }
+
+    @staticmethod
+    def resume_user_pause(db: Session, run_id: str) -> Dict[str, Any]:
+        """API：从用户暂停检查点续跑。"""
+        run = db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == run_id).first()
+        if not run:
+            raise ValueError("Pipeline 运行记录未找到")
+        meta = dict(run.extra_metadata) if isinstance(run.extra_metadata, dict) else {}
+        up = dict(meta.get("user_pause") or {})
+        status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+        paused = status_val == DB_PipelineStatus.PAUSED.value or bool(up.get("paused"))
+        if not paused:
+            raise ValueError(f"Pipeline 未处于暂停状态（当前: {status_val}）")
+
+        cp = meta.get("pipeline_checkpoint") if isinstance(meta.get("pipeline_checkpoint"), dict) else {}
+        resume_phase = (
+            up.get("resume_phase")
+            or cp.get("resume_phase")
+            or (f"after_{up['stage']}" if up.get("stage") else None)
+        )
+        if not resume_phase:
+            raise ValueError("缺少续跑检查点（resume_phase），请重新运行 Pipeline")
+
+        if not isinstance(meta.get("pipeline_checkpoint"), dict) or not meta["pipeline_checkpoint"].get("resume_phase"):
+            meta["pipeline_checkpoint"] = {
+                "results": (cp.get("results") if isinstance(cp, dict) else {}) or {},
+                "resume_phase": resume_phase,
+                "kind": "user_pause",
+            }
+
+        up["paused"] = False
+        up["requested"] = False
+        up["resumed_at"] = datetime.now(CHINA_TZ).isoformat()
+        up["resume_phase"] = resume_phase
+        meta["user_pause"] = up
+        run.status = DB_PipelineStatus.RUNNING
+        run.extra_metadata = meta
+        run.error_message = None
+        flag_modified(run, "extra_metadata")
+        db.commit()
+        return {
+            "run_id": run_id,
+            "status": "running",
+            "resume_phase": resume_phase,
+            "message": f"已从 {resume_phase} 继续运行",
+        }
 
     def _maybe_pause_for_hitl_gate(self, stage_key: str, results: Dict[str, Any]) -> None:
         if not self._should_hitl_gate(stage_key):
@@ -2013,6 +2506,9 @@ class PipelineService:
         stage_key = stage_def["key"]
         stage_label = stage_def["label"]
 
+        # 用户暂停：在进入本阶段前生效（上一阶段已完成）
+        self._maybe_honor_user_pause_before_stage(idx, results)
+
         stage_log.status = PipelineStageStatus.RUNNING
         stage_log.start_time = datetime.now(CHINA_TZ)
 
@@ -2069,8 +2565,15 @@ class PipelineService:
                     self._restore_downstream_from_parent_run(idx, results, stages)
                 raise SingleStageRerunComplete(stage_key)
 
+            # 用户暂停：当前阶段完成后生效
+            self._maybe_honor_user_pause_after_stage(stage_key, results)
+
         except SingleStageRerunComplete as done:
             raise done
+        except UserPause as pause:
+            raise pause
+        except HitlGatePause as pause:
+            raise pause
         except Exception as e:
             stage_log.status = PipelineStageStatus.FAILED
             stage_log.error_message = str(e)
@@ -2144,25 +2647,57 @@ class PipelineService:
             "extra": decision.get("extra"),
             "timestamp": decision.get("timestamp", datetime.now().isoformat()),
         }
+        if decision.get("pattern_id") == "hg_all_low_evidence":
+            hint_entry["decision_status"] = "pending"
+            hint_entry["await_stage"] = "hypothesis_review"
+            hint_entry["rerun_stages"] = [
+                "literature_mining",
+                "knowledge_gap",
+                "hypothesis_generation",
+                "hypothesis_review",
+            ]
+            existing = next(
+                (h for h in self._coordinator_hints if h.get("pattern_id") == "hg_all_low_evidence"),
+                None,
+            )
+            if existing:
+                existing.update(
+                    {
+                        "severity": hint_entry["severity"],
+                        "message": hint_entry["message"],
+                        "remediation": hint_entry["remediation"],
+                        "action": hint_entry["action"],
+                        "timestamp": hint_entry["timestamp"],
+                    }
+                )
+                if existing.get("decision_status") not in ("awaiting_user", "running", "rejected"):
+                    existing["decision_status"] = "pending"
+                self._persist_coordinator_hints()
+                if stage == "hypothesis_review":
+                    self._activate_evidence_iteration_decision()
+                if decision.get("remediation"):
+                    self._record_closed_loop_decision(
+                        trigger=f"coordinator_{stage}_check",
+                        action=decision.get("remediation", "pass"),
+                        reason=decision.get("message", "")[:300],
+                        next_stage=stage,
+                        metadata={"severity": decision.get("severity", "info")},
+                    )
+                return
+
         self._coordinator_hints.append(hint_entry)
 
         # ── 实时持久化 hints 到数据库（避免 Pipeline 暂停时丢失）──
         self._persist_coordinator_hints()
 
+        if stage == "hypothesis_review":
+            self._activate_evidence_iteration_decision()
+
         # 自动执行补救
         action = decision.get("action", {})
         suggestion = action.get("suggestion")
         if action.get("type") == "auto":
-            if suggestion == "iterate_evidence":
-                # 在后台线程执行（非阻塞主流程）
-                import threading
-                thread = threading.Thread(
-                    target=self._auto_evidence_iteration_sync,
-                    args=(research_question, project_id),
-                    daemon=True,
-                )
-                thread.start()
-            elif suggestion == "fix_report":
+            if suggestion == "fix_report":
                 # 自动修复报告内容问题（乱码/截断/标点重复）
                 import threading
                 thread = threading.Thread(
@@ -2293,7 +2828,6 @@ class PipelineService:
 
             literature_facts = self.db.query(Evidence).filter(
                 Evidence.project_id == project_id,
-                Evidence.source_type == "literature",
             ).all()
 
             previous_runs = self.db.query(PipelineRun).filter(
@@ -2406,6 +2940,9 @@ class PipelineService:
                     "hint_id": hint_id,
                     "fix_status": hint.get("fix_status"),
                     "fix_detail": hint.get("fix_detail"),
+                    "decision_status": hint.get("decision_status"),
+                    "await_stage": hint.get("await_stage"),
+                    "rerun_stages": hint.get("rerun_stages"),
                 }
 
                 if hint_id in existing_by_hint_id:
@@ -2705,6 +3242,169 @@ class PipelineService:
         except Exception as e:
             logger.warning(f"[大家长] 自动修复报告内容失败: {e}")
         return fixed_chapters
+
+    def _sync_coordinator_hints_to_run_output(self) -> None:
+        if not self.db_pipeline_run:
+            return
+        output_data = dict(self.db_pipeline_run.output_data or {})
+        output_data["coordinator_hints"] = self._coordinator_hints
+        self.db_pipeline_run.output_data = output_data
+        flag_modified(self.db_pipeline_run, "output_data")
+        self.db.commit()
+
+    def _activate_evidence_iteration_decision(self) -> None:
+        """可行性评估完成后，将低证据提示转为待用户决策。"""
+        meta = (
+            self.db_pipeline_run.extra_metadata
+            if self.db_pipeline_run and isinstance(self.db_pipeline_run.extra_metadata, dict)
+            else {}
+        )
+        is_rerun = bool(meta.get("evidence_iteration_rerun"))
+        updated = False
+        for hint in self._coordinator_hints:
+            if hint.get("pattern_id") != "hg_all_low_evidence":
+                continue
+            status = hint.get("decision_status")
+            if is_rerun and status == "running":
+                hg = self._stage_results.get("hypothesis_generation") or {}
+                hypos = hg.get("hypotheses") or []
+                all_low = bool(hypos) and all(
+                    isinstance(h, dict) and h.get("evidence_level") == "low" for h in hypos
+                )
+                if all_low:
+                    hint["decision_status"] = "awaiting_user"
+                    hint["message"] = "证据链迭代已完成，假设证据仍为 low，是否再次触发迭代？"
+                else:
+                    hint["decision_status"] = "completed"
+                    hint["message"] = "证据链迭代已完成，假设证据级别已提升"
+                updated = True
+            elif status == "pending":
+                hint["decision_status"] = "awaiting_user"
+                hint["message"] = (
+                    "所有假设证据级别为 low，可行性评估已完成，请选择是否触发证据链迭代"
+                )
+                hint["action"] = {
+                    **(hint.get("action") or {}),
+                    "description": "重跑文献挖掘 → 知识缺口 → 假设生成 → 可行性评估",
+                }
+                updated = True
+        if updated:
+            self._persist_coordinator_hints()
+            self._sync_coordinator_hints_to_run_output()
+
+    @staticmethod
+    def load_coordinator_hints(db: Session, run: DB_PipelineRun) -> List[Dict[str, Any]]:
+        from app.models.coordinator import CoordinatorAdvice
+
+        advice_records = (
+            db.query(CoordinatorAdvice)
+            .filter(
+                CoordinatorAdvice.project_id == run.project_id,
+                CoordinatorAdvice.advice_type == "stage_check",
+            )
+            .order_by(CoordinatorAdvice.created_at.asc())
+            .all()
+        )
+        if advice_records:
+            hints: List[Dict[str, Any]] = []
+            for adv in advice_records:
+                extra = adv.extra_data or {}
+                hints.append(
+                    {
+                        "id": extra.get("hint_id", adv.id),
+                        "stage": adv.stage or "",
+                        "severity": adv.severity,
+                        "message": adv.message,
+                        "remediation": adv.suggestion or "",
+                        "action": extra.get("action", {}),
+                        "source": extra.get("source", "stage_check"),
+                        "pattern_id": extra.get("pattern_id"),
+                        "fix_status": extra.get("fix_status"),
+                        "fix_detail": extra.get("fix_detail"),
+                        "decision_status": extra.get("decision_status"),
+                        "await_stage": extra.get("await_stage"),
+                        "rerun_stages": extra.get("rerun_stages"),
+                        "timestamp": adv.created_at.isoformat() if adv.created_at else "",
+                    }
+                )
+            return hints
+        output_data = run.output_data if isinstance(run.output_data, dict) else {}
+        return list(output_data.get("coordinator_hints") or [])
+
+    def _persist_hints_for_run(self, run: DB_PipelineRun, hints: List[Dict[str, Any]]) -> None:
+        output_data = dict(run.output_data or {})
+        output_data["coordinator_hints"] = hints
+        run.output_data = output_data
+        flag_modified(run, "output_data")
+        self.db.commit()
+        self._save_hints_to_advice_table(hints, run.project_id)
+
+    def respond_evidence_iteration_decision(
+        self,
+        project_id: str,
+        run_id: str,
+        hint_id: str,
+        decision: str,
+    ) -> Dict[str, Any]:
+        if decision not in ("approve", "reject"):
+            raise ValueError("decision 必须为 approve 或 reject")
+
+        run = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == run_id).first()
+        if not run:
+            raise ValueError(f"run 未找到: {run_id}")
+        if run.project_id != project_id:
+            raise ValueError("project_id 与 run 不匹配")
+
+        hints = self.load_coordinator_hints(self.db, run)
+        target = next((h for h in hints if h.get("id") == hint_id), None)
+        if not target:
+            raise ValueError(f"hint 未找到: {hint_id}")
+        if target.get("pattern_id") != "hg_all_low_evidence":
+            raise ValueError("该提示不支持证据链迭代决策")
+        if target.get("decision_status") != "awaiting_user":
+            raise ValueError("当前状态不可决策，请等待可行性评估完成")
+
+        if decision == "reject":
+            target["decision_status"] = "rejected"
+            target["message"] = "已选择不触发证据链迭代，可继续后续流程或手动补充文献"
+            self._persist_hints_for_run(run, hints)
+            return {"run_id": run_id, "decision": "reject", "status": "rejected"}
+
+        target["decision_status"] = "running"
+        target["message"] = "正在重跑文献挖掘 → 知识缺口 → 假设生成 → 可行性评估…"
+        self._persist_hints_for_run(run, hints)
+
+        new_run_id = self.start_rerun_from_stage(
+            project_id=project_id,
+            parent_run_id=run_id,
+            from_stage="literature_mining",
+            use_human_modified_output=True,
+            rerun_mode="from_stage_onward",
+            human_feedback=(
+                "用户同意证据链迭代：请加强文献检索、知识缺口分析与假设证据支撑。"
+            ),
+            run_options={
+                "evidence_iteration_rerun": True,
+                "pause_after_hypothesis_review": True,
+            },
+        )
+        new_run = self.db.query(DB_PipelineRun).filter(DB_PipelineRun.run_id == new_run_id).first()
+        if new_run:
+            meta = dict(new_run.extra_metadata or {})
+            meta["evidence_iteration_rerun"] = True
+            meta["evidence_iteration_hint_id"] = hint_id
+            new_run.extra_metadata = meta
+            flag_modified(new_run, "extra_metadata")
+            self.db.commit()
+
+        return {
+            "run_id": new_run_id,
+            "parent_run_id": run_id,
+            "decision": "approve",
+            "status": "running",
+            "rerun_from_stage": "literature_mining",
+            "rerun_mode": "from_stage_onward",
+        }
 
     def _auto_evidence_iteration_sync(
         self,
@@ -3095,6 +3795,77 @@ class PipelineService:
             payload={"gap_count": len(gaps) if isinstance(gaps, list) else 0},
         )
         return kg_result
+
+    def _try_gap_literature_enrichment(
+        self,
+        project_id: str,
+        research_question: str,
+        results: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """知识缺口完成后，按 Gap 描述补搜文献并合并到 literature_mining。"""
+        if not self._run_options.get("enable_gap_search", False):
+            return None
+        kg = results.get("knowledge_gap") or {}
+        gaps = kg.get("knowledge_gaps") or []
+        if not gaps:
+            logger.info("[Pipeline] Gap 补搜跳过：无知识缺口")
+            return None
+
+        refinement_queries: List[str] = []
+        for gap in gaps[:4]:
+            if isinstance(gap, dict):
+                desc = gap.get("description") or gap.get("gap") or gap.get("title") or ""
+            else:
+                desc = str(gap)
+            if str(desc).strip():
+                refinement_queries.append(str(desc).strip()[:120])
+        if not refinement_queries:
+            return None
+
+        previous = results.get("literature_mining") or {}
+        prev_fact_count = len(previous.get("facts") or [])
+        try:
+            agent = get_literature_mining_agent()
+            pu = results.get("problem_understanding") or {}
+            domain = (pu.get("research_domain") or "").strip() if isinstance(pu, dict) else ""
+            keywords = pu.get("keywords") or []
+            if isinstance(keywords, str):
+                keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+
+            refreshed = agent.mine_discovery_refresh(
+                project_id=project_id,
+                research_question=research_question,
+                refinement_queries=refinement_queries,
+                keywords=keywords if isinstance(keywords, list) else [],
+                previous=previous,
+                discovery_round=1,
+                top_k=self._get_literature_top_k(),
+                db=self.db,
+                research_domain=domain,
+            )
+            dump = self._safe_model_dump(refreshed)
+            dump = self._enrich_literature_mining(dump)
+            results["literature_mining"] = dump
+            new_fact_count = len(dump.get("facts") or [])
+            self._record_closed_loop_event(
+                "gap_literature_enrichment",
+                {
+                    "summary": f"Gap 补搜完成：文献事实 {prev_fact_count} → {new_fact_count}",
+                    "queries": refinement_queries[:4],
+                    "facts_before": prev_fact_count,
+                    "facts_after": new_fact_count,
+                },
+            )
+            logger.info(
+                "[Pipeline] Gap 文献补搜完成 facts %s -> %s queries=%s",
+                prev_fact_count,
+                new_fact_count,
+                refinement_queries[:2],
+            )
+            return dump
+        except Exception as exc:
+            logger.warning("[Pipeline] Gap 文献补搜失败: %s", exc)
+            return None
     
     def _exec_hypothesis_generation(
         self,
@@ -3876,7 +4647,15 @@ class PipelineService:
         try:
             self.db.commit()
         except Exception:
-            pass
+            logger.exception(
+                "闭环事件 commit 失败 run_id=%s type=%s",
+                getattr(self.db_pipeline_run, "run_id", None),
+                event_type,
+            )
+            try:
+                self.db.rollback()
+            except Exception:
+                logger.exception("闭环事件 rollback 失败")
     
     def _fail_pipeline_run(self, completed_at: datetime, total_duration_ms: int, failed_stage_name: Optional[str], error: str):
         try:

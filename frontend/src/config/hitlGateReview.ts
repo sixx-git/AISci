@@ -17,6 +17,19 @@ export interface HitlGateReviewTarget {
 }
 
 const STAGE_REVIEW_COPY: Record<string, HitlGateReviewTarget> = {
+  literature_mining: {
+    title: '文献已检索，请补充 PDF',
+    description:
+      'Pipeline 已在文献挖掘后暂停。请前往「文献库」下载检索到的论文 PDF，上传并完成解析后，再继续后续智能体。',
+    tab: 'literature',
+    ctaLabel: '前往文献库',
+    continueHint: '上传并解析 PDF 后，将重跑文献挖掘及之后全部智能体。',
+    continueTitle: '文献 PDF 待补充',
+    continueDescription:
+      '请先下载/上传相关论文 PDF 并解析入库；确认后将重跑文献挖掘 → 知识缺口 → 假设生成 → 假设评审等后续阶段。',
+    continueButtonLabel: '继续运行流水线',
+    continueAction: 'resume',
+  },
   hypothesis_generation: {
     title: '假设已生成',
     description:

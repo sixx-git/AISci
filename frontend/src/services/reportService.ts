@@ -254,7 +254,37 @@ export const reportService = {
     const { data } = await api.get<ApiResponse<ReportBrowsePage>>('/reports/browse', { params });
     return data;
   },
+
+  /** POST /api/v1/reports/:reportId/evaluate — 报告质量评估 */
+  async evaluate(
+    reportId: string,
+    mode: 'simple' | 'weighted' | 'scientist',
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    const { data } = await api.post<ApiResponse<Record<string, unknown>>>(`/reports/${reportId}/evaluate`, { mode });
+    return data;
+  },
+
+  /** GET /api/v1/reports/:reportId/evaluations — 获取历史评估记录 */
+  async getEvaluations(reportId: string): Promise<ApiResponse<EvaluationRecord[]>> {
+    const { data } = await api.get<ApiResponse<EvaluationRecord[]>>(`/reports/${reportId}/evaluations`);
+    return data;
+  },
+
+  /** DELETE /api/v1/reports/:reportId/evaluations/:evalId — 删除单条评估记录 */
+  async deleteEvaluation(reportId: string, evalId: string): Promise<ApiResponse<boolean>> {
+    const { data } = await api.delete<ApiResponse<boolean>>(`/reports/${reportId}/evaluations/${evalId}`);
+    return data;
+  },
 };
+
+export interface EvaluationRecord {
+  id: string;
+  report_id: string;
+  project_id: string;
+  mode: 'simple' | 'weighted' | 'scientist';
+  result: Record<string, unknown>;
+  created_at: string;
+}
 
 export interface LatexSourcePayload {
   report_id: string;

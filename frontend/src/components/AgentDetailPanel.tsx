@@ -8,7 +8,7 @@ import {
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import type { AgentNodeData } from '@/types';
-import { extractLiteratureStats } from '@/lib/literatureStats';
+import { extractLiteratureStats, isRcsSoftFailWarning } from '@/lib/literatureStats';
 import { extractValidationDataGuidance } from '@/lib/validationDataGuidance';
 import { ValidationDataGuidanceCard } from '@/components/ValidationDataGuidanceCard';
 import { ValidationResultCard, hasValidationResultSummary } from '@/components/ValidationResultCard';
@@ -337,8 +337,16 @@ function LiteratureStatsCard({ outputData }: { outputData: Record<string, unknow
     { label: '提取事实', value: stats.factsCount ?? '—', unit: '条' },
   ];
 
+  const warning =
+    typeof outputData.warning === 'string' ? outputData.warning.trim() : '';
+  const showWarning = Boolean(warning) && !isRcsSoftFailWarning(warning);
+  const factBreakdown =
+    stats.coreFactsCount != null && stats.auxiliaryFactsCount != null
+      ? `全文事实 ${stats.coreFactsCount} · 摘要/无PDF ${stats.auxiliaryFactsCount}（「入库篇数」≠全文事实）`
+      : null;
+
   return (
-    <Card title="文献检索与入库" subtitle="多源检索候选 vs 实际写入文献库的数量">
+    <Card title="文献检索与入库" subtitle="检索/入库是论文数量；下方事实拆分看全文 vs 摘要证据">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {items.map((item) => (
           <div key={item.label} className="bp-metric-box text-center py-3">
@@ -350,8 +358,11 @@ function LiteratureStatsCard({ outputData }: { outputData: Record<string, unknow
           </div>
         ))}
       </div>
-      {typeof outputData.warning === 'string' && outputData.warning.trim() && (
-        <p className="text-xs text-bp-yellow/90 mt-3 leading-relaxed">{outputData.warning}</p>
+      {factBreakdown && (
+        <p className="text-xs text-bp-muted mt-3">{factBreakdown}</p>
+      )}
+      {showWarning && (
+        <p className="text-xs text-bp-yellow/90 mt-3 leading-relaxed">{warning}</p>
       )}
     </Card>
   );

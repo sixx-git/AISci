@@ -28,10 +28,20 @@ class DataRequirementUnderstandingSkill(BaseSkill):
         scenario = project_mode_to_scenario(project_mode)
         user_hints = input_data.get("user_data_spec_hints") or {}
 
+        rule_spec = self._rule_data_spec(research_question, hypothesis, scenario, project_mode)
         data_spec = await self._try_llm_data_spec(research_question, hypothesis, scenario, user_hints)
         if not data_spec:
-            data_spec = self._rule_data_spec(research_question, hypothesis, scenario, project_mode)
+            data_spec = rule_spec
             result.add_warning("使用规则 fallback 解析数据需求（LLM 不可用或未返回有效结果）")
+        else:
+            # 保留题面/规则抽出的专有词（如 FedAvg），避免 LLM 泛化后丢失
+            for key in ("domain_keywords", "dataset_keywords"):
+                merged = list(
+                    dict.fromkeys(
+                        list(data_spec.get(key) or []) + list(rule_spec.get(key) or [])
+                    )
+                )[:20]
+                data_spec[key] = merged
 
         data_spec = apply_data_spec_hints(data_spec, user_hints)
 

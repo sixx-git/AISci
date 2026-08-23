@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,8 @@ from app.models.pipeline import (
 )
 
 CHINA_TZ = timezone(timedelta(hours=8))
+
+logger = logging.getLogger(__name__)
 
 STAGE_KEY_ORDER = [
     "problem_understanding",
@@ -201,7 +204,12 @@ class StageHumanLoopService:
                 trigger_rerun=trigger_rerun,
             )
         except Exception:
-            pass
+            logger.warning(
+                "Feedback Hub 写入失败 project=%s stage=%s",
+                project_id,
+                stage,
+                exc_info=True,
+            )
 
     def seed_results_from_run(
         self,
@@ -433,6 +441,9 @@ class StageHumanLoopService:
             "resume_phase": gate.get("resume_phase"),
             "paused_at": gate.get("paused_at"),
             "cleared_stages": gate.get("cleared_stages") or [],
+            "handoff": gate.get("handoff"),
+            "paper_count": gate.get("paper_count"),
+            "hint": gate.get("hint"),
         }
 
     def resume_hitl_gate(
@@ -485,18 +496,6 @@ class StageHumanLoopService:
 
         gate["stage"] = stage
         gate.setdefault("stage_label", HITL_GATE_STAGE_LABELS.get(stage, stage))
-        meta = self._ensure_hitl_checkpoint(run, stage)
-        gate = dict(meta.get("hitl_gate") or gate)
-        self._repair_stuck_pre_resume_stages(run, stage)
-
-        next_stage_map = {
-            "hypothesis_generation": "hypothesis_review",
-            "hypothesis_review": "iterative_experiment",
-            "iterative_experiment": "report_generation",
-            "experiment_design": "report_generation",  # 历史 gate
-            "small_validation": "report_generation",  # 历史 gate
-        }
-        run.current_stage = next_stage_map.get(stage, stage)
 
         constraints: List[str] = []
         if inject_feedback and human_feedback.strip():
@@ -518,9 +517,56 @@ class StageHumanLoopService:
         if human_feedback.strip():
             gate["last_human_feedback"] = human_feedback.strip()
 
+        # 文献 PDF 交接：由 API 原地从文献挖掘起重跑至结束（纳入新 PDF 事实）
+        if stage == "literature_mining":
+            gate["resume_phase"] = "after_problem_understanding"
+            meta["hitl_gate"] = gate
+            meta.pop("pipeline_checkpoint", None)
+            run.current_stage = "literature_mining"
+            run.status = PipelineStatus.RUNNING
+            run.extra_metadata = meta
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(run, "extra_metadata")
+            self.db.commit()
+            return {
+                "action": "continue",
+                "status": "running",
+                "run_id": run.run_id,
+                "feedback_constraints_count": len(constraints),
+                "resume_phase": "after_problem_understanding",
+                "rerun_from_stage": "literature_mining",
+                "prepare_in_place_from_stage_onward": True,
+            }
+
+        meta = self._ensure_hitl_checkpoint(run, stage)
+        gate = dict(meta.get("hitl_gate") or gate)
+        gate["cleared_stages"] = cleared
+        gate["feedback_constraints"] = constraints
+        gate["resumed"] = True
+        gate["paused"] = False
+        gate["last_action"] = "continue"
+        gate["continued_at"] = _now_iso()
+        if human_feedback.strip():
+            gate["last_human_feedback"] = human_feedback.strip()
+        self._repair_stuck_pre_resume_stages(run, stage)
+
+        next_stage_map = {
+            "literature_mining": "knowledge_gap",
+            "hypothesis_generation": "hypothesis_review",
+            "hypothesis_review": "iterative_experiment",
+            "iterative_experiment": "report_generation",
+            "experiment_design": "report_generation",  # 历史 gate
+            "small_validation": "report_generation",  # 历史 gate
+        }
+        run.current_stage = next_stage_map.get(stage, stage)
+
         meta["hitl_gate"] = gate
         run.status = PipelineStatus.RUNNING
         run.extra_metadata = meta
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(run, "extra_metadata")
         self.db.commit()
 
         return {
@@ -528,6 +574,7 @@ class StageHumanLoopService:
             "status": "running",
             "run_id": run.run_id,
             "feedback_constraints_count": len(constraints),
+            "resume_phase": gate.get("resume_phase"),
         }
 
     def select_evolved_hypothesis(

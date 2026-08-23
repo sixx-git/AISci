@@ -1,5 +1,5 @@
 """
-Pipeline 相关的 Schema 定义
+Pipeline ??? Schema ??
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -8,17 +8,18 @@ from enum import Enum
 
 
 class PipelineStatus(str, Enum):
-    """Pipeline 状态"""
+    """Pipeline ??"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
     HUMAN_REVIEW_REQUIRED = "human_review_required"
+    PAUSED = "paused"
 
 
 class PipelineStage(str, Enum):
-    """Pipeline 阶段"""
+    """Pipeline ??"""
     PROBLEM_UNDERSTANDING = "problem_understanding"
     LITERATURE_MINING = "literature_mining"
     DATA_ACQUISITION = "data_acquisition"
@@ -32,7 +33,7 @@ class PipelineStage(str, Enum):
 
 
 class PipelineStageStatus(str, Enum):
-    """Pipeline 阶段状态"""
+    """Pipeline ????"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -41,46 +42,46 @@ class PipelineStageStatus(str, Enum):
 
 
 class PipelineRunRequest(BaseModel):
-    """Pipeline 运行请求"""
-    project_id: str = Field(..., description="项目 ID", example="123e4567-e89b-12d3-a456-426614174000")
-    research_question: str = Field(..., description="研究问题", example="如何利用机器学习提高医学影像诊断的准确率？")
-    options: Optional[Dict[str, Any]] = Field(default=None, description="可选配置参数")
+    """Pipeline ????"""
+    project_id: str = Field(..., description="?? ID", example="123e4567-e89b-12d3-a456-426614174000")
+    research_question: str = Field(..., description="????", example="?????????????????????")
+    options: Optional[Dict[str, Any]] = Field(default=None, description="??????")
 
 
 class PipelineStageLog(BaseModel):
-    """Pipeline 阶段日志"""
-    stage: PipelineStage = Field(..., description="阶段名称")
-    status: PipelineStageStatus = Field(..., description="阶段状态")
-    start_time: Optional[datetime] = Field(None, description="开始时间")
-    end_time: Optional[datetime] = Field(None, description="结束时间")
-    duration: Optional[float] = Field(None, description="执行时长（秒）")
-    input_data: Optional[Dict[str, Any]] = Field(None, description="输入数据")
-    output_data: Optional[Dict[str, Any]] = Field(None, description="输出数据")
-    error_message: Optional[str] = Field(None, description="错误信息")
-    model_used: Optional[str] = Field(None, description="使用的模型名称")
-    token_count: Optional[int] = Field(None, description="Token 消耗量")
-    prompt_used: Optional[str] = Field(None, description="使用的提示词")
-    model_parameters: Optional[Dict[str, Any]] = Field(None, description="模型参数")
-    human_modified_output: Optional[Dict[str, Any]] = Field(None, description="人工修改后的输出")
-    human_reviewed: bool = Field(False, description="是否已人工审阅")
-    human_feedback: Optional[str] = Field(None, description="人工反馈说明")
-    edited_at: Optional[str] = Field(None, description="人工编辑时间")
-    revision_history: Optional[List[Dict[str, Any]]] = Field(None, description="修订历史")
+    """Pipeline ????"""
+    stage: PipelineStage = Field(..., description="????")
+    status: PipelineStageStatus = Field(..., description="????")
+    start_time: Optional[datetime] = Field(None, description="????")
+    end_time: Optional[datetime] = Field(None, description="????")
+    duration: Optional[float] = Field(None, description="???????")
+    input_data: Optional[Dict[str, Any]] = Field(None, description="????")
+    output_data: Optional[Dict[str, Any]] = Field(None, description="????")
+    error_message: Optional[str] = Field(None, description="????")
+    model_used: Optional[str] = Field(None, description="???????")
+    token_count: Optional[int] = Field(None, description="Token ???")
+    prompt_used: Optional[str] = Field(None, description="??????")
+    model_parameters: Optional[Dict[str, Any]] = Field(None, description="????")
+    human_modified_output: Optional[Dict[str, Any]] = Field(None, description="????????")
+    human_reviewed: bool = Field(False, description="???????")
+    human_feedback: Optional[str] = Field(None, description="??????")
+    edited_at: Optional[str] = Field(None, description="??????")
+    revision_history: Optional[List[Dict[str, Any]]] = Field(None, description="????")
 
 
 class PipelineRunResponse(BaseModel):
-    """Pipeline 运行响应"""
-    pipeline_id: str = Field(..., description="Pipeline 执行 ID")
-    project_id: str = Field(..., description="项目 ID")
-    status: PipelineStatus = Field(..., description="整体状态")
-    stages: List[PipelineStageLog] = Field(default_factory=list, description="各阶段执行日志")
-    total_duration: Optional[float] = Field(None, description="总执行时长（秒）")
-    final_result: Optional[Dict[str, Any]] = Field(None, description="最终结果")
+    """Pipeline ????"""
+    pipeline_id: str = Field(..., description="Pipeline ?? ID")
+    project_id: str = Field(..., description="?? ID")
+    status: PipelineStatus = Field(..., description="????")
+    stages: List[PipelineStageLog] = Field(default_factory=list, description="???????")
+    total_duration: Optional[float] = Field(None, description="????????")
+    final_result: Optional[Dict[str, Any]] = Field(None, description="????")
     created_at: datetime = Field(default_factory=datetime.now)
 
 
 class PipelineStageExecutionSummary(BaseModel):
-    """Pipeline 阶段执行摘要"""
+    """Pipeline ??????"""
     id: str
     pipeline_run_id: str
     stage: str
@@ -105,7 +106,7 @@ class PipelineStageExecutionSummary(BaseModel):
 
 
 class PipelineRunSummary(BaseModel):
-    """Pipeline 运行摘要（用于列表）"""
+    """Pipeline ??????????"""
     id: str
     run_id: str
     project_id: str
@@ -122,45 +123,79 @@ class PipelineRunSummary(BaseModel):
 
 
 class PipelineRunDetail(PipelineRunSummary):
-    """Pipeline 运行详情"""
+    """Pipeline ????"""
     input_data: Optional[Dict[str, Any]]
     output_data: Optional[Dict[str, Any]]
     stages: List[PipelineStageExecutionSummary]
 
 
 class PipelineRunResult(BaseModel):
-    """Pipeline 完整运行结果"""
+    """Pipeline ??????"""
     pipeline_id: str = Field(..., description="Pipeline ID")
-    run_id: str = Field(..., description="运行 ID")
+    run_id: str = Field(..., description="?? ID")
     project_id: str
     research_question: str
     status: PipelineStatus
     stages: List[PipelineStageLog] = Field(default_factory=list)
     total_duration: Optional[float] = None
-    error_message: Optional[str] = Field(None, description="错误信息")
+    error_message: Optional[str] = Field(None, description="????")
     problem_understanding: Optional[Dict[str, Any]] = None
     literature_mining: Optional[Dict[str, Any]] = None
     knowledge_gap: Optional[Dict[str, Any]] = None
     hypothesis_generation: Optional[Dict[str, Any]] = None
     hypothesis_review: Optional[Dict[str, Any]] = None
     iterative_experiment: Optional[Dict[str, Any]] = None
-    experiment_design: Optional[Dict[str, Any]] = None  # legacy / 合成兼容
-    small_validation: Optional[Dict[str, Any]] = None  # legacy / 合成兼容
+    experiment_design: Optional[Dict[str, Any]] = None  # legacy / ????
+    small_validation: Optional[Dict[str, Any]] = None  # legacy / ????
     report_generation: Optional[Dict[str, Any]] = None
     final_report: Optional[Dict[str, Any]] = None
-    final_report_id: Optional[str] = Field(None, description="生成的报告 ID")
-    failed_stage: Optional[str] = Field(None, description="失败的阶段名称")
-    current_stage: Optional[str] = Field(None, description="当前执行阶段 key")
-    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="闭环事件与质量趋势")
+    final_report_id: Optional[str] = Field(None, description="????? ID")
+    failed_stage: Optional[str] = Field(None, description="???????")
+    current_stage: Optional[str] = Field(None, description="?????? key")
+    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="?????????")
     created_at: datetime
     completed_at: Optional[datetime] = None
 
 
 class LoopDryRunRequest(BaseModel):
-    """Loop 决策 Dry-run 请求（不调 LLM）"""
-    run_options: Optional[Dict[str, Any]] = Field(default=None, description="与 Pipeline run options 相同")
-    quality_trend: Optional[List[Dict[str, Any]]] = Field(default=None, description="模拟用质量 Gate 趋势")
-    round_num: int = Field(default=2, ge=1, le=5, description="Discovery 轮次")
-    hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="可选：模拟 Accept 判断")
+    """Loop ?? Dry-run ????? LLM?"""
+    run_options: Optional[Dict[str, Any]] = Field(default=None, description="? Pipeline run options ??")
+    quality_trend: Optional[List[Dict[str, Any]]] = Field(default=None, description="????? Gate ??")
+    round_num: int = Field(default=2, ge=1, le=5, description="Discovery ??")
+    hypothesis_review: Optional[Dict[str, Any]] = Field(default=None, description="????? Accept ??")
     small_validation: Optional[Dict[str, Any]] = Field(default=None)
     project_mode: str = Field(default="general", description="general | federated_learning")
+
+
+class EvidenceIterationDecisionRequest(BaseModel):
+    """?????????"""
+    project_id: str = Field(..., description="?? ID")
+    hint_id: str = Field(..., description="????? ID")
+    decision: str = Field(..., description="approve=????; reject=?????")
+
+
+class EvidenceIterationDecisionResponse(BaseModel):
+    """?????????"""
+    run_id: str
+    parent_run_id: Optional[str] = None
+    decision: str
+    status: str
+    rerun_from_stage: Optional[str] = None
+    rerun_mode: Optional[str] = None
+
+
+class PipelinePauseResponse(BaseModel):
+    """User pause request ack (cooperative: takes effect after current stage)."""
+    run_id: str
+    accepted: bool = True
+    already_requested: bool = False
+    status: str = "running"
+    message: str = ""
+
+
+class PipelineResumeResponse(BaseModel):
+    """Resume after user pause."""
+    run_id: str
+    status: str = "running"
+    resume_phase: Optional[str] = None
+    message: str = ""

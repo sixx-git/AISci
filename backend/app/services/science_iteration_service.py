@@ -455,7 +455,6 @@ def build_session_from_results(
     rounds_raw = list(meta.get("science_iteration_rounds") or [])
     rounds = [IterationRoundRecord(**r) if isinstance(r, dict) else r for r in rounds_raw]
 
-    hg = results.get("hypothesis_generation") or {}
     hr = results.get("hypothesis_review") or {}
     snapshots = list(meta.get("version_snapshots") or [])
     plan_raw = meta.get("material_supplement_plan")
@@ -663,7 +662,6 @@ class ScienceIterationOrchestrator:
 
         from app.services.literature_discovery_adapter import discover_and_import_literature
 
-        pu = results.get("problem_understanding") or {}
         data_spec = (results.get("data_acquisition") or {}).get("data_spec") or {}
         discovery = discover_and_import_literature(
             self.db, project_id, research_question,

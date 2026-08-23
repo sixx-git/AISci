@@ -119,6 +119,17 @@ export const iterativeExperimentService = {
     return unwrap(data, '创建实验失败');
   },
 
+  /** 下载迭代可视化图片（shaxiang charts） */
+  async downloadChart(relPath: string): Promise<Blob> {
+    const rel = relPath
+      .replace(/^\/+/, '')
+      .replace(/^api\/v1\/iterative-experiments\/charts\//, '');
+    const { data } = await api.get<Blob>(`/iterative-experiments/charts/${rel}`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   async delete(projectId: string, experimentId: string): Promise<void> {
     const { data } = await api.delete<ApiResponse<{ deleted: boolean }>>(
       `/projects/${projectId}/iterative-experiments/${experimentId}`,

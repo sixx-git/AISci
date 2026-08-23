@@ -95,3 +95,66 @@ def test_from_stage_onward_creates_new_run(db_session, pipeline_run_with_stages)
     assert new_run_id != run.run_id
     after = db_session.query(PipelineRun).filter(PipelineRun.project_id == "proj-1").count()
     assert after == before + 1
+
+
+def test_in_place_from_stage_onward_resets_literature_and_downstream(
+    db_session, pipeline_run_with_stages
+):
+    run = pipeline_run_with_stages
+    run.status = PipelineStatus.HUMAN_REVIEW_REQUIRED
+    run.extra_metadata = {
+        "hitl_gate": {
+            "paused": True,
+            "stage": "literature_mining",
+            "cleared_stages": [],
+        },
+        "pipeline_checkpoint": {
+            "resume_phase": "after_literature_mining",
+            "results": {"literature_mining": {"facts": []}},
+        },
+    }
+    db_session.commit()
+
+    svc = PipelineService(db_session)
+    returned = svc.start_rerun_from_stage(
+        project_id="proj-1",
+        parent_run_id=run.run_id,
+        from_stage="literature_mining",
+        rerun_mode="from_stage_onward",
+        in_place=True,
+        run_options={"pause_after_literature_mining": False},
+    )
+
+    assert returned == run.run_id
+    db_session.refresh(run)
+    meta = run.extra_metadata or {}
+    assert meta.get("in_place_rerun") is True
+    assert meta.get("rerun_mode") == "from_stage_onward"
+    assert meta.get("rerun_from_stage") == "literature_mining"
+    assert meta.get("pipeline_checkpoint") is None
+    assert "literature_mining" in (meta.get("hitl_gate") or {}).get("cleared_stages", [])
+    assert (meta.get("hitl_gate") or {}).get("paused") is False
+    assert svc._rerun_single_stage_only is False
+    assert svc._start_idx == 1
+
+    stages = (
+        db_session.query(PipelineStageExecution)
+        .filter(PipelineStageExecution.pipeline_run_id == run.id)
+        .order_by(PipelineStageExecution.stage_order)
+        .all()
+    )
+    by_key = {
+        (s.stage.value if hasattr(s.stage, "value") else str(s.stage)): s for s in stages
+    }
+    assert by_key["problem_understanding"].status == PipelineStatus.COMPLETED
+    assert by_key["problem_understanding"].output_data is not None
+    for key in (
+        "literature_mining",
+        "knowledge_gap",
+        "hypothesis_generation",
+        "hypothesis_review",
+        "iterative_experiment",
+        "report_generation",
+    ):
+        assert by_key[key].status == PipelineStatus.PENDING
+        assert by_key[key].output_data is None

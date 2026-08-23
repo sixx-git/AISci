@@ -27,6 +27,8 @@ DEFAULT_EXPERIMENT_SELF_CORRECTION_MAX = 2
 DEFAULT_ITERATION_MODE = IterationMode.HUMAN.value
 # 可行性评估后默认暂停：迭代实验 / 报告改由「迭代实验」页人工完成
 DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW = True
+# 文献挖掘检索到论文后默认暂停：引导用户下载 PDF 并上传解析
+DEFAULT_PAUSE_AFTER_LITERATURE_MINING = True
 # 其它 HITL 阶段门控仍默认关闭（假设生成等）
 DEFAULT_HITL_GATE_STAGES: tuple[str, ...] = ()
 DEFAULT_GATE_STAGNANT_ROUNDS = 2
@@ -41,6 +43,7 @@ ENSEMBLE_ACCEPT_SCORE = 6.5
 VALID_ADVERSARIAL_MODES = ("single_group", "multi_group", "off")
 
 HITL_GATE_STAGE_LABELS = {
+    "literature_mining": "文献挖掘",
     "hypothesis_generation": "假设生成",
     "hypothesis_review": "假设评审",
     "iterative_experiment": "迭代实验",
@@ -225,5 +228,8 @@ def resolve_run_options(options: Dict[str, Any] | None) -> Dict[str, Any]:
         "enable_science_iteration_observe": opts.get("enable_science_iteration_observe", True),
         "pause_after_hypothesis_review": bool(
             opts.get("pause_after_hypothesis_review", DEFAULT_PAUSE_AFTER_HYPOTHESIS_REVIEW)
+        ),
+        "pause_after_literature_mining": bool(
+            opts.get("pause_after_literature_mining", DEFAULT_PAUSE_AFTER_LITERATURE_MINING)
         ),
     }

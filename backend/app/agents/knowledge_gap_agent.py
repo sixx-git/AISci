@@ -1,9 +1,8 @@
 """
 知识缺口智能体 (KnowledgeGapAgent)
 """
-import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from app.agents.literature_mining_agent import ScienceFact

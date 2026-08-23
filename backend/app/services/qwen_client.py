@@ -292,7 +292,8 @@ class QwenClient:
         timeout: int = 180,
         max_retries: int = 2
     ):
-        self.api_key = api_key or get_effective_api_key()
+        # api_key=None → 读运行时配置；显式传 "" 表示强制无密钥（勿回落到环境变量）
+        self.api_key = get_effective_api_key() if api_key is None else api_key
         self.base_url = base_url or get_effective_base_url()
         self._pinned_model = model  # 测试注入；None 表示每次调用读取运行时配置
         self.timeout = timeout
@@ -314,8 +315,10 @@ class QwenClient:
 
     def _create_openai_client(self):
         try:
+            # openai SDK 拒绝空凭证；无 key 时用占位符，真实调用由 chat() 抛 QwenError
+            api_key = self.api_key if self.api_key else "MISSING_QWEN_API_KEY"
             client = openai.OpenAI(
-                api_key=self.api_key,
+                api_key=api_key,
                 base_url=self.base_url,
                 timeout=self.timeout,
                 http_client=build_dashscope_http_client(timeout=float(self.timeout)),

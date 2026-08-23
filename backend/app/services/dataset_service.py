@@ -7,7 +7,6 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.core.project_modes import ProjectMode, normalize_project_mode
 from app.models.research import Dataset
-from app.schemas.research import DatasetCreate, DatasetResponse
 from app.core.config import get_settings
 from app.skills.data.data_juicer_lite_skill import DataJuicerLiteSkill
 from app.skills.data.dataset_semantic_understanding_skill import (
@@ -17,7 +16,6 @@ from app.skills.data.dataset_semantic_understanding_skill import (
 )
 from app.skills.data_finder.file_format_registry import (
     CHEMISTRY_EXTENSIONS,
-    is_allowed_upload_filename,
     is_chemistry_format,
 )
 
@@ -1100,8 +1098,13 @@ class DatasetService:
         try:
             if os.path.exists(ds.file_path):
                 os.remove(ds.file_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "删除数据集文件失败，仍删除 DB 记录 dataset_id=%s path=%s err=%s",
+                dataset_id,
+                ds.file_path,
+                exc,
+            )
         self.db.delete(ds)
         self.db.commit()
         return True

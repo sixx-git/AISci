@@ -26,6 +26,7 @@ from app.schemas.common import PaginatedResponse, PageInfo
 from app.schemas.human_loop import ReportReviseRequest
 from app.services.report_service import ReportService, merge_report_extra_metadata, enrich_report_for_response, report_to_db_response
 from app.services.stage_chat_service import get_stage_chat_service
+from app.services.report_evaluation_service import ReportEvaluationService
 
 router = APIRouter(tags=["reports"])
 
@@ -446,5 +447,108 @@ async def delete_report(
             success_flag,
             message="删除研究报告成功" if success_flag else "报告不存在"
         )
+    except Exception as e:
+        return error(str(e))
+
+
+@router.post("/{report_id}/evaluate", response_model=ApiResponse[dict])
+async def evaluate_report(
+    report_id: str,
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    报告质量评估（模型对战）
+    
+    三种模式：
+    - simple: 简单提交，不加额外提示词
+    - weighted: 客观加权评分（7 层 rubric）
+    - scientist: 科学家人格评分（模拟人类偏好）
+    """
+    try:
+        mode = body.get("mode", "simple")
+        if mode not in ("simple", "weighted", "scientist"):
+            return error(f"不支持的评估模式: {mode}", code=400)
+
+        from app.models.project import Report as ReportModel
+        report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+        if not report:
+            return error("报告不存在", code=404)
+
+        svc = ReportEvaluationService()
+        result = svc.evaluate(report, mode)
+
+        # 自动保存评估记录到数据库
+        if "error" not in result:
+            from app.models.project import ReportEvaluation as ReportEvaluationModel
+            from datetime import datetime
+            import uuid
+            eval_record = ReportEvaluationModel(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                project_id=report.project_id,
+                mode=mode,
+                result=result,
+                created_at=datetime.now(),
+            )
+            db.add(eval_record)
+            db.commit()
+            result["evaluation_id"] = eval_record.id
+
+        return success(result, message="报告评估完成")
+    except Exception as e:
+        return error(str(e))
+
+
+@router.get("/{report_id}/evaluations", response_model=ApiResponse[list])
+async def get_report_evaluations(
+    report_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    获取报告的历史评估记录
+    """
+    try:
+        from app.models.project import ReportEvaluation as ReportEvaluationModel
+        records = db.query(ReportEvaluationModel).filter(
+            ReportEvaluationModel.report_id == report_id
+        ).order_by(ReportEvaluationModel.created_at.desc()).all()
+
+        result = [
+            {
+                "id": r.id,
+                "report_id": r.report_id,
+                "project_id": r.project_id,
+                "mode": r.mode,
+                "result": r.result,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ]
+        return success(result, message=f"共 {len(result)} 条评估记录")
+    except Exception as e:
+        return error(str(e))
+
+
+@router.delete("/{report_id}/evaluations/{eval_id}", response_model=ApiResponse[bool])
+async def delete_report_evaluation(
+    report_id: str,
+    eval_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    删除单条评估记录
+    """
+    try:
+        from app.models.project import ReportEvaluation as ReportEvaluationModel
+        record = db.query(ReportEvaluationModel).filter(
+            ReportEvaluationModel.id == eval_id,
+            ReportEvaluationModel.report_id == report_id,
+        ).first()
+        if not record:
+            return error("评估记录不存在", code=404)
+        db.delete(record)
+        db.commit()
+        return success(True, message="评估记录已删除")
     except Exception as e:
         return error(str(e))

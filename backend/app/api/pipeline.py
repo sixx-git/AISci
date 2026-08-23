@@ -25,6 +25,8 @@ from app.schemas.pipeline import (
     PipelineStageStatus,
     PipelineStage,
     LoopDryRunRequest,
+    EvidenceIterationDecisionRequest,
+    EvidenceIterationDecisionResponse,
 )
 from app.models.pipeline import PipelineRun, PipelineStageExecution, PipelineStatus as DB_PipelineStatus, PipelineStage as DB_PipelineStage
 from app.services.pipeline_service import get_pipeline_service, PipelineService
@@ -338,6 +340,51 @@ async def run_pipeline(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pipeline 服务异常: {str(e)}")
+
+
+@router.post("/runs/{run_id}/pause", response_model=ResponseModel)
+async def pause_pipeline_run(run_id: str, db: Session = Depends(get_db)):
+    """请求暂停 Pipeline（协作式：当前阶段结束后生效，可后续续跑）。"""
+    try:
+        from app.services.pipeline_service import PipelineService
+        from app.schemas.pipeline import PipelinePauseResponse
+
+        result = PipelineService.request_user_pause(db, run_id)
+        return ResponseModel(
+            code=200,
+            message=result.get("message") or "暂停请求已接受",
+            data=PipelinePauseResponse(**result),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"暂停失败: {str(e)}")
+
+
+@router.post("/runs/{run_id}/resume", response_model=ResponseModel)
+async def resume_pipeline_run(run_id: str, db: Session = Depends(get_db)):
+    """从用户暂停检查点续跑 Pipeline。"""
+    try:
+        from app.services.pipeline_service import PipelineService
+        from app.schemas.pipeline import PipelineResumeResponse
+
+        result = PipelineService.resume_user_pause(db, run_id)
+        thread = threading.Thread(
+            target=_execute_pipeline_background,
+            args=(run_id,),
+            daemon=True,
+        )
+        thread.start()
+        logger.info(f"用户暂停后续跑已启动 run_id={run_id} thread={thread.name}")
+        return ResponseModel(
+            code=200,
+            message=result.get("message") or "已继续运行",
+            data=PipelineResumeResponse(**result),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"续跑失败: {str(e)}")
 
 
 @router.get("/runs/{project_id}", response_model=ResponseModel[list])
@@ -715,6 +762,9 @@ async def get_coordinator_hints(
                 "pattern_id": extra.get("pattern_id"),
                 "fix_status": extra.get("fix_status"),
                 "fix_detail": extra.get("fix_detail"),
+                "decision_status": extra.get("decision_status"),
+                "await_stage": extra.get("await_stage"),
+                "rerun_stages": extra.get("rerun_stages"),
                 "timestamp": adv.created_at.isoformat() if adv.created_at else "",
             })
         # 优先使用 advice 表的数据（更可靠），如果为空则回退到 output_data
@@ -738,6 +788,46 @@ async def get_coordinator_hints(
             "hint_count": len(coordinator_hints),
         },
     )
+
+
+@router.post(
+    "/coordinator-hints/{run_id}/evidence-iteration-decision",
+    response_model=ResponseModel[EvidenceIterationDecisionResponse],
+)
+async def evidence_iteration_decision(
+    run_id: str,
+    body: EvidenceIterationDecisionRequest,
+    db: Session = Depends(get_db),
+):
+    """用户对低证据假设的「同意/不同意证据链迭代」决策。"""
+    try:
+        pipeline_service = get_pipeline_service(db)
+        result = pipeline_service.respond_evidence_iteration_decision(
+            project_id=body.project_id,
+            run_id=run_id,
+            hint_id=body.hint_id,
+            decision=body.decision,
+        )
+        if body.decision == "approve":
+            thread = threading.Thread(
+                target=_execute_pipeline_background,
+                args=(result["run_id"],),
+                daemon=True,
+            )
+            thread.start()
+        return ResponseModel(
+            code=200,
+            message=(
+                "已开始证据链迭代重跑"
+                if body.decision == "approve"
+                else "已记录：不触发证据链迭代"
+            ),
+            data=EvidenceIterationDecisionResponse(**result),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── 主动协调 ──
@@ -842,10 +932,9 @@ async def get_project_readiness(
     if not project:
         raise HTTPException(status_code=404, detail="项目未找到")
 
-    # 获取文献数据
+    # Evidence 没有 source_type；就绪检查用项目内证据条数即可
     literature_facts = db.query(Evidence).filter(
         Evidence.project_id == project_id,
-        Evidence.source_type == "literature",
     ).all()
 
     # 获取历史运行记录

@@ -83,7 +83,7 @@ class HypothesisReviewAgent:
     
     def review(
         self,
-        hypotheses: List[HypothesisCandidate],
+        hypotheses: Any,
         retrieved_papers: Optional[List[Dict[str, Any]]] = None,
         literature_facts: Optional[List[Dict[str, Any]]] = None,
         alignments: Optional[List[Dict[str, Any]]] = None,
@@ -102,6 +102,18 @@ class HypothesisReviewAgent:
         Returns:
             评审结果，按综合得分降序排列
         """
+        # 兼容旧调用: review(research_question: str, hypotheses: list)
+        if isinstance(hypotheses, str) and isinstance(retrieved_papers, list):
+            research_question = hypotheses or research_question
+            hypotheses = retrieved_papers
+            retrieved_papers = None
+
+        hypotheses = self._coerce_candidates(hypotheses)
+        if original_hypotheses is not None:
+            original_hypotheses = self._coerce_candidates(original_hypotheses)
+        else:
+            original_hypotheses = list(hypotheses)
+
         try:
             logger.info(f"开始评审 {len(hypotheses)} 条假设")
             
@@ -143,18 +155,24 @@ class HypothesisReviewAgent:
             # 验证并标准化结果
             result = self._validate_and_normalize_result(result_dict, hypotheses)
 
-            # ── 对齐结果：降低 off_topic 假设的评分 ──
+            # ── 对齐结果：降低 off_topic 假设的评分（按 hypothesis_index，勿用排序后下标）──
             if alignments:
                 result._alignments = alignments
-                for i, review in enumerate(result.reviews):
-                    if i < len(alignments) and alignments[i].get("off_topic"):
-                        off_topic_penalty = 0.4
-                        result._off_topic_penalized = True
-                        for score_field_name in ["scientific_value", "novelty", "testability", "data_availability", "cost_risk"]:
-                            if hasattr(review.scores, score_field_name):
-                                score_detail = getattr(review.scores, score_field_name)
-                                score_detail.score = max(1, int(score_detail.score * (1 - off_topic_penalty)))
-                        review.overall_score = round(review.overall_score * (1 - off_topic_penalty), 1)
+                for review in result.reviews:
+                    idx = getattr(review, "hypothesis_index", None)
+                    if idx is None or not isinstance(idx, int):
+                        continue
+                    if idx < 0 or idx >= len(alignments):
+                        continue
+                    if not alignments[idx].get("off_topic"):
+                        continue
+                    off_topic_penalty = 0.4
+                    result._off_topic_penalized = True
+                    for score_field_name in ["scientific_value", "novelty", "testability", "data_availability", "cost_risk"]:
+                        if hasattr(review.scores, score_field_name):
+                            score_detail = getattr(review.scores, score_field_name)
+                            score_detail.score = max(1, int(score_detail.score * (1 - off_topic_penalty)))
+                    review.overall_score = round(review.overall_score * (1 - off_topic_penalty), 1)
 
             # ── 主假设选择：排除 off_topic 和低证据假设 ──
             result.primary_index, result.primary_reason = self._select_primary(
@@ -270,6 +288,44 @@ class HypothesisReviewAgent:
             logger.warning(f"NoveltyReviewSkill 异常: {e}")
             return {}
 
+    @staticmethod
+    def _coerce_candidates(items: Any) -> List[HypothesisCandidate]:
+        """将 dict / str / HypothesisCandidate 统一为 HypothesisCandidate 列表。"""
+        if not items:
+            return []
+        if not isinstance(items, list):
+            items = [items]
+        out: List[HypothesisCandidate] = []
+        for item in items:
+            if isinstance(item, HypothesisCandidate):
+                out.append(item)
+                continue
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    out.append(HypothesisCandidate(hypothesis=text))
+                continue
+            if isinstance(item, dict):
+                payload = dict(item)
+                if not payload.get("hypothesis"):
+                    payload["hypothesis"] = (
+                        payload.get("statement")
+                        or payload.get("text")
+                        or payload.get("content")
+                        or ""
+                    )
+                if not str(payload.get("hypothesis") or "").strip():
+                    continue
+                try:
+                    out.append(HypothesisCandidate.model_validate(payload))
+                except Exception:
+                    out.append(HypothesisCandidate(hypothesis=str(payload["hypothesis"])))
+                continue
+            text = str(item).strip()
+            if text:
+                out.append(HypothesisCandidate(hypothesis=text))
+        return out
+
     def _format_hypotheses(self, hypotheses: List[HypothesisCandidate]) -> str:
         """格式化假设列表"""
         if not hypotheses:
@@ -277,6 +333,11 @@ class HypothesisReviewAgent:
         
         formatted = []
         for idx, hypo in enumerate(hypotheses):
+            if not isinstance(hypo, HypothesisCandidate):
+                coerced = self._coerce_candidates([hypo])
+                if not coerced:
+                    continue
+                hypo = coerced[0]
             hypo_text = f"## 假设 {idx}\n"
             hypo_text += f"假设内容: {hypo.hypothesis}\n"
             
@@ -413,33 +474,37 @@ class HypothesisReviewAgent:
         eligible = []
         rejected_reasons: List[str] = []
 
-        for i, review in enumerate(reviews):
-            alignment = alignments[i] if alignments and i < len(alignments) else {}
+        for review in reviews:
+            hypo_idx = getattr(review, "hypothesis_index", None)
+            if hypo_idx is None or not isinstance(hypo_idx, int):
+                continue
+            alignment = alignments[hypo_idx] if alignments and 0 <= hypo_idx < len(alignments) else {}
             is_off_topic = alignment.get("off_topic", False)
             alignment_score = alignment.get("alignment_score", 50)
             evidence_level = "medium"
             has_supporting_facts = False
             has_data_fields = False
-            if original_hypotheses and i < len(original_hypotheses):
-                h = original_hypotheses[i]
+            if original_hypotheses and 0 <= hypo_idx < len(original_hypotheses):
+                h = original_hypotheses[hypo_idx]
                 if hasattr(h, 'evidence_level'):
-                    evidence_level = getattr(h, 'evidence_level', 'medium')
+                    evidence_level = getattr(h, 'evidence_level', 'medium') or "medium"
                 if hasattr(h, 'supporting_fact_ids'):
                     has_supporting_facts = bool(getattr(h, 'supporting_fact_ids', []))
                 if hasattr(h, 'dataset_field_refs'):
                     has_data_fields = bool(getattr(h, 'dataset_field_refs', []))
 
             if is_off_topic:
-                rejected_reasons.append(f"假设 {i}: off_topic (alignment_score={alignment_score})")
+                rejected_reasons.append(f"假设 {hypo_idx}: off_topic (alignment_score={alignment_score})")
                 continue
 
             if evidence_level == "low" and not has_supporting_facts and not has_data_fields:
                 rejected_reasons.append(
-                    f"假设 {i}: evidence_level=low 且无事实/数据支撑 (score={review.overall_score})"
+                    f"假设 {hypo_idx}: evidence_level=low 且无事实/数据支撑 (score={review.overall_score})"
                 )
                 continue
 
-            eligible.append((i, review, alignment_score, evidence_level))
+            evidence_rank = 0 if evidence_level == "high" else 1 if evidence_level == "medium" else 2
+            eligible.append((hypo_idx, review, alignment_score, evidence_level, evidence_rank))
 
         if not eligible:
             return None, (
@@ -448,19 +513,22 @@ class HypothesisReviewAgent:
                 + "。建议补充文献或数据后重新生成假设。"
             )
 
-        eligible.sort(key=lambda x: (
-            x[2] if x[2] is not None else 0,
-            0 if x[3] == "high" else 1 if x[3] == "medium" else 2,
-            -x[1].overall_score,
-        ), reverse=True)
+        # 高 alignment → 高证据 → 高 overall；禁止 reverse=True 翻转证据秩与分数符号
+        eligible.sort(
+            key=lambda x: (
+                -(x[2] if x[2] is not None else 0),
+                x[4],
+                -x[1].overall_score,
+            )
+        )
 
         best_idx = eligible[0][0]
-        best_score = eligible[0][2]
+        best_alignment_score = eligible[0][2]
         best_evidence = eligible[0][3]
 
         return best_idx, (
             f"推荐假设 {best_idx} 为主假设: "
-            f"alignment_score={best_score}, evidence_level={best_evidence}, "
+            f"alignment_score={best_alignment_score}, evidence_level={best_evidence}, "
             f"overall_score={eligible[0][1].overall_score}"
             + (f" (已排除 {len(rejected_reasons)} 条: {'; '.join(rejected_reasons)})" if rejected_reasons else "")
         )

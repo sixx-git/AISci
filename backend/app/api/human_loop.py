@@ -262,9 +262,25 @@ async def resume_hitl_gate(body: HitlGateResumeRequest, db: Session = Depends(ge
         if result["action"] == "continue":
             from app.api.pipeline import _execute_pipeline_background
 
+            exec_run_id = body.run_id
+            if result.get("prepare_in_place_from_stage_onward"):
+                pipeline_service = get_pipeline_service(db)
+                stage = result.get("rerun_from_stage") or "literature_mining"
+                exec_run_id = pipeline_service.start_rerun_from_stage(
+                    project_id=body.project_id,
+                    parent_run_id=body.run_id,
+                    from_stage=stage,
+                    use_human_modified_output=True,
+                    rerun_mode="from_stage_onward",
+                    in_place=True,
+                    run_options={"pause_after_literature_mining": False},
+                )
+                result["run_id"] = exec_run_id
+                result["rerun_from_stage"] = stage
+
             threading.Thread(
                 target=_execute_pipeline_background,
-                args=(body.run_id,),
+                args=(exec_run_id,),
                 daemon=True,
             ).start()
 

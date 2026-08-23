@@ -94,15 +94,20 @@ class TestSourceAvailability(unittest.TestCase):
 
 
 class TestExternalSkillScope(unittest.TestCase):
-    def test_skill_excludes_hf_zenodo_kaggle(self):
+    def test_skill_live_apis_include_open_repos(self):
+        """现行策略：Zenodo / HuggingFace / Figshare 为主；OpenAlex 方法保留但不默认进 live_apis。"""
         skill = ExternalDatasetSearchSkill()
-        with patch.object(skill, "_search_openalex", return_value={"results": []}), patch.object(
+        with patch.object(skill, "_search_zenodo", return_value={"results": []}), patch.object(
+            skill, "_search_huggingface", return_value={"results": []},
+        ), patch.object(skill, "_search_figshare", return_value={"results": []}), patch.object(
             skill, "_search_pubmed_geo", return_value={"results": []},
         ):
             res = asyncio.run(skill.run({"research_question": "test"}, {}))
-        self.assertIn("openalex", res.data.get("live_apis", []))
+        live = res.data.get("live_apis", [])
+        self.assertIn("zenodo", live)
+        self.assertIn("huggingface", live)
         self.assertIn("registry_sources", res.data)
-        self.assertNotIn("huggingface", res.data.get("live_apis", []))
+        self.assertNotIn("openalex", live)
 
 
 if __name__ == "__main__":

@@ -51,7 +51,8 @@ def normalize_legacy_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         c.setdefault("import_supported", False)
         c.setdefault("api_type", "catalog")
     elif "openalex" in platform or "pubmed" in platform:
-        c.setdefault("availability", "reference_only")
+        # 与 ExternalDatasetSearchSkill / coverage 口径一致：文献元数据不可自动导入
+        c.setdefault("availability", "metadata_only")
         c.setdefault("import_supported", False)
         c.setdefault("api_type", "metadata")
     elif "geo" in platform or "ncbi" in platform:

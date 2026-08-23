@@ -20,6 +20,7 @@ class PipelineStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     HUMAN_REVIEW_REQUIRED = "human_review_required"
+    PAUSED = "paused"
 
 
 class PipelineStage(str, Enum):

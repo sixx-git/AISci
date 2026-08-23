@@ -84,11 +84,28 @@ def _load(project_id: str) -> Dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
-            return _empty_store()
+            raise ValueError("store root is not a dict")
         data.setdefault("experiments", [])
         data.setdefault("report_experiment_ids", [])
         return data
-    except Exception:
+    except Exception as exc:
+        backup = path.with_suffix(path.suffix + ".corrupt.bak")
+        try:
+            path.replace(backup)
+            logger.error(
+                "实验 store JSON 损坏，已备份为 %s 后初始化空 store project=%s err=%s",
+                backup,
+                project_id,
+                exc,
+            )
+        except Exception as bak_exc:
+            logger.error(
+                "实验 store JSON 损坏且备份失败，返回空 store（未覆盖原文件）project=%s err=%s bak_err=%s",
+                project_id,
+                exc,
+                bak_exc,
+            )
+            return _empty_store()
         return _empty_store()
 
 

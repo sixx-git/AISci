@@ -194,7 +194,9 @@ class HitlGateResumeResponse(BaseModel):
     status: str
     run_id: str
     rerun_from_stage: Optional[str] = None
+    resume_phase: Optional[str] = None
     feedback_constraints_count: Optional[int] = None
+    prepare_in_place_from_stage_onward: Optional[bool] = None
 
 
 class SelectEvolvedHypothesisRequest(BaseModel):

@@ -1,0 +1,4 @@
+client_id,global_accuracy,communication_cost_mb,round
+client_0,0.72,12.5,1
+client_1,0.68,11.8,1
+client_2,0.75,13.1,1

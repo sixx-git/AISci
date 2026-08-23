@@ -63,6 +63,19 @@ def compute_quality_acceptance(
     latest_passed = gate_summary.get("latest_passed")
     gate_improved = gate_summary.get("gate_improved")
 
+    # 数值分改善：兼容 0–10 ensemble / 未归一化的 trend score（Gate 阈值 50 下两者可能都未通过）
+    numeric_scores: List[float] = []
+    for entry in trend:
+        if not isinstance(entry, dict) or entry.get("score") is None:
+            continue
+        try:
+            numeric_scores.append(float(entry["score"]))
+        except (TypeError, ValueError):
+            continue
+    numeric_improved = (
+        len(numeric_scores) >= 2 and numeric_scores[-1] > numeric_scores[0]
+    )
+
     verdict = "pass"
     if not accepted:
         verdict = "needs_review"
@@ -103,10 +116,14 @@ def compute_quality_acceptance(
         "latest_gate_passed": latest_passed,
         "gate_improved": gate_improved,
         "failed_gates": list(dict.fromkeys(failed_stages)),
-        "score_improved": bool(gate_improved),
-        "score_delta": gate_summary.get("cqs_delta"),
-        "first_score": gate_summary.get("cqs_first"),
-        "last_score": gate_summary.get("cqs_last"),
+        "score_improved": bool(gate_improved) or numeric_improved,
+        "score_delta": (
+            (numeric_scores[-1] - numeric_scores[0])
+            if len(numeric_scores) >= 2
+            else gate_summary.get("cqs_delta")
+        ),
+        "first_score": numeric_scores[0] if numeric_scores else gate_summary.get("cqs_first"),
+        "last_score": numeric_scores[-1] if numeric_scores else gate_summary.get("cqs_last"),
         "weak_stages": list(dict.fromkeys(failed_stages)),
         "sandbox_success": sandbox_success,
         "discovery_rounds": discovery_rounds,
@@ -116,7 +133,7 @@ def compute_quality_acceptance(
         "cqs_first": gate_summary.get("cqs_first"),
         "cqs_last": gate_summary.get("cqs_last"),
         "cqs_delta": gate_summary.get("cqs_delta"),
-        "cqs_improved": gate_improved,
+        "cqs_improved": bool(gate_improved) or numeric_improved,
         "summary": "；".join(summary_parts),
     }
 

@@ -155,7 +155,12 @@ class ReportGenerationAgent:
                     result_dict, data_context["data_finder_results"]
                 )
 
-            result_dict = self._apply_evidence_chain_references(result_dict, all_hypotheses)
+            result_dict = self._apply_evidence_chain_references(
+                result_dict,
+                all_hypotheses,
+                verified_references=verified_references or [],
+                citation_map=citation_map or [],
+            )
 
             result_dict = self._backfill_chapters_from_pipeline(
                 result_dict,
@@ -1383,7 +1388,7 @@ class ReportGenerationAgent:
 
                 chapters["experiments"] = _normalize_experiments_dict(exp)
             except Exception:
-                pass
+                logger.warning("experiments 章节归一化失败", exc_info=True)
 
         result["chapters"] = chapters
         return result
@@ -1560,6 +1565,8 @@ class ReportGenerationAgent:
     def _apply_evidence_chain_references(
         result: Dict[str, Any],
         all_hypotheses: List[Dict[str, Any]],
+        verified_references: Optional[List[Dict[str, Any]]] = None,
+        citation_map: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """证据链仅在书目为空/占位时回填；已有可验证 GB/T 书目时不整表覆盖。"""
         chapters = result.get("chapters", {})
@@ -1581,6 +1588,14 @@ class ReportGenerationAgent:
         if has_real_bib:
             return result
 
+        allowed_dois = set()
+        for item in list(verified_references or []) + list(citation_map or []):
+            if not isinstance(item, dict):
+                continue
+            doi = str(item.get("doi") or "").strip().lower()
+            if doi:
+                allowed_dois.add(doi)
+
         refs: List[str] = []
         seen = set()
         has_chain = False
@@ -1599,11 +1614,12 @@ class ReportGenerationAgent:
                     continue
                 seen.add(key)
                 year = ev.get("year") or ""
-                doi = ev.get("doi") or ""
+                doi = str(ev.get("doi") or "").strip()
                 line = title
                 if year:
                     line += f" ({year})"
-                if doi:
+                # 仅附加已在 verified/citation_map 中出现的 DOI，禁止证据链凭空写入 DOI
+                if doi and doi.lower() in allowed_dois:
                     line += f". DOI: {doi}"
                 refs.append(line)
 
@@ -1800,9 +1816,31 @@ class ReportGenerationAgent:
         if not novelty_outputs:
             return None
         hr_data = novelty_outputs.get("hypothesis_novelty_review", {})
-        if isinstance(hr_data, dict):
-            return hr_data.get("data", {}).get("novelty_score")
-        return None
+        if not isinstance(hr_data, dict):
+            return None
+        # 兼容旧结构 hypothesis_novelty_review.data.novelty_score
+        direct = (hr_data.get("data") or {}).get("novelty_score")
+        if direct is not None:
+            try:
+                return float(direct)
+            except (TypeError, ValueError):
+                pass
+        # 现行结构：hypothesis_{i}.data.novelty_score
+        scores: List[float] = []
+        for key, entry in hr_data.items():
+            if not str(key).startswith("hypothesis_") or not isinstance(entry, dict):
+                continue
+            data = entry.get("data") or {}
+            score = data.get("novelty_score") or data.get("overall_novelty")
+            if score is None:
+                continue
+            try:
+                scores.append(float(score))
+            except (TypeError, ValueError):
+                continue
+        if not scores:
+            return None
+        return round(sum(scores) / len(scores), 2)
 
     @staticmethod
     def _aggregate_sanity_check(
@@ -2309,7 +2347,7 @@ class ReportGenerationAgent:
 
                 text = IterationNarrativeSkill.strip_overclaim(text, verdict or "inconclusive")
             except Exception:
-                pass
+                logger.warning("过度声明剥离失败 verdict=%s", verdict, exc_info=True)
         try:
             from app.services.report_content_sanitizer import (
                 collapse_method_boundary_duplicates,
@@ -2318,7 +2356,7 @@ class ReportGenerationAgent:
 
             text = collapse_method_boundary_duplicates(dedupe_repeated_sentences(text))
         except Exception:
-            pass
+            logger.warning("results 章节去重净化失败", exc_info=True)
         return text
 
     @staticmethod
@@ -2337,7 +2375,7 @@ class ReportGenerationAgent:
                     hypothesis=str(sv.get("hypothesis") or ""),
                 )
             except Exception:
-                pass
+                logger.warning("iteration narrative 构建失败", exc_info=True)
         sv_results = sv.get("results", {}) if isinstance(sv.get("results"), dict) else {}
         # 兼容：sandbox_execution 在 sv 顶层（迭代实验 synthesize）
         top_sandbox = sv.get("sandbox_execution") if isinstance(sv.get("sandbox_execution"), dict) else {}

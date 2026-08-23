@@ -1,0 +1,52 @@
+---
+description: AISci 项目架构、技术栈与质量约束，供 Cursor 在检查/测试/修改代码时遵循
+globs:
+  - "backend/**/*.py"
+  - "frontend/src/**/*.{ts,tsx}"
+alwaysApply: true
+---
+
+# AISci 项目上下文（Cursor 规则）
+
+## 项目定位
+基于 Qwen/千问大模型的**多智能体科研自动化系统**。7 阶段 Pipeline：
+问题理解 → 文献挖掘 → 知识缺口 → 假设生成 → 假设评审 → 迭代实验 → 报告生成。
+由 CoordinatorAgent（大家长 Agent）做全局协调、质量管控与自动修复。
+
+## 技术栈
+- 后端：FastAPI + Uvicorn，SQLAlchemy 2.0（ORM），SQLite 默认 / MySQL 可选
+- 前端：React 18 + Vite 5 + TypeScript + TailwindCSS 3 + recharts
+- 嵌入/向量：sentence-transformers + zvec/FAISS
+- 包管理：后端 venv（`backend/` 下），前端 pnpm
+- 大模型：Qwen（DashScope），可用 `USE_MOCK_LLM=true` 走 Mock 模式
+
+## 目录约定
+- `backend/app/agents/` 各阶段智能体（独立类 + Prompt + JSON Schema）
+- `backend/app/services/` 业务逻辑（Pipeline、迭代实验、Feedback Hub、审计链等）
+- `backend/app/api/v1.py` 汇总挂载路由；子路由在 `backend/app/api/*.py`
+- `backend/app/skills/` 科研 Skill 工具层（40+）
+- `backend/prompts/` 阶段 Prompt 模板 + `presets/` 范式预设
+- `backend/tests/` pytest（`pytest.ini` 已配置 markers：slow/integration/unit/agent/live）
+- `frontend/src/{components,pages,services,types,config}/`
+- `pingfenbiao-main/`（:8765 独立预测服务）、`shaxiang-main/`（迭代实验引擎）
+
+## 关键技术约束（检查/修改时必须遵守）
+1. LLM 调用统一走 `backend/app/services/qwen_client.py`（`qwen_chat` / `qwen_structured_chat` / `QwenClient`）。`llm_service.py` 为遗留薄封装，新代码不要新增第二套 OpenAI client；禁止在 agent/service 里直接 `OpenAI()`（embedding 等特殊路径须复用 `qwen_client.build_dashscope_http_client`）。
+2. 所有文献事实必须绑定 `fact_id` + `source_chunk_id`，可溯源；禁止编造 References。
+3. 报告中不得出现 GPT-4/Claude/Llama 等非 Qwen 模型名；Technical Details 必须提及 Qwen/千问与阿里云百炼。
+4. Pydantic 模型（`schemas/`）约束 Agent 输入输出类型安全；修改 schema 需同步检查调用方。
+5. 前端 API 调用集中在 `frontend/src/services/`，类型定义在 `frontend/src/types/`。
+6. 禁止硬编码密钥/密码，统一用环境变量（`backend/.env`，模板 `.env.example`）。
+7. API 路由返回结构需与前端 service 层期望的字段一致（改后端响应先查前端 consumer）。
+
+## 常用命令
+- 后端测试：`cd backend && python -m pytest tests/ -v`（慢测试排除 `-m "not slow"`）
+- 批次回归：`pytest tests/test_batch*.py -v`
+- 端到端：`cd backend && python -m uvicorn app.main:app --port 8000` 后另开 `python scripts/check_e2e.py`
+- 前端检查：`cd frontend && pnpm lint`（eslint，max-warnings 0）、`pnpm build`（tsc + vite build）
+- 启动：后端 `uvicorn app.main:app --reload --port 8000`；前端 `pnpm dev`（:5173）
+
+## 质量红线
+- 改完任何功能必须跑对应测试/构建，确认无回归再收工。
+- 不要为了"修 lint"破坏业务逻辑或删掉必要代码。
+- 涉及中文科研报告文案时，标题与正文须扣题对齐。

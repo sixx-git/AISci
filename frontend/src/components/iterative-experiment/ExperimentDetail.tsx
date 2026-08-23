@@ -515,11 +515,11 @@ export function ExperimentDetail({
                         <p className="text-bp-text">
                           目录扫描{' '}
                           <span className="font-medium text-bp-cyan">
-                            {autodetectPreview.files_scanned ?? '?'}
+                            {String(autodetectPreview.files_scanned ?? '?')}
                           </span>{' '}
                           个数据文件，合并采用{' '}
                           <span className="font-medium text-bp-cyan">
-                            {autodetectPreview.files_used ?? '?'}
+                            {String(autodetectPreview.files_used ?? '?')}
                           </span>{' '}
                           个
                           {Array.isArray(autodetectPreview.used_files) &&

@@ -95,9 +95,10 @@ export function HitlGateContinueBar({
         setError(res.message || '启动失败');
         return;
       }
+      const nextRunId = res.data?.run_id || resolvedRunId;
       setGate(null);
       try {
-        localStorage.setItem(activeRunKey(projectId), resolvedRunId);
+        localStorage.setItem(activeRunKey(projectId), nextRunId);
         localStorage.setItem(activeRunStatusKey(projectId), 'running');
       } catch { /* ignore */ }
       navigateToProjectTab(navigate, projectId, 'workflow');

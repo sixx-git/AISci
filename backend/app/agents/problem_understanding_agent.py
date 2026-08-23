@@ -1,13 +1,11 @@
 """
 问题理解智能体 (ProblemUnderstandingAgent)
 """
-import json
 import logging
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.services.qwen_client import (
-    get_qwen_client,
     qwen_structured_chat
 )
 from app.services.prompt_loader import get_prompt_loader
@@ -106,7 +104,7 @@ class ProblemUnderstandingAgent:
     """问题理解智能体"""
     
     def __init__(self):
-        self.qwen_client = get_qwen_client()
+        pass
     
     def analyze(
         self,

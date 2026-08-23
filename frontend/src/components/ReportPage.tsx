@@ -1,17 +1,18 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FileText, Clock, Loader2, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, GraduationCap, MessageSquare, FileDown, History, Code2 } from 'lucide-react';
+import { FileText, Clock, AlertTriangle, BookOpen, ExternalLink, BarChart3, CheckCircle2, MessageSquare, FileDown, History, Code2 } from 'lucide-react';
 import { Card } from './Card';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
 import { ReportPdfPreview, ReportPreviewHeader } from './ReportPdfPreview';
+import { ReportQualityEvaluationCard } from './ReportQualityEvaluationCard';
 import { ReportChecklist } from './ReportChecklist';
 import { EvidenceChainQualityCard } from './EvidenceChainQualityCard';
 import { QualityCheckCard } from './QualityCheckCard';
 import type { ReportData, ReportPlot } from '@/types';
 import { reportService } from '@/services/reportService';
-import humanLoopService, { type MentorReview } from '@/services/humanLoopService';
+import humanLoopService from '@/services/humanLoopService';
 import { useToast } from '@/hooks/useToast';
 import { REPORT_SECTION_OPTIONS } from '@/config/reportSections';
 import { countRealReferences } from '@/lib/reportCompliance';
@@ -132,9 +133,6 @@ export function ReportPage({
   const [showHistory, setShowHistory] = useState(false);
   const [reviseScope, setReviseScope] = useState<'full' | 'section'>('full');
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
-  const [mentorNotes, setMentorNotes] = useState('');
-  const [mentorReview, setMentorReview] = useState<MentorReview | null>(null);
-  const [mentorBusy, setMentorBusy] = useState(false);
   const [lastChatReply, setLastChatReply] = useState('');
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
@@ -235,28 +233,6 @@ export function ReportPage({
     }
     return loadProjectReports(currentId);
   }, [selectedReportId, report?.id, loadProjectReports]);
-
-  const handleMentorReview = useCallback(async () => {
-    if (!report?.id) return;
-    setMentorBusy(true);
-    try {
-      const res = await humanLoopService.mentorReview({
-        project_id: projectId,
-        report_id: report.id,
-        target_type: 'report',
-        content: report.reportContent,
-        user_notes: mentorNotes,
-      });
-      if (res.code === 200 && res.data?.review) {
-        setMentorReview(res.data.review);
-        showAlert('导师评审完成');
-      }
-    } catch (e) {
-      showAlert(e instanceof Error ? e.message : '导师评审失败');
-    } finally {
-      setMentorBusy(false);
-    }
-  }, [projectId, report?.id, report?.reportContent, mentorNotes, showAlert]);
 
   const handleReviseReport = useCallback(async () => {
     if (!report?.id || !reviseMessage.trim()) return;
@@ -606,6 +582,10 @@ export function ReportPage({
       {/* 主体：PDF 预览 · 右侧检查 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-4">
+          <ReportQualityEvaluationCard
+            reportId={report.id}
+            projectId={projectId}
+          />
           <Card className="min-w-0">
             <ReportPreviewHeader
               title={report.title}

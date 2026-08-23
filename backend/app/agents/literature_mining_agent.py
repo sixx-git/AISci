@@ -2,9 +2,7 @@
 文献挖掘智能体 (LiteratureMiningAgent)
 ——基于项目文献库真实检索结果提取事实，提供可引用证据。
 """
-import json
 import logging
-import asyncio
 from typing import Optional, List, Dict, Any, Set
 from pydantic import BaseModel, Field
 
@@ -18,7 +16,6 @@ from app.services.vector_store import (
 from app.services.qwen_client import qwen_structured_chat
 from app.services.prompt_loader import get_prompt_loader
 from app.skills.literature.pdf_evidence_extraction_skill import PdfEvidenceExtractionSkill
-from app.skills.literature.citation_grounding_skill import CitationGroundingSkill
 from app.skills.literature.paper_full_text_rag_skill import PaperFullTextRAGSkill
 from app.skills.data.multimodal_linking_skill import MultimodalDataLinkingSkill
 
@@ -38,6 +35,10 @@ class ScienceFact(BaseModel):
     page_number: Optional[int] = Field(None, description="来源页码")
     quote_text: Optional[str] = Field(None, description="原文引用片段（来自 chunk 原文）")
     relevance_score: Optional[float] = Field(None, description="与研究问题的相关性评分 0.0~1.0")
+    tier: Optional[str] = Field("core", description="core=全文证据；auxiliary=摘要/无PDF/兜底，仍可引用")
+    source: Optional[str] = Field(None, description="事实来源标记，如 pdf_evidence_extraction / retrieved_paper")
+    no_pdf: Optional[bool] = Field(None, description="是否无全文 PDF（权限受限等）")
+    evidence_level: Optional[str] = Field(None, description="证据层级：fulltext / abstract / summary / chunk")
 
 
 class EvidenceItem(BaseModel):
@@ -87,7 +88,9 @@ class LiteratureMiningResponse(BaseModel):
     literature_search_count: int = Field(0, description="多源检索候选论文数")
     literature_import_count: int = Field(0, description="本轮自动入库论文数")
     literature_selected_count: int = Field(0, description="通过相关性筛选、待入库论文数")
-    evidence_facts: int = Field(0, description="从文献中提取的事实数")
+    evidence_facts: int = Field(0, description="从文献中提取的事实数（含辅助白名单）")
+    core_facts_count: int = Field(0, description="核心全文事实数")
+    auxiliary_facts_count: int = Field(0, description="辅助白名单事实数（摘要/无PDF等）")
     verified_references_count: int = Field(0, description="已验证的引用数")
     candidate_references_count: int = Field(0, description="候选引用数（未导入文献库）")
     retrieval_provenance: Optional[Dict[str, Any]] = Field(None, description="检索→自动入库 provenance")
@@ -139,6 +142,7 @@ class LiteratureMiningAgent:
             discovery_output: Dict[str, Any] = {}
             corpus_meta: Dict[str, Any] = {}
             discovery_ran = False
+            self._db = db
 
             if db is not None and self._should_run_literature_discovery(db, project_id):
                 discovery_ran = True
@@ -241,18 +245,45 @@ class LiteratureMiningAgent:
                 )
 
             # ── 1b. Chunk RCS：情境摘要打分 + 硬截断 ──
+            pre_rerank = list(search_results)
             search_results, rerank_stats = self._rerank_chunks(
                 research_question, search_results, keep_top_k=top_k
             )
+            soft_pass = False
+            if not search_results and pre_rerank:
+                # RCS 全拒：按向量相似度软通过 Top-K，继续抽取（避免「有入库却 0 核心事实」）
+                ranked = sorted(
+                    pre_rerank,
+                    key=lambda r: float(getattr(r, "similarity_score", 0.0) or 0.0),
+                    reverse=True,
+                )
+                search_results = ranked[: max(1, min(top_k, len(ranked)))]
+                soft_pass = True
+                rerank_stats = dict(rerank_stats or {})
+                rerank_stats.update(
+                    {
+                        "soft_pass": True,
+                        "soft_pass_count": len(search_results),
+                        "reason": "all_rejected_use_top_similarity",
+                    }
+                )
+                logger.warning(
+                    "[文献挖掘] RCS 全拒，软通过 %s 个候选片段继续抽取 run candidates=%s",
+                    len(search_results),
+                    len(pre_rerank),
+                )
+
             if not search_results:
-                return self._empty_response(
+                return self._auxiliary_from_rejected_candidates(
+                    pre_rerank,
+                    discovery_output=discovery_output,
+                    corpus_meta=corpus_meta,
+                    rerank_stats=rerank_stats,
+                    project_id=project_id,
                     warning=(
                         "已检索到文献片段，但均未通过相关性截断（RCS）。"
                         "请调整研究问题或补充更相关 PDF。"
                     ),
-                    discovery_output=discovery_output,
-                    corpus_meta=corpus_meta,
-                    retrieved_papers=discovery_output.get("papers") or [],
                 )
 
             # ── 2. 格式化，（含完整元数据）→ 送入 Prompt ──
@@ -274,7 +305,6 @@ class LiteratureMiningAgent:
                     "success": True,
                     "data": rerank_stats,
                 }
-            response = self._merge_supplementary_facts(response, search_results)
 
             if discovery_output:
                 response.skill_outputs["literature_discovery"] = {
@@ -294,6 +324,12 @@ class LiteratureMiningAgent:
                 if isinstance(discovery_data, dict) and discovery_data.get("papers"):
                     response.retrieved_papers = discovery_data["papers"]
 
+            response.retrieved_papers = self._hydrate_retrieved_paper_abstracts(
+                response.retrieved_papers or [],
+                project_id=project_id,
+            )
+            # 摘要回填后再 enrich，便于 gate_passed 论文进入辅助事实
+            response = self._merge_supplementary_facts(response, search_results)
             response = self._apply_import_stats(
                 response,
                 discovery_output=discovery_output,
@@ -302,6 +338,10 @@ class LiteratureMiningAgent:
             response = self._finalize_literature_stats(response)
             response.evidence_facts = len(response.facts)
             response.verified_references_count = len(response.citation_map)
+            from app.services.literature_bundle_service import sync_fact_counts
+
+            synced = sync_fact_counts(response.model_dump())
+            response = LiteratureMiningResponse(**{**response.model_dump(), **synced})
 
             if response.literature_search_count:
                 stats_msg = (
@@ -310,6 +350,9 @@ class LiteratureMiningAgent:
                 )
                 if response.literature_import_count == 0:
                     stats_msg += "（候选未通过相关性筛选或已存在重复）"
+                if soft_pass:
+                    soft_note = "RCS 未通过，已按相似度软通过片段继续抽取"
+                    stats_msg = f"{soft_note}；{stats_msg}"
                 response.warning = (
                     f"{response.warning}; {stats_msg}" if response.warning else stats_msg
                 )
@@ -417,24 +460,44 @@ class LiteratureMiningAgent:
                 return LiteratureMiningResponse(**merged_empty)
             return self._empty_response(warning="Discovery 刷新未检索到相关文献片段")
 
+        pre_rerank = list(search_results)
         search_results, rerank_stats = self._rerank_chunks(
             search_query, search_results, keep_top_k=top_k
         )
+        if not search_results and pre_rerank:
+            ranked = sorted(
+                pre_rerank,
+                key=lambda r: float(getattr(r, "similarity_score", 0.0) or 0.0),
+                reverse=True,
+            )
+            search_results = ranked[: max(1, min(top_k, len(ranked)))]
+            rerank_stats = dict(rerank_stats or {})
+            rerank_stats.update(
+                {
+                    "soft_pass": True,
+                    "soft_pass_count": len(search_results),
+                    "reason": "all_rejected_use_top_similarity",
+                }
+            )
         if not search_results:
+            aux = self._auxiliary_from_rejected_candidates(
+                pre_rerank,
+                discovery_output=discovery_output,
+                corpus_meta=None,
+                rerank_stats=rerank_stats,
+                project_id=project_id,
+                warning="Discovery 刷新：新片段未通过 RCS 相关性截断，已纳入白名单事实",
+            )
             if previous:
-                merged_empty = self._merge_mining_dicts(
+                merged = self._merge_mining_dicts(
                     previous,
-                    self._empty_response(
-                        warning="Discovery 刷新：新片段未通过 RCS 相关性截断，保留上一轮文献"
-                    ).model_dump(),
+                    aux.model_dump(),
                     discovery_round=discovery_round,
                     search_query=search_query,
                     supplementary_import=True,
                 )
-                return LiteratureMiningResponse(**merged_empty)
-            return self._empty_response(
-                warning="Discovery 刷新：检索片段均未通过 RCS 相关性截断"
-            )
+                return LiteratureMiningResponse(**merged)
+            return aux
 
         formatted_chunks = self._format_chunks(search_results)
         result = self._extract_facts(search_query, formatted_chunks, search_results)
@@ -459,6 +522,10 @@ class LiteratureMiningAgent:
 
         response.evidence_facts = len(response.facts)
         response.verified_references_count = len(response.citation_map)
+        from app.services.literature_bundle_service import sync_fact_counts
+
+        synced = sync_fact_counts(response.model_dump())
+        response = LiteratureMiningResponse(**{**response.model_dump(), **synced})
         if previous:
             response.literature_import_count = int(
                 (previous or {}).get("literature_import_count")
@@ -810,6 +877,37 @@ class LiteratureMiningAgent:
                 "page_number": fact.get("page_number") or sr.page_number,
                 "quote_text": fact.get("quote_text"),
                 "relevance_score": fact.get("relevance_score") or sr.similarity_score,
+                "tier": fact.get("tier") or (
+                    "auxiliary"
+                    if (
+                        bool(getattr(sr, "fallback", False))
+                        or self._is_auxiliary_chunk(chunk_id)
+                    )
+                    else "core"
+                ),
+                "source": fact.get("source") or (
+                    "abstract_fallback"
+                    if (
+                        bool(getattr(sr, "fallback", False))
+                        or self._is_auxiliary_chunk(chunk_id)
+                    )
+                    else "llm_extraction"
+                ),
+                "no_pdf": fact.get("no_pdf")
+                if fact.get("no_pdf") is not None
+                else (
+                    bool(getattr(sr, "fallback", False))
+                    or self._is_auxiliary_chunk(chunk_id)
+                ),
+                "evidence_level": fact.get("evidence_level")
+                or (
+                    "abstract"
+                    if (
+                        bool(getattr(sr, "fallback", False))
+                        or self._is_auxiliary_chunk(chunk_id)
+                    )
+                    else "fulltext"
+                ),
             }
             validated_facts.append(validated_fact)
 
@@ -840,18 +938,24 @@ class LiteratureMiningAgent:
             doc_id = item.get("document_id", "")
             if not doc_id:
                 continue
-            # 从 lookup 表补全元数据
+            # 从 lookup 表补全元数据：DOI/URL/external_id/authors/year 优先库侧，禁止 LLM 虚构覆盖
             sr = doc_lookup.get(doc_id)
+
+            def _prefer_store(llm_val, store_val):
+                if store_val not in (None, "", []):
+                    return store_val
+                return llm_val
+
             enriched = {
                 "document_id": doc_id,
                 "paper_title": item.get("paper_title") or item.get("title") or (sr.source_title if sr else None),
                 "title": item.get("title") or item.get("paper_title") or (sr.source_title if sr else None),
-                "authors": item.get("authors") or (sr.authors if sr else None),
-                "year": item.get("year") or (sr.year if sr else None),
+                "authors": _prefer_store(item.get("authors"), sr.authors if sr else None),
+                "year": _prefer_store(item.get("year"), sr.year if sr else None),
                 "source_type": item.get("source_type") or (sr.source_type if sr else None),
-                "source_url": item.get("source_url") or (sr.source_url if sr else None),
-                "doi": item.get("doi") or (sr.doi if sr else None),
-                "external_id": item.get("external_id") or (sr.external_id if sr else None),
+                "source_url": _prefer_store(item.get("source_url"), sr.source_url if sr else None),
+                "doi": _prefer_store(item.get("doi"), sr.doi if sr else None),
+                "external_id": _prefer_store(item.get("external_id"), sr.external_id if sr else None),
                 "fallback": item.get("fallback") or (sr.fallback if sr else False),
                 "fact_ids": item.get("fact_ids", []),
                 "chunk_ids": item.get("chunk_ids", []),
@@ -910,6 +1014,7 @@ class LiteratureMiningAgent:
                         "quote_text": content[:300],
                         "relevance_score": sr.similarity_score,
                         "source": "vector_chunk",
+                        "tier": "auxiliary",
                     }
                 )
             if fallback_facts:
@@ -930,7 +1035,243 @@ class LiteratureMiningAgent:
         ]
         payload["evidence_facts"] = len(facts)
         payload["verified_references_count"] = len(payload.get("citation_map") or [])
+        from app.services.literature_bundle_service import sync_fact_counts
+
+        payload = sync_fact_counts(payload)
         return LiteratureMiningResponse(**payload)
+
+    def _is_auxiliary_chunk(self, chunk_id: str) -> bool:
+        """无 PDF / 摘要兜底 chunk → 辅助事实。"""
+        cid = (chunk_id or "").strip()
+        if not cid:
+            return False
+        db = getattr(self, "_db", None)
+        own = False
+        if db is None:
+            try:
+                from app.core.database import SessionLocal
+
+                db = SessionLocal()
+                own = True
+            except Exception:
+                return False
+        try:
+            from app.models.project import Chunk
+
+            ch = db.query(Chunk).filter(Chunk.id == cid).first()
+            if not ch:
+                return False
+            meta = ch.extra_metadata or {}
+            if isinstance(meta, str):
+                import json as _json
+
+                try:
+                    meta = _json.loads(meta)
+                except Exception:
+                    meta = {}
+            if not isinstance(meta, dict):
+                meta = {}
+            if meta.get("no_pdf") is True or str(meta.get("source") or "").lower() in {
+                "abstract_fallback",
+                "metadata",
+            }:
+                return True
+            ctype = str(ch.chunk_type or "").lower()
+            return ctype in {"abstract", "metadata", "summary"}
+        except Exception:
+            return False
+        finally:
+            if own and db is not None:
+                db.close()
+
+    def _hydrate_retrieved_paper_abstracts(
+        self,
+        papers: List[Dict[str, Any]],
+        *,
+        project_id: str,
+    ) -> List[Dict[str, Any]]:
+        """discovery 常缺 abstract：用项目文献库摘要回填，便于辅助事实提升。"""
+        if not papers or not project_id:
+            return papers
+        db = getattr(self, "_db", None)
+        own = False
+        if db is None:
+            try:
+                from app.core.database import SessionLocal
+
+                db = SessionLocal()
+                own = True
+            except Exception:
+                return papers
+        try:
+            from app.models.project import Document
+
+            docs = (
+                db.query(Document)
+                .filter(Document.project_id == project_id)
+                .all()
+            )
+            by_ext: Dict[str, Any] = {}
+            by_title: Dict[str, Any] = {}
+            for d in docs:
+                abstract = (d.abstract or "").strip()
+                if not abstract:
+                    continue
+                if d.external_id:
+                    by_ext[str(d.external_id).strip().lower()] = d
+                title = (d.title or "").strip().lower()
+                if title:
+                    by_title[title] = d
+
+            out: List[Dict[str, Any]] = []
+            for raw in papers:
+                if not isinstance(raw, dict):
+                    continue
+                paper = dict(raw)
+                if (paper.get("abstract") or "").strip():
+                    out.append(paper)
+                    continue
+                ext = str(
+                    paper.get("arxiv_id")
+                    or paper.get("external_id")
+                    or ""
+                ).strip().lower()
+                title = str(paper.get("title") or paper.get("paper_title") or "").strip().lower()
+                doc = by_ext.get(ext) if ext else None
+                if doc is None and title:
+                    doc = by_title.get(title)
+                if doc is not None:
+                    paper["abstract"] = (doc.abstract or "").strip()
+                    paper.setdefault("document_id", doc.id)
+                    paper.setdefault("no_pdf", (doc.file_size or 0) <= 0)
+                    # 绑定真实摘要 chunk，便于可溯源
+                    if not paper.get("source_chunk_id") and getattr(self, "_db", None) is not None:
+                        try:
+                            from app.models.project import Chunk
+
+                            abs_chunk = (
+                                db.query(Chunk)
+                                .filter(Chunk.document_id == doc.id)
+                                .order_by(Chunk.chunk_index.asc())
+                                .first()
+                            )
+                            if abs_chunk and abs_chunk.id:
+                                paper["source_chunk_id"] = abs_chunk.id
+                        except Exception:
+                            pass
+                out.append(paper)
+            return out
+        except Exception as exc:
+            logger.warning("回填 retrieved_papers 摘要失败: %s", exc)
+            return papers
+        finally:
+            if own and db is not None:
+                db.close()
+
+    def _auxiliary_from_rejected_candidates(
+        self,
+        candidates: List[SearchResult],
+        *,
+        discovery_output: Optional[Dict[str, Any]] = None,
+        corpus_meta: Optional[Dict[str, Any]] = None,
+        rerank_stats: Optional[Dict[str, Any]] = None,
+        project_id: str = "",
+        warning: str = "",
+    ) -> LiteratureMiningResponse:
+        """RCS 全拒时：把候选 chunk / 摘要提升为白名单事实（可引用、计入证据数）。"""
+        from app.services.literature_bundle_service import sync_fact_counts
+
+        skill_outputs: Dict[str, Any] = {}
+        if discovery_output:
+            skill_outputs["literature_discovery"] = {"success": True, "data": discovery_output}
+        if corpus_meta:
+            skill_outputs["corpus_auto_import"] = corpus_meta
+        if rerank_stats:
+            skill_outputs["chunk_rerank"] = {"success": True, "data": rerank_stats}
+
+        facts: List[dict] = []
+        seen_chunks: Set[str] = set()
+        source_papers: List[str] = []
+        seen_titles: Set[str] = set()
+        citation_map: List[dict] = []
+        seen_docs: Set[str] = set()
+
+        for i, sr in enumerate(candidates[:20], 1):
+            content = (sr.content or "").strip()
+            if not content or not sr.chunk_id or sr.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(sr.chunk_id)
+            is_aux = bool(getattr(sr, "fallback", False)) or self._is_auxiliary_chunk(sr.chunk_id)
+            fact_id = f"{'aux' if is_aux else 'core'}_chunk_fact_{i:03d}"
+            facts.append(
+                {
+                    "fact_id": fact_id,
+                    "content": content[:500],
+                    "fact_text": content[:1000],
+                    "source_chunk_id": sr.chunk_id,
+                    "document_id": sr.document_id,
+                    "source_paper_title": sr.source_title,
+                    "page_number": sr.page_number,
+                    "quote_text": content[:300],
+                    "relevance_score": getattr(sr, "relevance_score", None) or sr.similarity_score,
+                    "source": "abstract_fallback" if is_aux else "rcs_soft_chunk",
+                    "tier": "auxiliary" if is_aux else "core",
+                    "no_pdf": is_aux,
+                    "evidence_level": "abstract" if is_aux else "fulltext",
+                }
+            )
+            title = (sr.source_title or "").strip()
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                source_papers.append(title)
+            doc_id = (sr.document_id or "").strip()
+            if doc_id and doc_id not in seen_docs:
+                seen_docs.add(doc_id)
+                citation_map.append(
+                    {
+                        "document_id": doc_id,
+                        "paper_title": title or None,
+                        "title": title or None,
+                        "authors": sr.authors,
+                        "year": sr.year,
+                        "source_type": sr.source_type,
+                        "source_url": sr.source_url,
+                        "doi": sr.doi,
+                        "external_id": sr.external_id,
+                        "fact_ids": [fact_id],
+                        "chunk_ids": [sr.chunk_id],
+                    }
+                )
+
+        papers = self._hydrate_retrieved_paper_abstracts(
+            (discovery_output or {}).get("papers") or [],
+            project_id=project_id,
+        )
+        resp = LiteratureMiningResponse(
+            facts=[],
+            evidence=[],
+            source_papers=source_papers,
+            citation_map=citation_map,
+            uncertain_points=[],
+            warning=warning or "候选片段未过 RCS，已纳入白名单事实",
+            skill_outputs=skill_outputs,
+            retrieved_papers=papers,
+            candidate_references_count=len(papers),
+            retrieval_provenance=(corpus_meta or {}).get("retrieval_provenance"),
+        )
+        payload = resp.model_dump()
+        payload["facts"] = facts
+        from app.services.literature_bundle_service import enrich_literature_mining
+
+        payload = enrich_literature_mining(payload)
+        payload = sync_fact_counts(payload)
+        resp = LiteratureMiningResponse(**payload)
+        resp = self._apply_import_stats(
+            resp,
+            discovery_output=discovery_output,
+            corpus_meta=corpus_meta,
+        )
+        return self._finalize_literature_stats(resp)
 
     # ────────── Skills ──────────
 

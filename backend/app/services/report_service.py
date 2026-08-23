@@ -529,6 +529,12 @@ class ReportService:
         extra["last_hitl_sync_at"] = datetime.now().isoformat()
         extra["hitl_sync_run_id"] = run_id
         db_report.extra_metadata = extra
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_report, "extra_metadata")
+        except Exception:
+            logger.warning("HITL sync flag_modified(extra_metadata) 失败 report_id=%s", db_report.id, exc_info=True)
         db_report.version = int(db_report.version or 1) + 1
         db_report.updated_at = datetime.now()
         self.db.commit()
@@ -799,7 +805,7 @@ class ReportService:
 
             flag_modified(db_report, "extra_metadata")
         except Exception:
-            pass
+            logger.warning("LaTeX 手改 flag_modified(extra_metadata) 失败 report_id=%s", report_id, exc_info=True)
         self.db.commit()
         self.db.refresh(db_report)
         logger.info("已保存手改 LaTeX report_id=%s file_id=%s", report_id, db_report.pdf_path)
@@ -834,7 +840,7 @@ class ReportService:
 
             flag_modified(db_report, "extra_metadata")
         except Exception:
-            pass
+            logger.warning("compile_latex flag_modified(extra_metadata) 失败 report_id=%s", report_id, exc_info=True)
         self.db.commit()
         return {
             "report_id": db_report.id,
@@ -1023,7 +1029,7 @@ class ReportService:
 
             flag_modified(db_report, "extra_metadata")
         except Exception:
-            pass
+            logger.warning("persist_report flag_modified(extra_metadata) 失败 report_id=%s", getattr(db_report, "id", None), exc_info=True)
         self.db.commit()
         self.db.refresh(db_report)
 

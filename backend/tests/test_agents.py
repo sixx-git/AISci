@@ -95,27 +95,65 @@ class TestLiteratureMiningAgent:
         agent = LiteratureMiningAgent()
         assert agent is not None
 
+    @patch('app.agents.literature_mining_agent.LiteratureMiningAgent._run_skills_sync', return_value={})
+    @patch('app.agents.literature_mining_agent.LiteratureMiningAgent._rerank_chunks')
+    @patch('app.agents.literature_mining_agent.search_vector_store')
+    @patch('app.agents.literature_mining_agent.get_vector_store')
     @patch('app.agents.literature_mining_agent.qwen_structured_chat')
-    def test_mine_literature(self, mock_qwen):
-        """测试文献挖掘"""
-        mock_qwen.return_value = {
-            "key_findings": [
-                {"title": "研究1", "finding": "发现1", "source": "文献1"},
-                {"title": "研究2", "finding": "发现2", "source": "文献2"}
-            ],
-            "methodologies": ["方法1", "方法2"],
-            "theoretical_framework": "理论框架"
-        }
-        
-        agent = LiteratureMiningAgent()
-        response = agent.mine(
-            "研究问题",
-            [{"content": "文献内容", "source": "文献1"}]
+    def test_mine_literature(self, mock_qwen, mock_vs_factory, mock_search, mock_rerank, _mock_skills):
+        """测试文献挖掘（现行 facts / citation_map 契约）"""
+        from app.services.vector_store import SearchResult
+
+        mock_vs = MagicMock()
+        mock_vs.has_index.return_value = True
+        mock_vs_factory.return_value = mock_vs
+        sr = SearchResult(
+            chunk_id="c1",
+            document_id="d1",
+            content="城市绿化可降低地表温度。",
+            page_number=1,
+            source_title="研究1",
+            similarity_score=0.9,
         )
-        
+        mock_search.return_value = [sr]
+        mock_rerank.return_value = ([sr], {})
+        mock_qwen.return_value = {
+            "facts": [
+                {
+                    "fact_id": "fact_001",
+                    "content": "发现1",
+                    "source_chunk_id": "c1",
+                    "document_id": "d1",
+                    "source_paper_title": "研究1",
+                    "quote_text": "城市绿化可降低地表温度。",
+                },
+                {
+                    "fact_id": "fact_002",
+                    "content": "发现2",
+                    "source_chunk_id": "c1",
+                    "document_id": "d1",
+                    "source_paper_title": "研究1",
+                },
+            ],
+            "evidence": [],
+            "source_papers": ["研究1"],
+            "citation_map": [
+                {
+                    "document_id": "d1",
+                    "paper_title": "研究1",
+                    "fact_ids": ["fact_001", "fact_002"],
+                    "chunk_ids": ["c1"],
+                }
+            ],
+            "uncertain_points": [],
+        }
+
+        agent = LiteratureMiningAgent()
+        response = agent.mine("test_project", "研究问题")
+
         assert response is not None
-        assert hasattr(response, 'key_findings')
-        assert len(response.key_findings) >= 2
+        assert hasattr(response, "facts")
+        assert len(response.facts) >= 2
         mock_qwen.assert_called()
 
 
@@ -174,23 +212,34 @@ class TestHypothesisGenerationAgent:
         mock_qwen.return_value = {
             "hypotheses": [
                 {
-                    "statement": "假设陈述1",
+                    "hypothesis": "假设陈述1",
                     "rationale": "理由1",
-                    "novelty_score": 8,
-                    "feasibility_score": 7
+                    "novelty": "创新点1",
+                    "testability": "可测1",
+                    "required_data": "数据1",
+                    "possible_method": "方法1",
+                    "risk": "风险1",
+                    "supporting_fact_ids": [],
+                    "evidence_level": "low",
                 },
                 {
-                    "statement": "假设陈述2",
+                    "hypothesis": "假设陈述2",
                     "rationale": "理由2",
-                    "novelty_score": 7,
-                    "feasibility_score": 8
-                }
-            ]
+                    "novelty": "创新点2",
+                    "testability": "可测2",
+                    "required_data": "数据2",
+                    "possible_method": "方法2",
+                    "risk": "风险2",
+                    "supporting_fact_ids": [],
+                    "evidence_level": "low",
+                },
+            ],
+            "summary": "测试摘要",
         }
-        
+
         agent = HypothesisGenerationAgent()
-        response = agent.generate("研究问题", [], [])
-        
+        response = agent.generate("研究问题", [], [], constraints=[])
+
         assert response is not None
         assert len(response.hypotheses) >= 2
         mock_qwen.assert_called()
@@ -211,21 +260,30 @@ class TestHypothesisReviewAgent:
         mock_qwen.return_value = {
             "reviews": [
                 {
+                    "hypothesis_index": 0,
                     "hypothesis": "假设1",
                     "overall_score": 8.5,
+                    "scores": {
+                        "scientific_value": {"score": 8, "reason": "ok"},
+                        "novelty": {"score": 8, "reason": "ok"},
+                        "testability": {"score": 9, "reason": "ok"},
+                        "data_availability": {"score": 8, "reason": "ok"},
+                        "cost_risk": {"score": 8, "reason": "ok"},
+                    },
+                    "suggestions": "建议1",
                     "strengths": ["优点1"],
                     "weaknesses": ["缺点1"],
-                    "recommendation": "推荐"
                 }
             ],
-            "top_pick": 0
+            "summary": "总体评价",
         }
-        
+
         agent = HypothesisReviewAgent()
-        response = agent.review("研究问题", [
-            {"statement": "假设1", "rationale": "理由1"}
-        ])
-        
+        response = agent.review(
+            [{"hypothesis": "假设1", "rationale": "理由1"}],
+            research_question="研究问题",
+        )
+
         assert response is not None
         assert len(response.reviews) >= 1
         mock_qwen.assert_called()
@@ -244,28 +302,38 @@ class TestReportGenerationAgent:
     def test_generate_report(self, mock_qwen):
         """测试生成报告"""
         mock_qwen.return_value = {
+            "title": "科学假设与研究计划",
             "paper_title": "论文标题",
-            "abstract": "摘要内容",
-            "introduction": "引言",
-            "related_work": "相关工作",
-            "methodology": "方法论",
-            "results": "结果",
-            "discussion": "讨论",
-            "conclusion": "结论",
-            "references": ["参考文献1"]
+            "paper_abstract": "摘要内容",
+            "markdown_content": "",
+            "chapters": {
+                "problem_statement": "问题陈述",
+                "rationale": "原理依据",
+                "technical_details": "技术细节",
+                "datasets": "数据集",
+                "source": "源数据",
+                "target": "目标",
+                "methods": "方法",
+                "experiments": "实验",
+                "results": "结果",
+                "references": ["参考文献1"],
+            },
         }
-        
+
         agent = ReportGenerationAgent()
-        response = agent.generate(
-            "问题理解",
-            [],
-            [],
-            "假设",
-            "实验设计",
-            "验证结果"
+        response = agent.generate_report(
+            project_info={"title": "测试项目"},
+            problem_understanding={"problem_statement": "问题理解"},
+            literature_facts=[],
+            citation_map=[],
+            knowledge_gaps={},
+            all_hypotheses=[{"hypothesis": "假设"}],
+            final_hypothesis={"hypothesis": "假设"},
+            experiment_design={"methods": "实验设计"},
+            small_validation={"results": {"actual_results": {}}},
         )
-        
+
         assert response is not None
-        assert response.paper_title is not None
-        assert response.abstract is not None
+        assert response.get("paper_title") is not None
+        assert (response.get("paper_abstract") or response.get("chapters", {}).get("problem_statement"))
         mock_qwen.assert_called()

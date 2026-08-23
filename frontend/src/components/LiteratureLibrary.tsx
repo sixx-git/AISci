@@ -11,6 +11,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { StatCard } from '@/components/StatCard';
 import { LoadingState } from '@/components/workspace/LoadingState';
+import { HitlGateContinueBar } from '@/components/HitlGateContinueBar';
 import type { LiteratureItem, LiteratureStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { documentService, vectorService, literatureService } from '@/services';
@@ -30,11 +31,11 @@ function inferDocType(info: DocumentInfo): LiteratureItem['type'] {
 }
 
 // ============ 后端 status → LiteratureItem.parseStatus ============
-function mapStatus(doc: Pick<DocumentInfo, 'status' | 'file_size' | 'source_type' | 'pdf_url' | 'import_status'>): LiteratureItem['parseStatus'] {
+function mapStatus(doc: Pick<DocumentInfo, 'status' | 'file_size' | 'source_type' | 'pdf_url' | 'import_status' | 'abstract' | 'chunk_count'>): LiteratureItem['parseStatus'] {
+  const noLocalPdf = !doc.file_size || doc.file_size <= 0;
   switch (doc.status) {
     case 'uploaded': {
       // arXiv / OpenAlex / BibTeX 等默认只入库元数据，尚未下载本地 PDF
-      const noLocalPdf = !doc.file_size || doc.file_size <= 0;
       const externalSource = ['arxiv', 'openalex', 'bibtex', 'google_scholar_import', 'manual'].includes(
         (doc.source_type || '').toLowerCase(),
       );
@@ -44,7 +45,13 @@ function mapStatus(doc: Pick<DocumentInfo, 'status' | 'file_size' | 'source_type
       return 'pending';
     }
     case 'processing': return 'parsing';
-    case 'processed': return 'completed';
+    case 'processed': {
+      // 无本地 PDF 但已有摘要/切片：权限受限等场景的摘要入库
+      if (noLocalPdf && (Boolean(doc.abstract) || (doc.chunk_count ?? 0) > 0)) {
+        return 'abstract';
+      }
+      return 'completed';
+    }
     case 'failed': return 'error';
     default: return 'pending';
   }
@@ -97,6 +104,7 @@ const typeConfig: Record<LiteratureItem['type'], { label: string; className: str
 // ============ 解析状态映射 ============
 const parseStatusConfig: Record<LiteratureItem['parseStatus'], { label: string; className: string }> = {
   metadata:  { label: '仅元数据', className: 'bg-bp-yellow/15 text-bp-yellow border-bp-yellow/25' },
+  abstract:  { label: '摘要入库', className: 'bg-bp-purple/15 text-bp-purple border-bp-purple/25' },
   pending:   { label: '待解析', className: 'bg-bp-panel text-bp-muted border-bp-border' },
   parsing:   { label: '解析中', className: 'bg-bp-cyan-tint text-bp-cyan border-bp-cyan/25' },
   completed: { label: '已解析', className: 'bg-bp-green/15 text-bp-green border-bp-green/25' },
@@ -146,7 +154,7 @@ function truncateText(text: string, maxLen: number): string {
 function computeStats(items: LiteratureItem[]): LiteratureStats {
   return {
     uploaded: items.length,
-    parsed: items.filter((i) => i.parseStatus === 'completed').length,
+    parsed: items.filter((i) => i.parseStatus === 'completed' || i.parseStatus === 'abstract').length,
     snippets: items.reduce((s, i) => s + i.snippetCount, 0),
     withDoi: items.filter((i) => Boolean(i.doi)).length,
   };
@@ -573,6 +581,14 @@ export function LiteratureLibrary({
           </div>
         )}
 
+        {projectId && projectId !== 'default' && (
+          <HitlGateContinueBar
+            projectId={projectId}
+            stages={['literature_mining']}
+            revalidateKey={0}
+          />
+        )}
+
         {/* Tabs */}
         <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as typeof activeTab)} />
 
@@ -614,6 +630,14 @@ export function LiteratureLibrary({
           <h1 className="text-3xl font-bold text-bp-text mb-2">科研文献库</h1>
           <p className="text-bp-muted">上传论文 PDF 或通过 arXiv 检索导入文献，系统将进行文本解析、切片与科学事实提取。</p>
         </div>
+      )}
+
+      {projectId && projectId !== 'default' && (
+        <HitlGateContinueBar
+          projectId={projectId}
+          stages={['literature_mining']}
+          revalidateKey={literature.length + importedDocs.length}
+        />
       )}
 
       {/* ========== Tabs ========== */}
@@ -1137,6 +1161,11 @@ function LibraryTabContent({
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className={cn('text-xs px-2 py-0.5 rounded border', sConf.className)}>{sConf.label}</span>
                   <span className={cn('text-xs px-2 py-0.5 rounded border', iConf.className)}>{iConf.label}</span>
+                  {(!doc.file_size || doc.file_size <= 0) && (doc.abstract || (doc.chunk_count ?? 0) > 0) && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-bp-purple/15 text-bp-purple border border-bp-purple/25">
+                      摘要入库
+                    </span>
+                  )}
                   {doc.external_id && (
                     <span className="text-xs px-2 py-0.5 rounded bg-bp-surface/50 text-bp-muted border border-bp-border font-mono">
                       {doc.external_id}
@@ -1341,7 +1370,7 @@ function LiteratureTable({
                   <td className="px-4 py-3 text-center">
                     <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border', psConf.className)}>
                       {item.parseStatus === 'parsing' && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {item.parseStatus === 'completed' && <CheckCircle className="w-3 h-3" />}
+                      {(item.parseStatus === 'completed' || item.parseStatus === 'abstract') && <CheckCircle className="w-3 h-3" />}
                       {(item.parseStatus === 'pending' || item.parseStatus === 'metadata') && <Clock className="w-3 h-3" />}
                       {item.parseStatus === 'error' && <AlertCircle className="w-3 h-3" />}
                       {psConf.label}

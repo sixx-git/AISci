@@ -38,6 +38,8 @@ import { ProjectTabNav } from '@/components/workspace/ProjectTabNav';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { ErrorState } from '@/components/workspace/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
+import { OverviewSubmissionCard } from '@/components/overview/OverviewSubmissionCard';
+import type { PipelineProgressNode } from '@/components/PipelineProgress';
 
 // ============ localStorage 研究问题读取 ============
 /**
@@ -70,10 +72,20 @@ const STAGE_CN_MAP: Record<string, string> = {
 };
 
 // ============ 项目概览 ============
-function ProjectOverview({ project, stats, pipelineNodes }: {
+function ProjectOverview({
+  project,
+  stats,
+  pipelineNodes,
+  researchQuestion,
+  latestRunId,
+  latestRunStatus,
+}: {
   project: ProjectOverview;
   stats: { label: string; value: string }[];
-  pipelineNodes: { id: string; label: string; status: string }[];
+  pipelineNodes: PipelineProgressNode[];
+  researchQuestion: string;
+  latestRunId: string | null;
+  latestRunStatus?: string | null;
 }) {
   const navigate = useNavigate();
   const fl = project.config?.fl_pack?.summary || project.config?.fl_pack;
@@ -142,7 +154,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
             {String(
               project.config?.fl_pack?.experiment_profile?.label
                 || project.config?.fl_experiment_profile
-                || fl?.experiment_profile_label
+                || project.config?.fl_pack?.experiment_profile_label
                 || 'standard_non_iid',
             )}
           </p>
@@ -188,6 +200,15 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
         </Card>
       )}
 
+      <OverviewSubmissionCard
+        project={project}
+        researchQuestion={researchQuestion}
+        latestRunId={latestRunId}
+        latestRunStatus={latestRunStatus}
+        pipelineNodes={pipelineNodes}
+        onGoWorkflow={() => navigate(buildProjectTabUrl(project.id, 'workflow'))}
+      />
+
       <Card title="研究数据概览" subtitle="当前项目的关键指标">
         {stats.length === 0 ? (
           <div className="text-center py-8 text-bp-muted">
@@ -208,7 +229,7 @@ function ProjectOverview({ project, stats, pipelineNodes }: {
 
       <Card title="研究 Pipeline" subtitle="各阶段执行状态 · 点击阶段可跳转">
         <PipelineProgress
-          nodes={pipelineNodes as any}
+          nodes={pipelineNodes}
           onNodeClick={(node) => {
             const tab = getPipelineStageTab(node.id);
             if (tab) {
@@ -588,12 +609,6 @@ export function ProjectWorkspace() {
     return getStoredResearchQuestion(id || '');
   }, [project?.research_question, id]);
 
-  const questionSource = useMemo<'backend' | 'localStorage' | 'none'>(() => {
-    if (!resolvedResearchQuestion) return 'none';
-    if (project?.research_question) return 'backend';
-    return 'localStorage';
-  }, [resolvedResearchQuestion, project?.research_question]);
-
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('zh-CN', {
@@ -736,7 +751,16 @@ export function ProjectWorkspace() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
+        return (
+          <ProjectOverview
+            project={project}
+            stats={overviewStats}
+            pipelineNodes={overviewPipelineNodes}
+            researchQuestion={resolvedResearchQuestion || project.research_question || ''}
+            latestRunId={latestRunId}
+            latestRunStatus={latestRun?.status}
+          />
+        );
       case 'questions':
         return (
           <QuestionsTab
@@ -794,7 +818,16 @@ export function ProjectWorkspace() {
           </>
         );
       default:
-        return <ProjectOverview project={project} stats={overviewStats} pipelineNodes={overviewPipelineNodes} />;
+        return (
+          <ProjectOverview
+            project={project}
+            stats={overviewStats}
+            pipelineNodes={overviewPipelineNodes}
+            researchQuestion={resolvedResearchQuestion || project.research_question || ''}
+            latestRunId={latestRunId}
+            latestRunStatus={latestRun?.status}
+          />
+        );
     }
   };
 

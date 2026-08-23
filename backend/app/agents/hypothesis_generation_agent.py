@@ -122,7 +122,7 @@ class HypothesisGenerationAgent:
         research_question: str,
         facts: List[Dict[str, Any]],
         knowledge_gaps: List[Dict[str, Any]],
-        constraints: List[str],
+        constraints: Optional[List[str]] = None,
         project_id: Optional[str] = None,
         data_context: Optional[Dict[str, Any]] = None,
         multimodal_datasets: Optional[List[Dict[str, Any]]] = None,
@@ -469,9 +469,6 @@ class HypothesisGenerationAgent:
         data_evidence_set = set(available_data_evidence_ids or [])
         validated_hypotheses = []
 
-        # 从研究问题中提取关键词用于偏题检测
-        rq_lower = research_question.lower()
-
         for hypo in result_dict["hypotheses"]:
             if not isinstance(hypo, dict):
                 continue
@@ -631,13 +628,12 @@ class HypothesisGenerationAgent:
         facts_available: bool,
     ) -> str:
         """
-        标的证据等级：
+        标的证据等级（以可验证 fact 数量为准；LLM 自报等级仅作日志参考）:
           - low:    没有事实可引用 / 0 个 supporting_fact_ids
           - medium: 有 1-2 个 supporting_fact_ids
           - high:   3+ 个 supporting_fact_ids
         """
-        # LLM 给出的可能是 "low" / "medium" / "high"
-        raw = raw_level.lower().strip()
+        _ = (raw_level or "").strip().lower()  # 保留参数兼容；证据等级以 fact 绑定为准
 
         if not facts_available:
             return "low"

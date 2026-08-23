@@ -40,6 +40,9 @@ export interface CoordinatorHint {
   extra?: CoordinatorHintExtra;
   fix_status?: 'completed' | 'failed' | 'running';
   fix_detail?: string;
+  decision_status?: 'pending' | 'awaiting_user' | 'running' | 'completed' | 'rejected';
+  await_stage?: string;
+  rerun_stages?: string[];
   timestamp: string;
 }
 
@@ -47,6 +50,8 @@ interface CoordinatorHintsProps {
   hints: CoordinatorHint[];
   onRerunStage?: (stage: string) => void;
   onViewDetail?: (hint: CoordinatorHint) => void;
+  onEvidenceIterationDecision?: (hint: CoordinatorHint, decision: 'approve' | 'reject') => void;
+  evidenceIterationLoading?: boolean;
   compact?: boolean;
 }
 
@@ -93,7 +98,7 @@ const stageLabelMap: Record<string, string> = {
   literature_mining: '文献挖掘',
   knowledge_gap: '知识缺口',
   hypothesis_generation: '假设生成',
-  hypothesis_review: '假设评审',
+  hypothesis_review: '可行性评估',
   iterative_experiment: '迭代实验',
   report_generation: '报告生成',
 };
@@ -188,10 +193,48 @@ function AutoFixBadge({ remediation, fixStatus, fixDetail }: { remediation: stri
   return null;
 }
 
+function EvidenceIterationDecisionBadge({ status }: { status?: CoordinatorHint['decision_status'] }) {
+  if (!status || status === 'awaiting_user') return null;
+  if (status === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
+        <Clock className="w-2.5 h-2.5" />
+        等待可行性评估完成
+      </span>
+    );
+  }
+  if (status === 'running') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-bp-cyan bg-bp-cyan/10 px-1.5 py-0.5 rounded-full">
+        <RotateCcw className="w-2.5 h-2.5 animate-spin" />
+        证据链迭代重跑中
+      </span>
+    );
+  }
+  if (status === 'completed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">
+        <CheckCircle className="w-2.5 h-2.5" />
+        迭代已完成
+      </span>
+    );
+  }
+  if (status === 'rejected') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-bp-muted bg-bp-muted/10 px-1.5 py-0.5 rounded-full">
+        已跳过迭代
+      </span>
+    );
+  }
+  return null;
+}
+
 export function CoordinatorHints({
   hints,
   onRerunStage,
   onViewDetail,
+  onEvidenceIterationDecision,
+  evidenceIterationLoading = false,
   compact = false,
 }: CoordinatorHintsProps) {
   // 已通过检查（含自动修复完成）
@@ -202,6 +245,11 @@ export function CoordinatorHints({
   // 待处理的问题（需要用户操作）
   const pendingHints = hints.filter(
     (h) => h.action?.type === 'hint' && h.source !== 'llm_analysis'
+      && h.pattern_id !== 'hg_all_low_evidence',
+  );
+  const evidenceIterationHints = hints.filter(
+    (h) => h.pattern_id === 'hg_all_low_evidence'
+      || h.action?.suggestion === 'evidence_iteration_decision',
   );
   // 自动执行（含 LLM 分析结果，排除已完成的自动修复）
   const autoHints = hints.filter(
@@ -228,7 +276,7 @@ export function CoordinatorHints({
   const checkedStageSet = new Set(hints.map((h) => h.stage));
   const passedStageSet = new Set(passedHints.map((h) => h.stage));
   const issueStageSet = new Set(
-    [...pendingHints, ...autoHints].map((h) => h.stage)
+    [...pendingHints, ...autoHints, ...evidenceIterationHints].map((h) => h.stage)
   );
 
   // 渲染单个 hint 卡片
@@ -265,7 +313,8 @@ export function CoordinatorHints({
               <span className="text-bp-muted/60">兜底分析</span>
             </>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <EvidenceIterationDecisionBadge status={hint.decision_status} />
             <AutoFixBadge remediation={hint.remediation} fixStatus={hint.fix_status} fixDetail={hint.fix_detail} />
           </div>
         </div>
@@ -303,8 +352,32 @@ export function CoordinatorHints({
                 查看详情
               </Button>
             )}
+            {hint.action.suggestion === 'evidence_iteration_decision'
+              && hint.decision_status === 'awaiting_user'
+              && onEvidenceIterationDecision && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
+                  disabled={evidenceIterationLoading}
+                  onClick={() => onEvidenceIterationDecision(hint, 'approve')}
+                >
+                  同意迭代
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={evidenceIterationLoading}
+                  onClick={() => onEvidenceIterationDecision(hint, 'reject')}
+                >
+                  不同意迭代
+                </Button>
+              </>
+            )}
             {/* 自动执行提示：显示状态标签而非按钮 */}
-            {hint.action.type === 'auto' && hint.action.suggestion !== 'fix_report' && (
+            {hint.action.type === 'auto' && hint.action.suggestion !== 'fix_report'
+              && hint.action.suggestion !== 'evidence_iteration_decision' && (
               <span className="text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">
                 ✅ 自动执行中
               </span>
@@ -393,6 +466,16 @@ export function CoordinatorHints({
               <div className="text-xs text-bp-muted mb-2">⚡ 自动执行</div>
               <div className="space-y-2">
                 {predefinedAutoHints.map((hint) => renderHintCard(hint))}
+              </div>
+            </div>
+          )}
+
+          {/* ── 证据链迭代决策 ── */}
+          {evidenceIterationHints.length > 0 && (
+            <div>
+              <div className="text-xs text-amber-400 mb-2">🔗 证据链迭代</div>
+              <div className="space-y-2">
+                {evidenceIterationHints.map((hint) => renderHintCard(hint))}
               </div>
             </div>
           )}

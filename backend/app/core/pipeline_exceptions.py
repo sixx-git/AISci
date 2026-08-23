@@ -9,6 +9,14 @@ class HitlGatePause(Exception):
         super().__init__(f"HITL gate paused at {stage_key}")
 
 
+class UserPause(Exception):
+    """用户手动暂停 — 非失败，当前阶段结束后生效，可续跑。"""
+
+    def __init__(self, stage_key: str = ""):
+        self.stage_key = stage_key
+        super().__init__(f"User pause after {stage_key}")
+
+
 class SingleStageRerunComplete(Exception):
     """仅重跑单个阶段完成 — 保留上游与下游（父 run）结果。"""
 

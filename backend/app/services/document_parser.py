@@ -391,12 +391,13 @@ class DocumentParser:
         # 尝试提取作者（仅接受较短、像人名列表的片段）
         if not parsed.authors:
             author_match = re.search(
-                r'(?:authors?|作者)(?:\s*[:：])?\s*([\s\S]*?)(?=\n\s*(?:abstract|introduction|$))',
+                r'(?:authors?|作者)(?:\s*[:：])?\s*([\s\S]*?)(?=\n\s*(?:abstract|introduction|摘要|引言|关键词|keywords|$))',
                 text,
                 re.IGNORECASE
             )
             if author_match:
-                authors = author_match.group(1).strip()
+                # 只取首行/首段，避免空白行后正文被吃进 authors
+                authors = author_match.group(1).strip().split("\n")[0].strip()
                 if not self._looks_like_polluted_identity(authors, kind="authors"):
                     parsed.authors = authors
     

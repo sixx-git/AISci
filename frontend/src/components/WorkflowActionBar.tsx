@@ -6,12 +6,24 @@ import type { AgentNodeData } from '@/types';
 interface WorkflowActionBarProps {
   nodes: AgentNodeData[];
   isRunning: boolean;
+  isPaused?: boolean;
+  pauseRequested?: boolean;
   onRunAll: () => void;
   onPause: () => void;
+  onResume?: () => void;
   onReset: () => void;
 }
 
-export function WorkflowActionBar({ nodes, isRunning, onRunAll, onPause, onReset }: WorkflowActionBarProps) {
+export function WorkflowActionBar({
+  nodes,
+  isRunning,
+  isPaused = false,
+  pauseRequested = false,
+  onRunAll,
+  onPause,
+  onResume,
+  onReset,
+}: WorkflowActionBarProps) {
   const completed = nodes.filter((n) => n.status === 'completed').length;
   const total = nodes.length;
   const running = nodes.filter((n) => n.status === 'running').length;
@@ -23,24 +35,24 @@ export function WorkflowActionBar({ nodes, isRunning, onRunAll, onPause, onReset
         <Button
           variant="primary"
           icon={<Play className="w-4 h-4" />}
-          onClick={onRunAll}
-          disabled={isRunning}
+          onClick={isPaused && onResume ? onResume : onRunAll}
+          disabled={isRunning && !isPaused}
         >
-          {isRunning ? '运行中…' : '运行全部流程'}
+          {isPaused ? '继续运行' : isRunning ? '运行中…' : '运行全部流程'}
         </Button>
         <Button
           variant="secondary"
           icon={<Pause className="w-4 h-4" />}
           onClick={onPause}
-          disabled={!isRunning}
+          disabled={!isRunning || isPaused || pauseRequested}
         >
-          暂停
+          {pauseRequested ? '暂停中…' : '暂停'}
         </Button>
         <Button
           variant="secondary"
           icon={<RotateCcw className="w-4 h-4" />}
           onClick={onReset}
-          disabled={isRunning}
+          disabled={isRunning && !isPaused}
         >
           重置
         </Button>

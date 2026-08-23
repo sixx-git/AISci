@@ -271,7 +271,6 @@ function VerificationTab({ provenance, loading }: { provenance?: HypothesisProve
           <div className="space-y-2">
             {v.verification_checks.map((chk, i) => {
               const isExpanded = expandedCheck === i;
-              const hasExtraData = Object.keys(chk).length > 3 || (!chk.check && !chk.name && !chk.detail && Object.keys(chk).length > 0);
               return (
                 <div key={i} className="p-2 rounded border border-bp-border text-xs">
                   <div className="flex items-start gap-2">

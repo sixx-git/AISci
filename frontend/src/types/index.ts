@@ -168,8 +168,8 @@ export interface LiteratureItem {
   title: string;
   authors: string;
   type: '论文' | '综述' | '会议' | '预印本';
-  /** metadata = 仅导入元数据、尚未下载/解析 PDF */
-  parseStatus: 'pending' | 'parsing' | 'completed' | 'error' | 'metadata';
+  /** metadata = 仅导入元数据；abstract = 无 PDF 摘要入库（可引用辅助事实） */
+  parseStatus: 'pending' | 'parsing' | 'completed' | 'error' | 'metadata' | 'abstract';
   snippetCount: number;
   doi: string;
   fileSize: string;
@@ -326,6 +326,7 @@ export interface PipelineStageExecutionSummary {
   model_used?: string;
   prompt_used?: string;
   model_parameters?: Record<string, unknown>;
+  extra_metadata?: Record<string, unknown> | null;
   human_modified_output?: Record<string, unknown> | null;
   human_reviewed?: boolean;
   human_feedback?: string | null;
@@ -387,6 +388,9 @@ export interface HitlGateInfo {
   paused_at?: string;
   cleared_stages?: string[];
   last_action?: string;
+  handoff?: string;
+  paper_count?: number;
+  hint?: string;
 }
 
 export interface PipelineRunExtraMetadata {
@@ -402,6 +406,17 @@ export interface PipelineRunExtraMetadata {
   rerun_from?: string;
   run_options?: PipelineRunOptions;
   hitl_gate?: HitlGateInfo;
+  /** 用户手动暂停（协作式） */
+  user_pause?: {
+    requested?: boolean;
+    paused?: boolean;
+    stage?: string;
+    resume_phase?: string;
+    paused_at?: string;
+    requested_at?: string;
+    resumed_at?: string;
+    [key: string]: unknown;
+  };
   /** Pipeline 暂停/续跑时的阶段结果检查点 */
   pipeline_checkpoint?: {
     results?: Record<string, unknown>;
@@ -862,6 +877,7 @@ export interface PipelineRunOptions {
   con_challenge_max_rounds?: number;
   enable_hypothesis_evolution?: boolean;
   pause_after_hypothesis_review?: boolean;
+  pause_after_literature_mining?: boolean;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {

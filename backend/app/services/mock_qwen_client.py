@@ -14,12 +14,10 @@ import json
 import time
 import logging
 from typing import Dict, List, Optional, Any, Union
-from datetime import datetime
 
 from app.services.qwen_client import (
-    QwenClient, QwenError, QwenAPIError, 
-    get_qwen_client, _set_qwen_client,
-    get_call_logs
+    QwenClient,
+    _set_qwen_client,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +42,7 @@ class MockQwenClient(QwenClient):
     """
 
     def __init__(self):
-        # 不初始化真实 OpenAI client
+        # mock-key：仅本地 Mock，永不发真实请求
         self.api_key = "mock-key"
         self.base_url = "mock://"
         self.model = "mock-model"

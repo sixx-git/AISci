@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 def _abstract_fact_cutoff() -> Optional[float]:
@@ -36,6 +39,80 @@ def _can_promote_abstract_to_fact(item: Dict[str, Any]) -> bool:
         return float(score) >= cutoff
     except (TypeError, ValueError):
         return False
+
+
+# 辅助白名单来源：权限受限/无 PDF/摘要兜底等，可被假设引用，计入 evidence_facts
+_AUXILIARY_SOURCES = frozenset(
+    {
+        "vector_chunk",
+        "chunk",
+        "abstract_fallback",
+        "retrieved_paper",
+        "source_paper",
+        "project_library",
+        "project_library_chunk",
+        "citation_map",
+        "literature_evidence",
+        "literature_discovery",
+        "rcs_rejected_chunk",
+    }
+)
+
+
+def classify_fact_tier(fact: Dict[str, Any]) -> str:
+    """core = 全文/RCS 通过的 LLM 抽取；auxiliary = 摘要/无 PDF/兜底片段。"""
+    explicit = str(fact.get("tier") or "").strip().lower()
+    if explicit in ("core", "auxiliary"):
+        return explicit
+    if fact.get("no_pdf") is True:
+        return "auxiliary"
+    source = str(fact.get("source") or "").strip().lower()
+    if source in _AUXILIARY_SOURCES or "abstract" in source:
+        return "auxiliary"
+    evidence_level = str(fact.get("evidence_level") or "").strip().lower()
+    if evidence_level in ("abstract", "summary", "metadata"):
+        return "auxiliary"
+    return "core"
+
+
+def annotate_fact_tiers(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for raw in facts or []:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        item["tier"] = classify_fact_tier(item)
+        out.append(item)
+    return out
+
+
+def sync_fact_counts(lm: Dict[str, Any]) -> Dict[str, Any]:
+    """写回 evidence_facts / core_facts_count / auxiliary_facts_count（总数含辅助）。"""
+    facts = annotate_fact_tiers(_as_dict_list(lm.get("facts")))
+    lm["facts"] = facts
+    core = sum(1 for f in facts if f.get("tier") != "auxiliary")
+    aux = sum(1 for f in facts if f.get("tier") == "auxiliary")
+    lm["evidence_facts"] = len(facts)
+    lm["core_facts_count"] = core
+    lm["auxiliary_facts_count"] = aux
+    return lm
+
+
+def _resolve_abstract_chunk_id(item: Dict[str, Any], *, index: int, prefix: str) -> Tuple[str, bool]:
+    """返回 (chunk_id, used_synthetic)。无真实 chunk 时用稳定合成 id，标 no_pdf 辅助事实。"""
+    real = str(item.get("source_chunk_id") or item.get("chunk_id") or "").strip()
+    if real and not real.startswith(("paper_", "source_paper_", "citation_", "synthetic_")):
+        return real, False
+    chunk_ids = item.get("chunk_ids") or []
+    if isinstance(chunk_ids, list):
+        for cid in chunk_ids:
+            c = str(cid or "").strip()
+            if c and not c.startswith(("paper_", "source_paper_", "citation_", "synthetic_")):
+                return c, False
+    doc = str(item.get("document_id") or item.get("paper_id") or item.get("external_id") or "").strip()
+    if doc:
+        return f"{prefix}_{doc}", True
+    return f"{prefix}_{index + 1}", True
 
 
 def _as_dict_list(items: Any) -> List[Dict[str, Any]]:
@@ -208,6 +285,7 @@ def normalize_literature_bundle(
 
         abstract = (paper.get("abstract") or "").strip()
         if abstract and _can_promote_abstract_to_fact(paper):
+            chunk_id, synthetic = _resolve_abstract_chunk_id(paper, index=i, prefix="abstract_paper")
             _append_fact(
                 facts,
                 seen_fact_ids,
@@ -216,7 +294,7 @@ def normalize_literature_bundle(
                     "fact_id": f"paper_fact_{i + 1:03d}",
                     "content": abstract[:600],
                     "fact_text": abstract[:1200],
-                    "source_chunk_id": f"paper_{i + 1}",
+                    "source_chunk_id": chunk_id,
                     "source_paper_title": title,
                     "quote_text": abstract[:240],
                     "confidence": 0.75,
@@ -225,6 +303,9 @@ def normalize_literature_bundle(
                     "document_id": paper.get("document_id") or paper.get("paper_id"),
                     "year": paper.get("year"),
                     "doi": paper.get("doi"),
+                    "tier": "auxiliary",
+                    "no_pdf": True if synthetic or paper.get("no_pdf") else bool(paper.get("no_pdf")),
+                    "evidence_level": "abstract",
                 },
             )
 
@@ -247,6 +328,7 @@ def normalize_literature_bundle(
         _append_citation(citation_map, paper)
         abstract = (paper.get("abstract") or "").strip()
         if abstract and _can_promote_abstract_to_fact(paper):
+            chunk_id, synthetic = _resolve_abstract_chunk_id(paper, index=i, prefix="abstract_source")
             _append_fact(
                 facts,
                 seen_fact_ids,
@@ -255,11 +337,15 @@ def normalize_literature_bundle(
                     "fact_id": paper.get("fact_id") or f"source_paper_fact_{i + 1:03d}",
                     "content": abstract[:600],
                     "fact_text": abstract[:1200],
-                    "source_chunk_id": paper.get("source_chunk_id") or f"source_paper_{i + 1}",
+                    "source_chunk_id": chunk_id,
                     "source_paper_title": title,
                     "quote_text": abstract[:240],
                     "relevance_score": paper.get("relevance_score"),
                     "source": paper.get("source") or "source_paper",
+                    "document_id": paper.get("document_id") or paper.get("paper_id"),
+                    "tier": "auxiliary",
+                    "no_pdf": True if synthetic or paper.get("no_pdf") else bool(paper.get("no_pdf")),
+                    "evidence_level": "abstract",
                 },
             )
 
@@ -273,6 +359,7 @@ def normalize_literature_bundle(
             continue
         if not _can_promote_abstract_to_fact(cit):
             continue
+        chunk_id, synthetic = _resolve_abstract_chunk_id(cit, index=i, prefix="abstract_cite")
         _append_fact(
             facts,
             seen_fact_ids,
@@ -281,12 +368,15 @@ def normalize_literature_bundle(
                 "fact_id": f"citation_fact_{i + 1:03d}",
                 "content": abstract[:600],
                 "fact_text": abstract[:1200],
-                "source_chunk_id": f"citation_{cit.get('document_id') or i + 1}",
+                "source_chunk_id": chunk_id,
                 "source_paper_title": title,
                 "document_id": cit.get("document_id"),
                 "quote_text": abstract[:240],
                 "relevance_score": cit.get("relevance_score"),
                 "source": cit.get("source_type") or "citation_map",
+                "tier": "auxiliary",
+                "no_pdf": True if synthetic or cit.get("no_pdf") else bool(cit.get("no_pdf")),
+                "evidence_level": "abstract",
             },
         )
 
@@ -311,6 +401,7 @@ def project_documents_as_citations(db: Any, project_id: str) -> List[Dict[str, A
     try:
         from app.models.project import Document, DocumentStatus
     except Exception:
+        logger.warning("导入 Document 模型失败，无法构建 citation", exc_info=True)
         return []
 
     rows = (
@@ -410,6 +501,7 @@ def _load_document_chunk_texts(
     try:
         from app.models.project import Chunk
     except Exception:
+        logger.warning("导入 Chunk 模型失败 document_id=%s", document_id, exc_info=True)
         return []
     try:
         rows = (
@@ -420,6 +512,7 @@ def _load_document_chunk_texts(
             .all()
         )
     except Exception:
+        logger.warning("查询 Chunk 失败 document_id=%s", document_id, exc_info=True)
         return []
     out: List[Dict[str, Any]] = []
     for row in rows:
@@ -505,6 +598,8 @@ def merge_project_library_into_literature_mining(
                     "confidence": 0.7 if abstract else 0.55,
                     "source": "project_library",
                     "evidence_level": "abstract" if abstract else "summary",
+                    "tier": "auxiliary",
+                    "no_pdf": True,
                 },
             )
             added_for_doc += 1
@@ -537,6 +632,7 @@ def merge_project_library_into_literature_mining(
                         "confidence": 0.75,
                         "source": "project_library_chunk",
                         "evidence_level": "chunk",
+                        "tier": "auxiliary",
                     },
                 )
                 added_for_doc += 1
@@ -546,14 +642,13 @@ def merge_project_library_into_literature_mining(
     lm["facts"] = facts
     lm["citation_map"] = citation_map
     lm["verified_references"] = verified
-    lm["evidence_facts"] = len(facts)
     lm["verified_references_count"] = len(verified)
     lm["project_library_document_count"] = len(library)
     if not lm.get("imported_documents"):
         lm["imported_documents"] = len(library)
     if not lm.get("literature_import_count"):
         lm["literature_import_count"] = len(library)
-    return lm
+    return sync_fact_counts(lm)
 
 
 def enrich_literature_mining(literature_mining: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -563,7 +658,6 @@ def enrich_literature_mining(literature_mining: Optional[Dict[str, Any]]) -> Dic
     lm["facts"] = facts
     lm["citation_map"] = citation_map
     lm["verified_references"] = verified
-    lm["evidence_facts"] = len(facts)
     lm["verified_references_count"] = len(verified)
     if not lm.get("literature_search_count"):
         lm["literature_search_count"] = int(
@@ -578,4 +672,4 @@ def enrich_literature_mining(literature_mining: Optional[Dict[str, Any]]) -> Dic
             lm["imported_documents"] = lm["literature_import_count"]
     if not lm.get("candidate_references_count"):
         lm["candidate_references_count"] = lm.get("literature_search_count")
-    return lm
+    return sync_fact_counts(lm)

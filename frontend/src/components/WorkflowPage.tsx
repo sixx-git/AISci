@@ -38,6 +38,7 @@ import { reportService } from '@/services/reportService';
 import { iterativeExperimentService } from '@/services/iterativeExperimentService';
 import { buildReportDownloadFilename } from '@/lib/reportExport';
 import { activeRunKey, activeRunStatusKey } from '@/lib/storageKeys';
+import { getErrorMessage } from '@/lib/errors';
 import type {
   AgentNodeData,
   AgentStatus,
@@ -112,6 +113,30 @@ function clearActiveRun(projectId: string): void {
     localStorage.removeItem(activeRunKey(projectId));
     localStorage.removeItem(activeRunStatusKey(projectId));
   } catch { /* ignore */ }
+}
+
+function mapCoordinatorHint(
+  h: Record<string, unknown>,
+  runId: string,
+  index: number,
+): CoordinatorHint {
+  return {
+    id: String((h.id as string) || `${runId}_${index}`),
+    stage: (h.stage as string) || '',
+    severity: ((h.severity as string) || 'info') as CoordinatorHint['severity'],
+    message: (h.message as string) || '',
+    remediation: (h.remediation as string) || null,
+    action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
+    source: (h.source as string) || 'predefined',
+    pattern_id: (h.pattern_id as string) || undefined,
+    fix_status: ((h.fix_status as string) || undefined) as CoordinatorHint['fix_status'],
+    fix_detail: (h.fix_detail as string) || undefined,
+    decision_status: ((h.decision_status as string) || undefined) as CoordinatorHint['decision_status'],
+    await_stage: (h.await_stage as string) || undefined,
+    rerun_stages: (h.rerun_stages as string[]) || undefined,
+    extra: (h.extra as CoordinatorHint['extra']) || undefined,
+    timestamp: (h.timestamp as string) || new Date().toISOString(),
+  };
 }
 
 // ============ 工具函数 ============
@@ -634,6 +659,7 @@ export function WorkflowPage({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [runExtraMetadata, setRunExtraMetadata] = useState<PipelineRunExtraMetadata | null>(null);
   const [pipelineRunStatus, setPipelineRunStatus] = useState<string | null>(null);
+  const [pauseRequested, setPauseRequested] = useState(false);
   // 按项目持久化：切换 Tab 会卸载本页，若不落盘会丢配置；红蓝对抗默认关闭
   const [loopConfig, setLoopConfig] = useState<LoopConfigState>(() => loadLoopConfig(projectId));
   const loopConfigRef = useRef(loopConfig);
@@ -664,6 +690,7 @@ export function WorkflowPage({
   const [showHitlModal, setShowHitlModal] = useState(false);
   const [coordinatorHints, setCoordinatorHints] = useState<CoordinatorHint[]>([]);
   const [coordinatorLoading, setCoordinatorLoading] = useState(false);
+  const [evidenceIterationLoading, setEvidenceIterationLoading] = useState(false);
   const [hitlGateInfo, setHitlGateInfo] = useState<HitlGateInfo | null>(null);
   const [hitlGateRunId, setHitlGateRunId] = useState<string | null>(null);
 
@@ -921,6 +948,13 @@ export function WorkflowPage({
             }
           } else if (status === 'human_review_required') {
             await openHitlGateModal(savedRunId);
+          } else if (status === 'paused') {
+            setPauseRequested(false);
+            setPipelineRunStatus('paused');
+            setRunState('idle');
+            setStatusMessage('流程已暂停，可点击「继续运行」从断点续跑');
+            rememberLatestRunId(savedRunId);
+            await refreshFromRunDetail(savedRunId);
           } else if (status === 'running') {
             startPolling(savedRunId);
           } else {
@@ -986,7 +1020,12 @@ export function WorkflowPage({
 
       const runStatus = (runDetail.status as string) ?? null;
       const hitlPaused = runDetail.extra_metadata?.hitl_gate?.paused;
-      if (hitlPaused || runStatus === 'human_review_required') {
+      if (runStatus === 'paused' || runDetail.extra_metadata?.user_pause?.paused) {
+        setPipelineRunStatus('paused');
+        setCurrentRunId(latestRun.run_id);
+        currentRunIdRef.current = latestRun.run_id;
+        setStatusMessage('流程已暂停，可点击「继续运行」从断点续跑');
+      } else if (hitlPaused || runStatus === 'human_review_required') {
         const gate = runDetail.extra_metadata?.hitl_gate;
         const eventKey = buildHitlGateEventKey(latestRun.run_id, gate);
         if (!hasSeenHitlGateModal(eventKey)) {
@@ -1104,6 +1143,7 @@ export function WorkflowPage({
             setRunState('idle');
             setStaleWarning(false);
             setStatusMessage(null);
+            setPauseRequested(false);
             currentRunIdRef.current = null;
             setCurrentRunId(null);
             if (projectId) clearActiveRun(projectId);
@@ -1127,6 +1167,20 @@ export function WorkflowPage({
                 await openHitlGateModal(runId);
               }
             }
+            return;
+          }
+
+          if (status === 'paused') {
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
+            setPauseRequested(false);
+            setPipelineRunStatus('paused');
+            setRunState('idle');
+            setStatusMessage('流程已暂停，可点击「继续运行」从断点续跑');
+            rememberLatestRunId(runId);
+            await refreshFromRunDetail(runId);
             return;
           }
 
@@ -1247,14 +1301,58 @@ export function WorkflowPage({
     rememberLatestRunId,
   ]);
 
-  // ========== 暂停 ==========
-  const handlePause = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
+  // ========== 暂停（协作式：当前阶段结束后后端生效） ==========
+  const handlePause = useCallback(async () => {
+    const runId = currentRunIdRef.current || currentRunId;
+    if (!runId) {
+      setErrorMessage('没有正在运行的 Pipeline，无法暂停。');
+      return;
     }
-    setRunState('idle');
-  }, []);
+    try {
+      setPauseRequested(true);
+      const res = await pipelineService.pause(runId);
+      if (res.code !== 200) {
+        setPauseRequested(false);
+        setErrorMessage(res.message || '暂停请求失败');
+        return;
+      }
+      setStatusMessage(res.data?.message || '已请求暂停，将在当前阶段结束后停止');
+      setErrorMessage(null);
+    } catch (err) {
+      setPauseRequested(false);
+      setErrorMessage(getErrorMessage(err, '暂停请求失败'));
+    }
+  }, [currentRunId]);
+
+  const handleResumeFromPause = useCallback(async () => {
+    const runId = currentRunIdRef.current || currentRunId || latestRunId;
+    if (!runId) {
+      setErrorMessage('没有可续跑的暂停记录。');
+      return;
+    }
+    try {
+      setErrorMessage(null);
+      setStatusMessage('正在从暂停点继续运行…');
+      setPauseRequested(false);
+      const res = await pipelineService.resume(runId);
+      if (res.code !== 200) {
+        setErrorMessage(res.message || '续跑失败');
+        setStatusMessage(null);
+        return;
+      }
+      setPipelineRunStatus('running');
+      setRunState('running');
+      setCurrentRunId(runId);
+      currentRunIdRef.current = runId;
+      if (projectId) setActiveRunId(projectId, runId);
+      rememberLatestRunId(runId);
+      setStatusMessage(res.data?.message || '已继续运行');
+      startPolling(runId);
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err, '续跑失败'));
+      setStatusMessage(null);
+    }
+  }, [currentRunId, latestRunId, projectId, rememberLatestRunId, startPolling]);
 
   // ========== 重置 ==========
   const handleReset = useCallback(() => {
@@ -1267,6 +1365,8 @@ export function WorkflowPage({
     setErrorMessage(null);
     setStaleWarning(false);
     setStatusMessage(null);
+    setPauseRequested(false);
+    setPipelineRunStatus(null);
     setCurrentRunId(null);
     currentRunIdRef.current = null;
     allPendingCountRef.current = 0;
@@ -1345,6 +1445,57 @@ export function WorkflowPage({
     [projectId, nodes, startPolling, resolveRunIdForActions, rememberLatestRunId, resolveLatestRunOptions],
   );
 
+  const handleEvidenceIterationDecision = useCallback(
+    async (hint: CoordinatorHint, decision: 'approve' | 'reject') => {
+      if (!projectId) {
+        setErrorMessage('缺少项目 ID，无法提交决策。');
+        return;
+      }
+      const parentRunId = resolveRunIdForActions();
+      if (!parentRunId) {
+        setErrorMessage('未找到可用的 Pipeline 运行记录。');
+        return;
+      }
+      setEvidenceIterationLoading(true);
+      setErrorMessage(null);
+      try {
+        const res = await pipelineService.respondEvidenceIterationDecision({
+          run_id: parentRunId,
+          project_id: projectId,
+          hint_id: hint.id,
+          decision,
+        });
+        if (res.code !== 200 || !res.data) {
+          setErrorMessage(res.message || '提交证据链迭代决策失败');
+          return;
+        }
+        const targetRunId = res.data.run_id;
+        if (decision === 'approve') {
+          setCurrentRunId(targetRunId);
+          currentRunIdRef.current = targetRunId;
+          rememberLatestRunId(targetRunId);
+          setActiveRunId(projectId, targetRunId);
+          setRunState('running');
+          startPolling(targetRunId);
+          setStatusMessage('正在执行证据链迭代：文献挖掘 → 知识缺口 → 假设生成 → 可行性评估…');
+        } else {
+          setStatusMessage('已记录：不触发证据链迭代');
+        }
+        const refresh = await pipelineService.getCoordinatorHints(targetRunId);
+        if (refresh.code === 200 && refresh.data) {
+          const rawHints = refresh.data.hints || [];
+          setCoordinatorHints(rawHints.map((h, i) => mapCoordinatorHint(h, targetRunId, i)));
+        }
+      } catch (err) {
+        console.error('证据链迭代决策失败', err);
+        setErrorMessage(err instanceof Error ? err.message : '提交证据链迭代决策失败');
+      } finally {
+        setEvidenceIterationLoading(false);
+      }
+    },
+    [projectId, resolveRunIdForActions, rememberLatestRunId, startPolling],
+  );
+
   // ========== 计算状态摘要 ==========
   const effectiveRunId = currentRunId ?? latestRunId;
   const effectiveHitlRunId = hitlGateRunId ?? effectiveRunId;
@@ -1361,20 +1512,7 @@ export function WorkflowPage({
       if (cancelled) return;
       if (res.code === 200 && res.data) {
         const rawHints = res.data.hints || [];
-        setCoordinatorHints(rawHints.map((h, i) => ({
-          id: String((h.id as string) || `${effectiveRunId}_${i}`),
-          stage: (h.stage as string) || '',
-          severity: ((h.severity as string) || 'info') as CoordinatorHint['severity'],
-          message: (h.message as string) || '',
-          remediation: (h.remediation as string) || null,
-          action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
-          source: (h.source as string) || 'predefined',
-          pattern_id: (h.pattern_id as string) || undefined,
-          fix_status: ((h.fix_status as string) || undefined) as CoordinatorHint['fix_status'],
-          fix_detail: (h.fix_detail as string) || undefined,
-          extra: (h.extra as CoordinatorHint['extra']) || undefined,
-          timestamp: (h.timestamp as string) || new Date().toISOString(),
-        })));
+        setCoordinatorHints(rawHints.map((h, i) => mapCoordinatorHint(h, effectiveRunId, i)));
       }
     }).catch(() => {
       if (!cancelled) setCoordinatorHints([]);
@@ -1388,32 +1526,23 @@ export function WorkflowPage({
   useEffect(() => {
     if (!effectiveRunId) return;
     const isRunning = pipelineRunStatus === 'RUNNING' || runState === 'running' || runState === 'polling';
-    if (!isRunning) return;
+    const awaitingEvidenceDecision = coordinatorHints.some(
+      (h) => h.pattern_id === 'hg_all_low_evidence'
+        && (h.decision_status === 'pending' || h.decision_status === 'awaiting_user' || h.decision_status === 'running'),
+    );
+    if (!isRunning && pipelineRunStatus !== 'human_review_required' && !awaitingEvidenceDecision) return;
 
     const poll = setInterval(() => {
       pipelineService.getCoordinatorHints(effectiveRunId).then((res) => {
         if (res.code === 200 && res.data) {
           const rawHints = res.data.hints || [];
-          setCoordinatorHints(rawHints.map((h, i) => ({
-            id: String((h.id as string) || `${effectiveRunId}_${i}`),
-            stage: (h.stage as string) || '',
-            severity: ((h.severity as string) || 'info') as CoordinatorHint['severity'],
-            message: (h.message as string) || '',
-            remediation: (h.remediation as string) || null,
-            action: (h.action as CoordinatorHint['action']) || { type: 'auto', suggestion: 'continue', description: '' },
-            source: (h.source as string) || 'predefined',
-            pattern_id: (h.pattern_id as string) || undefined,
-            fix_status: ((h.fix_status as string) || undefined) as CoordinatorHint['fix_status'],
-            fix_detail: (h.fix_detail as string) || undefined,
-            extra: (h.extra as CoordinatorHint['extra']) || undefined,
-            timestamp: (h.timestamp as string) || new Date().toISOString(),
-          })));
+          setCoordinatorHints(rawHints.map((h, i) => mapCoordinatorHint(h, effectiveRunId, i)));
         }
       }).catch(() => { /* ignore polling errors */ });
     }, 5000); // 5 秒轮询
 
     return () => clearInterval(poll);
-  }, [effectiveRunId, pipelineRunStatus, runState]);
+  }, [effectiveRunId, pipelineRunStatus, runState, coordinatorHints]);
 
   const isHitlGatePaused = Boolean(
     projectId
@@ -1667,8 +1796,11 @@ export function WorkflowPage({
         <WorkflowActionBar
           nodes={nodes}
           isRunning={runState !== 'idle'}
+          isPaused={pipelineRunStatus === 'paused'}
+          pauseRequested={pauseRequested}
           onRunAll={handleRunAll}
           onPause={handlePause}
+          onResume={handleResumeFromPause}
           onReset={handleReset}
         />
       </div>
@@ -1698,6 +1830,8 @@ export function WorkflowPage({
                 handleRerunCurrentStage(nodeId);
               }
             }}
+            onEvidenceIterationDecision={handleEvidenceIterationDecision}
+            evidenceIterationLoading={evidenceIterationLoading}
             onViewDetail={() => {
               // 简单展开：无需特殊处理
             }}

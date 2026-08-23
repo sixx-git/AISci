@@ -367,3 +367,22 @@ class RunLog(Base):
     project = relationship("Project", back_populates="run_logs")
     
     __table_args__ = {'comment': '运行日志表'}
+
+
+class ReportEvaluation(Base):
+    """
+    报告质量评估记录表
+    存储每次"模型对战"评估的结果，支持历史记录查看
+    """
+    __tablename__ = "report_evaluations"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    report_id = Column(String(36), ForeignKey("reports.id"), nullable=False, index=True, comment="关联报告ID")
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True, comment="关联项目ID")
+    
+    mode = Column(String(20), nullable=False, comment="评估模式: simple/weighted/scientist")
+    result = Column(JSON, nullable=False, comment="评估结果（完整 JSON）")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    
+    __table_args__ = {'comment': '报告质量评估记录表'}

@@ -13,7 +13,7 @@ interface ClosedLoopTimelineProps {
   embedded?: boolean;
 }
 
-const EVENT_LABELS: Record<string, string> = {
+export const EVENT_LABELS: Record<string, string> = {
   hypothesis_tree: '假设树剪枝',
   hypothesis_tree_pilot: '假设树 Pilot 融合',
   ensemble_review: '集成评审',
@@ -28,6 +28,8 @@ const EVENT_LABELS: Record<string, string> = {
   hitl_gate_pause: 'HITL Gate 暂停',
   data_gap_loop: 'Gap 数据补搜',
   evidence_reasoning_loop: '证据链迭代',
+  knowledge_gap: '知识缺口',
+  hitl_gate: 'HITL Gate',
 };
 
 const EVENT_ICONS: Record<string, typeof GitBranch> = {

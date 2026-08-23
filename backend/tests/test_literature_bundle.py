@@ -24,10 +24,39 @@ def test_normalize_retrieved_papers_to_facts_and_citations():
     assert len(facts) == 1
     assert facts[0]["fact_id"] == "paper_fact_001"
     assert facts[0]["source_paper_title"] == "DNA Origami Nanorobots"
+    assert facts[0]["tier"] == "auxiliary"
+    assert facts[0].get("no_pdf") is True
     assert len(citation_map) == 1
     assert citation_map[0]["title"] == "DNA Origami Nanorobots"
     assert citation_map[0].get("document_id")  # 外部论文也须有稳定 document_id
     assert len(verified) == 1
+
+
+def test_enrich_marks_auxiliary_counts():
+    lm = enrich_literature_mining(
+        {
+            "facts": [
+                {
+                    "fact_id": "f_core",
+                    "content": "Full-text derived fact.",
+                    "source_chunk_id": "c1",
+                    "tier": "core",
+                }
+            ],
+            "retrieved_papers": [
+                {
+                    "title": "Paper A",
+                    "abstract": "Finding A about nanorobots.",
+                    "gate_passed": True,
+                    "relevance_score": 8,
+                },
+            ],
+        }
+    )
+    assert lm["evidence_facts"] == 2
+    assert lm["core_facts_count"] == 1
+    assert lm["auxiliary_facts_count"] == 1
+    assert any(f.get("tier") == "auxiliary" for f in lm["facts"])
 
 
 def test_source_paper_title_only_gets_synthetic_document_id():

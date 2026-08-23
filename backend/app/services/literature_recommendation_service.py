@@ -65,7 +65,7 @@ def llm_recommend_papers(
                 "authors": ["Author A"],
                 "year": 2023,
                 "venue": "Conference",
-                "doi": "10.1234/example",
+                "doi": "",
                 "arxiv_id": "",
                 "subtopic_labels": ["example topic"],
                 "relevance_score": 8,
@@ -93,6 +93,14 @@ def llm_recommend_papers(
             if not str(p.get("title") or "").strip():
                 continue
             item = dict(p)
+            doi = str(item.get("doi") or "").strip()
+            # 拒绝 schema 示例/明显占位 DOI，避免编造引用
+            if doi and (
+                doi.lower().startswith("10.1234/")
+                or "example" in doi.lower()
+                or doi.lower() in {"10.xxxx/xxxxx", "doi"}
+            ):
+                item.pop("doi", None)
             score = _coerce_relevance_score(item.get("relevance_score"))
             if score is not None:
                 item["relevance_score"] = score

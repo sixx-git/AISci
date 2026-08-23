@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,8 @@ STAGE_ERROR_PATTERNS: Dict[str, List[Dict[str, Any]]] = {
             "id": "hg_all_low_evidence",
             "severity": "medium",
             "condition": lambda d: d.get("total", 0) > 0 and d.get("low_evidence_count", 0) == d.get("total", 0),
-            "remediation": "auto_evidence_iteration",
-            "message": "所有假设证据级别为 low，将自动触发证据链迭代",
+            "remediation": "hint_evidence_iteration",
+            "message": "所有假设证据级别为 low，可行性评估完成后将询问是否触发证据链迭代",
         },
     ],
     "hypothesis_review": [
@@ -144,10 +144,15 @@ REMEDIATION_ACTIONS: Dict[str, Dict[str, Any]] = {
         "suggestion": "verify_references",
         "description": "建议用户核验引用",
     },
+    "hint_evidence_iteration": {
+        "type": "hint",
+        "suggestion": "evidence_iteration_decision",
+        "description": "可行性评估完成后确认是否重跑文献挖掘至可行性评估",
+    },
     "auto_evidence_iteration": {
-        "type": "auto",
-        "suggestion": "iterate_evidence",
-        "description": "自动触发证据链迭代",
+        "type": "hint",
+        "suggestion": "evidence_iteration_decision",
+        "description": "可行性评估完成后确认是否重跑文献挖掘至可行性评估",
     },
     "auto_skip": {
         "type": "auto",

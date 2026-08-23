@@ -300,6 +300,9 @@ def collect_sandbox_plots_from_validation(small_validation: Optional[Dict[str, A
         return []
     plots = (small_validation.get("artifacts") or {}).get("plots") or []
     if not plots:
-        actual = (small_validation.get("results") or {}).get("actual_results") or {}
+        results = small_validation.get("results")
+        if not isinstance(results, dict):
+            results = {}
+        actual = results.get("actual_results") if isinstance(results.get("actual_results"), dict) else {}
         plots = actual.get("sandbox_plots") or []
     return [dict(p) for p in plots if isinstance(p, dict)]

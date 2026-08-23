@@ -1,9 +1,12 @@
+import logging
 import uuid
 from sqlalchemy.orm import Session
 from app.schemas.chat import ChatRequest, ChatResponse, ChatMessage as ChatMessageSchema
 from app.models.chat import ChatSession, ChatMessage
 from app.services.llm_service import LLMService
 from app.services.vector_store import get_vector_store, search_vector_store
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -70,7 +73,12 @@ class ChatService:
 
         try:
             results = search_vector_store(project_id, query, top_k=top_k, db=self.db)
-        except ValueError:
+        except ValueError as exc:
+            logger.warning(
+                "项目文献检索失败（将以无引用回答）project=%s err=%s",
+                project_id,
+                exc,
+            )
             return "", []
 
         if not results:

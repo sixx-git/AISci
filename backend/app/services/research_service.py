@@ -33,6 +33,7 @@ class ResearchService:
         project.execution_time = time.time() - start_time
         self.db.commit()
         
+        # 遗留接口：v1 未挂载。禁止返回虚构文献；references 恒为空直至接入可溯源 RAG。
         return ResearchResponse(
             success=True,
             research_id=research_id,

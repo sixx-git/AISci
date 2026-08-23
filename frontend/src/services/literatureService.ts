@@ -39,6 +39,9 @@ export interface ImportedDocument {
   source_type?: 'upload' | 'arxiv' | 'bibtex' | 'google_scholar_import' | 'manual';
   source_url?: string;
   pdf_url?: string;
+  file_size?: number;
+  chunk_count?: number;
+  status?: string;
   library_scope?: 'base' | 'project' | 'personal';
   import_status?: 'discovered' | 'imported' | 'pdf_downloaded' | 'parsed' | 'indexed' | 'failed';
   is_personal?: boolean;

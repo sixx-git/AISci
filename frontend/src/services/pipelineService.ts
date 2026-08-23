@@ -39,6 +39,40 @@ export const pipelineService = {
     return data;
   },
 
+  /** POST /api/v1/pipeline/runs/:runId/pause — 协作式暂停（当前阶段结束后生效） */
+  async pause(runId: string): Promise<ApiResponse<{
+    run_id: string;
+    accepted: boolean;
+    already_requested?: boolean;
+    status: string;
+    message: string;
+  }>> {
+    const { data } = await api.post<ApiResponse<{
+      run_id: string;
+      accepted: boolean;
+      already_requested?: boolean;
+      status: string;
+      message: string;
+    }>>(`/pipeline/runs/${runId}/pause`);
+    return data;
+  },
+
+  /** POST /api/v1/pipeline/runs/:runId/resume — 从用户暂停检查点续跑 */
+  async resume(runId: string): Promise<ApiResponse<{
+    run_id: string;
+    status: string;
+    resume_phase?: string;
+    message: string;
+  }>> {
+    const { data } = await api.post<ApiResponse<{
+      run_id: string;
+      status: string;
+      resume_phase?: string;
+      message: string;
+    }>>(`/pipeline/runs/${runId}/resume`);
+    return data;
+  },
+
   /** GET /api/v1/pipeline/audit-export/:runId */
   async exportAuditChain(runId: string): Promise<ApiResponse<Record<string, unknown>>> {
     const { data } = await api.get<ApiResponse<Record<string, unknown>>>(`/pipeline/audit-export/${runId}`);
@@ -70,6 +104,31 @@ export const pipelineService = {
       coordinator_decisions: Array<Record<string, unknown>>;
       hint_count: number;
     }>>(`/pipeline/coordinator-hints/${runId}`);
+    return data;
+  },
+
+  /** POST /api/v1/pipeline/coordinator-hints/:runId/evidence-iteration-decision */
+  async respondEvidenceIterationDecision(payload: {
+    run_id: string;
+    project_id: string;
+    hint_id: string;
+    decision: 'approve' | 'reject';
+  }): Promise<ApiResponse<{
+    run_id: string;
+    parent_run_id?: string;
+    decision: string;
+    status: string;
+    rerun_from_stage?: string;
+    rerun_mode?: string;
+  }>> {
+    const { data } = await api.post(
+      `/pipeline/coordinator-hints/${payload.run_id}/evidence-iteration-decision`,
+      {
+        project_id: payload.project_id,
+        hint_id: payload.hint_id,
+        decision: payload.decision,
+      },
+    );
     return data;
   },
 
