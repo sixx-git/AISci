@@ -24,6 +24,7 @@ import json
 import logging
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -1096,33 +1097,64 @@ class RubricGenerator:
             "All output in English. Output JSON array only."
         )
 
-        try:
-            items = call_llm_json(
-                self.client,
-                self.config.rubric_model,
-                prompt,
-                system=system,
-                temperature=GENERATION_TEMPERATURE,
-                max_tokens=GENERATION_MAX_TOKENS,
-                max_retries=self.config.max_retries,
-            )
-            if not isinstance(items, list):
-                items = []
+        attempts = 3 if dimension_id == "scientific_reasoning" else 1
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                items = call_llm_json(
+                    self.client,
+                    self.config.rubric_model,
+                    prompt,
+                    system=system,
+                    temperature=GENERATION_TEMPERATURE,
+                    max_tokens=GENERATION_MAX_TOKENS,
+                    max_retries=self.config.max_retries,
+                )
+                if not isinstance(items, list):
+                    items = []
 
-            logger.info(
-                f"  {dimension_id}: Generated {len(items)} raw items"
-            )
+                logger.info(
+                    f"  {dimension_id}: Generated {len(items)} raw items"
+                    f" (attempt {attempt}/{attempts})"
+                )
 
-            # 标准化处理
-            normalized = self._normalize_items(items, dimension_id)
-            logger.info(
-                f"  {dimension_id}: {len(normalized)} items after normalization"
-            )
-            return normalized
+                # 标准化处理
+                normalized = self._normalize_items(items, dimension_id)
+                logger.info(
+                    f"  {dimension_id}: {len(normalized)} items after normalization"
+                )
+                if dimension_id == "scientific_reasoning" and not normalized and attempt < attempts:
+                    logger.warning(
+                        "  scientific_reasoning empty after attempt %s, retrying...",
+                        attempt,
+                    )
+                    time.sleep(2 ** attempt)
+                    continue
+                if dimension_id == "scientific_reasoning" and not normalized:
+                    raise RuntimeError(
+                        "scientific_reasoning generation produced 0 items after retries"
+                    )
+                return normalized
 
-        except Exception as e:
-            logger.error(f"  {dimension_id}: Generation failed - {e}")
-            return []
+            except Exception as e:
+                last_error = e
+                logger.error(
+                    f"  {dimension_id}: Generation failed "
+                    f"(attempt {attempt}/{attempts}) - {e}"
+                )
+                if dimension_id == "scientific_reasoning" and attempt < attempts:
+                    time.sleep(2 ** attempt)
+                    continue
+                if dimension_id == "scientific_reasoning":
+                    raise RuntimeError(
+                        f"scientific_reasoning generation failed: {e}"
+                    ) from e
+                return []
+        if last_error:
+            raise RuntimeError(
+                f"scientific_reasoning generation failed: {last_error}"
+            ) from last_error
+        return []
 
     def _filter_domain_general_terms(
         self, raw_terms: List[str], query: str

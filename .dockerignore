@@ -1,0 +1,72 @@
+# Meoo image deploy: keep upload under 100MiB
+.git
+.cursor
+.workbuddy
+.uploads
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.vite
+__pycache__
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.log
+
+# Local envs / deps (rebuild on remote)
+venv
+.venv
+node_modules
+**/node_modules
+frontend/node_modules
+frontend/dist
+frontend/build
+frontend/.vite
+
+# Heavy / ephemeral local data (root-anchored — do NOT use bare "data"/"storage")
+/datasets
+/data
+/storage
+/output
+/logs
+/_ppt_assets
+/_cmp
+/docs
+/designs
+/tests
+/report-scorer-suite
+/run_full
+backend/data
+backend/storage
+backend/tests
+backend/.pytest_cache
+backend/.ruff_cache
+
+# pingfenbiao: keep code, drop samples/reports
+pingfenbiao-main/**/样例/
+pingfenbiao-main/**/测试报告/
+pingfenbiao-main/**/__pycache__/
+
+# Optional local artifacts
+*.pptx
+*.ppt
+_dump_*.py
+_gen_*.py
+_scan_*.py
+.meoo_*.tmp
+.meoo_*.sql
+
+# shaxiang sample/runtime data (keep code only)
+shaxiang-main/**/data/
+shaxiang-main/**/outputs/
+shaxiang-main/**/.cache/
+
+# Meoo generated frontend stubs (not used by AISci React app)
+/src/supabase/
+/migrations/

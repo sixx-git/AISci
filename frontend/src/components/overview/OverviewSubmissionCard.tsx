@@ -4,11 +4,10 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { ContextEngineeringDrawer } from '@/components/overview/ContextEngineeringDrawer';
 import { RunFeedbackDrawer } from '@/components/overview/RunFeedbackDrawer';
-import { StageOutputsDrawer, chainToPreview, type HypothesisChainPreview } from '@/components/overview/StageOutputsDrawer';
+import { StageOutputsDrawer } from '@/components/overview/StageOutputsDrawer';
 import type { PipelineProgressNode } from '@/components/PipelineProgress';
 import { pipelineService } from '@/services/pipelineService';
 import { reportService } from '@/services/reportService';
-import hypothesisService from '@/services/hypothesisService';
 import { iterativeExperimentService } from '@/services/iterativeExperimentService';
 import { literatureService } from '@/services/literatureService';
 import { triggerBlobDownload, triggerJsonDownload } from '@/lib/downloadBlob';
@@ -86,7 +85,6 @@ export function OverviewSubmissionCard({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [report, setReport] = useState<ReportData | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [evidenceChains, setEvidenceChains] = useState<HypothesisChainPreview[]>([]);
   const [experiments, setExperiments] = useState<IterativeExperiment[]>([]);
   const [chunkExtras, setChunkExtras] = useState<SnapshotItem[]>([]);
 
@@ -188,32 +186,6 @@ export function OverviewSubmissionCard({
     return extras;
   }, [project.id]);
 
-  const loadEvidenceChains = useCallback(async () => {
-    try {
-      const res = await hypothesisService.getProjectHypotheses(project.id);
-      const list = res.code === 200 && Array.isArray(res.data) ? res.data : [];
-      const picked = [
-        ...list.filter((h) => h.is_primary),
-        ...list.filter((h) => !h.is_primary),
-      ].slice(0, 4);
-      const previews = await Promise.all(picked.map(async (h) => {
-        try {
-          const chainRes = await hypothesisService.getEvidenceChain(h.id);
-          return chainToPreview(
-            h.id,
-            h.hypothesis || h.rationale || h.id,
-            chainRes.code === 200 ? chainRes.data : null,
-          );
-        } catch {
-          return chainToPreview(h.id, h.hypothesis || h.id, null);
-        }
-      }));
-      setEvidenceChains(previews.filter((p) => p.supportCount + p.counterCount > 0 || Boolean(p.title)));
-    } catch {
-      setEvidenceChains([]);
-    }
-  }, [project.id]);
-
   const openDrawer = async (kind: 'context' | 'run' | 'stages', focus?: string) => {
     if (!hasRun) {
       showAlert('请先在智能体工作流中运行 Pipeline');
@@ -224,9 +196,6 @@ export function OverviewSubmissionCard({
     const detail = await ensureRunDetail();
     if (kind === 'context') {
       await fetchChunkExtras(detail);
-    }
-    if (kind === 'stages') {
-      await loadEvidenceChains();
     }
   };
 
@@ -665,7 +634,6 @@ export function OverviewSubmissionCard({
         loading={loadingDetail && stageSnapshots.length === 0}
         stages={stageSnapshots}
         focusKey={stageFocus}
-        evidenceChains={evidenceChains}
         onClose={() => setDrawer(null)}
         onDownloadStage={handleDownloadStage}
       />

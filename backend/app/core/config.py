@@ -41,15 +41,19 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     
-    # 数据库配置
+    # 数据库配置（Meoo 云库优先读 SUPABASE_DB_URL，见 cloud_db.resolve_database_url）
     DATABASE_URL: str = "sqlite:///./data/aiscientist.db"
+    # SQLite 场景下是否同步到 Supabase Storage（Meoo FREE 无 Postgres 直连时）
+    AISCI_CLOUD_DB_SYNC: bool = True
+    # 周期性把本地 SQLite 回写到 Storage 的间隔（秒）；默认 3 小时
+    AISCI_CLOUD_DB_SYNC_INTERVAL_SEC: int = 10800
     
     # 千问 API 配置
     QWEN_API_KEY: str = ""
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    QWEN_MODEL: str = "qwen3.7-max"
+    QWEN_MODEL: str = "qwen3.6-plus"
     # 已废弃：与 QWEN_MODEL 合并，仅保留以兼容旧 .env
-    QWEN_VL_MODEL: str = "qwen3.7-max"
+    QWEN_VL_MODEL: str = "qwen3.6-plus"
     # 强制 IPv4 访问百炼（部分网络 IPv6 SSL 会 UNEXPECTED_EOF）
     QWEN_FORCE_IPV4: bool = True
     
@@ -155,10 +159,31 @@ class Settings(BaseSettings):
     class Config:
         env_file = _resolve_env_file()
         case_sensitive = True
+        # 允许 .env 中存在 Meoo SUPABASE_*/MEOO_* 等未声明字段
+        extra = "ignore"
 
 
 @lru_cache()
 def get_settings():
+    # 将 backend/.env / 根 .env 注入 os.environ，供 cloud_db 等直接读取
+    try:
+        from dotenv import load_dotenv
+
+        backend_root = Path(__file__).resolve().parents[2]
+        load_dotenv(backend_root / ".env", override=False)
+        load_dotenv(backend_root.parent / ".env", override=False)
+    except Exception:
+        pass
+
+    # Meoo：有 SUPABASE_DB_URL 时覆盖 DATABASE_URL
+    supabase_db = (os.environ.get("SUPABASE_DB_URL") or "").strip()
+    if supabase_db:
+        if supabase_db.startswith("postgres://"):
+            supabase_db = "postgresql+psycopg2://" + supabase_db[len("postgres://") :]
+        elif supabase_db.startswith("postgresql://") and "+psycopg" not in supabase_db:
+            supabase_db = "postgresql+psycopg2://" + supabase_db[len("postgresql://") :]
+        os.environ["DATABASE_URL"] = supabase_db
+
     settings = Settings()
     endpoint = (settings.HF_ENDPOINT or "").strip().rstrip("/")
     if endpoint:

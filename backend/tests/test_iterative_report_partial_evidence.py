@@ -83,9 +83,10 @@ def test_enrich_writes_counterexamples_section():
         None,
     )
     text = out["chapters"]["results"]
-    assert "Actual Results" in text
+    assert "实际分析结果" in text
+    assert "Actual Results" not in text
     assert "阶段性结果" in text
-    assert "Counterexamples" in text or "反例" in text
+    assert "反例" in text
     assert "KeyError" in text or "缺少标签" in text
 
 
@@ -148,8 +149,8 @@ def test_enrich_no_evidence_omits_actual_results_heading():
         {
             "chapters": {
                 "results": (
-                    "### Actual Results（实际分析结果）\n\n"
-                    "### Expected Results（预期结果）\n\n"
+                    "### 实际分析结果\n\n"
+                    "### 预期结果\n\n"
                     "预期通过模拟得到后验约束。"
                 )
             }
@@ -158,8 +159,9 @@ def test_enrich_no_evidence_omits_actual_results_heading():
         None,
     )
     text = out["chapters"]["results"]
+    assert "实际分析结果" not in text
     assert "Actual Results" not in text
-    assert "Expected Results" in text
+    assert "预期结果" in text or "Expected Results" in text
 
 
 def test_enrich_failure_only_still_writes_section():

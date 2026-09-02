@@ -20,7 +20,8 @@ def test_sanitize_chapters_cleans_references_html():
     assert "<i>" not in refs[0]
     assert "Planck 2018 results" in refs[0]
     assert "{[J]}" not in refs[0]
-    assert "预印本" in refs[1]
+    assert "预印本" not in refs[1]
+    assert "在线优先" not in refs[1]
 
 
 def test_sanitize_removes_llm_agent_from_technical_details():
@@ -65,8 +66,42 @@ def test_sanitize_report_result():
         }
     )
     assert "千问" not in result["paper_abstract"]
+    assert "纳米机器人" in result["paper_abstract"]
+    assert len(result["paper_abstract"]) >= 12
     assert "向量检索" not in result["chapters"]["technical_details"]
     assert "LLM" not in result["markdown_content"]
+
+
+def test_sanitize_keeps_llm_as_research_object_in_abstract():
+    """研究对象「大语言模型」不得把整段摘要删成护栏短句。"""
+    sv = {
+        "narrative_brief": {"evidence_verdict": "inconclusive"},
+        "sandbox_execution": {
+            "partial_run": True,
+            "metrics": {"run_scope": "smoke", "dynamic_accuracy": 0.814, "fixed_accuracy": 0.808},
+        },
+    }
+    abstract = (
+        "参数高效微调常采用固定秩或均匀参数预算，难以适应大语言模型在动态任务需求下的微调效率与性能稳定性。"
+        "本文在 SST-2 上构建复杂度感知动态预算代理实验，动态相对固定准确率约提升 0.67%，尚未达到 1% 门槛。"
+    )
+    result = sanitize_report_result(
+        {
+            "paper_title": "基于任务复杂度感知的动态参数预算分配机制研究",
+            "paper_abstract": abstract,
+            "chapters": {
+                "problem_statement": "**主要矛盾。** 固定参数预算难以适应多样化任务。",
+                "methods": "本节验证为可执行的最小代理实验，用于检验假设的可操作推论。",
+                "results": "动态准确率 0.814，固定准确率 0.808。",
+            },
+        },
+        small_validation=sv,
+    )
+    out = result["paper_abstract"]
+    assert "大语言模型" in out
+    assert "SST-2" in out or "0.67" in out
+    assert len(out) >= 80
+    assert out != "现有证据为阶段性结果，尚不足以充分验证假设。"
 
 
 def test_strip_operational_bracket_sections():
@@ -119,7 +154,7 @@ def test_strip_empty_actual_results_section():
     cleaned = strip_empty_actual_results_section(text)
     assert "Actual Results" not in cleaned
     assert "实际分析结果" not in cleaned
-    assert "Expected Results" in cleaned
+    assert "预期结果" in cleaned or "Expected Results" in cleaned
     assert "对照实验" in cleaned
 
 
@@ -131,8 +166,49 @@ def test_keep_nonempty_actual_results_section():
         "预期提升。"
     )
     cleaned = strip_empty_actual_results_section(text)
-    assert "Actual Results" in cleaned
+    assert "实际分析结果" in cleaned
     assert "0.82" in cleaned
+    assert "Actual Results" not in cleaned
+
+
+def test_normalize_english_result_headings():
+    from app.services.report_content_sanitizer import normalize_report_section_headings
+
+    text = normalize_report_section_headings(
+        "### Actual Results（实际分析结果）\n\n### Experiment Run（初步实验验证）\n"
+    )
+    assert "Actual Results" not in text
+    assert "Experiment Run" not in text
+    assert "实际分析结果" in text
+    assert "初步实验验证" in text
+
+
+def test_clean_iteration_summary_strips_broken_hparams():
+    from app.services.report_content_sanitizer import clean_iteration_summary
+
+    s = clean_iteration_summary(
+        "移除class_weight=；，仅依赖sample_weights；数据: 5000行 x 5列 | 指标: f1=0.03"
+    )
+    assert "class_weight=" not in s
+    assert "数据:" not in s
+    assert "指标:" not in s
+
+
+def test_poor_performance_flag_from_low_f1():
+    from app.services.report_content_sanitizer import evidence_flags_from_small_validation
+
+    flags = evidence_flags_from_small_validation(
+        {
+            "sandbox_execution": {
+                "metrics": {"f1_score_mean": 0.19, "accuracy_mean": 0.27},
+                "partial_run": True,
+                "plots": [{"overall_assessment": "significant_issue", "chart_kind": "diagnostic_counterexample"}],
+            },
+            "results": {"actual_results": {}},
+        }
+    )
+    assert flags["poor_performance"] is True
+    assert flags["evidence_verdict"] == "contradicted"
 
 
 def test_sanitize_chapters_drops_empty_actual_heading():
@@ -148,7 +224,9 @@ def test_sanitize_chapters_drops_empty_actual_heading():
     )
     results = chapters["results"]
     assert "Actual Results" not in results
-    assert "Expected Results" in results
+    assert "实际分析结果" not in results
+    assert "预期结果" in results or "Expected Results" in results
+    assert "可重复指标" in results
 
 
 def test_strip_smoke_and_paths():
@@ -173,7 +251,7 @@ def test_strip_smoke_and_paths():
     )
     assert "run_scope" not in filtered
     assert filtered["rf_accuracy_mean"] == 0.9
-    assert "随机森林" in format_metric_label("rf_accuracy_mean")
+    assert "random forest" in format_metric_label("rf_accuracy_mean")
     title = academic_chart_title(
         name="confusion.png", note="确认了数据是单类别问题", iteration_number=2
     )
@@ -268,6 +346,8 @@ def test_dedupe_stage_claim_and_align_idempotent():
     assert "Hα fluxes" not in src_c and "Hα" not in src_c
 
     refs = annotate_preprint_references(
-        ["Jiaqi Huang et al..An overview{[EB/OL]}. 2025. DOI: 10.3758/xxx"]
+        ["Jiaqi Huang et al..An overview{[EB/OL]}. 2025. DOI: 10.3758/xxx（预印本/在线优先，引用时请核对正式出版信息）。"]
     )
-    assert "预印本" in refs[0]
+    assert "预印本" not in refs[0]
+    assert "在线优先" not in refs[0]
+    assert "10.3758/xxx" in refs[0]

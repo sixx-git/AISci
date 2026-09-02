@@ -943,12 +943,24 @@ async def get_project_readiness(
     ).order_by(PipelineRun.created_at.desc()).limit(5).all()
 
     project_info = {
-        "research_question": project.description or "",
+        "research_question": (
+            project.research_question
+            or project.description
+            or project.name
+            or ""
+        ),
         "literature_facts": [{"id": f.id} for f in literature_facts],
-        "config": project.extra_metadata or {},
+        # Project 模型字段为 config（JSON），不是 extra_metadata
+        "config": project.config if isinstance(project.config, dict) else {},
         "previous_runs": [
-            {"status": r.status.value if hasattr(r.status, 'value') else r.status,
-             "failed_stage": r.failed_stage}
+            {
+                "status": r.status.value if hasattr(r.status, "value") else r.status,
+                "failed_stage": (
+                    r.failed_stage.value
+                    if hasattr(r.failed_stage, "value")
+                    else r.failed_stage
+                ),
+            }
             for r in previous_runs
         ],
     }

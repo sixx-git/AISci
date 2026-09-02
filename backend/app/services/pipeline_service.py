@@ -3069,13 +3069,12 @@ class PipelineService:
                 # ── 直接持久化修复后的 chapters 到数据库（独立会话）──
                 self._persist_fixed_chapters_to_db(run_id, fixed_chapters)
 
-                # ── 更新 hint 状态为「已修复」──
+                # ── 更新 hint 状态为「已修复」（同阶段全部 auto_fix_report，避免漏更新）──
                 for hint in self._coordinator_hints:
                     if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
                         hint["fix_status"] = "completed"
                         hint["fix_detail"] = f"已修复 {len(fixed_chapters)} 个章节: {', '.join(fixed_chapters.keys())}"
                         hint["message"] = "报告内容质量问题已自动修复"
-                        break
                 # 持久化更新后的 hints
                 self._persist_coordinator_hints()
             else:
@@ -3084,7 +3083,6 @@ class PipelineService:
                     if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
                         hint["fix_status"] = "failed"
                         hint["fix_detail"] = "LLM 未返回有效修复内容"
-                        break
                 self._persist_coordinator_hints()
         except Exception as e:
             logger.warning(f"[大家长] 自动修复报告失败: {e}")
@@ -3093,7 +3091,6 @@ class PipelineService:
                 if hint.get("stage") == stage and hint.get("remediation") == "auto_fix_report":
                     hint["fix_status"] = "failed"
                     hint["fix_detail"] = f"修复失败: {str(e)[:100]}"
-                    break
             self._persist_coordinator_hints()
 
     def _persist_fixed_chapters_to_db(self, run_id: str, fixed_chapters: Dict[str, str]) -> None:

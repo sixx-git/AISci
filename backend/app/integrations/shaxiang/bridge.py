@@ -530,6 +530,81 @@ def _normalize_iteration(it: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def upsert_experiment_from_aisci(local: Dict[str, Any]) -> str:
+    """当 AISci JSON 有实验但 shaxiang SQLite 缺失时，按原 id 回填，避免设计脚本/投影失败。
+
+    常见原因：experiments.db 被旧备份覆盖、云端 JSON 与本地 DB 不同步。
+    """
+    if not isinstance(local, dict):
+        raise ShaxiangBridgeError("无法回填：本地实验记录无效")
+    exp_id = str(local.get("shaxiang_experiment_id") or local.get("id") or "").strip()
+    if not exp_id:
+        raise ShaxiangBridgeError("无法回填：缺少实验 id")
+
+    def _inner() -> str:
+        from datetime import datetime
+
+        from schemas.experiment import Experiment, ExperimentStatus
+        from storage.sqlite_store import SQLiteRepository
+
+        root = ensure_shaxiang_path()
+        db_path = str(root / "data" / "experiments.db")
+        repo = SQLiteRepository(db_path)
+        existing = repo.get_experiment(exp_id)
+        if existing is not None:
+            return exp_id
+
+        hyp = (local.get("hypothesis") or local.get("title") or "").strip() or "（空假设）"
+        title = (local.get("title") or hyp[:30]).strip() or exp_id
+        status_raw = str(local.get("status") or "created").lower()
+        try:
+            status = ExperimentStatus(status_raw)
+        except ValueError:
+            status = ExperimentStatus.CREATED
+
+        initial_plan = local.get("initial_plan")
+        plan_obj = None
+        if isinstance(initial_plan, dict) and (
+            initial_plan.get("title") or initial_plan.get("analysis_script") or initial_plan.get("methodology")
+        ):
+            try:
+                from schemas.experiment import ExperimentPlan
+
+                plan_obj = ExperimentPlan.model_validate(initial_plan)
+            except Exception as exc:
+                logger.warning("回填时 initial_plan 校验失败，将置空: %s", exc)
+                plan_obj = None
+
+        now = datetime.now().isoformat()
+        experiment = Experiment(
+            id=exp_id,
+            title=title[:200],
+            research_goal=(local.get("research_goal") or hyp).strip() or hyp,
+            hypothesis=hyp,
+            dataset_recommendations=list(local.get("dataset_recommendations") or []) or None,
+            current_data_config=local.get("data_config") if isinstance(local.get("data_config"), dict) else None,
+            phase=str(local.get("phase") or "created"),
+            constraints=[str(c) for c in (local.get("constraints") or []) if str(c).strip()],
+            status=status,
+            executor_type=str(local.get("executor_type") or "sandbox"),
+            max_iterations=int(local.get("max_iterations") or 10),
+            current_iteration=int(local.get("current_iteration") or 0),
+            initial_plan=plan_obj,
+            data_config=local.get("data_config") if isinstance(local.get("data_config"), dict) else None,
+            human_feedback=local.get("human_feedback"),
+            feedback_status=str(local.get("feedback_status") or "none"),
+            run_mode=str(local.get("run_mode") or "smoke_only"),
+            quality_mode=str(local.get("quality_mode") or "draft"),
+            created_at=str(local.get("created_at") or now),
+            updated_at=str(local.get("updated_at") or now),
+        )
+        repo.save_experiment(experiment)
+        logger.warning("已从 AISci JSON 回填 shaxiang 实验: %s", exp_id)
+        return exp_id
+
+    return _run_in_shaxiang(_inner)
+
+
 def project_experiment(project_id: str, experiment_id: str) -> Dict[str, Any]:
     """从 shaxiang SQLite 投影为 AISci 前端/Pipeline 使用的 experiment dict。"""
 

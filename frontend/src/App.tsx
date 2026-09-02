@@ -1,6 +1,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
+import { WelcomeNoticeModal } from './components/WelcomeNoticeModal';
 import { Home } from './pages/Home';
 import { CreateProject } from './pages/CreateProject';
 import { ProjectWorkspace } from './pages/ProjectWorkspace';
@@ -33,6 +34,7 @@ function App() {
             <Route path="/settings" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        <WelcomeNoticeModal />
       </div>
     </BrowserRouter>
   );

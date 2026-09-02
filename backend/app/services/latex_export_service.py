@@ -585,9 +585,19 @@ def _normalize_experiments_dict(value: Dict[str, Any]) -> Dict[str, Any]:
 def _format_itemize(lines: List[str]) -> str:
     if not lines:
         return ""
+    cleaned: List[str] = []
+    for line in lines:
+        s = str(line or "").strip()
+        # 避免「- xxx」再包一层 itemize 变成 \item - xxx
+        s = re.sub(r"^[-*•]\s+", "", s).strip()
+        s = re.sub(r"^\d+[.)、]\s*", "", s).strip()
+        if s:
+            cleaned.append(s)
+    if not cleaned:
+        return ""
     body = "\n".join(
         f"    \\item {_markdown_to_latex_body(line) if '**' in line else escape_latex(line)}"
-        for line in lines
+        for line in cleaned
     )
     return f"\\begin{{itemize}}\n{body}\n\\end{{itemize}}\n"
 
@@ -1125,13 +1135,16 @@ def _reference_item_to_bib_fields(item: Dict[str, Any]) -> Tuple[str, Dict[str, 
     return entry_type, fields
 
 def _build_author_block(project_info: Dict[str, Any]) -> str:
-    project_name = escape_latex(project_info.get("title") or project_info.get("name") or "AI Scientist 科研项目")
-    domain = escape_latex(project_info.get("research_domain") or "智能科研助手")
+    project_name = escape_latex(
+        project_info.get("title") or project_info.get("name") or "科研项目"
+    )
+    domain = escape_latex(project_info.get("research_domain") or "人工智能")
+    # 双盲预印本风格：不暴露内部平台邮箱
     return (
-        "AI Scientist 系统 \\\\\n"
         f"{project_name} \\\\\n"
         f"{domain} \\\\\n"
-        "\\texttt{generated@aisci.local}"
+        "Anonymous authors \\\\\n"
+        "Paper under double-blind review"
     )
 
 
@@ -1282,8 +1295,16 @@ def _format_reference_gbt7714(item: Dict[str, Any]) -> str:
             segments.append(f". {place_pub}")
     else:
         source = journal
-        if not source and "arxiv" in url.lower():
-            eprint = str(item.get("external_id") or url.rstrip("/").split("/")[-1] or "").strip()
+        if not source and ("arxiv" in url.lower() or "arxiv" in doi.lower()):
+            eprint = str(item.get("external_id") or "").strip()
+            # 拒绝非标准假 arXiv id（如 W4330338093），优先从 DOI/URL 提取
+            if not re.fullmatch(r"\d{4}\.\d{4,5}(v\d+)?", eprint):
+                m = re.search(
+                    r"(?:arxiv[:\.]|doi\.org/(?:arxiv\.)?)(\d{4}\.\d{4,5})",
+                    f"{doi} {url}",
+                    re.I,
+                )
+                eprint = m.group(1) if m else ""
             source = f"arXiv:{eprint}" if eprint else "arXiv preprint"
         if source:
             segments.append(f". {source}" + (f", {year}" if year else ""))

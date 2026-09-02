@@ -5,23 +5,12 @@ import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/workspace/LoadingState';
 import { mapStageExecutionStatus } from '@/lib/pipelineProgressNodes';
 import { isExperimentStageKey, type SnapshotItem, type StageOutputSnapshot } from '@/lib/overviewSubmission';
-import type { EvidenceChain } from '@/types';
-
-export interface HypothesisChainPreview {
-  hypothesisId: string;
-  title: string;
-  supportCount: number;
-  counterCount: number;
-  supporting: string[];
-  opposing: string[];
-}
 
 interface StageOutputsDrawerProps {
   open: boolean;
   loading?: boolean;
   stages: StageOutputSnapshot[];
   focusKey?: string | null;
-  evidenceChains?: HypothesisChainPreview[];
   onClose: () => void;
   onDownloadStage?: (stage: StageOutputSnapshot) => void;
 }
@@ -127,7 +116,6 @@ export function StageOutputsDrawer({
   loading = false,
   stages,
   focusKey,
-  evidenceChains = [],
   onClose,
   onDownloadStage,
 }: StageOutputsDrawerProps) {
@@ -137,7 +125,7 @@ export function StageOutputsDrawer({
       open={open}
       wide
       title="各阶段智能体产出"
-      subtitle="问题理解到报告生成的结构化结果与证据链摘要；迭代实验请在概览页下载历史"
+      subtitle="问题理解到报告生成的结构化结果；完整证据链请到「候选假设」页查看；迭代实验请在概览页下载历史"
       onClose={onClose}
     >
       {loading && <LoadingState compact message="正在加载各阶段输出…" />}
@@ -146,25 +134,6 @@ export function StageOutputsDrawer({
       )}
       {!loading && visible.length > 0 && (
         <div className="space-y-4">
-          {evidenceChains.length > 0 && (
-            <section className="rounded-bp border border-bp-border bg-bp-panel/40 p-3 space-y-3">
-              <h3 className="text-sm font-semibold text-bp-text">证据链（候选假设）</h3>
-              {evidenceChains.map((chain) => (
-                <div key={chain.hypothesisId} className="text-sm">
-                  <p className="text-bp-text leading-relaxed">{chain.title}</p>
-                  <p className="text-xs text-bp-muted mt-1">
-                    支持 {chain.supportCount} · 反对 {chain.counterCount}
-                  </p>
-                  {chain.supporting.slice(0, 3).map((text) => (
-                    <p key={text} className="text-xs text-bp-muted mt-1">支持：{text}</p>
-                  ))}
-                  {chain.opposing.slice(0, 3).map((text) => (
-                    <p key={text} className="text-xs text-bp-muted mt-1">反对：{text}</p>
-                  ))}
-                </div>
-              ))}
-            </section>
-          )}
           {visible.map((stage) => (
             <StageBlock
               key={stage.key}
@@ -177,21 +146,4 @@ export function StageOutputsDrawer({
       )}
     </SideDrawer>
   );
-}
-
-export function chainToPreview(
-  hypothesisId: string,
-  title: string,
-  chain: EvidenceChain | null,
-): HypothesisChainPreview {
-  const supporting = chain?.supporting_evidence || [];
-  const opposing = chain?.counter_evidence || [];
-  return {
-    hypothesisId,
-    title,
-    supportCount: chain?.support_count ?? supporting.length,
-    counterCount: chain?.counter_count ?? opposing.length,
-    supporting: supporting.map((e) => e.claim || e.quote_or_summary || '').filter(Boolean).slice(0, 4),
-    opposing: opposing.map((e) => e.claim || e.quote_or_summary || '').filter(Boolean).slice(0, 4),
-  };
 }

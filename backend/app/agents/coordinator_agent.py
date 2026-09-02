@@ -619,7 +619,9 @@ class CoordinatorAgent:
             })
 
         # 3. 项目配置检查
-        config = project_info.get("config", {})
+        config = project_info.get("config") or {}
+        if not isinstance(config, dict):
+            config = {}
         if not config.get("llm_model"):
             warnings.append({
                 "type": "config",

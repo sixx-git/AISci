@@ -75,10 +75,16 @@ def create_tables():
     migrate_hypotheses_table()
 
 
+def _is_sqlite() -> bool:
+    return bool(settings.DATABASE_URL.startswith("sqlite"))
+
+
 def migrate_hypotheses_table():
     """SQLite 兼容迁移：为 hypotheses 表补加 review_scores_json。"""
     if engine is None:
         init_db()
+    if not _is_sqlite():
+        return
 
     import sqlite3
     conn = engine.raw_connection()
@@ -113,6 +119,8 @@ def migrate_projects_table():
     """SQLite 兼容迁移：为 projects 表补加缺失的列。"""
     if engine is None:
         init_db()
+    if not _is_sqlite():
+        return
 
     import sqlite3
     conn = engine.raw_connection()
@@ -153,6 +161,8 @@ def migrate_pipeline_runs_table():
     """SQLite 兼容迁移：为 pipeline_runs 表补加缺失的列。"""
     if engine is None:
         init_db()
+    if not _is_sqlite():
+        return
 
     import sqlite3
     conn = engine.raw_connection()
@@ -186,6 +196,8 @@ def migrate_pipeline_stage_executions_table():
     """SQLite 兼容迁移：为 pipeline_stage_executions 补加 extra_metadata。"""
     if engine is None:
         init_db()
+    if not _is_sqlite():
+        return
 
     import sqlite3
     conn = engine.raw_connection()

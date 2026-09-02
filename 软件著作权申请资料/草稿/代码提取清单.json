@@ -1,0 +1,4014 @@
+{
+  "software_name": "联邦智研AI科研自动化系统",
+  "version": "V1.0",
+  "project_root": "D:\\Workplace\\AISci",
+  "file_count": 399,
+  "material_line_count": 90171,
+  "source_line_count": 100429,
+  "selected_source_line_count": 89772,
+  "lines_per_page": 50,
+  "total_pages": 1804,
+  "target_pages": 60,
+  "available_candidate_line_count": 7398431,
+  "available_candidate_pages": 147969,
+  "supplement_status": "候选源码可达到前30页/后30页要求",
+  "mode": "front30_back30",
+  "selection_file": "D:\\Workplace\\AISci\\软件著作权申请资料\\草稿\\代码文件选择.json",
+  "outputs": [
+    "代码-前30页.md",
+    "代码-后30页.md"
+  ],
+  "files": [
+    {
+      "path": "frontend/src/App.tsx",
+      "source_line_count": 43,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 43,
+      "selected_line_count": 40,
+      "material_line_start": 1,
+      "material_line_end": 41
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "source_line_count": 10,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 10,
+      "selected_line_count": 9,
+      "material_line_start": 42,
+      "material_line_end": 51
+    },
+    {
+      "path": "frontend/src/components/HypothesesPage.tsx",
+      "source_line_count": 721,
+      "blank_line_count": 53,
+      "selected_line_start": 1,
+      "selected_line_end": 721,
+      "selected_line_count": 668,
+      "material_line_start": 52,
+      "material_line_end": 720
+    },
+    {
+      "path": "frontend/src/components/PromptManagementPage.tsx",
+      "source_line_count": 180,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 180,
+      "selected_line_count": 166,
+      "material_line_start": 721,
+      "material_line_end": 887
+    },
+    {
+      "path": "frontend/src/components/ClosedLoopTimeline.tsx",
+      "source_line_count": 272,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 272,
+      "selected_line_count": 260,
+      "material_line_start": 888,
+      "material_line_end": 1148
+    },
+    {
+      "path": "frontend/src/components/CoordinatorHints.tsx",
+      "source_line_count": 505,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 505,
+      "selected_line_count": 475,
+      "material_line_start": 1149,
+      "material_line_end": 1624
+    },
+    {
+      "path": "frontend/src/components/EvidenceChainDrawer.tsx",
+      "source_line_count": 515,
+      "blank_line_count": 33,
+      "selected_line_start": 1,
+      "selected_line_end": 515,
+      "selected_line_count": 482,
+      "material_line_start": 1625,
+      "material_line_end": 2107
+    },
+    {
+      "path": "frontend/src/components/EvidenceLevelBadge.tsx",
+      "source_line_count": 34,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 34,
+      "selected_line_count": 30,
+      "material_line_start": 2108,
+      "material_line_end": 2138
+    },
+    {
+      "path": "frontend/src/components/HitlGateModal.tsx",
+      "source_line_count": 98,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 98,
+      "selected_line_count": 91,
+      "material_line_start": 2139,
+      "material_line_end": 2230
+    },
+    {
+      "path": "frontend/src/components/HypothesisCard.tsx",
+      "source_line_count": 388,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 388,
+      "selected_line_count": 371,
+      "material_line_start": 2231,
+      "material_line_end": 2602
+    },
+    {
+      "path": "frontend/src/components/LoopConfigPanel.tsx",
+      "source_line_count": 264,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 264,
+      "selected_line_count": 245,
+      "material_line_start": 2603,
+      "material_line_end": 2848
+    },
+    {
+      "path": "frontend/src/components/Navbar.tsx",
+      "source_line_count": 60,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 60,
+      "selected_line_count": 54,
+      "material_line_start": 2849,
+      "material_line_end": 2903
+    },
+    {
+      "path": "frontend/src/components/PipelineProgress.tsx",
+      "source_line_count": 241,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 241,
+      "selected_line_count": 228,
+      "material_line_start": 2904,
+      "material_line_end": 3132
+    },
+    {
+      "path": "frontend/src/lib/hitlGateModalStorage.ts",
+      "source_line_count": 39,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 39,
+      "selected_line_count": 34,
+      "material_line_start": 3133,
+      "material_line_end": 3167
+    },
+    {
+      "path": "frontend/src/lib/pipelineProgressNodes.ts",
+      "source_line_count": 147,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 147,
+      "selected_line_count": 132,
+      "material_line_start": 3168,
+      "material_line_end": 3300
+    },
+    {
+      "path": "frontend/src/components/AgentDetailPanel.tsx",
+      "source_line_count": 587,
+      "blank_line_count": 51,
+      "selected_line_start": 1,
+      "selected_line_end": 587,
+      "selected_line_count": 536,
+      "material_line_start": 3301,
+      "material_line_end": 3837
+    },
+    {
+      "path": "frontend/src/components/AgentNode.tsx",
+      "source_line_count": 344,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 344,
+      "selected_line_count": 329,
+      "material_line_start": 3838,
+      "material_line_end": 4167
+    },
+    {
+      "path": "frontend/src/components/Button.tsx",
+      "source_line_count": 63,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 63,
+      "selected_line_count": 56,
+      "material_line_start": 4168,
+      "material_line_end": 4224
+    },
+    {
+      "path": "frontend/src/components/Card.tsx",
+      "source_line_count": 45,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 45,
+      "selected_line_count": 43,
+      "material_line_start": 4225,
+      "material_line_end": 4268
+    },
+    {
+      "path": "frontend/src/components/ConfirmDeleteDialog.tsx",
+      "source_line_count": 154,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 154,
+      "selected_line_count": 143,
+      "material_line_start": 4269,
+      "material_line_end": 4412
+    },
+    {
+      "path": "frontend/src/components/CounterfactualPreviewPanel.tsx",
+      "source_line_count": 112,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 112,
+      "selected_line_count": 104,
+      "material_line_start": 4413,
+      "material_line_end": 4517
+    },
+    {
+      "path": "frontend/src/components/CrossProjectLiteratureSummary.tsx",
+      "source_line_count": 169,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 169,
+      "selected_line_count": 158,
+      "material_line_start": 4518,
+      "material_line_end": 4676
+    },
+    {
+      "path": "frontend/src/components/DeveloperMenu.tsx",
+      "source_line_count": 107,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 107,
+      "selected_line_count": 98,
+      "material_line_start": 4677,
+      "material_line_end": 4775
+    },
+    {
+      "path": "frontend/src/components/DiscoveryLoopPanel.tsx",
+      "source_line_count": 192,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 192,
+      "selected_line_count": 177,
+      "material_line_start": 4776,
+      "material_line_end": 4953
+    },
+    {
+      "path": "frontend/src/components/EmptyState.tsx",
+      "source_line_count": 41,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 41,
+      "selected_line_count": 39,
+      "material_line_start": 4954,
+      "material_line_end": 4993
+    },
+    {
+      "path": "frontend/src/components/EnsembleReviewPanel.tsx",
+      "source_line_count": 111,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 111,
+      "selected_line_count": 101,
+      "material_line_start": 4994,
+      "material_line_end": 5095
+    },
+    {
+      "path": "frontend/src/components/EvidenceChainQualityCard.tsx",
+      "source_line_count": 121,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 121,
+      "selected_line_count": 113,
+      "material_line_start": 5096,
+      "material_line_end": 5209
+    },
+    {
+      "path": "frontend/src/components/EvidenceDiffPanel.tsx",
+      "source_line_count": 111,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 111,
+      "selected_line_count": 102,
+      "material_line_start": 5210,
+      "material_line_end": 5312
+    },
+    {
+      "path": "frontend/src/components/HitlGateContinueBar.tsx",
+      "source_line_count": 141,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 141,
+      "selected_line_count": 131,
+      "material_line_start": 5313,
+      "material_line_end": 5444
+    },
+    {
+      "path": "frontend/src/components/HypothesisEvolutionPanel.tsx",
+      "source_line_count": 121,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 121,
+      "selected_line_count": 115,
+      "material_line_start": 5445,
+      "material_line_end": 5560
+    },
+    {
+      "path": "frontend/src/components/HypothesisProvenanceTimeline.tsx",
+      "source_line_count": 167,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 167,
+      "selected_line_count": 154,
+      "material_line_start": 5561,
+      "material_line_end": 5715
+    },
+    {
+      "path": "frontend/src/components/HypothesisTreePanel.tsx",
+      "source_line_count": 105,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 105,
+      "selected_line_count": 97,
+      "material_line_start": 5716,
+      "material_line_end": 5813
+    },
+    {
+      "path": "frontend/src/components/IterationHistoryPanel.tsx",
+      "source_line_count": 255,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 255,
+      "selected_line_count": 229,
+      "material_line_start": 5814,
+      "material_line_end": 6043
+    },
+    {
+      "path": "frontend/src/components/IterationRoundPanel.tsx",
+      "source_line_count": 178,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 178,
+      "selected_line_count": 165,
+      "material_line_start": 6044,
+      "material_line_end": 6209
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/ExperimentDetail.tsx",
+      "source_line_count": 1100,
+      "blank_line_count": 42,
+      "selected_line_start": 1,
+      "selected_line_end": 1100,
+      "selected_line_count": 1058,
+      "material_line_start": 6210,
+      "material_line_end": 7268
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/ExperimentList.tsx",
+      "source_line_count": 158,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 158,
+      "selected_line_count": 152,
+      "material_line_start": 7269,
+      "material_line_end": 7421
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/IterationTimeline.tsx",
+      "source_line_count": 296,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 296,
+      "selected_line_count": 278,
+      "material_line_start": 7422,
+      "material_line_end": 7700
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/NewExperimentForm.tsx",
+      "source_line_count": 198,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 198,
+      "selected_line_count": 188,
+      "material_line_start": 7701,
+      "material_line_end": 7889
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/phaseLabels.ts",
+      "source_line_count": 23,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 23,
+      "selected_line_count": 21,
+      "material_line_start": 7890,
+      "material_line_end": 7911
+    },
+    {
+      "path": "frontend/src/components/LoopDependencyGraph.tsx",
+      "source_line_count": 149,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 149,
+      "selected_line_count": 137,
+      "material_line_start": 7912,
+      "material_line_end": 8049
+    },
+    {
+      "path": "frontend/src/components/overview/ContextEngineeringDrawer.tsx",
+      "source_line_count": 159,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 159,
+      "selected_line_count": 153,
+      "material_line_start": 8050,
+      "material_line_end": 8203
+    },
+    {
+      "path": "frontend/src/components/overview/OverviewSubmissionCard.tsx",
+      "source_line_count": 648,
+      "blank_line_count": 25,
+      "selected_line_start": 1,
+      "selected_line_end": 648,
+      "selected_line_count": 623,
+      "material_line_start": 8204,
+      "material_line_end": 8827
+    },
+    {
+      "path": "frontend/src/components/overview/RunFeedbackDrawer.tsx",
+      "source_line_count": 197,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 197,
+      "selected_line_count": 188,
+      "material_line_start": 8828,
+      "material_line_end": 9016
+    },
+    {
+      "path": "frontend/src/components/overview/SideDrawer.tsx",
+      "source_line_count": 61,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 61,
+      "selected_line_count": 57,
+      "material_line_start": 9017,
+      "material_line_end": 9074
+    },
+    {
+      "path": "frontend/src/components/overview/StageOutputsDrawer.tsx",
+      "source_line_count": 149,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 149,
+      "selected_line_count": 141,
+      "material_line_start": 9075,
+      "material_line_end": 9216
+    },
+    {
+      "path": "frontend/src/components/PageHeader.tsx",
+      "source_line_count": 30,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 30,
+      "selected_line_count": 28,
+      "material_line_start": 9217,
+      "material_line_end": 9245
+    },
+    {
+      "path": "frontend/src/components/predict/ImpactDetailView.tsx",
+      "source_line_count": 926,
+      "blank_line_count": 46,
+      "selected_line_start": 1,
+      "selected_line_end": 926,
+      "selected_line_count": 880,
+      "material_line_start": 9246,
+      "material_line_end": 10126
+    },
+    {
+      "path": "frontend/src/components/predict/JobStatusPanel.tsx",
+      "source_line_count": 115,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 115,
+      "selected_line_count": 105,
+      "material_line_start": 10127,
+      "material_line_end": 10232
+    },
+    {
+      "path": "frontend/src/components/predict/PredictForms.tsx",
+      "source_line_count": 520,
+      "blank_line_count": 38,
+      "selected_line_start": 1,
+      "selected_line_end": 520,
+      "selected_line_count": 482,
+      "material_line_start": 10233,
+      "material_line_end": 10715
+    },
+    {
+      "path": "frontend/src/components/predict/predictHelpers.ts",
+      "source_line_count": 89,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 89,
+      "selected_line_count": 80,
+      "material_line_start": 10716,
+      "material_line_end": 10796
+    },
+    {
+      "path": "frontend/src/components/predict/PredictSidebar.tsx",
+      "source_line_count": 115,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 115,
+      "selected_line_count": 111,
+      "material_line_start": 10797,
+      "material_line_end": 10908
+    },
+    {
+      "path": "frontend/src/components/ProactiveAdvicePanel.tsx",
+      "source_line_count": 299,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 299,
+      "selected_line_count": 278,
+      "material_line_start": 10909,
+      "material_line_end": 11187
+    },
+    {
+      "path": "frontend/src/components/ProConAdversarialPanel.tsx",
+      "source_line_count": 132,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 132,
+      "selected_line_count": 124,
+      "material_line_start": 11188,
+      "material_line_end": 11312
+    },
+    {
+      "path": "frontend/src/components/PromptConsole.tsx",
+      "source_line_count": 30,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 30,
+      "selected_line_count": 26,
+      "material_line_start": 11313,
+      "material_line_end": 11339
+    },
+    {
+      "path": "frontend/src/components/PromptPresetBar.tsx",
+      "source_line_count": 230,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 230,
+      "selected_line_count": 210,
+      "material_line_start": 11340,
+      "material_line_end": 11550
+    },
+    {
+      "path": "frontend/src/components/PromptStageEditor.tsx",
+      "source_line_count": 151,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 151,
+      "selected_line_count": 141,
+      "material_line_start": 11551,
+      "material_line_end": 11692
+    },
+    {
+      "path": "frontend/src/components/QualityCheckCard.tsx",
+      "source_line_count": 257,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 257,
+      "selected_line_count": 240,
+      "material_line_start": 11693,
+      "material_line_end": 11933
+    },
+    {
+      "path": "frontend/src/components/ReportChecklist.tsx",
+      "source_line_count": 267,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 267,
+      "selected_line_count": 255,
+      "material_line_start": 11934,
+      "material_line_end": 12189
+    },
+    {
+      "path": "frontend/src/components/ReportPdfPreview.tsx",
+      "source_line_count": 174,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 174,
+      "selected_line_count": 162,
+      "material_line_start": 12190,
+      "material_line_end": 12352
+    },
+    {
+      "path": "frontend/src/components/ReportQualityEvaluationCard.tsx",
+      "source_line_count": 482,
+      "blank_line_count": 29,
+      "selected_line_start": 1,
+      "selected_line_end": 482,
+      "selected_line_count": 453,
+      "material_line_start": 12353,
+      "material_line_end": 12806
+    },
+    {
+      "path": "frontend/src/components/RunHistoryPanel.tsx",
+      "source_line_count": 19,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 19,
+      "selected_line_count": 17,
+      "material_line_start": 12807,
+      "material_line_end": 12824
+    },
+    {
+      "path": "frontend/src/components/RunLogDetail.tsx",
+      "source_line_count": 142,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 142,
+      "selected_line_count": 127,
+      "material_line_start": 12825,
+      "material_line_end": 12952
+    },
+    {
+      "path": "frontend/src/components/RunLogTable.tsx",
+      "source_line_count": 271,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 271,
+      "selected_line_count": 245,
+      "material_line_start": 12953,
+      "material_line_end": 13198
+    },
+    {
+      "path": "frontend/src/components/ScoreBar.tsx",
+      "source_line_count": 81,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 81,
+      "selected_line_count": 75,
+      "material_line_start": 13199,
+      "material_line_end": 13274
+    },
+    {
+      "path": "frontend/src/components/settings/LlmConfigForm.tsx",
+      "source_line_count": 396,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 396,
+      "selected_line_count": 368,
+      "material_line_start": 13275,
+      "material_line_end": 13643
+    },
+    {
+      "path": "frontend/src/components/StageHumanLoopPanel.tsx",
+      "source_line_count": 745,
+      "blank_line_count": 43,
+      "selected_line_start": 1,
+      "selected_line_end": 745,
+      "selected_line_count": 702,
+      "material_line_start": 13644,
+      "material_line_end": 14346
+    },
+    {
+      "path": "frontend/src/components/StatCard.tsx",
+      "source_line_count": 30,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 30,
+      "selected_line_count": 27,
+      "material_line_start": 14347,
+      "material_line_end": 14374
+    },
+    {
+      "path": "frontend/src/components/StatusBadge.tsx",
+      "source_line_count": 54,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 54,
+      "selected_line_count": 49,
+      "material_line_start": 14375,
+      "material_line_end": 14424
+    },
+    {
+      "path": "frontend/src/components/ValidationDataGuidanceCard.tsx",
+      "source_line_count": 182,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 182,
+      "selected_line_count": 173,
+      "material_line_start": 14425,
+      "material_line_end": 14598
+    },
+    {
+      "path": "frontend/src/components/ValidationResultCard.tsx",
+      "source_line_count": 167,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 167,
+      "selected_line_count": 152,
+      "material_line_start": 14599,
+      "material_line_end": 14751
+    },
+    {
+      "path": "frontend/src/components/VerifiableChecksPanel.tsx",
+      "source_line_count": 44,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 44,
+      "selected_line_count": 41,
+      "material_line_start": 14752,
+      "material_line_end": 14793
+    },
+    {
+      "path": "frontend/src/components/VersionComparePanel.tsx",
+      "source_line_count": 122,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 122,
+      "selected_line_count": 110,
+      "material_line_start": 14794,
+      "material_line_end": 14904
+    },
+    {
+      "path": "frontend/src/components/WelcomeNoticeModal.tsx",
+      "source_line_count": 109,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 109,
+      "selected_line_count": 99,
+      "material_line_start": 14905,
+      "material_line_end": 15004
+    },
+    {
+      "path": "frontend/src/components/WorkflowActionBar.tsx",
+      "source_line_count": 85,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 85,
+      "selected_line_count": 81,
+      "material_line_start": 15005,
+      "material_line_end": 15086
+    },
+    {
+      "path": "frontend/src/components/WorkflowAdvancedLinks.tsx",
+      "source_line_count": 31,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 31,
+      "selected_line_count": 29,
+      "material_line_start": 15087,
+      "material_line_end": 15116
+    },
+    {
+      "path": "frontend/src/components/workspace/AdvancedTabNotice.tsx",
+      "source_line_count": 41,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 41,
+      "selected_line_count": 38,
+      "material_line_start": 15117,
+      "material_line_end": 15155
+    },
+    {
+      "path": "frontend/src/components/workspace/BackToProjectsLink.tsx",
+      "source_line_count": 16,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 16,
+      "selected_line_count": 14,
+      "material_line_start": 15156,
+      "material_line_end": 15170
+    },
+    {
+      "path": "frontend/src/components/workspace/CollapsiblePanel.tsx",
+      "source_line_count": 46,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 46,
+      "selected_line_count": 43,
+      "material_line_start": 15171,
+      "material_line_end": 15214
+    },
+    {
+      "path": "frontend/src/components/workspace/ErrorState.tsx",
+      "source_line_count": 39,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 39,
+      "selected_line_count": 37,
+      "material_line_start": 15215,
+      "material_line_end": 15252
+    },
+    {
+      "path": "frontend/src/components/workspace/LoadingState.tsx",
+      "source_line_count": 26,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 26,
+      "selected_line_count": 24,
+      "material_line_start": 15253,
+      "material_line_end": 15277
+    },
+    {
+      "path": "frontend/src/components/workspace/ProjectMetaBar.tsx",
+      "source_line_count": 50,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 50,
+      "selected_line_count": 47,
+      "material_line_start": 15278,
+      "material_line_end": 15325
+    },
+    {
+      "path": "frontend/src/components/workspace/ProjectTabNav.tsx",
+      "source_line_count": 31,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 31,
+      "selected_line_count": 29,
+      "material_line_start": 15326,
+      "material_line_end": 15355
+    },
+    {
+      "path": "frontend/src/components/workspace/ProjectWorkspaceHeader.tsx",
+      "source_line_count": 60,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 60,
+      "selected_line_count": 58,
+      "material_line_start": 15356,
+      "material_line_end": 15414
+    },
+    {
+      "path": "frontend/src/services/documentService.ts",
+      "source_line_count": 99,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 99,
+      "selected_line_count": 91,
+      "material_line_start": 15415,
+      "material_line_end": 15506
+    },
+    {
+      "path": "frontend/src/services/flSimulationService.ts",
+      "source_line_count": 75,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 75,
+      "selected_line_count": 67,
+      "material_line_start": 15507,
+      "material_line_end": 15574
+    },
+    {
+      "path": "frontend/src/services/humanLoopService.ts",
+      "source_line_count": 164,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 164,
+      "selected_line_count": 151,
+      "material_line_start": 15575,
+      "material_line_end": 15726
+    },
+    {
+      "path": "frontend/src/services/hypothesisService.ts",
+      "source_line_count": 119,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 119,
+      "selected_line_count": 107,
+      "material_line_start": 15727,
+      "material_line_end": 15834
+    },
+    {
+      "path": "frontend/src/services/index.ts",
+      "source_line_count": 6,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 6,
+      "selected_line_count": 6,
+      "material_line_start": 15835,
+      "material_line_end": 15841
+    },
+    {
+      "path": "frontend/src/services/iterativeExperimentService.ts",
+      "source_line_count": 384,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 384,
+      "selected_line_count": 356,
+      "material_line_start": 15842,
+      "material_line_end": 16198
+    },
+    {
+      "path": "frontend/src/services/literatureService.ts",
+      "source_line_count": 265,
+      "blank_line_count": 22,
+      "selected_line_start": 1,
+      "selected_line_end": 265,
+      "selected_line_count": 243,
+      "material_line_start": 16199,
+      "material_line_end": 16442
+    },
+    {
+      "path": "frontend/src/services/llmConfigService.ts",
+      "source_line_count": 44,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 44,
+      "selected_line_count": 39,
+      "material_line_start": 16443,
+      "material_line_end": 16482
+    },
+    {
+      "path": "frontend/src/services/pipelineService.ts",
+      "source_line_count": 174,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 174,
+      "selected_line_count": 160,
+      "material_line_start": 16483,
+      "material_line_end": 16643
+    },
+    {
+      "path": "frontend/src/services/predictService.ts",
+      "source_line_count": 112,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 112,
+      "selected_line_count": 97,
+      "material_line_start": 16644,
+      "material_line_end": 16741
+    },
+    {
+      "path": "frontend/src/services/projectService.ts",
+      "source_line_count": 108,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 108,
+      "selected_line_count": 96,
+      "material_line_start": 16742,
+      "material_line_end": 16838
+    },
+    {
+      "path": "frontend/src/services/promptService.ts",
+      "source_line_count": 100,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 100,
+      "selected_line_count": 89,
+      "material_line_start": 16839,
+      "material_line_end": 16928
+    },
+    {
+      "path": "frontend/src/services/reportService.ts",
+      "source_line_count": 322,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 322,
+      "selected_line_count": 296,
+      "material_line_start": 16929,
+      "material_line_end": 17225
+    },
+    {
+      "path": "frontend/src/services/scienceIterationService.ts",
+      "source_line_count": 38,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 38,
+      "selected_line_count": 34,
+      "material_line_start": 17226,
+      "material_line_end": 17260
+    },
+    {
+      "path": "frontend/src/services/skillService.ts",
+      "source_line_count": 63,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 63,
+      "selected_line_count": 55,
+      "material_line_start": 17261,
+      "material_line_end": 17316
+    },
+    {
+      "path": "frontend/src/services/vectorService.ts",
+      "source_line_count": 31,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 31,
+      "selected_line_count": 28,
+      "material_line_start": 17317,
+      "material_line_end": 17345
+    },
+    {
+      "path": "frontend/src/components/WorkflowPage.tsx",
+      "source_line_count": 2003,
+      "blank_line_count": 152,
+      "selected_line_start": 1,
+      "selected_line_end": 2003,
+      "selected_line_count": 1851,
+      "material_line_start": 17346,
+      "material_line_end": 19197
+    },
+    {
+      "path": "frontend/src/components/LiteratureLibrary.tsx",
+      "source_line_count": 1638,
+      "blank_line_count": 110,
+      "selected_line_start": 1,
+      "selected_line_end": 1638,
+      "selected_line_count": 1528,
+      "material_line_start": 19198,
+      "material_line_end": 20726
+    },
+    {
+      "path": "frontend/src/pages/CreateProject.tsx",
+      "source_line_count": 436,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 436,
+      "selected_line_count": 421,
+      "material_line_start": 20727,
+      "material_line_end": 21148
+    },
+    {
+      "path": "frontend/src/pages/Documents.tsx",
+      "source_line_count": 69,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 69,
+      "selected_line_count": 64,
+      "material_line_start": 21149,
+      "material_line_end": 21213
+    },
+    {
+      "path": "frontend/src/pages/Home.tsx",
+      "source_line_count": 640,
+      "blank_line_count": 44,
+      "selected_line_start": 1,
+      "selected_line_end": 640,
+      "selected_line_count": 596,
+      "material_line_start": 21214,
+      "material_line_end": 21810
+    },
+    {
+      "path": "frontend/src/pages/Predict.tsx",
+      "source_line_count": 284,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 284,
+      "selected_line_count": 267,
+      "material_line_start": 21811,
+      "material_line_end": 22078
+    },
+    {
+      "path": "frontend/src/pages/ProjectWorkspace.tsx",
+      "source_line_count": 862,
+      "blank_line_count": 65,
+      "selected_line_start": 1,
+      "selected_line_end": 862,
+      "selected_line_count": 797,
+      "material_line_start": 22079,
+      "material_line_end": 22876
+    },
+    {
+      "path": "frontend/src/pages/Reports.tsx",
+      "source_line_count": 494,
+      "blank_line_count": 37,
+      "selected_line_start": 1,
+      "selected_line_end": 494,
+      "selected_line_count": 457,
+      "material_line_start": 22877,
+      "material_line_end": 23334
+    },
+    {
+      "path": "frontend/src/pages/Settings.tsx",
+      "source_line_count": 75,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 75,
+      "selected_line_count": 70,
+      "material_line_start": 23335,
+      "material_line_end": 23405
+    },
+    {
+      "path": "frontend/src/pages/Skills.tsx",
+      "source_line_count": 361,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 361,
+      "selected_line_count": 340,
+      "material_line_start": 23406,
+      "material_line_end": 23746
+    },
+    {
+      "path": "frontend/src/components/iterative-experiment/IterativeExperimentPage.tsx",
+      "source_line_count": 348,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 348,
+      "selected_line_count": 335,
+      "material_line_start": 23747,
+      "material_line_end": 24082
+    },
+    {
+      "path": "frontend/src/components/LatexEditorPage.tsx",
+      "source_line_count": 311,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 311,
+      "selected_line_count": 292,
+      "material_line_start": 24083,
+      "material_line_end": 24375
+    },
+    {
+      "path": "frontend/src/components/ReportPage.tsx",
+      "source_line_count": 857,
+      "blank_line_count": 49,
+      "selected_line_start": 1,
+      "selected_line_end": 857,
+      "selected_line_count": 808,
+      "material_line_start": 24376,
+      "material_line_end": 25184
+    },
+    {
+      "path": "frontend/src/components/ResearchQuestionPage.tsx",
+      "source_line_count": 537,
+      "blank_line_count": 48,
+      "selected_line_start": 1,
+      "selected_line_end": 537,
+      "selected_line_count": 489,
+      "material_line_start": 25185,
+      "material_line_end": 25674
+    },
+    {
+      "path": "frontend/src/components/RunLogsPage.tsx",
+      "source_line_count": 230,
+      "blank_line_count": 25,
+      "selected_line_start": 1,
+      "selected_line_end": 230,
+      "selected_line_count": 205,
+      "material_line_start": 25675,
+      "material_line_end": 25880
+    },
+    {
+      "path": "frontend/src/lib/utils.ts",
+      "source_line_count": 53,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 53,
+      "selected_line_count": 41,
+      "material_line_start": 25881,
+      "material_line_end": 25922
+    },
+    {
+      "path": "frontend/src/hooks/useCounterfactualPreview.ts",
+      "source_line_count": 86,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 86,
+      "selected_line_count": 78,
+      "material_line_start": 25923,
+      "material_line_end": 26001
+    },
+    {
+      "path": "frontend/src/hooks/useHypothesisReviewExtras.ts",
+      "source_line_count": 90,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 90,
+      "selected_line_count": 82,
+      "material_line_start": 26002,
+      "material_line_end": 26084
+    },
+    {
+      "path": "frontend/src/hooks/useToast.ts",
+      "source_line_count": 37,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 37,
+      "selected_line_count": 27,
+      "material_line_start": 26085,
+      "material_line_end": 26112
+    },
+    {
+      "path": "frontend/src/lib/api.ts",
+      "source_line_count": 40,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 40,
+      "selected_line_count": 31,
+      "material_line_start": 26113,
+      "material_line_end": 26144
+    },
+    {
+      "path": "frontend/src/lib/datasetUrls.ts",
+      "source_line_count": 28,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 28,
+      "selected_line_count": 24,
+      "material_line_start": 26145,
+      "material_line_end": 26169
+    },
+    {
+      "path": "frontend/src/lib/downloadBlob.ts",
+      "source_line_count": 19,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 19,
+      "selected_line_count": 18,
+      "material_line_start": 26170,
+      "material_line_end": 26188
+    },
+    {
+      "path": "frontend/src/lib/errors.ts",
+      "source_line_count": 22,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 22,
+      "selected_line_count": 22,
+      "material_line_start": 26189,
+      "material_line_end": 26211
+    },
+    {
+      "path": "frontend/src/lib/format.ts",
+      "source_line_count": 7,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 7,
+      "selected_line_count": 7,
+      "material_line_start": 26212,
+      "material_line_end": 26219
+    },
+    {
+      "path": "frontend/src/lib/iterationExport.ts",
+      "source_line_count": 130,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 130,
+      "selected_line_count": 123,
+      "material_line_start": 26220,
+      "material_line_end": 26343
+    },
+    {
+      "path": "frontend/src/lib/json.ts",
+      "source_line_count": 9,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 9,
+      "selected_line_count": 9,
+      "material_line_start": 26344,
+      "material_line_end": 26353
+    },
+    {
+      "path": "frontend/src/lib/latexSectionNav.ts",
+      "source_line_count": 87,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 87,
+      "selected_line_count": 81,
+      "material_line_start": 26354,
+      "material_line_end": 26435
+    },
+    {
+      "path": "frontend/src/lib/literatureStats.ts",
+      "source_line_count": 71,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 71,
+      "selected_line_count": 62,
+      "material_line_start": 26436,
+      "material_line_end": 26498
+    },
+    {
+      "path": "frontend/src/lib/mappers/hypothesisMapper.ts",
+      "source_line_count": 82,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 82,
+      "selected_line_count": 77,
+      "material_line_start": 26499,
+      "material_line_end": 26576
+    },
+    {
+      "path": "frontend/src/lib/overviewSubmission.ts",
+      "source_line_count": 911,
+      "blank_line_count": 47,
+      "selected_line_start": 1,
+      "selected_line_end": 911,
+      "selected_line_count": 864,
+      "material_line_start": 26577,
+      "material_line_end": 27441
+    },
+    {
+      "path": "frontend/src/lib/pipelineReviewExtras.ts",
+      "source_line_count": 94,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 94,
+      "selected_line_count": 83,
+      "material_line_start": 27442,
+      "material_line_end": 27525
+    },
+    {
+      "path": "frontend/src/lib/projectNavigation.ts",
+      "source_line_count": 30,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 30,
+      "selected_line_count": 27,
+      "material_line_start": 27526,
+      "material_line_end": 27553
+    },
+    {
+      "path": "frontend/src/lib/projectStatus.ts",
+      "source_line_count": 114,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 114,
+      "selected_line_count": 108,
+      "material_line_start": 27554,
+      "material_line_end": 27662
+    },
+    {
+      "path": "frontend/src/lib/reportCompliance.ts",
+      "source_line_count": 73,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 73,
+      "selected_line_count": 63,
+      "material_line_start": 27663,
+      "material_line_end": 27726
+    },
+    {
+      "path": "frontend/src/lib/reportExport.ts",
+      "source_line_count": 24,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 24,
+      "selected_line_count": 22,
+      "material_line_start": 27727,
+      "material_line_end": 27749
+    },
+    {
+      "path": "frontend/src/lib/researchField.ts",
+      "source_line_count": 55,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 55,
+      "selected_line_count": 47,
+      "material_line_start": 27750,
+      "material_line_end": 27797
+    },
+    {
+      "path": "frontend/src/lib/runLogStatus.ts",
+      "source_line_count": 27,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 27,
+      "selected_line_count": 26,
+      "material_line_start": 27798,
+      "material_line_end": 27824
+    },
+    {
+      "path": "frontend/src/lib/storageKeys.ts",
+      "source_line_count": 27,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 27,
+      "selected_line_count": 21,
+      "material_line_start": 27825,
+      "material_line_end": 27846
+    },
+    {
+      "path": "frontend/src/lib/validationDataGuidance.ts",
+      "source_line_count": 61,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 61,
+      "selected_line_count": 57,
+      "material_line_start": 27847,
+      "material_line_end": 27904
+    },
+    {
+      "path": "frontend/src/config/designTokens.ts",
+      "source_line_count": 53,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 53,
+      "selected_line_count": 48,
+      "material_line_start": 27905,
+      "material_line_end": 27953
+    },
+    {
+      "path": "frontend/src/config/env.ts",
+      "source_line_count": 5,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 5,
+      "selected_line_count": 4,
+      "material_line_start": 27954,
+      "material_line_end": 27958
+    },
+    {
+      "path": "frontend/src/config/hitlGateReview.ts",
+      "source_line_count": 110,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 110,
+      "selected_line_count": 106,
+      "material_line_start": 27959,
+      "material_line_end": 28065
+    },
+    {
+      "path": "frontend/src/config/llmModels.ts",
+      "source_line_count": 84,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 84,
+      "selected_line_count": 78,
+      "material_line_start": 28066,
+      "material_line_end": 28144
+    },
+    {
+      "path": "frontend/src/config/pipelineStageNavigation.ts",
+      "source_line_count": 22,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 22,
+      "selected_line_count": 21,
+      "material_line_start": 28145,
+      "material_line_end": 28166
+    },
+    {
+      "path": "frontend/src/config/projectTabs.ts",
+      "source_line_count": 45,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 45,
+      "selected_line_count": 37,
+      "material_line_start": 28167,
+      "material_line_end": 28204
+    },
+    {
+      "path": "frontend/src/config/promptStages.ts",
+      "source_line_count": 57,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 57,
+      "selected_line_count": 55,
+      "material_line_start": 28205,
+      "material_line_end": 28260
+    },
+    {
+      "path": "frontend/src/config/reportSections.ts",
+      "source_line_count": 17,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 17,
+      "selected_line_count": 16,
+      "material_line_start": 28261,
+      "material_line_end": 28277
+    },
+    {
+      "path": "frontend/src/types/cytoscape-fcose.d.ts",
+      "source_line_count": 5,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 5,
+      "selected_line_count": 5,
+      "material_line_start": 28278,
+      "material_line_end": 28283
+    },
+    {
+      "path": "frontend/src/types/index.ts",
+      "source_line_count": 1252,
+      "blank_line_count": 104,
+      "selected_line_start": 1,
+      "selected_line_end": 1252,
+      "selected_line_count": 1148,
+      "material_line_start": 28284,
+      "material_line_end": 29432
+    },
+    {
+      "path": "frontend/src/types/iterativeExperiment.ts",
+      "source_line_count": 154,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 154,
+      "selected_line_count": 138,
+      "material_line_start": 29433,
+      "material_line_end": 29571
+    },
+    {
+      "path": "frontend/src/vite-env.d.ts",
+      "source_line_count": 9,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 9,
+      "selected_line_count": 7,
+      "material_line_start": 29572,
+      "material_line_end": 29579
+    },
+    {
+      "path": "backend/app/skills/__init__.py",
+      "source_line_count": 34,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 34,
+      "selected_line_count": 33,
+      "material_line_start": 29580,
+      "material_line_end": 29613
+    },
+    {
+      "path": "backend/app/skills/base.py",
+      "source_line_count": 82,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 82,
+      "selected_line_count": 66,
+      "material_line_start": 29614,
+      "material_line_end": 29680
+    },
+    {
+      "path": "backend/app/skills/chinese_writing/__init__.py",
+      "source_line_count": 18,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 18,
+      "selected_line_count": 17,
+      "material_line_start": 29681,
+      "material_line_end": 29698
+    },
+    {
+      "path": "backend/app/skills/chinese_writing/chinese_writing_skills.py",
+      "source_line_count": 148,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 148,
+      "selected_line_count": 127,
+      "material_line_start": 29699,
+      "material_line_end": 29826
+    },
+    {
+      "path": "backend/app/skills/counterfactual/__init__.py",
+      "source_line_count": 1,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 1,
+      "selected_line_count": 1,
+      "material_line_start": 29827,
+      "material_line_end": 29828
+    },
+    {
+      "path": "backend/app/skills/counterfactual/counterfactual_preview_skill.py",
+      "source_line_count": 287,
+      "blank_line_count": 32,
+      "selected_line_start": 1,
+      "selected_line_end": 287,
+      "selected_line_count": 255,
+      "material_line_start": 29829,
+      "material_line_end": 30084
+    },
+    {
+      "path": "backend/app/skills/data_finder/__init__.py",
+      "source_line_count": 1,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 1,
+      "selected_line_count": 1,
+      "material_line_start": 30085,
+      "material_line_end": 30086
+    },
+    {
+      "path": "backend/app/skills/data_finder/_utils.py",
+      "source_line_count": 100,
+      "blank_line_count": 22,
+      "selected_line_start": 1,
+      "selected_line_end": 100,
+      "selected_line_count": 78,
+      "material_line_start": 30087,
+      "material_line_end": 30165
+    },
+    {
+      "path": "backend/app/skills/data_finder/chem_structure_extraction_skill.py",
+      "source_line_count": 185,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 185,
+      "selected_line_count": 155,
+      "material_line_start": 30166,
+      "material_line_end": 30321
+    },
+    {
+      "path": "backend/app/skills/data_finder/data_finder_extension_skills.py",
+      "source_line_count": 26,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 26,
+      "selected_line_count": 18,
+      "material_line_start": 30322,
+      "material_line_end": 30340
+    },
+    {
+      "path": "backend/app/skills/data_finder/data_provenance_skill.py",
+      "source_line_count": 40,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 40,
+      "selected_line_count": 33,
+      "material_line_start": 30341,
+      "material_line_end": 30374
+    },
+    {
+      "path": "backend/app/skills/data_finder/data_requirement_understanding_skill.py",
+      "source_line_count": 173,
+      "blank_line_count": 27,
+      "selected_line_start": 1,
+      "selected_line_end": 173,
+      "selected_line_count": 146,
+      "material_line_start": 30375,
+      "material_line_end": 30521
+    },
+    {
+      "path": "backend/app/skills/data_finder/dataset_merge_skill.py",
+      "source_line_count": 231,
+      "blank_line_count": 33,
+      "selected_line_start": 1,
+      "selected_line_end": 231,
+      "selected_line_count": 198,
+      "material_line_start": 30522,
+      "material_line_end": 30720
+    },
+    {
+      "path": "backend/app/skills/data_finder/dataset_schema_alignment_skill.py",
+      "source_line_count": 74,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 74,
+      "selected_line_count": 62,
+      "material_line_start": 30721,
+      "material_line_end": 30783
+    },
+    {
+      "path": "backend/app/skills/data_finder/entity_resolution_skill.py",
+      "source_line_count": 136,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 136,
+      "selected_line_count": 121,
+      "material_line_start": 30784,
+      "material_line_end": 30905
+    },
+    {
+      "path": "backend/app/skills/data_finder/external_dataset_search_skill.py",
+      "source_line_count": 278,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 278,
+      "selected_line_count": 255,
+      "material_line_start": 30906,
+      "material_line_end": 31161
+    },
+    {
+      "path": "backend/app/skills/data_finder/figure_data_extraction_skill.py",
+      "source_line_count": 101,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 101,
+      "selected_line_count": 85,
+      "material_line_start": 31162,
+      "material_line_end": 31247
+    },
+    {
+      "path": "backend/app/skills/data_finder/figure_vlm_series_skill.py",
+      "source_line_count": 195,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 195,
+      "selected_line_count": 172,
+      "material_line_start": 31248,
+      "material_line_end": 31420
+    },
+    {
+      "path": "backend/app/skills/data_finder/file_format_registry.py",
+      "source_line_count": 120,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 120,
+      "selected_line_count": 97,
+      "material_line_start": 31421,
+      "material_line_end": 31518
+    },
+    {
+      "path": "backend/app/skills/data_finder/fits_extraction_skill.py",
+      "source_line_count": 363,
+      "blank_line_count": 45,
+      "selected_line_start": 1,
+      "selected_line_end": 363,
+      "selected_line_count": 318,
+      "material_line_start": 31519,
+      "material_line_end": 31837
+    },
+    {
+      "path": "backend/app/skills/data_finder/paper_data_link_extractor_skill.py",
+      "source_line_count": 57,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 57,
+      "selected_line_count": 47,
+      "material_line_start": 31838,
+      "material_line_end": 31885
+    },
+    {
+      "path": "backend/app/skills/data_finder/pdf_figure_crop_skill.py",
+      "source_line_count": 217,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 217,
+      "selected_line_count": 187,
+      "material_line_start": 31886,
+      "material_line_end": 32073
+    },
+    {
+      "path": "backend/app/skills/data_finder/pdf_table_extraction_skill.py",
+      "source_line_count": 156,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 156,
+      "selected_line_count": 135,
+      "material_line_start": 32074,
+      "material_line_end": 32209
+    },
+    {
+      "path": "backend/app/skills/data_finder/structured_file_extraction_skill.py",
+      "source_line_count": 67,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 67,
+      "selected_line_count": 54,
+      "material_line_start": 32210,
+      "material_line_end": 32264
+    },
+    {
+      "path": "backend/app/skills/data_finder/supplementary_extraction_skill.py",
+      "source_line_count": 96,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 96,
+      "selected_line_count": 86,
+      "material_line_start": 32265,
+      "material_line_end": 32351
+    },
+    {
+      "path": "backend/app/skills/data_finder/supplementary_fetch_skill.py",
+      "source_line_count": 60,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 60,
+      "selected_line_count": 50,
+      "material_line_start": 32352,
+      "material_line_end": 32402
+    },
+    {
+      "path": "backend/app/skills/data_finder/tabular_file_extraction_skill.py",
+      "source_line_count": 232,
+      "blank_line_count": 27,
+      "selected_line_start": 1,
+      "selected_line_end": 232,
+      "selected_line_count": 205,
+      "material_line_start": 32403,
+      "material_line_end": 32608
+    },
+    {
+      "path": "backend/app/skills/data_finder/text_facts_extraction_skill.py",
+      "source_line_count": 136,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 136,
+      "selected_line_count": 118,
+      "material_line_start": 32609,
+      "material_line_end": 32727
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/__init__.py",
+      "source_line_count": 21,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 21,
+      "selected_line_count": 20,
+      "material_line_start": 32728,
+      "material_line_end": 32748
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/_utils.py",
+      "source_line_count": 139,
+      "blank_line_count": 24,
+      "selected_line_start": 1,
+      "selected_line_end": 139,
+      "selected_line_count": 115,
+      "material_line_start": 32749,
+      "material_line_end": 32864
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/citation_integrity_check_skill.py",
+      "source_line_count": 63,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 63,
+      "selected_line_count": 53,
+      "material_line_start": 32865,
+      "material_line_end": 32918
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/counter_evidence_retrieval_skill.py",
+      "source_line_count": 64,
+      "blank_line_count": 10,
+      "selected_line_start": 1,
+      "selected_line_end": 64,
+      "selected_line_count": 54,
+      "material_line_start": 32919,
+      "material_line_end": 32973
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/evidence_chain_builder_skill.py",
+      "source_line_count": 51,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 51,
+      "selected_line_count": 42,
+      "material_line_start": 32974,
+      "material_line_end": 33016
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/evidence_extension_skills.py",
+      "source_line_count": 125,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 125,
+      "selected_line_count": 104,
+      "material_line_start": 33017,
+      "material_line_end": 33121
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/evidence_grounding_skill.py",
+      "source_line_count": 109,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 109,
+      "selected_line_count": 92,
+      "material_line_start": 33122,
+      "material_line_end": 33214
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/evidence_retrieval_skill.py",
+      "source_line_count": 78,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 78,
+      "selected_line_count": 67,
+      "material_line_start": 33215,
+      "material_line_end": 33282
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/evidence_stance_classification_skill.py",
+      "source_line_count": 43,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 43,
+      "selected_line_count": 34,
+      "material_line_start": 33283,
+      "material_line_end": 33317
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/hypothesis_revision_skill.py",
+      "source_line_count": 143,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 143,
+      "selected_line_count": 126,
+      "material_line_start": 33318,
+      "material_line_end": 33444
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/iterative_hypothesis_loop_skill.py",
+      "source_line_count": 166,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 166,
+      "selected_line_count": 148,
+      "material_line_start": 33445,
+      "material_line_end": 33593
+    },
+    {
+      "path": "backend/app/skills/evidence_reasoning/scientific_claim_extraction_skill.py",
+      "source_line_count": 39,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 39,
+      "selected_line_count": 31,
+      "material_line_start": 33594,
+      "material_line_end": 33625
+    },
+    {
+      "path": "backend/app/skills/experiment/__init__.py",
+      "source_line_count": 24,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 24,
+      "selected_line_count": 23,
+      "material_line_start": 33626,
+      "material_line_end": 33649
+    },
+    {
+      "path": "backend/app/skills/experiment/experiment_plan_critic_skill.py",
+      "source_line_count": 120,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 120,
+      "selected_line_count": 104,
+      "material_line_start": 33650,
+      "material_line_end": 33754
+    },
+    {
+      "path": "backend/app/skills/experiment/experiment_sanity_check_skill.py",
+      "source_line_count": 161,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 161,
+      "selected_line_count": 138,
+      "material_line_start": 33755,
+      "material_line_end": 33893
+    },
+    {
+      "path": "backend/app/skills/experiment/lab_workflow_skills.py",
+      "source_line_count": 153,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 153,
+      "selected_line_count": 132,
+      "material_line_start": 33894,
+      "material_line_end": 34026
+    },
+    {
+      "path": "backend/app/skills/experiment/result_verification_skill.py",
+      "source_line_count": 171,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 171,
+      "selected_line_count": 150,
+      "material_line_start": 34027,
+      "material_line_end": 34177
+    },
+    {
+      "path": "backend/app/skills/literature/__init__.py",
+      "source_line_count": 16,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 16,
+      "selected_line_count": 15,
+      "material_line_start": 34178,
+      "material_line_end": 34193
+    },
+    {
+      "path": "backend/app/skills/literature/arxiv_search_skill.py",
+      "source_line_count": 87,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 87,
+      "selected_line_count": 71,
+      "material_line_start": 34194,
+      "material_line_end": 34265
+    },
+    {
+      "path": "backend/app/skills/literature/citation_grounding_skill.py",
+      "source_line_count": 345,
+      "blank_line_count": 49,
+      "selected_line_start": 1,
+      "selected_line_end": 345,
+      "selected_line_count": 296,
+      "material_line_start": 34266,
+      "material_line_end": 34562
+    },
+    {
+      "path": "backend/app/skills/literature/literature_chunk_rerank_skill.py",
+      "source_line_count": 328,
+      "blank_line_count": 39,
+      "selected_line_start": 1,
+      "selected_line_end": 328,
+      "selected_line_count": 289,
+      "material_line_start": 34563,
+      "material_line_end": 34852
+    },
+    {
+      "path": "backend/app/skills/literature/paper_full_text_rag_skill.py",
+      "source_line_count": 124,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 124,
+      "selected_line_count": 106,
+      "material_line_start": 34853,
+      "material_line_end": 34959
+    },
+    {
+      "path": "backend/app/skills/literature/pdf_evidence_extraction_skill.py",
+      "source_line_count": 101,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 101,
+      "selected_line_count": 84,
+      "material_line_start": 34960,
+      "material_line_end": 35044
+    },
+    {
+      "path": "backend/app/skills/literature/search_papers_skill.py",
+      "source_line_count": 429,
+      "blank_line_count": 36,
+      "selected_line_start": 1,
+      "selected_line_end": 429,
+      "selected_line_count": 393,
+      "material_line_start": 35045,
+      "material_line_end": 35438
+    },
+    {
+      "path": "backend/app/skills/mentor_review_skill.py",
+      "source_line_count": 106,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 106,
+      "selected_line_count": 91,
+      "material_line_start": 35439,
+      "material_line_end": 35530
+    },
+    {
+      "path": "backend/app/skills/modeling/__init__.py",
+      "source_line_count": 27,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 27,
+      "selected_line_count": 26,
+      "material_line_start": 35531,
+      "material_line_end": 35557
+    },
+    {
+      "path": "backend/app/skills/modeling/_utils.py",
+      "source_line_count": 114,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 114,
+      "selected_line_count": 88,
+      "material_line_start": 35558,
+      "material_line_end": 35646
+    },
+    {
+      "path": "backend/app/skills/modeling/baseline_model_training_skill.py",
+      "source_line_count": 111,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 111,
+      "selected_line_count": 91,
+      "material_line_start": 35647,
+      "material_line_end": 35738
+    },
+    {
+      "path": "backend/app/skills/modeling/data_preprocessing_skill.py",
+      "source_line_count": 117,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 117,
+      "selected_line_count": 102,
+      "material_line_start": 35739,
+      "material_line_end": 35841
+    },
+    {
+      "path": "backend/app/skills/modeling/dataset_profiling_skill.py",
+      "source_line_count": 97,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 97,
+      "selected_line_count": 84,
+      "material_line_start": 35842,
+      "material_line_end": 35926
+    },
+    {
+      "path": "backend/app/skills/modeling/model_evaluation_skill.py",
+      "source_line_count": 230,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 230,
+      "selected_line_count": 202,
+      "material_line_start": 35927,
+      "material_line_end": 36129
+    },
+    {
+      "path": "backend/app/skills/modeling/modeling_extension_skills.py",
+      "source_line_count": 280,
+      "blank_line_count": 39,
+      "selected_line_start": 1,
+      "selected_line_end": 280,
+      "selected_line_count": 241,
+      "material_line_start": 36130,
+      "material_line_end": 36371
+    },
+    {
+      "path": "backend/app/skills/modeling/self_correction_skill.py",
+      "source_line_count": 134,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 134,
+      "selected_line_count": 118,
+      "material_line_start": 36372,
+      "material_line_end": 36490
+    },
+    {
+      "path": "backend/app/skills/modeling/task_type_detection_skill.py",
+      "source_line_count": 73,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 73,
+      "selected_line_count": 62,
+      "material_line_start": 36491,
+      "material_line_end": 36553
+    },
+    {
+      "path": "backend/app/skills/multimodal/__init__.py",
+      "source_line_count": 9,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 9,
+      "selected_line_count": 8,
+      "material_line_start": 36554,
+      "material_line_end": 36562
+    },
+    {
+      "path": "backend/app/skills/multimodal/audio_transcription_skill.py",
+      "source_line_count": 89,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 89,
+      "selected_line_count": 76,
+      "material_line_start": 36563,
+      "material_line_end": 36639
+    },
+    {
+      "path": "backend/app/skills/multimodal/multimodal_evidence_builder_skill.py",
+      "source_line_count": 250,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 250,
+      "selected_line_count": 230,
+      "material_line_start": 36640,
+      "material_line_end": 36870
+    },
+    {
+      "path": "backend/app/skills/multimodal/qwen_vl_image_understanding_skill.py",
+      "source_line_count": 138,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 138,
+      "selected_line_count": 117,
+      "material_line_start": 36871,
+      "material_line_end": 36988
+    },
+    {
+      "path": "backend/app/skills/reasoning/__init__.py",
+      "source_line_count": 12,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 12,
+      "selected_line_count": 11,
+      "material_line_start": 36989,
+      "material_line_end": 37000
+    },
+    {
+      "path": "backend/app/skills/reasoning/hypothesis_evolution_skill.py",
+      "source_line_count": 291,
+      "blank_line_count": 36,
+      "selected_line_start": 1,
+      "selected_line_end": 291,
+      "selected_line_count": 255,
+      "material_line_start": 37001,
+      "material_line_end": 37256
+    },
+    {
+      "path": "backend/app/skills/reasoning/hypothesis_novelty_review_skill.py",
+      "source_line_count": 132,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 132,
+      "selected_line_count": 111,
+      "material_line_start": 37257,
+      "material_line_end": 37368
+    },
+    {
+      "path": "backend/app/skills/reasoning/hypothesis_tournament_skill.py",
+      "source_line_count": 179,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 179,
+      "selected_line_count": 160,
+      "material_line_start": 37369,
+      "material_line_end": 37529
+    },
+    {
+      "path": "backend/app/skills/reasoning/ideation_novelty_skill.py",
+      "source_line_count": 199,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 199,
+      "selected_line_count": 176,
+      "material_line_start": 37530,
+      "material_line_end": 37706
+    },
+    {
+      "path": "backend/app/skills/reasoning/question_alignment_skill.py",
+      "source_line_count": 386,
+      "blank_line_count": 45,
+      "selected_line_start": 1,
+      "selected_line_end": 386,
+      "selected_line_count": 341,
+      "material_line_start": 37707,
+      "material_line_end": 38048
+    },
+    {
+      "path": "backend/app/skills/report/__init__.py",
+      "source_line_count": 16,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 16,
+      "selected_line_count": 15,
+      "material_line_start": 38049,
+      "material_line_end": 38064
+    },
+    {
+      "path": "backend/app/skills/report/iteration_narrative_skill.py",
+      "source_line_count": 278,
+      "blank_line_count": 27,
+      "selected_line_start": 1,
+      "selected_line_end": 278,
+      "selected_line_count": 251,
+      "material_line_start": 38065,
+      "material_line_end": 38316
+    },
+    {
+      "path": "backend/app/skills/report/plot_vlm_critique_skill.py",
+      "source_line_count": 178,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 178,
+      "selected_line_count": 157,
+      "material_line_start": 38317,
+      "material_line_end": 38474
+    },
+    {
+      "path": "backend/app/skills/report/proposal_logic_review_skill.py",
+      "source_line_count": 223,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 223,
+      "selected_line_count": 193,
+      "material_line_start": 38475,
+      "material_line_end": 38668
+    },
+    {
+      "path": "backend/app/skills/report/report_chart_generation_skill.py",
+      "source_line_count": 484,
+      "blank_line_count": 45,
+      "selected_line_start": 1,
+      "selected_line_end": 484,
+      "selected_line_count": 439,
+      "material_line_start": 38669,
+      "material_line_end": 39108
+    },
+    {
+      "path": "backend/app/skills/report/report_quality_check_skill.py",
+      "source_line_count": 518,
+      "blank_line_count": 58,
+      "selected_line_start": 1,
+      "selected_line_end": 518,
+      "selected_line_count": 460,
+      "material_line_start": 39109,
+      "material_line_end": 39569
+    },
+    {
+      "path": "backend/app/skills/report/report_reviewer_skill.py",
+      "source_line_count": 136,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 136,
+      "selected_line_count": 117,
+      "material_line_start": 39570,
+      "material_line_end": 39687
+    },
+    {
+      "path": "backend/app/skills/report/scientific_plot_skill.py",
+      "source_line_count": 481,
+      "blank_line_count": 51,
+      "selected_line_start": 1,
+      "selected_line_end": 481,
+      "selected_line_count": 430,
+      "material_line_start": 39688,
+      "material_line_end": 40118
+    },
+    {
+      "path": "backend/app/agents/__init__.py",
+      "source_line_count": 86,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 86,
+      "selected_line_count": 85,
+      "material_line_start": 40119,
+      "material_line_end": 40204
+    },
+    {
+      "path": "backend/app/api/__init__.py",
+      "source_line_count": 7,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 7,
+      "selected_line_count": 7,
+      "material_line_start": 40205,
+      "material_line_end": 40212
+    },
+    {
+      "path": "backend/app/integrations/shaxiang/__init__.py",
+      "source_line_count": 1,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 1,
+      "selected_line_count": 1,
+      "material_line_start": 40213,
+      "material_line_end": 40214
+    },
+    {
+      "path": "backend/app/main.py",
+      "source_line_count": 275,
+      "blank_line_count": 39,
+      "selected_line_start": 1,
+      "selected_line_end": 275,
+      "selected_line_count": 236,
+      "material_line_start": 40215,
+      "material_line_end": 40451
+    },
+    {
+      "path": "backend/app/models/__init__.py",
+      "source_line_count": 72,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 72,
+      "selected_line_count": 71,
+      "material_line_start": 40452,
+      "material_line_end": 40523
+    },
+    {
+      "path": "backend/app/schemas/__init__.py",
+      "source_line_count": 25,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 25,
+      "selected_line_count": 25,
+      "material_line_start": 40524,
+      "material_line_end": 40549
+    },
+    {
+      "path": "backend/app/services/__init__.py",
+      "source_line_count": 71,
+      "blank_line_count": 4,
+      "selected_line_start": 1,
+      "selected_line_end": 71,
+      "selected_line_count": 67,
+      "material_line_start": 40550,
+      "material_line_end": 40617
+    },
+    {
+      "path": "backend/app/services/_utils/__init__.py",
+      "source_line_count": 1,
+      "blank_line_count": 0,
+      "selected_line_start": 1,
+      "selected_line_end": 1,
+      "selected_line_count": 1,
+      "material_line_start": 40618,
+      "material_line_end": 40619
+    },
+    {
+      "path": "backend/app/services/fl_simulation/__init__.py",
+      "source_line_count": 10,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 10,
+      "selected_line_count": 9,
+      "material_line_start": 40620,
+      "material_line_end": 40629
+    },
+    {
+      "path": "backend/app/services/literature_sources/__init__.py",
+      "source_line_count": 6,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 6,
+      "selected_line_count": 5,
+      "material_line_start": 40630,
+      "material_line_end": 40635
+    },
+    {
+      "path": "backend/app/services/loops/__init__.py",
+      "source_line_count": 14,
+      "blank_line_count": 1,
+      "selected_line_start": 1,
+      "selected_line_end": 14,
+      "selected_line_count": 13,
+      "material_line_start": 40636,
+      "material_line_end": 40649
+    },
+    {
+      "path": "backend/app/agents/coordinator_agent.py",
+      "source_line_count": 763,
+      "blank_line_count": 77,
+      "selected_line_start": 1,
+      "selected_line_end": 763,
+      "selected_line_count": 686,
+      "material_line_start": 40650,
+      "material_line_end": 41336
+    },
+    {
+      "path": "backend/app/agents/hypothesis_generation_agent.py",
+      "source_line_count": 658,
+      "blank_line_count": 91,
+      "selected_line_start": 1,
+      "selected_line_end": 658,
+      "selected_line_count": 567,
+      "material_line_start": 41337,
+      "material_line_end": 41904
+    },
+    {
+      "path": "backend/app/agents/hypothesis_review_agent.py",
+      "source_line_count": 546,
+      "blank_line_count": 75,
+      "selected_line_start": 1,
+      "selected_line_end": 546,
+      "selected_line_count": 471,
+      "material_line_start": 41905,
+      "material_line_end": 42376
+    },
+    {
+      "path": "backend/app/agents/knowledge_gap_agent.py",
+      "source_line_count": 313,
+      "blank_line_count": 55,
+      "selected_line_start": 1,
+      "selected_line_end": 313,
+      "selected_line_count": 258,
+      "material_line_start": 42377,
+      "material_line_end": 42635
+    },
+    {
+      "path": "backend/app/agents/literature_mining_agent.py",
+      "source_line_count": 1520,
+      "blank_line_count": 151,
+      "selected_line_start": 1,
+      "selected_line_end": 1520,
+      "selected_line_count": 1369,
+      "material_line_start": 42636,
+      "material_line_end": 44005
+    },
+    {
+      "path": "backend/app/agents/problem_understanding_agent.py",
+      "source_line_count": 255,
+      "blank_line_count": 47,
+      "selected_line_start": 1,
+      "selected_line_end": 255,
+      "selected_line_count": 208,
+      "material_line_start": 44006,
+      "material_line_end": 44214
+    },
+    {
+      "path": "backend/app/agents/report_generation_agent.py",
+      "source_line_count": 2676,
+      "blank_line_count": 220,
+      "selected_line_start": 1,
+      "selected_line_end": 2676,
+      "selected_line_count": 2456,
+      "material_line_start": 44215,
+      "material_line_end": 46671
+    },
+    {
+      "path": "backend/app/api/agents.py",
+      "source_line_count": 550,
+      "blank_line_count": 74,
+      "selected_line_start": 1,
+      "selected_line_end": 550,
+      "selected_line_count": 476,
+      "material_line_start": 46672,
+      "material_line_end": 47148
+    },
+    {
+      "path": "backend/app/api/chat.py",
+      "source_line_count": 20,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 20,
+      "selected_line_count": 17,
+      "material_line_start": 47149,
+      "material_line_end": 47166
+    },
+    {
+      "path": "backend/app/api/diagnose.py",
+      "source_line_count": 58,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 58,
+      "selected_line_count": 49,
+      "material_line_start": 47167,
+      "material_line_end": 47216
+    },
+    {
+      "path": "backend/app/api/documents.py",
+      "source_line_count": 183,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 183,
+      "selected_line_count": 153,
+      "material_line_start": 47217,
+      "material_line_end": 47370
+    },
+    {
+      "path": "backend/app/api/feedback.py",
+      "source_line_count": 104,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 104,
+      "selected_line_count": 89,
+      "material_line_start": 47371,
+      "material_line_end": 47460
+    },
+    {
+      "path": "backend/app/api/fl_simulation.py",
+      "source_line_count": 170,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 170,
+      "selected_line_count": 142,
+      "material_line_start": 47461,
+      "material_line_end": 47603
+    },
+    {
+      "path": "backend/app/api/human_loop.py",
+      "source_line_count": 313,
+      "blank_line_count": 33,
+      "selected_line_start": 1,
+      "selected_line_end": 313,
+      "selected_line_count": 280,
+      "material_line_start": 47604,
+      "material_line_end": 47884
+    },
+    {
+      "path": "backend/app/api/iterative_experiments.py",
+      "source_line_count": 455,
+      "blank_line_count": 80,
+      "selected_line_start": 1,
+      "selected_line_end": 455,
+      "selected_line_count": 375,
+      "material_line_start": 47885,
+      "material_line_end": 48260
+    },
+    {
+      "path": "backend/app/api/literature.py",
+      "source_line_count": 423,
+      "blank_line_count": 54,
+      "selected_line_start": 1,
+      "selected_line_end": 423,
+      "selected_line_count": 369,
+      "material_line_start": 48261,
+      "material_line_end": 48630
+    },
+    {
+      "path": "backend/app/api/llm_config.py",
+      "source_line_count": 147,
+      "blank_line_count": 24,
+      "selected_line_start": 1,
+      "selected_line_end": 147,
+      "selected_line_count": 123,
+      "material_line_start": 48631,
+      "material_line_end": 48754
+    },
+    {
+      "path": "backend/app/api/pingfenbiao_proxy.py",
+      "source_line_count": 115,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 115,
+      "selected_line_count": 99,
+      "material_line_start": 48755,
+      "material_line_end": 48854
+    },
+    {
+      "path": "backend/app/api/pipeline.py",
+      "source_line_count": 971,
+      "blank_line_count": 131,
+      "selected_line_start": 1,
+      "selected_line_end": 971,
+      "selected_line_count": 840,
+      "material_line_start": 48855,
+      "material_line_end": 49695
+    },
+    {
+      "path": "backend/app/api/projects.py",
+      "source_line_count": 342,
+      "blank_line_count": 57,
+      "selected_line_start": 1,
+      "selected_line_end": 342,
+      "selected_line_count": 285,
+      "material_line_start": 49696,
+      "material_line_end": 49981
+    },
+    {
+      "path": "backend/app/api/prompts.py",
+      "source_line_count": 130,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 130,
+      "selected_line_count": 114,
+      "material_line_start": 49982,
+      "material_line_end": 50096
+    },
+    {
+      "path": "backend/app/api/reports.py",
+      "source_line_count": 554,
+      "blank_line_count": 70,
+      "selected_line_start": 1,
+      "selected_line_end": 554,
+      "selected_line_count": 484,
+      "material_line_start": 50097,
+      "material_line_end": 50581
+    },
+    {
+      "path": "backend/app/api/research.py",
+      "source_line_count": 20,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 20,
+      "selected_line_count": 17,
+      "material_line_start": 50582,
+      "material_line_end": 50599
+    },
+    {
+      "path": "backend/app/api/science_iteration.py",
+      "source_line_count": 117,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 117,
+      "selected_line_count": 99,
+      "material_line_start": 50600,
+      "material_line_end": 50699
+    },
+    {
+      "path": "backend/app/api/skills.py",
+      "source_line_count": 62,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 62,
+      "selected_line_count": 49,
+      "material_line_start": 50700,
+      "material_line_end": 50749
+    },
+    {
+      "path": "backend/app/api/v1.py",
+      "source_line_count": 44,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 44,
+      "selected_line_count": 42,
+      "material_line_start": 50750,
+      "material_line_end": 50792
+    },
+    {
+      "path": "backend/app/api/vector_search.py",
+      "source_line_count": 195,
+      "blank_line_count": 38,
+      "selected_line_start": 1,
+      "selected_line_end": 195,
+      "selected_line_count": 157,
+      "material_line_start": 50793,
+      "material_line_end": 50950
+    },
+    {
+      "path": "backend/app/core/async_utils.py",
+      "source_line_count": 31,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 31,
+      "selected_line_count": 23,
+      "material_line_start": 50951,
+      "material_line_end": 50974
+    },
+    {
+      "path": "backend/app/core/closed_loop_decisions.py",
+      "source_line_count": 125,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 125,
+      "selected_line_count": 110,
+      "material_line_start": 50975,
+      "material_line_end": 51085
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "source_line_count": 191,
+      "blank_line_count": 31,
+      "selected_line_start": 1,
+      "selected_line_end": 191,
+      "selected_line_count": 160,
+      "material_line_start": 51086,
+      "material_line_end": 51246
+    },
+    {
+      "path": "backend/app/core/data_citation.py",
+      "source_line_count": 40,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 40,
+      "selected_line_count": 35,
+      "material_line_start": 51247,
+      "material_line_end": 51282
+    },
+    {
+      "path": "backend/app/core/data_cleaning.py",
+      "source_line_count": 120,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 120,
+      "selected_line_count": 104,
+      "material_line_start": 51283,
+      "material_line_end": 51387
+    },
+    {
+      "path": "backend/app/core/data_scenario_presets.py",
+      "source_line_count": 81,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 81,
+      "selected_line_count": 65,
+      "material_line_start": 51388,
+      "material_line_end": 51453
+    },
+    {
+      "path": "backend/app/core/database.py",
+      "source_line_count": 220,
+      "blank_line_count": 35,
+      "selected_line_start": 1,
+      "selected_line_end": 220,
+      "selected_line_count": 185,
+      "material_line_start": 51454,
+      "material_line_end": 51639
+    },
+    {
+      "path": "backend/app/core/dataset_scale.py",
+      "source_line_count": 56,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 56,
+      "selected_line_count": 42,
+      "material_line_start": 51640,
+      "material_line_end": 51682
+    },
+    {
+      "path": "backend/app/core/dataset_urls.py",
+      "source_line_count": 77,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 77,
+      "selected_line_count": 60,
+      "material_line_start": 51683,
+      "material_line_end": 51743
+    },
+    {
+      "path": "backend/app/core/domain_data_catalog.py",
+      "source_line_count": 260,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 260,
+      "selected_line_count": 230,
+      "material_line_start": 51744,
+      "material_line_end": 51974
+    },
+    {
+      "path": "backend/app/core/execution_metadata.py",
+      "source_line_count": 113,
+      "blank_line_count": 15,
+      "selected_line_start": 1,
+      "selected_line_end": 113,
+      "selected_line_count": 98,
+      "material_line_start": 51975,
+      "material_line_end": 52073
+    },
+    {
+      "path": "backend/app/core/figure_digitization.py",
+      "source_line_count": 158,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 158,
+      "selected_line_count": 140,
+      "material_line_start": 52074,
+      "material_line_end": 52214
+    },
+    {
+      "path": "backend/app/core/figure_extraction.py",
+      "source_line_count": 74,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 74,
+      "selected_line_count": 67,
+      "material_line_start": 52215,
+      "material_line_end": 52282
+    },
+    {
+      "path": "backend/app/core/hypothesis_provenance.py",
+      "source_line_count": 120,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 120,
+      "selected_line_count": 109,
+      "material_line_start": 52283,
+      "material_line_end": 52392
+    },
+    {
+      "path": "backend/app/core/iteration_control.py",
+      "source_line_count": 88,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 88,
+      "selected_line_count": 74,
+      "material_line_start": 52393,
+      "material_line_end": 52467
+    },
+    {
+      "path": "backend/app/core/iterative_science.py",
+      "source_line_count": 1059,
+      "blank_line_count": 113,
+      "selected_line_start": 1,
+      "selected_line_end": 1059,
+      "selected_line_count": 946,
+      "material_line_start": 52468,
+      "material_line_end": 53414
+    },
+    {
+      "path": "backend/app/core/json_fields.py",
+      "source_line_count": 37,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 37,
+      "selected_line_count": 32,
+      "material_line_start": 53415,
+      "material_line_end": 53447
+    },
+    {
+      "path": "backend/app/core/llm_runtime.py",
+      "source_line_count": 203,
+      "blank_line_count": 34,
+      "selected_line_start": 1,
+      "selected_line_end": 203,
+      "selected_line_count": 169,
+      "material_line_start": 53448,
+      "material_line_end": 53617
+    },
+    {
+      "path": "backend/app/core/pipeline_exceptions.py",
+      "source_line_count": 33,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 33,
+      "selected_line_count": 21,
+      "material_line_start": 53618,
+      "material_line_end": 53639
+    },
+    {
+      "path": "backend/app/core/pipeline_modes.py",
+      "source_line_count": 235,
+      "blank_line_count": 36,
+      "selected_line_start": 1,
+      "selected_line_end": 235,
+      "selected_line_count": 199,
+      "material_line_start": 53640,
+      "material_line_end": 53839
+    },
+    {
+      "path": "backend/app/core/plan_executability.py",
+      "source_line_count": 165,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 165,
+      "selected_line_count": 137,
+      "material_line_start": 53840,
+      "material_line_end": 53977
+    },
+    {
+      "path": "backend/app/core/project_modes.py",
+      "source_line_count": 128,
+      "blank_line_count": 23,
+      "selected_line_start": 1,
+      "selected_line_end": 128,
+      "selected_line_count": 105,
+      "material_line_start": 53978,
+      "material_line_end": 54083
+    },
+    {
+      "path": "backend/app/core/quality_scoring.py",
+      "source_line_count": 243,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 243,
+      "selected_line_count": 223,
+      "material_line_start": 54084,
+      "material_line_end": 54307
+    },
+    {
+      "path": "backend/app/core/report_fields.py",
+      "source_line_count": 51,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 51,
+      "selected_line_count": 40,
+      "material_line_start": 54308,
+      "material_line_end": 54348
+    },
+    {
+      "path": "backend/app/core/research_field.py",
+      "source_line_count": 294,
+      "blank_line_count": 43,
+      "selected_line_start": 1,
+      "selected_line_end": 294,
+      "selected_line_count": 251,
+      "material_line_start": 54349,
+      "material_line_end": 54600
+    },
+    {
+      "path": "backend/app/core/response.py",
+      "source_line_count": 35,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 35,
+      "selected_line_count": 27,
+      "material_line_start": 54601,
+      "material_line_end": 54628
+    },
+    {
+      "path": "backend/app/integrations/shaxiang/bridge.py",
+      "source_line_count": 997,
+      "blank_line_count": 140,
+      "selected_line_start": 1,
+      "selected_line_end": 997,
+      "selected_line_count": 857,
+      "material_line_start": 54629,
+      "material_line_end": 55486
+    },
+    {
+      "path": "backend/app/models/chat.py",
+      "source_line_count": 25,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 25,
+      "selected_line_count": 18,
+      "material_line_start": 55487,
+      "material_line_end": 55505
+    },
+    {
+      "path": "backend/app/models/coordinator.py",
+      "source_line_count": 74,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 74,
+      "selected_line_count": 58,
+      "material_line_start": 55506,
+      "material_line_end": 55564
+    },
+    {
+      "path": "backend/app/models/core.py",
+      "source_line_count": 39,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 39,
+      "selected_line_count": 31,
+      "material_line_start": 55565,
+      "material_line_end": 55596
+    },
+    {
+      "path": "backend/app/models/pipeline.py",
+      "source_line_count": 216,
+      "blank_line_count": 49,
+      "selected_line_start": 1,
+      "selected_line_end": 216,
+      "selected_line_count": 167,
+      "material_line_start": 55597,
+      "material_line_end": 55764
+    },
+    {
+      "path": "backend/app/models/project.py",
+      "source_line_count": 388,
+      "blank_line_count": 82,
+      "selected_line_start": 1,
+      "selected_line_end": 388,
+      "selected_line_count": 306,
+      "material_line_start": 55765,
+      "material_line_end": 56071
+    },
+    {
+      "path": "backend/app/models/research.py",
+      "source_line_count": 194,
+      "blank_line_count": 37,
+      "selected_line_start": 1,
+      "selected_line_end": 194,
+      "selected_line_count": 157,
+      "material_line_start": 56072,
+      "material_line_end": 56229
+    },
+    {
+      "path": "backend/app/schemas/chat.py",
+      "source_line_count": 21,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 21,
+      "selected_line_count": 15,
+      "material_line_start": 56230,
+      "material_line_end": 56245
+    },
+    {
+      "path": "backend/app/schemas/common.py",
+      "source_line_count": 74,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 74,
+      "selected_line_count": 58,
+      "material_line_start": 56246,
+      "material_line_end": 56304
+    },
+    {
+      "path": "backend/app/schemas/data_integration.py",
+      "source_line_count": 237,
+      "blank_line_count": 34,
+      "selected_line_start": 1,
+      "selected_line_end": 237,
+      "selected_line_count": 203,
+      "material_line_start": 56305,
+      "material_line_end": 56508
+    },
+    {
+      "path": "backend/app/schemas/documents.py",
+      "source_line_count": 11,
+      "blank_line_count": 2,
+      "selected_line_start": 1,
+      "selected_line_end": 11,
+      "selected_line_count": 9,
+      "material_line_start": 56509,
+      "material_line_end": 56518
+    },
+    {
+      "path": "backend/app/schemas/human_loop.py",
+      "source_line_count": 217,
+      "blank_line_count": 44,
+      "selected_line_start": 1,
+      "selected_line_end": 217,
+      "selected_line_count": 173,
+      "material_line_start": 56519,
+      "material_line_end": 56692
+    },
+    {
+      "path": "backend/app/schemas/pipeline.py",
+      "source_line_count": 201,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 201,
+      "selected_line_count": 171,
+      "material_line_start": 56693,
+      "material_line_end": 56864
+    },
+    {
+      "path": "backend/app/schemas/project.py",
+      "source_line_count": 341,
+      "blank_line_count": 61,
+      "selected_line_start": 1,
+      "selected_line_end": 341,
+      "selected_line_count": 280,
+      "material_line_start": 56865,
+      "material_line_end": 57145
+    },
+    {
+      "path": "backend/app/schemas/research.py",
+      "source_line_count": 426,
+      "blank_line_count": 67,
+      "selected_line_start": 1,
+      "selected_line_end": 426,
+      "selected_line_count": 359,
+      "material_line_start": 57146,
+      "material_line_end": 57505
+    },
+    {
+      "path": "backend/app/schemas/science_iteration.py",
+      "source_line_count": 123,
+      "blank_line_count": 27,
+      "selected_line_start": 1,
+      "selected_line_end": 123,
+      "selected_line_count": 96,
+      "material_line_start": 57506,
+      "material_line_end": 57602
+    },
+    {
+      "path": "backend/app/services/_utils/pipeline_queries.py",
+      "source_line_count": 93,
+      "blank_line_count": 11,
+      "selected_line_start": 1,
+      "selected_line_end": 93,
+      "selected_line_count": 82,
+      "material_line_start": 57603,
+      "material_line_end": 57685
+    },
+    {
+      "path": "backend/app/services/analysis_script_generator.py",
+      "source_line_count": 285,
+      "blank_line_count": 31,
+      "selected_line_start": 1,
+      "selected_line_end": 285,
+      "selected_line_count": 254,
+      "material_line_start": 57686,
+      "material_line_end": 57940
+    },
+    {
+      "path": "backend/app/services/analysis_script_utils.py",
+      "source_line_count": 28,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 28,
+      "selected_line_count": 25,
+      "material_line_start": 57941,
+      "material_line_end": 57966
+    },
+    {
+      "path": "backend/app/services/audit_chain_service.py",
+      "source_line_count": 95,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 95,
+      "selected_line_count": 83,
+      "material_line_start": 57967,
+      "material_line_end": 58050
+    },
+    {
+      "path": "backend/app/services/chat_service.py",
+      "source_line_count": 113,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 113,
+      "selected_line_count": 92,
+      "material_line_start": 58051,
+      "material_line_end": 58143
+    },
+    {
+      "path": "backend/app/services/closed_loop_quality_service.py",
+      "source_line_count": 142,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 142,
+      "selected_line_count": 126,
+      "material_line_start": 58144,
+      "material_line_end": 58270
+    },
+    {
+      "path": "backend/app/services/cloud_db.py",
+      "source_line_count": 526,
+      "blank_line_count": 71,
+      "selected_line_start": 1,
+      "selected_line_end": 526,
+      "selected_line_count": 455,
+      "material_line_start": 58271,
+      "material_line_end": 58726
+    },
+    {
+      "path": "backend/app/services/data_acquisition_release_gate.py",
+      "source_line_count": 113,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 113,
+      "selected_line_count": 100,
+      "material_line_start": 58727,
+      "material_line_end": 58827
+    },
+    {
+      "path": "backend/app/services/data_catalog_service.py",
+      "source_line_count": 136,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 136,
+      "selected_line_count": 118,
+      "material_line_start": 58828,
+      "material_line_end": 58946
+    },
+    {
+      "path": "backend/app/services/data_finder_bundle.py",
+      "source_line_count": 213,
+      "blank_line_count": 24,
+      "selected_line_start": 1,
+      "selected_line_end": 213,
+      "selected_line_count": 189,
+      "material_line_start": 58947,
+      "material_line_end": 59136
+    },
+    {
+      "path": "backend/app/services/data_finder_coverage.py",
+      "source_line_count": 316,
+      "blank_line_count": 39,
+      "selected_line_start": 1,
+      "selected_line_end": 316,
+      "selected_line_count": 277,
+      "material_line_start": 59137,
+      "material_line_end": 59414
+    },
+    {
+      "path": "backend/app/services/data_finder_gap_search.py",
+      "source_line_count": 131,
+      "blank_line_count": 17,
+      "selected_line_start": 1,
+      "selected_line_end": 131,
+      "selected_line_count": 114,
+      "material_line_start": 59415,
+      "material_line_end": 59529
+    },
+    {
+      "path": "backend/app/services/data_finder_service.py",
+      "source_line_count": 1102,
+      "blank_line_count": 116,
+      "selected_line_start": 1,
+      "selected_line_end": 1102,
+      "selected_line_count": 986,
+      "material_line_start": 59530,
+      "material_line_end": 60516
+    },
+    {
+      "path": "backend/app/services/data_finder_slim.py",
+      "source_line_count": 750,
+      "blank_line_count": 82,
+      "selected_line_start": 1,
+      "selected_line_end": 750,
+      "selected_line_count": 668,
+      "material_line_start": 60517,
+      "material_line_end": 61185
+    },
+    {
+      "path": "backend/app/services/data_probe_service.py",
+      "source_line_count": 218,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 218,
+      "selected_line_count": 188,
+      "material_line_start": 61186,
+      "material_line_end": 61374
+    },
+    {
+      "path": "backend/app/services/data_sources/base.py",
+      "source_line_count": 115,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 115,
+      "selected_line_count": 102,
+      "material_line_start": 61375,
+      "material_line_end": 61477
+    },
+    {
+      "path": "backend/app/services/data_sources/catalog_connector.py",
+      "source_line_count": 66,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 66,
+      "selected_line_count": 59,
+      "material_line_start": 61478,
+      "material_line_end": 61537
+    },
+    {
+      "path": "backend/app/services/data_sources/hf_connector.py",
+      "source_line_count": 54,
+      "blank_line_count": 6,
+      "selected_line_start": 1,
+      "selected_line_end": 54,
+      "selected_line_count": 48,
+      "material_line_start": 61538,
+      "material_line_end": 61586
+    },
+    {
+      "path": "backend/app/services/data_sources/registry.py",
+      "source_line_count": 99,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 99,
+      "selected_line_count": 79,
+      "material_line_start": 61587,
+      "material_line_end": 61666
+    },
+    {
+      "path": "backend/app/services/data_sources/repository_connector.py",
+      "source_line_count": 238,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 238,
+      "selected_line_count": 212,
+      "material_line_start": 61667,
+      "material_line_end": 61879
+    },
+    {
+      "path": "backend/app/services/dataset_service.py",
+      "source_line_count": 1142,
+      "blank_line_count": 90,
+      "selected_line_start": 1,
+      "selected_line_end": 1142,
+      "selected_line_count": 1052,
+      "material_line_start": 61880,
+      "material_line_end": 62932
+    },
+    {
+      "path": "backend/app/services/document_parser.py",
+      "source_line_count": 591,
+      "blank_line_count": 85,
+      "selected_line_start": 1,
+      "selected_line_end": 591,
+      "selected_line_count": 506,
+      "material_line_start": 62933,
+      "material_line_end": 63439
+    },
+    {
+      "path": "backend/app/services/document_serialization.py",
+      "source_line_count": 40,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 40,
+      "selected_line_count": 37,
+      "material_line_start": 63440,
+      "material_line_end": 63477
+    },
+    {
+      "path": "backend/app/services/document_service.py",
+      "source_line_count": 118,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 118,
+      "selected_line_count": 104,
+      "material_line_start": 63478,
+      "material_line_end": 63582
+    },
+    {
+      "path": "backend/app/services/ensemble_review_service.py",
+      "source_line_count": 181,
+      "blank_line_count": 24,
+      "selected_line_start": 1,
+      "selected_line_end": 181,
+      "selected_line_count": 157,
+      "material_line_start": 63583,
+      "material_line_end": 63740
+    },
+    {
+      "path": "backend/app/services/evidence_reasoning_service.py",
+      "source_line_count": 214,
+      "blank_line_count": 26,
+      "selected_line_start": 1,
+      "selected_line_end": 214,
+      "selected_line_count": 188,
+      "material_line_start": 63741,
+      "material_line_end": 63929
+    },
+    {
+      "path": "backend/app/services/experiment_memory.py",
+      "source_line_count": 427,
+      "blank_line_count": 59,
+      "selected_line_start": 1,
+      "selected_line_end": 427,
+      "selected_line_count": 368,
+      "material_line_start": 63930,
+      "material_line_end": 64298
+    },
+    {
+      "path": "backend/app/services/experiment_pilot_analysis_service.py",
+      "source_line_count": 475,
+      "blank_line_count": 55,
+      "selected_line_start": 1,
+      "selected_line_end": 475,
+      "selected_line_count": 420,
+      "material_line_start": 64299,
+      "material_line_end": 64719
+    },
+    {
+      "path": "backend/app/services/experiment_sandbox_service.py",
+      "source_line_count": 443,
+      "blank_line_count": 45,
+      "selected_line_start": 1,
+      "selected_line_end": 443,
+      "selected_line_count": 398,
+      "material_line_start": 64720,
+      "material_line_end": 65118
+    },
+    {
+      "path": "backend/app/services/experiment_service.py",
+      "source_line_count": 145,
+      "blank_line_count": 25,
+      "selected_line_start": 1,
+      "selected_line_end": 145,
+      "selected_line_count": 120,
+      "material_line_start": 65119,
+      "material_line_end": 65239
+    },
+    {
+      "path": "backend/app/services/experiment_spec_service.py",
+      "source_line_count": 486,
+      "blank_line_count": 61,
+      "selected_line_start": 1,
+      "selected_line_end": 486,
+      "selected_line_count": 425,
+      "material_line_start": 65240,
+      "material_line_end": 65665
+    },
+    {
+      "path": "backend/app/services/external_candidate_service.py",
+      "source_line_count": 288,
+      "blank_line_count": 42,
+      "selected_line_start": 1,
+      "selected_line_end": 288,
+      "selected_line_count": 246,
+      "material_line_start": 65666,
+      "material_line_end": 65912
+    },
+    {
+      "path": "backend/app/services/external_dataset_import_service.py",
+      "source_line_count": 191,
+      "blank_line_count": 29,
+      "selected_line_start": 1,
+      "selected_line_end": 191,
+      "selected_line_count": 162,
+      "material_line_start": 65913,
+      "material_line_end": 66075
+    },
+    {
+      "path": "backend/app/services/feedback_hub_service.py",
+      "source_line_count": 169,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 169,
+      "selected_line_count": 148,
+      "material_line_start": 66076,
+      "material_line_end": 66224
+    },
+    {
+      "path": "backend/app/services/fl_pack_service.py",
+      "source_line_count": 864,
+      "blank_line_count": 61,
+      "selected_line_start": 1,
+      "selected_line_end": 864,
+      "selected_line_count": 803,
+      "material_line_start": 66225,
+      "material_line_end": 67028
+    },
+    {
+      "path": "backend/app/services/fl_simulation/base.py",
+      "source_line_count": 27,
+      "blank_line_count": 7,
+      "selected_line_start": 1,
+      "selected_line_end": 27,
+      "selected_line_count": 20,
+      "material_line_start": 67029,
+      "material_line_end": 67049
+    },
+    {
+      "path": "backend/app/services/fl_simulation/fedml_backend.py",
+      "source_line_count": 176,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 176,
+      "selected_line_count": 157,
+      "material_line_start": 67050,
+      "material_line_end": 67207
+    },
+    {
+      "path": "backend/app/services/fl_simulation/flower_backend.py",
+      "source_line_count": 173,
+      "blank_line_count": 19,
+      "selected_line_start": 1,
+      "selected_line_end": 173,
+      "selected_line_count": 154,
+      "material_line_start": 67208,
+      "material_line_end": 67362
+    },
+    {
+      "path": "backend/app/services/fl_simulation/local_pack_backend.py",
+      "source_line_count": 68,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 68,
+      "selected_line_count": 60,
+      "material_line_start": 67363,
+      "material_line_end": 67423
+    },
+    {
+      "path": "backend/app/services/fl_simulation/registry.py",
+      "source_line_count": 40,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 40,
+      "selected_line_count": 32,
+      "material_line_start": 67424,
+      "material_line_end": 67456
+    },
+    {
+      "path": "backend/app/services/fl_simulation/runner.py",
+      "source_line_count": 138,
+      "blank_line_count": 22,
+      "selected_line_start": 1,
+      "selected_line_end": 138,
+      "selected_line_count": 116,
+      "material_line_start": 67457,
+      "material_line_end": 67573
+    },
+    {
+      "path": "backend/app/services/fl_simulation/schemas.py",
+      "source_line_count": 84,
+      "blank_line_count": 9,
+      "selected_line_start": 1,
+      "selected_line_end": 84,
+      "selected_line_count": 75,
+      "material_line_start": 67574,
+      "material_line_end": 67649
+    },
+    {
+      "path": "backend/app/services/hypothesis_service.py",
+      "source_line_count": 568,
+      "blank_line_count": 67,
+      "selected_line_start": 1,
+      "selected_line_end": 568,
+      "selected_line_count": 501,
+      "material_line_start": 67650,
+      "material_line_end": 68151
+    },
+    {
+      "path": "backend/app/services/hypothesis_tree_service.py",
+      "source_line_count": 210,
+      "blank_line_count": 29,
+      "selected_line_start": 1,
+      "selected_line_end": 210,
+      "selected_line_count": 181,
+      "material_line_start": 68152,
+      "material_line_end": 68333
+    },
+    {
+      "path": "backend/app/services/iterative_experiment_jobs.py",
+      "source_line_count": 165,
+      "blank_line_count": 22,
+      "selected_line_start": 1,
+      "selected_line_end": 165,
+      "selected_line_count": 143,
+      "material_line_start": 68334,
+      "material_line_end": 68477
+    },
+    {
+      "path": "backend/app/services/iterative_experiment_service.py",
+      "source_line_count": 1738,
+      "blank_line_count": 152,
+      "selected_line_start": 1,
+      "selected_line_end": 1738,
+      "selected_line_count": 1586,
+      "material_line_start": 68478,
+      "material_line_end": 70064
+    },
+    {
+      "path": "backend/app/services/latex_export_service.py",
+      "source_line_count": 1813,
+      "blank_line_count": 222,
+      "selected_line_start": 1,
+      "selected_line_end": 1813,
+      "selected_line_count": 1591,
+      "material_line_start": 70065,
+      "material_line_end": 71656
+    },
+    {
+      "path": "backend/app/services/literature_bundle_service.py",
+      "source_line_count": 675,
+      "blank_line_count": 57,
+      "selected_line_start": 1,
+      "selected_line_end": 675,
+      "selected_line_count": 618,
+      "material_line_start": 71657,
+      "material_line_end": 72275
+    },
+    {
+      "path": "backend/app/services/literature_corpus_service.py",
+      "source_line_count": 282,
+      "blank_line_count": 33,
+      "selected_line_start": 1,
+      "selected_line_end": 282,
+      "selected_line_count": 249,
+      "material_line_start": 72276,
+      "material_line_end": 72525
+    },
+    {
+      "path": "backend/app/services/literature_discovery_adapter.py",
+      "source_line_count": 138,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 138,
+      "selected_line_count": 120,
+      "material_line_start": 72526,
+      "material_line_end": 72646
+    },
+    {
+      "path": "backend/app/services/literature_ingestion_service.py",
+      "source_line_count": 851,
+      "blank_line_count": 115,
+      "selected_line_start": 1,
+      "selected_line_end": 851,
+      "selected_line_count": 736,
+      "material_line_start": 72647,
+      "material_line_end": 73383
+    },
+    {
+      "path": "backend/app/services/literature_recommendation_service.py",
+      "source_line_count": 345,
+      "blank_line_count": 38,
+      "selected_line_start": 1,
+      "selected_line_end": 345,
+      "selected_line_count": 307,
+      "material_line_start": 73384,
+      "material_line_end": 73691
+    },
+    {
+      "path": "backend/app/services/literature_relevance_gate.py",
+      "source_line_count": 368,
+      "blank_line_count": 42,
+      "selected_line_start": 1,
+      "selected_line_end": 368,
+      "selected_line_count": 326,
+      "material_line_start": 73692,
+      "material_line_end": 74018
+    },
+    {
+      "path": "backend/app/services/literature_search_utils.py",
+      "source_line_count": 152,
+      "blank_line_count": 21,
+      "selected_line_start": 1,
+      "selected_line_end": 152,
+      "selected_line_count": 131,
+      "material_line_start": 74019,
+      "material_line_end": 74150
+    },
+    {
+      "path": "backend/app/services/literature_sources/arxiv_source.py",
+      "source_line_count": 499,
+      "blank_line_count": 66,
+      "selected_line_start": 1,
+      "selected_line_end": 499,
+      "selected_line_count": 433,
+      "material_line_start": 74151,
+      "material_line_end": 74584
+    },
+    {
+      "path": "backend/app/services/literature_sources/bibtex_importer.py",
+      "source_line_count": 386,
+      "blank_line_count": 59,
+      "selected_line_start": 1,
+      "selected_line_end": 386,
+      "selected_line_count": 327,
+      "material_line_start": 74585,
+      "material_line_end": 74912
+    },
+    {
+      "path": "backend/app/services/llm_service.py",
+      "source_line_count": 25,
+      "blank_line_count": 3,
+      "selected_line_start": 1,
+      "selected_line_end": 25,
+      "selected_line_count": 22,
+      "material_line_start": 74913,
+      "material_line_end": 74935
+    },
+    {
+      "path": "backend/app/services/loops/closed_loop_helpers.py",
+      "source_line_count": 119,
+      "blank_line_count": 14,
+      "selected_line_start": 1,
+      "selected_line_end": 119,
+      "selected_line_count": 105,
+      "material_line_start": 74936,
+      "material_line_end": 75041
+    },
+    {
+      "path": "backend/app/services/loops/dry_run.py",
+      "source_line_count": 38,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 38,
+      "selected_line_count": 33,
+      "material_line_start": 75042,
+      "material_line_end": 75075
+    },
+    {
+      "path": "backend/app/services/mock_qwen_client.py",
+      "source_line_count": 420,
+      "blank_line_count": 57,
+      "selected_line_start": 1,
+      "selected_line_end": 420,
+      "selected_line_count": 363,
+      "material_line_start": 75076,
+      "material_line_end": 75439
+    },
+    {
+      "path": "backend/app/services/multimodal_service.py",
+      "source_line_count": 307,
+      "blank_line_count": 32,
+      "selected_line_start": 1,
+      "selected_line_end": 307,
+      "selected_line_count": 275,
+      "material_line_start": 75440,
+      "material_line_end": 75715
+    },
+    {
+      "path": "backend/app/services/paper_extraction_pipeline.py",
+      "source_line_count": 150,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 150,
+      "selected_line_count": 132,
+      "material_line_start": 75716,
+      "material_line_end": 75848
+    },
+    {
+      "path": "backend/app/services/paper_verification_service.py",
+      "source_line_count": 233,
+      "blank_line_count": 30,
+      "selected_line_start": 1,
+      "selected_line_end": 233,
+      "selected_line_count": 203,
+      "material_line_start": 75849,
+      "material_line_end": 76052
+    },
+    {
+      "path": "backend/app/services/pipeline_output_service.py",
+      "source_line_count": 134,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 134,
+      "selected_line_count": 118,
+      "material_line_start": 76053,
+      "material_line_end": 76171
+    },
+    {
+      "path": "backend/app/services/pipeline_service.py",
+      "source_line_count": 4898,
+      "blank_line_count": 426,
+      "selected_line_start": 1,
+      "selected_line_end": 4898,
+      "selected_line_count": 4472,
+      "material_line_start": 76172,
+      "material_line_end": 80644
+    },
+    {
+      "path": "backend/app/services/plot_quality_loop_service.py",
+      "source_line_count": 94,
+      "blank_line_count": 12,
+      "selected_line_start": 1,
+      "selected_line_end": 94,
+      "selected_line_count": 82,
+      "material_line_start": 80645,
+      "material_line_end": 80727
+    },
+    {
+      "path": "backend/app/services/pro_con_adversarial_service.py",
+      "source_line_count": 419,
+      "blank_line_count": 34,
+      "selected_line_start": 1,
+      "selected_line_end": 419,
+      "selected_line_count": 385,
+      "material_line_start": 80728,
+      "material_line_end": 81113
+    },
+    {
+      "path": "backend/app/services/project_research_backfill_service.py",
+      "source_line_count": 285,
+      "blank_line_count": 54,
+      "selected_line_start": 1,
+      "selected_line_end": 285,
+      "selected_line_count": 231,
+      "material_line_start": 81114,
+      "material_line_end": 81345
+    },
+    {
+      "path": "backend/app/services/project_service.py",
+      "source_line_count": 594,
+      "blank_line_count": 87,
+      "selected_line_start": 1,
+      "selected_line_end": 594,
+      "selected_line_count": 507,
+      "material_line_start": 81346,
+      "material_line_end": 81853
+    },
+    {
+      "path": "backend/app/services/prompt_context.py",
+      "source_line_count": 13,
+      "blank_line_count": 5,
+      "selected_line_start": 1,
+      "selected_line_end": 13,
+      "selected_line_count": 8,
+      "material_line_start": 81854,
+      "material_line_end": 81862
+    },
+    {
+      "path": "backend/app/services/prompt_loader.py",
+      "source_line_count": 176,
+      "blank_line_count": 37,
+      "selected_line_start": 1,
+      "selected_line_end": 176,
+      "selected_line_count": 139,
+      "material_line_start": 81863,
+      "material_line_end": 82002
+    },
+    {
+      "path": "backend/app/services/prompt_override_service.py",
+      "source_line_count": 125,
+      "blank_line_count": 16,
+      "selected_line_start": 1,
+      "selected_line_end": 125,
+      "selected_line_count": 109,
+      "material_line_start": 82003,
+      "material_line_end": 82112
+    },
+    {
+      "path": "backend/app/services/prompt_preset_service.py",
+      "source_line_count": 158,
+      "blank_line_count": 20,
+      "selected_line_start": 1,
+      "selected_line_end": 158,
+      "selected_line_count": 138,
+      "material_line_start": 82113,
+      "material_line_end": 82251
+    },
+    {
+      "path": "backend/app/services/qwen_client.py",
+      "source_line_count": 944,
+      "blank_line_count": 126,
+      "selected_line_start": 1,
+      "selected_line_end": 944,
+      "selected_line_count": 818,
+      "material_line_start": 82252,
+      "material_line_end": 83070
+    },
+    {
+      "path": "backend/app/services/report_charts_service.py",
+      "source_line_count": 697,
+      "blank_line_count": 90,
+      "selected_line_start": 1,
+      "selected_line_end": 697,
+      "selected_line_count": 607,
+      "material_line_start": 83071,
+      "material_line_end": 83678
+    },
+    {
+      "path": "backend/app/services/report_compliance_service.py",
+      "source_line_count": 718,
+      "blank_line_count": 92,
+      "selected_line_start": 1,
+      "selected_line_end": 718,
+      "selected_line_count": 626,
+      "material_line_start": 83679,
+      "material_line_end": 84305
+    },
+    {
+      "path": "backend/app/services/report_content_sanitizer.py",
+      "source_line_count": 880,
+      "blank_line_count": 89,
+      "selected_line_start": 1,
+      "selected_line_end": 880,
+      "selected_line_count": 791,
+      "material_line_start": 84306,
+      "material_line_end": 85097
+    },
+    {
+      "path": "backend/app/services/report_evaluation_service.py",
+      "source_line_count": 210,
+      "blank_line_count": 28,
+      "selected_line_start": 1,
+      "selected_line_end": 210,
+      "selected_line_count": 182,
+      "material_line_start": 85098,
+      "material_line_end": 85280
+    },
+    {
+      "path": "backend/app/services/report_plot_service.py",
+      "source_line_count": 308,
+      "blank_line_count": 43,
+      "selected_line_start": 1,
+      "selected_line_end": 308,
+      "selected_line_count": 265,
+      "material_line_start": 85281,
+      "material_line_end": 85546
+    },
+    {
+      "path": "backend/app/services/report_service.py",
+      "source_line_count": 1084,
+      "blank_line_count": 116,
+      "selected_line_start": 1,
+      "selected_line_end": 1084,
+      "selected_line_count": 968,
+      "material_line_start": 85547,
+      "material_line_end": 86515
+    },
+    {
+      "path": "backend/app/services/research_service.py",
+      "source_line_count": 53,
+      "blank_line_count": 8,
+      "selected_line_start": 1,
+      "selected_line_end": 53,
+      "selected_line_count": 45,
+      "material_line_start": 86516,
+      "material_line_end": 86561
+    },
+    {
+      "path": "backend/app/services/science_iteration_service.py",
+      "source_line_count": 693,
+      "blank_line_count": 78,
+      "selected_line_start": 1,
+      "selected_line_end": 693,
+      "selected_line_count": 615,
+      "material_line_start": 86562,
+      "material_line_end": 87177
+    },
+    {
+      "path": "backend/app/services/skill_registry_service.py",
+      "source_line_count": 374,
+      "blank_line_count": 50,
+      "selected_line_start": 1,
+      "selected_line_end": 374,
+      "selected_line_count": 324,
+      "material_line_start": 87178,
+      "material_line_end": 87502
+    },
+    {
+      "path": "backend/app/services/stage_chat_service.py",
+      "source_line_count": 704,
+      "blank_line_count": 89,
+      "selected_line_start": 1,
+      "selected_line_end": 704,
+      "selected_line_count": 615,
+      "material_line_start": 87503,
+      "material_line_end": 88118
+    },
+    {
+      "path": "backend/app/services/stage_human_loop_service.py",
+      "source_line_count": 705,
+      "blank_line_count": 73,
+      "selected_line_start": 1,
+      "selected_line_end": 705,
+      "selected_line_count": 632,
+      "material_line_start": 88119,
+      "material_line_end": 88751
+    },
+    {
+      "path": "backend/app/services/tabular_encoding_utils.py",
+      "source_line_count": 212,
+      "blank_line_count": 18,
+      "selected_line_start": 1,
+      "selected_line_end": 212,
+      "selected_line_count": 194,
+      "material_line_start": 88752,
+      "material_line_end": 88946
+    },
+    {
+      "path": "backend/app/services/validation_data_guidance_service.py",
+      "source_line_count": 553,
+      "blank_line_count": 50,
+      "selected_line_start": 1,
+      "selected_line_end": 553,
+      "selected_line_count": 503,
+      "material_line_start": 88947,
+      "material_line_end": 89450
+    },
+    {
+      "path": "backend/app/services/vector_service.py",
+      "source_line_count": 192,
+      "blank_line_count": 41,
+      "selected_line_start": 1,
+      "selected_line_end": 192,
+      "selected_line_count": 151,
+      "material_line_start": 89451,
+      "material_line_end": 89602
+    },
+    {
+      "path": "backend/app/services/vector_store.py",
+      "source_line_count": 694,
+      "blank_line_count": 126,
+      "selected_line_start": 1,
+      "selected_line_end": 694,
+      "selected_line_count": 568,
+      "material_line_start": 89603,
+      "material_line_end": 90171
+    }
+  ],
+  "safe_software_filename": "联邦智研AI科研自动化系统"
+}

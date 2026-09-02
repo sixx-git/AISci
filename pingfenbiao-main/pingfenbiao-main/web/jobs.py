@@ -26,6 +26,34 @@ MAX_LOG_LINES = 40
 SUBPROCESS_TIMEOUT_SEC = 3600
 
 
+def _scientific_reasoning_item_count(task_path: Path) -> int:
+    """读取 task.json 中 scientific_reasoning 评分项数量。"""
+    try:
+        data = json.loads(task_path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    stats = ((data.get("generation_meta") or {}).get("dimension_stats") or {})
+    sr = stats.get("scientific_reasoning") or {}
+    if "item_count" in sr:
+        try:
+            return int(sr.get("item_count") or 0)
+        except (TypeError, ValueError):
+            pass
+    dims = (data.get("rubrics") or {}).get("dimensions") or []
+    if isinstance(dims, dict):
+        items = (dims.get("scientific_reasoning") or {}).get("items") or []
+        return len(items) if isinstance(items, list) else 0
+    if isinstance(dims, list):
+        for dim in dims:
+            if not isinstance(dim, dict):
+                continue
+            did = dim.get("dimension_id") or dim.get("id")
+            if did == "scientific_reasoning":
+                items = dim.get("items") or []
+                return len(items) if isinstance(items, list) else 0
+    return 0
+
+
 def resolve_rubric_save_path(raw: str, default_filename: str = "task.json") -> Path | None:
     """将用户填写的保存路径规范为最终 task.json 落盘路径。
 
@@ -374,9 +402,19 @@ class JobManager:
                 )
                 return
 
+            upgraded_from = metadata.get("_upgraded_from") or {}
+            if upgraded_from:
+                logs.append(
+                    "元数据已升级到正式发表版本: "
+                    f"{upgraded_from.get('doi')} (cites={upgraded_from.get('cited_by_count', 0)}) "
+                    f"-> {metadata.get('doi')} (cites={metadata.get('cited_by_count', 0)}, "
+                    f"venue={metadata.get('host_venue') or 'N/A'})"
+                )
             logs.append(f"Venue: {metadata.get('host_venue', 'Unknown')}")
             logs.append(f"Citations: {metadata.get('cited_by_count', 0)}")
             logs.append(f"Year: {metadata.get('publication_year', 'Unknown')}")
+            # 影响力评估优先使用升级后的正式 DOI
+            eval_doi = metadata.get("doi") or doi
             _update("元数据获取成功", 35)
 
             # Step 2b-prep: 获取 API key（评分表生成和打分都需要）
@@ -507,26 +545,47 @@ class JobManager:
                 try:
                     _update(f"生成 {PACKAGES[tt]['label']} 评分表…", 40)
 
-                    gen_cmd, gen_env = build_generate_command(
-                        tt, "", source_dir, tt_output, effective_api_key, quiet=True,
-                    )
-                    gen_proc = subprocess.run(
-                        gen_cmd, cwd=str(ROOT_DIR),
-                        env=gen_env,
-                        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_SEC,
-                    )
-                    gen_logs = (gen_proc.stdout or "") + (gen_proc.stderr or "")
-                    for line in gen_logs.strip().splitlines():
-                        clean = line.strip()
-                        if clean:
-                            logs.append(f"[{tt}] {clean}")
-                    if gen_proc.returncode != 0:
-                        logs.append(f"[{tt}] 评分表生成失败 (exit {gen_proc.returncode})")
-                        return None
-
                     task_path = tt_output / "task.json"
-                    if not task_path.exists():
-                        logs.append(f"[{tt}] task.json 未生成")
+                    gen_ok = False
+                    for gen_attempt in range(1, 3):
+                        if task_path.exists():
+                            try:
+                                task_path.unlink()
+                            except OSError:
+                                pass
+                        gen_cmd, gen_env = build_generate_command(
+                            tt, "", source_dir, tt_output, effective_api_key, quiet=True,
+                        )
+                        gen_proc = subprocess.run(
+                            gen_cmd, cwd=str(ROOT_DIR),
+                            env=gen_env,
+                            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_SEC,
+                        )
+                        gen_logs = (gen_proc.stdout or "") + (gen_proc.stderr or "")
+                        for line in gen_logs.strip().splitlines():
+                            clean = line.strip()
+                            if clean:
+                                logs.append(f"[{tt}] {clean}")
+                        if gen_proc.returncode != 0:
+                            logs.append(
+                                f"[{tt}] 评分表生成失败 (exit {gen_proc.returncode})"
+                                f"（第 {gen_attempt}/2 次）"
+                            )
+                            continue
+                        if not task_path.exists():
+                            logs.append(f"[{tt}] task.json 未生成（第 {gen_attempt}/2 次）")
+                            continue
+                        sr_n = _scientific_reasoning_item_count(task_path)
+                        if sr_n <= 0:
+                            logs.append(
+                                f"[{tt}] scientific_reasoning 为空（第 {gen_attempt}/2 次），将重试生成"
+                            )
+                            continue
+                        gen_ok = True
+                        break
+
+                    if not gen_ok or not task_path.exists():
+                        logs.append(f"[{tt}] 评分表生成失败：scientific_reasoning 维度仍为空")
                         return None
 
                     save_to = save_paths.get(tt)
@@ -587,9 +646,9 @@ class JobManager:
                     logs.append(f"[{tt}] 异常: {e}")
                     return None
 
-            # 并行执行 3 种任务类型
-            _update("正在生成评分表并打分（并行）…", 40)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # 串行执行，避免三路并行抢占 LLM 导致 scientific_reasoning 超时
+            _update("正在生成评分表并打分（串行）…", 40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 futures = {executor.submit(_generate_and_score, tt): tt for tt in ["literature_review", "data_analysis", "claim_verification"]}
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
@@ -615,8 +674,8 @@ class JobManager:
             from common.impact_evaluator import evaluate_impact
 
             impact = evaluate_impact(
-                title=metadata.get("title", ""),
-                doi=doi or metadata.get("doi", ""),
+                title=metadata.get("title", "") or (title or ""),
+                doi=eval_doi or "",
                 pdf_text=pdf_text,
                 api_key=effective_api_key,
             )

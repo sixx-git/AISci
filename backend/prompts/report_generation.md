@@ -122,7 +122,7 @@
 - **methods**：可执行、**可验证**的实验步骤，须与假设及 `research_object` 对应；须含「验证边界/代理实验」声明（**全文仅出现一次，勿在摘要/讨论重复粘贴**）；须给出可复现关键参数（如 QRC：比特数/酉矩阵采样方式/测量与读出；RC：谱半径、储备池规模、输入缩放；数据：窗口长度、划分协议、**类别分布/不平衡程度**）；**禁止**写 Pipeline 内部阶段与脚本全文。
 - **experiments**：JSON 对象含 baselines、metrics、experimental_setup、ablation_study、validation_protocol；须与 methods 边界一致；baselines/metrics 字段勿留空。
 - **results**：有实测时写 Actual Results + **结果分析与讨论**；列出图题与一句读图要点；指标须完整（禁止 `n_test_samples=` 空值截断）；未跑满计划轮次时写阶段性结果；失败轮次写入反例/局限
-- **references**：仅 citation_map / literature_facts 可验证条目；GB/T 7714；DOI 优先去重；年份为当前年及以后或 preprint 须标注「预印本/在线优先」；禁止编造。
+- **references**：仅 citation_map / literature_facts 可验证条目；GB/T 7714；DOI 优先去重；禁止编造。不要附加「预印本/在线优先，引用时请核对正式出版信息」一类说明文字。
 
 **VFL / 联邦学习场景**：若项目挂载 FL Starter Pack 或 `small_validation.fl_context` / `federated_pilot` 存在，experiments/results 须写清：setting（HFL/VFL）、对齐键或 client 划分、通信轮次、global vs local 指标；失败/对齐未通过写入反例；可参考 pack checklists（alignment_rate、communication_rounds 等）。baselines/metrics 须符合 vertical_fl / horizontal_fl 表述，禁止假装已部署多机联邦。
 

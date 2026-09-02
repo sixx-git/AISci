@@ -2169,6 +2169,12 @@ class ReportGenerationAgent:
                 "观测到准确率接近满分且基线与主模型同量级（或特征重要性近零），"
                 "提示可能存在平凡解、标签泄漏或无效分裂，不宜解读为强支持证据。"
             )
+        elif flags.get("poor_performance"):
+            lines.append(
+                "分类主指标处于偏低水平（如准确率/F1显著低于可用阈值），"
+                "且诊断图提示类别可分性不足；结果应解读为方法边界与协议需修正，"
+                "而非对假设的正向支持。"
+            )
         elif flags.get("negative_fit"):
             lines.append(
                 "拟合指标（如决定系数）为负或未达可用水平，表明当前协议下模型解释力不足。"
@@ -2219,9 +2225,9 @@ class ReportGenerationAgent:
             "需注意：本节多为可执行代理实验（如表格学习），用于检验可操作推论，"
             "并不等同于对领域终极问题的完整证明。"
         )
-        if flags.get("trivial_solution") or flags.get("negative_fit"):
+        if flags.get("trivial_solution") or flags.get("negative_fit") or flags.get("poor_performance"):
             lines.append(
-                "结合否定性/平凡性信号，当前更宜将结果解读为方法边界提示或协议需修正，"
+                "结合否定性/平凡性或低性能信号，当前更宜将结果解读为方法边界提示或协议需修正，"
                 "而非假设已被证实。"
             )
         elif metric_items and not failed_iters:
@@ -2287,13 +2293,18 @@ class ReportGenerationAgent:
         if partial_run:
             cur = progress.get("current_iteration")
             mx = progress.get("max_iterations")
+            ran = progress.get("ran_rounds")
+            n_ok = len(successful_iters) if isinstance(successful_iters, list) else 0
+            shown = ran or (n_ok if n_ok > 0 else cur)
             lims.append(
-                f"实验未跑满计划轮次（约 {cur or '?'}/{mx or '?'}），结论仅为阶段性结果"
+                f"实验未跑满计划轮次（约 {shown or '?'}/{mx or '?'}），结论仅为阶段性结果"
             )
         if failed_iters:
             lims.append("存在执行失败或协议不匹配，需先修复数据/脚本再谈效应量")
         if flags.get("trivial_solution"):
             lims.append("存在平凡解风险，需检查标签分布、特征泄漏与评价口径")
+        if flags.get("poor_performance"):
+            lims.append("主分类指标偏低，动态与固定策略差异有限，尚不足以支持效率/稳定性提升主张")
         if not metric_items:
             lims.append("正向定量指标不足，尚难给出可重复的效应描述")
         if plot_n == 0:
@@ -2305,12 +2316,20 @@ class ReportGenerationAgent:
         if isinstance(next_exps, list) and next_exps:
             clean_next = []
             for x in next_exps[:4]:
-                s = str(x).strip()
+                s = clean_iteration_summary(str(x).strip())
                 s = s.replace("['", "").replace("']", "").replace("', '", "；")
+                s = re.sub(r"[；;]{2,}", "；", s).strip("；;，, ")
+                if len(s) < 12:
+                    continue
                 if s:
                     clean_next.append(s[:180])
             if clean_next:
                 lines.append("后续可检验步骤：" + "；".join(clean_next) + "。")
+            else:
+                lines.append(
+                    "后续建议：（1）在固定协议下补齐关键轮次与对照；（2）对失败根因做消融或诊断实验；"
+                    "（3）明确主指标、不确定性与可重复脚本，再形成更强的支持/否定结论。"
+                )
         else:
             lines.append(
                 "后续建议：（1）在固定协议下补齐关键轮次与对照；（2）对失败根因做消融或诊断实验；"
@@ -2507,21 +2526,24 @@ class ReportGenerationAgent:
             return result
 
         enriched = ""
-        # 仅在确有可写入内容时输出 Actual Results（未跑满轮次也可）
+        # 仅在确有可写入内容时输出实际分析结果（未跑满轮次也可）
         if has_usable_evidence or has_modeling or has_summary_stats:
-            enriched += "### Actual Results（实际分析结果）\n\n"
+            enriched += "### 实际分析结果\n\n"
 
             if partial_run and (sandbox_success or has_negative or successful_iters):
                 cur = progress.get("current_iteration")
                 mx = progress.get("max_iterations")
-                if cur is not None or mx is not None:
+                ran = progress.get("ran_rounds")
+                n_ok = len(successful_iters) if isinstance(successful_iters, list) else 0
+                shown = ran or (n_ok if n_ok > 0 else cur)
+                if shown is not None or mx is not None:
                     enriched += (
-                        f"> **阶段性结果**：实验计划 {mx or '?'} 轮，当前已跑约 {cur or '?'} 轮；"
+                        f"> **阶段性结果**：实验计划 {mx or '?'} 轮，当前已完成约 {shown or '?'} 轮；"
                         "以下基于已完成轮次，不要求跑满全部轮次即可写入报告。\n\n"
                     )
 
             if sandbox_success:
-                enriched += "### Experiment Run（初步实验验证）\n\n"
+                enriched += "### 初步实验验证\n\n"
                 enriched += "- 执行状态: 成功（含部分成功轮次）\n" if partial_run else "- 执行状态: 成功\n"
                 if sandbox_exec.get("duration_ms"):
                     enriched += f"- 耗时: {sandbox_exec.get('duration_ms')} ms\n"
@@ -2535,7 +2557,7 @@ class ReportGenerationAgent:
                             continue
                         enriched += f"  - {format_metric_label(k)}: {v}\n"
                 if isinstance(plots, list) and plots:
-                    enriched += f"- 沙箱图表: {len(plots)} 张\n"
+                    enriched += f"- 实验图表: {len(plots)} 张\n"
                     enriched += "\n#### 图题与核心读图要点\n\n"
                     for i, pl in enumerate(plots[:6], 1):
                         if not isinstance(pl, dict):
@@ -2555,9 +2577,9 @@ class ReportGenerationAgent:
                             note = "结合对应指标解读趋势，勿脱离数值单独外推。"
                         enriched += f"{i}. **{title}** — {note}\n"
                 enriched += "\n"
-                enriched += "> 以下 Results 以迭代实验/沙箱验证为准；模拟/预期结果仅作参考。\n\n"
+                enriched += "> 以下结果以迭代实验验证为准；模拟/预期结果仅作参考。\n\n"
             elif successful_iters and not sandbox_success:
-                enriched += "### Experiment Run（已跑轮次记录）\n\n"
+                enriched += "### 初步实验验证\n\n"
                 enriched += f"- 已记录成功/部分轮次: {len(successful_iters)} 轮\n"
                 for r in successful_iters[:5]:
                     if not isinstance(r, dict):
@@ -2573,7 +2595,7 @@ class ReportGenerationAgent:
                 enriched += "\n"
 
             if has_negative:
-                enriched += "### Counterexamples（失败轮次 / 反例证据）\n\n"
+                enriched += "### 失败轮次与反例证据\n\n"
                 enriched += (
                     "以下轮次未成功或未达成功标准，可作为「当前方法难以充分验证该假设」的反例；"
                     "应如实写局限，勿编造成功指标。\n\n"
@@ -2603,9 +2625,9 @@ class ReportGenerationAgent:
                     enriched += "\n"
 
             if has_modeling:
-                enriched += "### Modeling Results（数据建模评估）\n\n"
+                enriched += "### 数据建模评估\n\n"
                 if modeling_result.get("is_pilot_validation") or actual.get("validation_scope") == "pilot_validation":
-                    enriched += "> **Pilot Validation**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
+                    enriched += "> **小样本可行性验证**：样本量较小，本节结果仅用于可行性验证，不得夸大为最终结论。\n\n"
                 enriched += f"- 任务类型: {modeling_result.get('task_type', 'unknown')}\n"
                 enriched += f"- 目标变量: {modeling_result.get('target_column', '-')}\n"
                 enriched += f"- 最佳模型: {modeling_result.get('best_model', '-')}\n"
@@ -2619,7 +2641,7 @@ class ReportGenerationAgent:
                     for key, val in best_metrics.items():
                         if key == "confusion_matrix":
                             continue
-                        enriched += f"  - {key}: {val}\n"
+                        enriched += f"  - {format_metric_label(key)}: {val}\n"
                 enriched += "\n"
 
             if not sandbox_success and not has_negative and has_summary_stats:
@@ -2628,7 +2650,7 @@ class ReportGenerationAgent:
                 enriched += f"- 数据来源: {actual.get('data_source', 'unknown')}\n\n"
 
         if has_simulated:
-            enriched += "### Simulated Results（模拟结果）\n\n"
+            enriched += "### 模拟结果\n\n"
             enriched += "- 模拟数据已生成\n"
             enriched += f"- 说明: {simulated.get('note', '基于假设参数的模拟数据')}\n\n"
 
@@ -2655,6 +2677,7 @@ class ReportGenerationAgent:
         if isinstance(existing_results, str) and len(existing_results.strip()) >= 40:
             if (
                 "Experiment Run" not in existing_results
+                and "初步实验验证" not in existing_results
                 and "实测指标" not in existing_results
                 and "结果分析与讨论" not in existing_results
             ):

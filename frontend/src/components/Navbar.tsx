@@ -22,7 +22,7 @@ export function Navbar() {
               <Home className="w-6 h-6 text-bp-base" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-bp-cyan font-mono">[AISci]</h1>
+              <h1 className="text-xl font-bold text-bp-cyan font-mono">联邦智研</h1>
               <p className="text-xs text-bp-muted -mt-1">智能科研助手</p>
             </div>
           </Link>

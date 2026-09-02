@@ -1,0 +1,798 @@
+{
+  "software_name": "联邦智研AI科研自动化系统",
+  "business_understanding_required": true,
+  "source_documents": [
+    {
+      "path": "LATEX_EXPORT_SETUP.md",
+      "size": 1976
+    },
+    {
+      "path": "QUICKSTART.md",
+      "size": 10000
+    },
+    {
+      "path": "README.md",
+      "size": 27804
+    },
+    {
+      "path": "debug-auto-fix-status.md",
+      "size": 1690
+    },
+    {
+      "path": "backend/DATABASE.md",
+      "size": 21598
+    },
+    {
+      "path": "backend/README.md",
+      "size": 9809
+    },
+    {
+      "path": "backend/plot_meta.txt",
+      "size": 320
+    },
+    {
+      "path": "backend/requirements.meoo.txt",
+      "size": 657
+    },
+    {
+      "path": "backend/requirements.txt",
+      "size": 610
+    },
+    {
+      "path": "designs/aisci-ui-acceptance.md",
+      "size": 8177
+    },
+    {
+      "path": "designs/aisci-ui-spec.md",
+      "size": 12813
+    },
+    {
+      "path": "docs/DATA_ACQUISITION.md",
+      "size": 4094
+    },
+    {
+      "path": "docs/FL_EXPERIMENT_PARADIGMS.md",
+      "size": 2051
+    },
+    {
+      "path": "docs/FL_STARTER_PACK.md",
+      "size": 4077
+    },
+    {
+      "path": "docs/SCIENCE_ITERATION.md",
+      "size": 2731
+    },
+    {
+      "path": "docs/SCIENTIFIC_PROPOSAL_LOGIC.md",
+      "size": 7987
+    },
+    {
+      "path": "frontend/README.md",
+      "size": 5433
+    },
+    {
+      "path": "output/_intro_ch8.txt",
+      "size": 20871
+    },
+    {
+      "path": "output/_intro_dump_now.txt",
+      "size": 77974
+    },
+    {
+      "path": "output/_intro_keys.txt",
+      "size": 13000
+    },
+    {
+      "path": "output/_ppt_dump.txt",
+      "size": 10553
+    },
+    {
+      "path": "output/_t1_filled_dump.txt",
+      "size": 45168
+    },
+    {
+      "path": "output/_t1_huizong_now.txt",
+      "size": 46046
+    },
+    {
+      "path": "output/_t1_hz_paras.txt",
+      "size": 46046
+    },
+    {
+      "path": "output/_t1_latest_dump.txt",
+      "size": 56075
+    },
+    {
+      "path": "output/_t1_template_now.txt",
+      "size": 50303
+    },
+    {
+      "path": "output/_t1_tpl_paras.txt",
+      "size": 50829
+    },
+    {
+      "path": "output/_t2_dump.txt",
+      "size": 22228
+    },
+    {
+      "path": "output/_t2_filled_dump.txt",
+      "size": 51763
+    },
+    {
+      "path": "output/_template_dump.txt",
+      "size": 19026
+    },
+    {
+      "path": "report-scorer-suite/SKILL.md",
+      "size": 5603
+    },
+    {
+      "path": "storage/README.md",
+      "size": 2618
+    },
+    {
+      "path": "backend/prompts/README.md",
+      "size": 4363
+    },
+    {
+      "path": "backend/prompts/counterfactual_preview.md",
+      "size": 2608
+    },
+    {
+      "path": "backend/prompts/hypothesis_evolution_out_of_box.md",
+      "size": 1121
+    },
+    {
+      "path": "backend/prompts/hypothesis_evolution_simplify.md",
+      "size": 1162
+    },
+    {
+      "path": "backend/prompts/hypothesis_generation.md",
+      "size": 8377
+    },
+    {
+      "path": "backend/prompts/hypothesis_review.md",
+      "size": 4241
+    },
+    {
+      "path": "backend/prompts/iterative_experiment.md",
+      "size": 866
+    },
+    {
+      "path": "backend/prompts/knowledge_gap.md",
+      "size": 2936
+    }
+  ],
+  "project_evidence_file": "业务理解证据.md",
+  "product_positioning": "联邦智研AI科研自动化系统（项目代号 AISci）是一套以国产大模型 Qwen（千问）为底座构建的多智能体科研自动化软件。系统把科研活动中“提出问题—检索证据—生成假设—验证假设—形成报告”的科学逻辑链，封装为一条可复现、可审计、支持人在回路（HITL）的七阶段标准 Pipeline，供科研人员在浏览器中完成从研究问题到带完整证据链的研究报告的全程自动化操作。",
+  "industry": "科研信息化 / 人工智能科研辅助软件",
+  "target_users": [
+    "高校与科研院所的科研团队（导师与学生）",
+    "攻读学位、需要撰写开题报告与科研报告的研究生",
+    "参加大创、挑战杯、揭榜挂帅等科研类赛事的学生团队",
+    "需要快速完成文献调研、假设构建与报告撰写的个人研究者"
+  ],
+  "core_value": "用事实白名单约束引用、用判定式门禁拦截不可行方案、用“大家长”Agent 统筹全局质量，让大模型参与的科研过程做到证据可溯源、质量可判定、风险可前置，把原本依赖个人经验的科研流程组织为分钟级、可追溯的工作流。",
+  "business_features": [
+    "七阶段科研自动化 Pipeline",
+    "多智能体协作",
+    "事实白名单证据链迭代",
+    "知识库对齐与小样本预检双重过滤",
+    "大家长 Agent 全程质检与自动修复",
+    "人在回路审核 Gate",
+    "综合质量分与审计链导出",
+    "科学影响力预测",
+    "联邦学习 Starter Pack"
+  ],
+  "business_feature_details": {
+    "七阶段科研自动化 Pipeline": "系统按固定顺序执行七个阶段：问题理解解析研究目标与边界；文献挖掘从 arXiv 与私有文献库提取结构化事实；知识缺口识别尚未解决的新挑战与矛盾；假设生成基于事实白名单产出可检验假设；假设评审做五维评分与红蓝对抗；迭代实验在沙箱中按反馈多轮执行并自检；报告生成输出带参考文献与图表的科研报告。阶段间由 CoordinatorAgent 衔接。",
+    "多智能体协作": "每个阶段由一个专用智能体负责（ProblemUnderstandingAgent、LiteratureMiningAgent、KnowledgeGapAgent、HypothesisGenerationAgent、HypothesisReviewAgent、报告生成 Agent 等），CoordinatorAgent 负责 Agent 间记忆管理、全局跟踪与阶段切换。",
+    "事实白名单证据链迭代": "文献挖掘阶段从论文中提取结构化知识，每条 Fact 绑定唯一 fact_id 与 source_chunk_id，形成事实白名单。后续假设生成、评审与报告撰写只能引用白名单中真实存在的 fact_id，证据不足时系统可自动触发补搜或沙箱验证，并支持证据链多轮迭代。",
+    "知识库对齐与小样本预检双重过滤": "系统用一组判定式 Gate（如事实对齐、方案可执行性、数据充分性）在假设与实验设计阶段做双重把关：没有事实依据的假设不通过，理论上不成立或实际跑不通的方案被提前拦截，从源头规避无效算力与伪成功报告。",
+    "大家长 Agent 全程质检与自动修复": "CoordinatorAgent 贯穿全流程，基于预设常见问题规则库主动拦截低质量输出，并在报告生成后自动修复内容“机器味儿”问题（如重复标点、结构错位），把每一阶段的质量结果与人工意见带回后续环节。",
+    "人在回路审核 Gate": "在假设评审、报告发布等关键节点设置人工审核 Gate，专家可查看系统提示与证据级别，选择“通过”或“退回修改”，使自动化流程在失控前得到人工纠偏。",
+    "综合质量分与审计链导出": "系统对每阶段产出计算综合质量分（CQS），并在 Pipeline 运行目录记录审计链（events/decisions/quality trend），用户可在报告中心导出 JSONL 审计链与证据链，逐条回放决策依据。",
+    "科学影响力预测": "延伸的评分表系统整合 OpenAlex 引用数据、论文文本特征与生命周期模型，对生成报告做四维评估（文本质量/声誉网络/未来影响/偏差公平）并量化不确定性，明确区分文本质量贡献与已有声誉影响，抑制光环效应。",
+    "联邦学习 Starter Pack": "以内容注入方式提供联邦学习文献种子、数据集元数据与本地可跑脚本，作为通用科研能力的扩展演示；创建联邦学习模式项目时可在 UI 选择 FL 档位与仿真后端，通用模式不挂载相关面板。"
+  },
+  "operation_flow": [
+    "在首页或“新建项目”页创建科研项目，填写研究问题、研究领域、目标与约束，选择通用或联邦学习模式。",
+    "进入项目工作台，系统在“研究问题”Tab 调用问题理解智能体解析目标与边界。",
+    "在“文献库”Tab 上传 PDF/导入 arXiv 文献，文献挖掘智能体提取事实白名单（fact_id 与来源）。",
+    "知识缺口智能体识别尚未解决的新挑战，假设生成智能体基于事实白名单产出 3–5 条可检验假设。",
+    "在“候选假设”Tab 查看五维评分与证据级别；遇到人工审核 Gate 时，专家通过或退回修改。",
+    "在“迭代实验”Tab 绑定数据、设计分析脚本，系统先小样本预检再执行多轮迭代，失败可触发证据链迭代。",
+    "报告生成阶段产出带参考文献与图表的研究报告，用户可查看 CQS 与修复状态。",
+    "在“研究报告”或报告中心导出 Markdown/PDF 与审计链 JSONL，用于复盘、提交或参赛材料。"
+  ],
+  "application_purpose": "实现科研全流程自动化与证据可溯源管理",
+  "main_functions": "联邦智研AI科研自动化系统以国产大模型 Qwen 为底座，将科研全流程封装为可由科研人员在浏览器中操作的七阶段自动化 Pipeline。第一条主线是问题理解与文献挖掘：系统解析用户研究问题，从上传的 PDF 与 arXiv 文献中提取结构化知识，为每条事实分配 fact_id 与来源标识，形成事实白名单。第二条主线是知识缺口与假设：知识缺口智能体识别尚未解决的新挑战与文献矛盾，假设生成智能体基于白名单产出 3–5 条可检验假设，并强制要求每条假设引用真实 fact_id；假设评审智能体从科学价值、创新性、可检验性、数据可用性、成本风险五个维度评分，并引入红蓝对抗与证据级别标记。第三条主线是迭代实验与报告：系统在沙箱中按反馈多轮执行实验，先小样本预检拦截跑不通的方案，失败时可自动触发证据链迭代；报告生成阶段产出带参考文献与图表的研究报告，并基于预设规则自动修复内容质量。贯穿全程的 CoordinatorAgent（大家长 Agent）负责 Agent 间记忆、全局质量监控与自动修复，关键节点设置人在回路审核 Gate 供专家通过或退回。系统还计算综合质量分（CQS）、记录可回放的审计链，并提供科学影响力预测（评分表系统）对报告做早期可解释的影响力评估，以及联邦学习 Starter Pack 作为扩展演示。最终用户在报告中心导出报告与审计链，用于科研复盘、开题或赛事提交。",
+  "technical_characteristics": "前端 React+Vite+TailwindCSS+React Router；后端 FastAPI+SQLAlchemy+SQLite；调用 Qwen/DashScope API；多智能体由 CoordinatorAgent 统一调度。",
+  "software_technical_option": "应用软件",
+  "software_category": "应用软件",
+  "manual_sections": [
+    {
+      "title": "一、相关文档",
+      "intent": "用表格指向本项目配套的总体设计、详细设计、测试与快速开始文档，便于审核员了解资料体系。",
+      "paragraphs": [
+        "本操作手册与下列项目文档配套使用，读者可在软件安装目录或源码仓库中查阅："
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "二、软件概述",
+      "intent": "说明产品定位与适用领域，让读者先建立整体认知。",
+      "paragraphs": [
+        "联邦智研AI科研自动化系统是一套以国产大模型 Qwen 为底座的多智能体科研自动化软件，面向高校科研团队、研究生与科研类赛事团队，将“提出问题—检索证据—生成假设—验证假设—形成报告”的科学逻辑链封装为可复现、可审计、支持人在回路的七阶段标准流程。",
+        "软件适用的核心场景包括：文献调研与事实抽取、科学假设构建与评审、迭代实验设计与执行、科研报告撰写与影响力评估，以及开题报告、大创与挑战杯等赛事材料的准备。"
+      ],
+      "include_feature_overview": true,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "三、功能特点",
+      "intent": "概述软件区别于通用写作工具的关键能力，承接概述章节。",
+      "paragraphs": [
+        "软件的核心能力不在于单纯代写文本，而在于用机制约束大模型行为：以事实白名单杜绝编造引用，以判定式 Gate 拦截不可行方案，以大家长 Agent 统筹全局质量，并以审计链保留每一步决策依据。"
+      ],
+      "include_feature_overview": true,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "四、系统要求",
+      "intent": "列出运行软件所需的操作系统、浏览器与基础依赖。",
+      "paragraphs": [
+        "软件为前后端分离架构，前端为浏览器应用，后端为本地或服务器部署的 API 服务。用户需准备能同时运行后端与前端的环境，并配置 Qwen 大模型访问凭证（或开启模拟模式）。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "五、安装与启动",
+      "intent": "给出最小可跑通的启动步骤，避免读者卡在环境配置。",
+      "paragraphs": [
+        "后端：安装 Python 3.10–3.12 依赖，复制 .env.example 为 backend/.env，填入 QWEN_API_KEY（暂无 Key 时设置 USE_MOCK_LLM=true 亦可跑通），执行启动命令后后端监听 8000 端口，Swagger 文档位于 /docs。",
+        "前端：安装 Node.js 18+ 与 pnpm 9.x，执行开发命令后前端监听 5173 端口，浏览器访问 http://localhost:5173。若使用科学影响力预测，还需启动独立的评分表服务（默认 8765 端口）。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "六、操作流程总览",
+      "intent": "先给端到端流程地图，再进入逐页面操作，符合审核员阅读习惯。",
+      "paragraphs": [
+        "一个典型科研任务的端到端流程为：新建项目 → 问题理解 → 文献挖掘与事实白名单 → 知识缺口 → 假设生成与评审（含人在回路 Gate）→ 迭代实验 → 报告生成 → 导出报告与审计链。下方各章按真实页面逐一说明操作。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": true
+    },
+    {
+      "title": "七、功能页面操作说明",
+      "intent": "本手册核心章节，按真实页面与流程组织，逐页说明用户可见内容与操作。",
+      "paragraphs": [
+        "以下各节对应软件在浏览器中的真实页面与核心流程，均以普通用户视角描述进入位置、可见控件、操作步骤、输入限制与结果反馈。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": true,
+      "include_operation_flow": false
+    },
+    {
+      "title": "八、常见问题解答",
+      "intent": "汇总真实使用中最常被问到的问题与处理办法。",
+      "paragraphs": [
+        "本节整理安装、运行与功能使用中的常见问题，便于用户自助排查。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    },
+    {
+      "title": "九、术语表",
+      "intent": "用普通中文解释软件中出现的业务与机制术语。",
+      "paragraphs": [
+        "下列术语在手册与软件界面中反复出现，此处给出面向普通用户的解释。"
+      ],
+      "include_feature_overview": false,
+      "include_operation_modules": false,
+      "include_operation_flow": false
+    }
+  ],
+  "manual_modules": [
+    {
+      "title": "首页与项目列表",
+      "evidence": [
+        "frontend/src/Home.tsx",
+        "frontend/README.md（页面：首页 / 项目搜索、筛选与列表）",
+        "designs/aisci-ui-acceptance.md（Frame 01-Home）"
+      ],
+      "purpose": "用户登录后的起始页，用于浏览、搜索与进入已有科研项目，并作为创建新项目的入口。",
+      "usage": "科研人员每天打开系统第一眼看到的就是首页：这里列出自己参与的全部项目，可按名称或状态筛选，也能从首页直接进入某个项目的工作台或发起新项目。",
+      "entry": "浏览器访问 http://localhost:5173 后默认进入首页（路由 /）。",
+      "visible_elements": [
+        "顶部品牌栏与导航（含“创建项目”入口）",
+        "项目卡片网格，每张卡片显示项目名称、研究领域、状态与最近一次 Pipeline 摘要",
+        "搜索框与状态筛选标签（草稿/进行中/已生成报告等）",
+        "首页 Footer 与最近 Pipeline 运行概览"
+      ],
+      "operation_steps": [
+        "在搜索框输入项目关键字，或点击状态标签筛选列表。",
+        "点击某张项目卡片，进入该项目的多 Tab 工作台。",
+        "点击右上角“创建项目”按钮，跳转到新建项目页。"
+      ],
+      "validation_rules": [
+        "无项目时列表显示空状态提示，引导用户点击创建项目。",
+        "搜索为空时返回“无匹配项目”提示，不报错。"
+      ],
+      "feedback": [
+        "筛选或搜索后列表实时更新，卡片显示最新状态。",
+        "点击卡片后页面跳转到对应项目工作台，地址栏变为 /projects/{id}。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“首页”项目列表与创建项目入口截图。】"
+    },
+    {
+      "title": "新建科研项目",
+      "evidence": [
+        "frontend/src/pages/CreateProject.tsx",
+        "frontend/README.md（创建项目 /projects/new，通用/联邦学习模式、FL 档位与领域）",
+        "designs/aisci-ui-acceptance.md（Frame 17-创建项目）"
+      ],
+      "purpose": "录入一个科研任务的元信息，确定其运行模式（通用或联邦学习）、研究领域与初始约束，作为后续七阶段流程的输入。",
+      "usage": "当用户有一个新的研究想法（例如“部分类不相交数据下的联邦学习鲁棒性”）要系统化推进时，在此页填写研究问题、目标与约束，建立项目骨架。",
+      "entry": "首页点击“创建项目”，或访问 /projects/new。",
+      "visible_elements": [
+        "项目名称、研究问题、研究领域、研究目标、已知背景输入框",
+        "项目模式选择（通用 general / 联邦学习 federated learning）",
+        "联邦学习模式下出现的 FL 档位与领域标签选择",
+        "关键词、数据来源、限制条件、期望输出等扩展字段",
+        "“创建”按钮与取消按钮"
+      ],
+      "operation_steps": [
+        "填写项目名称与研究问题（必填）。",
+        "选择项目模式；若选联邦学习，继续选择 FL 档位与领域标签。",
+        "填写研究目标、背景、约束与期望输出等可选项。",
+        "点击“创建”，系统生成项目并返回工作台。"
+      ],
+      "validation_rules": [
+        "项目名称与研究问题为必填，留空时按钮置灰或提示“请填写必填项”。",
+        "联邦学习模式必须至少选择一个 FL 档位，否则提示选择后再创建。",
+        "研究问题长度建议具体可检验，过长会给出精简提示但不强制。"
+      ],
+      "feedback": [
+        "创建成功后自动跳转到新建项目的工作台（/projects/{id}）。",
+        "项目出现在首页列表，状态为“草稿”。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“新建项目”表单与模式选择截图。】"
+    },
+    {
+      "title": "项目工作台与多 Tab 导航",
+      "evidence": [
+        "frontend/src/config/projectTabs.ts",
+        "frontend/README.md（项目工作台主 Tab：项目概览·研究问题·文献库·智能体工作流·候选假设·迭代实验·研究报告；高级深链 Prompt 管理·运行日志）",
+        "designs/aisci-ui-spec.md（工作台外壳：Navbar→ProjectMetaBar→Tabs→Body）"
+      ],
+      "purpose": "单个科研项目的统一操作台，把所有阶段相关页面聚合在多 Tab 布局中，用户在一个界面内完成全流程。",
+      "usage": "用户进入具体项目后，日常所有操作都在工作台进行：切到不同 Tab 分别处理问题、文献、假设、实验与报告，无需在多个系统间跳转。",
+      "entry": "首页点击项目卡片，或访问 /projects/:id。",
+      "visible_elements": [
+        "顶部项目信息栏（名称、模式、状态）",
+        "左侧或顶部 Tab 栏：项目概览、研究问题、文献库、智能体工作流、候选假设、迭代实验、研究报告、Prompt 管理、运行日志",
+        "每个 Tab 对应的内容区与状态指示（加载中/空/错误三态）"
+      ],
+      "operation_steps": [
+        "在 Tab 栏点击目标阶段对应的标签。",
+        "在当前 Tab 内完成该阶段操作（如研究问题 Tab 查看/编辑问题陈述）。",
+        "需要深入配置时，通过高级深链进入 Prompt 管理或运行日志 Tab。"
+      ],
+      "validation_rules": [
+        "联邦学习模式才显示联邦相关面板，通用模式自动隐藏对应入口。",
+        "Tab 内容区加载失败显示错误态与重试提示，不空白卡死。"
+      ],
+      "feedback": [
+        "切换 Tab 后内容区刷新为对应阶段数据与控件。",
+        "阶段状态变化会反映在项目信息栏与 Tab 角标上。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“项目工作台”多 Tab 布局截图。】"
+    },
+    {
+      "title": "智能体工作流运行（七阶段 Pipeline）",
+      "evidence": [
+        "frontend/src/components/WorkflowPage.tsx",
+        "frontend/src/components/PipelineProgress.tsx",
+        "frontend/src/components/ClosedLoopTimeline.tsx",
+        "README.md（由 CoordinatorAgent 全程协调，支持 HITL、CQS、审计链导出）"
+      ],
+      "purpose": "可视化并驱动七阶段科研流水线，展示每个阶段的进度、输出与运行过程事件，是系统核心操作页面。",
+      "usage": "用户在工作流 Tab 启动一次完整科研运行，实时观察问题理解→文献挖掘→知识缺口→假设生成→假设评审→迭代实验→报告生成的推进，并在人为审核节点介入。",
+      "entry": "项目工作台 → “智能体工作流”Tab（WorkflowPage）。",
+      "visible_elements": [
+        "阶段进度条（PipelineProgress），七个阶段按序高亮",
+        "当前阶段产出文本/结构化结果展示区",
+        "运行过程时间线（ClosedLoopTimeline）显示 CQS 趋势、运行过程事件与决策",
+        "“启动 Pipeline / 继续 / 导出审计链”按钮",
+        "HITL Gate 弹窗（出现时）"
+      ],
+      "operation_steps": [
+        "点击“启动 Pipeline”，系统按七阶段顺序执行。",
+        "观察进度条与每个阶段产出；遇到人工审核 Gate 时，在弹窗中查看证据并选择通过或退回。",
+        "某阶段完成后可点击查看详细输出；运行结束在运行过程时间线查看质量趋势。",
+        "点击“导出审计链”下载本次运行的 JSONL 决策记录。"
+      ],
+      "validation_rules": [
+        "启动前需至少填写研究问题，否则提示先到研究问题 Tab 补全。",
+        "HITL Gate 未处理时流程暂停，需专家通过或退回方可继续。",
+        "无 Qwen Key 且未开模拟模式时，启动会提示配置凭证。"
+      ],
+      "feedback": [
+        "阶段切换时进度条与高亮更新，产出区刷新。",
+        "完成后显示综合质量分与“已修复/修复中”状态；审计链可导出。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“智能体工作流”七阶段进度与运行过程时间线截图。】"
+    },
+    {
+      "title": "文献库与事实白名单（证据链抽屉）",
+      "evidence": [
+        "frontend/src/components/LiteratureLibrary.tsx",
+        "frontend/src/components/EvidenceChainDrawer.tsx",
+        "frontend/src/components/EvidenceLevelBadge.tsx",
+        "README.md（Fact 白名单：每条 Fact 绑定 fact_id 与 source_chunk_id）"
+      ],
+      "purpose": "管理项目文献，并呈现由文献挖掘提取的事实白名单与可溯源的证据链，让用户核对假设引用的真实来源。",
+      "usage": "用户在文献库 Tab 上传论文或导入检索结果后，想确认系统到底依据哪些文献事实生成了假设，可打开证据链抽屉查看每条 fact 的来源与证据级别。",
+      "entry": "项目工作台 → “文献库”Tab（LiteratureLibrary）；证据链抽屉由假设或事实链接打开。",
+      "visible_elements": [
+        "文献列表（标题、来源、导入状态）",
+        "上传/导入（arXiv）按钮与进度",
+        "事实白名单条目，每条带 fact_id、证据级别徽标（EvidenceLevelBadge）",
+        "证据链抽屉（EvidenceChainDrawer）显示 fact 与 source_chunk_id 的对应关系"
+      ],
+      "operation_steps": [
+        "点击“上传”选择本地 PDF/DOCX，或点击“导入”检索并添加 arXiv 文献。",
+        "等待文献挖掘完成，列表中显示已提取的事实数量。",
+        "点击某条事实或假设中的 fact 引用，打开证据链抽屉查看来源原文与来源块标识。",
+        "根据证据级别（high/medium/low）判断该事实的可信度。"
+      ],
+      "validation_rules": [
+        "仅支持 PDF/DOCX/TXT/MD/CSV 等文本类文献，其他格式提示不支持。",
+        "文献解析失败显示错误态与重试入口，不阻断其他文献。",
+        "证据级别为 low 的事实在假设生成时会被要求补强或标注。"
+      ],
+      "feedback": [
+        "上传/导入后文献进入列表，状态从“处理中”变为“已完成”。",
+        "事实白名单条目带上 fact_id 与级别徽标，点击可回放来源。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“文献库”与“证据链抽屉”截图。】"
+    },
+    {
+      "title": "候选假设与评审（人在回路 Gate）",
+      "evidence": [
+        "frontend/src/components/HypothesesPage.tsx",
+        "frontend/src/components/HypothesisCard.tsx",
+        "frontend/src/components/HitlGateModal.tsx",
+        "frontend/src/components/HitlGateContinueBar.tsx",
+        "backend/prompts/hypothesis_review.md（五维评分）"
+      ],
+      "purpose": "展示假设生成与评审结果，提供五维评分、证据级别与人工审核 Gate，让用户决定假设是否进入实验。",
+      "usage": "用户在假设评审阶段后，于候选假设 Tab 查看系统产出的多条假设及其评分，对关键假设做人工通过/退回，控制自动化流程的走向。",
+      "entry": "项目工作台 → “候选假设”Tab（HypothesesPage）；HITL 弹窗在评审 Gate 触发时自动出现。",
+      "visible_elements": [
+        "假设卡片列表（HypothesisCard），含假设陈述、证据级别、五维评分",
+        "每条假设的 fact 引用与可检验性说明",
+        "人工审核 Gate 弹窗（HitlGateModal）与继续条（HitlGateContinueBar）",
+        "“通过/退回修改”按钮与评审摘要"
+      ],
+      "operation_steps": [
+        "浏览假设卡片，查看五维评分与证据级别徽标。",
+        "点击某条假设展开其 fact 引用与评审摘要。",
+        "出现审核 Gate 时，在弹窗中阅读系统提示，选择“通过”或“退回修改”。",
+        "退回的假设会回到生成/修订环节，通过后进入迭代实验。"
+      ],
+      "validation_rules": [
+        "审核 Gate 必须通过或退回其中之一，不能跳过。",
+        "证据级别为 low 的假设在通过前会被提示需补强证据。",
+        "退回需填写简要理由，否则按钮置灰。"
+      ],
+      "feedback": [
+        "通过后假设状态变更，继续条提示可进入下一阶段。",
+        "退回后假设回到修订队列，用户可在工作流中看到重试。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“候选假设”评审卡片与 HITL Gate 弹窗截图。】"
+    },
+    {
+      "title": "迭代实验与运行决策",
+      "evidence": [
+        "frontend/src/components/LoopConfigPanel.tsx",
+        "frontend/src/components/CounterfactualPreviewPanel.tsx",
+        "frontend/src/components/IterationRoundPanel.tsx",
+        "backend/prompts/iterative_experiment.md（数据推荐→脚本设计→smoke/full 迭代→人工反馈）"
+      ],
+      "purpose": "绑定真实数据、设计分析脚本并按反馈多轮执行实验，结合反事实预演与多轮实验决策，把假设推向可验证结论。",
+      "usage": "用户在假设评审通过后，于迭代实验 Tab 选择数据、配置实验循环、查看反事实预演（失败模式预警），并基于每轮结果决定是否继续或转向。",
+      "entry": "项目工作台 → “迭代实验”Tab。",
+      "visible_elements": [
+        "数据绑定与实验循环配置面板（LoopConfigPanel）",
+        "反事实预演面板（CounterfactualPreviewPanel）显示失败模式与转向建议",
+        "迭代轮次面板（IterationRoundPanel）展示每轮结果、指标与状态",
+        "“运行 / 采纳结果 / 触发证据链迭代”按钮"
+      ],
+      "operation_steps": [
+        "在循环配置面板选择数据集并设定实验参数。",
+        "查看反事实预演给出的失败风险与最小成本验证建议。",
+        "点击“运行”，系统先小样本预检再执行 full 迭代。",
+        "逐轮查看指标；证据不足时点击“触发证据链迭代”回到文献补搜。",
+        "确认结论后采纳结果，供报告引用。"
+      ],
+      "validation_rules": [
+        "未绑定数据不得进入脚本设计或运行，提示先选数据。",
+        "小样本预检不通过会阻断 full 运行，要求修正方案。",
+        "高风险且无廉价验证手段的路径会被标记，需人工确认继续。"
+      ],
+      "feedback": [
+        "每轮运行后指标与状态刷新，运行过程时间线记录决策。",
+        "采纳结果后该实验出现在报告可引用列表中。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“迭代实验”循环配置与反事实预演面板截图。】"
+    },
+    {
+      "title": "研究报告生成与导出",
+      "evidence": [
+        "frontend/src/pages/Reports.tsx",
+        "backend/README.md（报告生成、LaTeX 优先 + Markdown 回退、审计链导出）",
+        "LATEX_EXPORT_SETUP.md（报告产物：report.tex/pdf/md/report_data.json）"
+      ],
+      "purpose": "查看系统生成的研究报告，导出多种格式与完整审计链，供复盘、提交或赛事材料使用。",
+      "usage": "用户在七阶段运行完成后，于报告中心浏览生成的科研报告，检查参考文献与图表，并导出 PDF/Markdown 与审计链 JSONL 作为交付物。",
+      "entry": "项目工作台 → “研究报告”Tab，或顶栏“报告中心” /reports。",
+      "visible_elements": [
+        "报告列表（标题、生成时间、状态）",
+        "报告预览区（Markdown 渲染，含章节、参考文献、图表）",
+        "“导出 PDF / Markdown / 审计链”按钮",
+        "质量分与修复状态标记"
+      ],
+      "operation_steps": [
+        "在报告列表点击某份报告进入预览。",
+        "通读章节、参考文献与图表，确认证据链完整。",
+        "点击“导出 PDF”或“导出 Markdown”下载报告。",
+        "点击“导出审计链”下载 JSONL，逐条回放决策依据。"
+      ],
+      "validation_rules": [
+        "未安装 XeLaTeX 时系统自动回退 Markdown→PDF，并在元数据显示 export_method=markdown fallback。",
+        "审计链导出依赖运行记录存在，无记录时按钮提示先运行 Pipeline。"
+      ],
+      "feedback": [
+        "导出后浏览器下载对应文件，报告页显示“已导出”提示。",
+        "LaTeX 源码 report.tex 始终生成，可手动编译。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“报告中心”预览与导出按钮截图。】"
+    },
+    {
+      "title": "文献中心（上传与检索）",
+      "evidence": [
+        "frontend/src/pages/Documents.tsx",
+        "frontend/README.md（文献 /documents：上传、arXiv 检索与导入）",
+        "designs/aisci-ui-acceptance.md（Frame 14-文献中心）"
+      ],
+      "purpose": "跨项目的文献统一入口，支持上传本地文献与检索导入 arXiv 论文，供多个项目共享证据来源。",
+      "usage": "用户希望把一批论文集中管理、并在不同项目间复用检索结果时，在文献中心统一上传与检索，再在各项目文献库按需引用。",
+      "entry": "顶栏“文献” /documents。",
+      "visible_elements": [
+        "项目范围切换（单项目 / 跨项目汇总）",
+        "上传区域与 arXiv 检索框",
+        "文献卡片列表（标题、来源、引用次数、导入状态）"
+      ],
+      "operation_steps": [
+        "选择当前查看范围（某项目或跨项目汇总）。",
+        "点击上传添加本地文献，或在检索框输入关键词检索 arXiv。",
+        "从检索结果中勾选论文并“导入”到项目。",
+        "在列表中查看已入库文献与处理状态。"
+      ],
+      "validation_rules": [
+        "检索关键词为空时提示输入后再检索。",
+        "重复导入同一论文时会提示已存在，避免重复。"
+      ],
+      "feedback": [
+        "导入后文献出现在列表，状态变为“已处理”。",
+        "项目文献库可看到被导入的文献与提取的事实。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“文献中心”上传与检索截图。】"
+    },
+    {
+      "title": "科学影响力预测",
+      "evidence": [
+        "frontend/src/pages/Predict.tsx",
+        "frontend/README.md（预测 /predict：评分表/影响力预测，BFF→pingfenbiao）",
+        "output/_intro_ch8.txt（科学影响力预测系统：四维评估、偏差分析、不确定量化）"
+      ],
+      "purpose": "对生成的研究报告或论文做早期、可解释的科学影响力评估，输出四维评分与偏差提示。",
+      "usage": "用户在报告完成后，想快速判断其潜在学术影响力与被高估风险时，在预测页提交报告，查看文本质量、声誉网络、未来影响与偏差公平四维结果。",
+      "entry": "顶栏“预测” /predict（需评分表服务运行）。",
+      "visible_elements": [
+        "任务文件/评分文件上传或选择区",
+        "“运行预测”按钮",
+        "四维评估雷达/分项卡片（文本质量/声誉网络/未来影响/偏差公平）",
+        "校准总分、主要影响因素与不确定性量化展示"
+      ],
+      "operation_steps": [
+        "在预测页选择或上传待评估的报告/论文。",
+        "点击“运行预测”，等待评分表服务返回。",
+        "查看四维分项、校准总分与偏差提示。",
+        "根据不确定性量化判断结果可信度。"
+      ],
+      "validation_rules": [
+        "评分表服务未启动（默认 8765）时提示先启动该服务。",
+        "未选择文件时按钮置灰，提示先选评估对象。"
+      ],
+      "feedback": [
+        "返回后页面展示四维评分卡片与总分，并标注不确定性。",
+        "偏差维度给出缓解建议，帮助用户识别光环效应。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“科学影响力预测”四维评估结果截图。】"
+    },
+    {
+      "title": "系统设置（LLM 配置）",
+      "evidence": [
+        "frontend/src/pages/Settings.tsx",
+        "frontend/README.md（设置 /settings：LLM 配置 + 环境变量说明）",
+        "QUICKSTART.md（编辑 backend/.env，填入 QWEN_API_KEY；USE_MOCK_LLM=true 可跑通）"
+      ],
+      "purpose": "配置大模型访问凭证与运行参数，是系统能调用 Qwen 或开启模拟模式的前提。",
+      "usage": "用户在首次部署后进入设置页，确认或填写 Qwen API Key，或在无 Key 时开启模拟模式，使后续 Pipeline 能正常调用模型。",
+      "entry": "顶栏“设置” /settings。",
+      "visible_elements": [
+        "LLM 服务提供方与模型选择",
+        "API Key 输入框（脱敏显示）",
+        "模拟模式（USE_MOCK_LLM）开关",
+        "环境变量说明与保存按钮"
+      ],
+      "operation_steps": [
+        "在设置页选择 Qwen 作为基座模型。",
+        "填写 DashScope API Key（或在无 Key 时打开模拟模式开关）。",
+        "点击“保存”，前端提示配置已更新。",
+        "回到工作流启动 Pipeline 验证是否可调用。"
+      ],
+      "validation_rules": [
+        "API Key 格式不正确时提示检查后重试。",
+        "模拟模式开启时显示“将使用模拟输出”提示，结果不可用于正式提交。",
+        "保存需后端可写 .env，权限不足时提示联系部署者。"
+      ],
+      "feedback": [
+        "保存成功后显示“配置已保存”，状态栏反映当前模式。",
+        "启动 Pipeline 时若凭证有效则正常执行，否则给出明确错误。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“设置”LLM 配置页截图。】"
+    },
+    {
+      "title": "Skills 管理与 Prompt 控制台",
+      "evidence": [
+        "frontend/src/pages/Skills.tsx",
+        "frontend/src/components/PromptManagementPage.tsx",
+        "backend/README.md（Skill 分类：literature/data finder/evidence reasoning/…）",
+        "backend/prompts/README.md（Prompt 范式预设库、项目级覆盖）"
+      ],
+      "purpose": "浏览与启停科研 Skill 模块，并通过 Prompt 控制台管理各阶段的提示词范式与项目级覆盖。",
+      "usage": "高级用户在想调整系统行为时，于 Skills 页查看可用技能（文献、证据推理、数据发现等）并启停，或在 Prompt 控制台为某项目覆盖特定阶段的提示词。",
+      "entry": "顶栏“Skills” /skills，或工作台高级深链“Prompt 管理”。",
+      "visible_elements": [
+        "Skill 分类列表与启停开关（文献/证据推理/数据/报告/…）",
+        "Prompt 控制台的阶段选择、预设范式下拉与编辑区",
+        "项目覆盖保存状态"
+      ],
+      "operation_steps": [
+        "在 Skills 页浏览技能分类，打开或关闭所需技能。",
+        "进入 Prompt 控制台，选择目标阶段与预设范式。",
+        "编辑提示词或载入预设，点击“保存为项目覆盖”。",
+        "返回工作流，新运行将采用覆盖后的提示词。"
+      ],
+      "validation_rules": [
+        "关闭核心技能（如文献）会导致对应阶段不可用，给出影响提示。",
+        "Prompt 编辑为空时不允许保存为覆盖，提示先填写内容。"
+      ],
+      "feedback": [
+        "启停与保存后状态栏刷新，项目配置记录覆盖生效。",
+        "下次运行对应阶段沿用新设置。"
+      ],
+      "screenshot": "【截图预留：请在此处插入“Skills”列表与“Prompt 控制台”截图。】"
+    }
+  ],
+  "system_requirements": [
+    {
+      "item": "操作系统",
+      "minimum": "Windows 10 / macOS 12 / 主流 Linux 发行版",
+      "recommended": "Windows 11 / macOS 15"
+    },
+    {
+      "item": "浏览器",
+      "minimum": "Chrome 90 / Edge 90 等支持 ES2020 的现代浏览器",
+      "recommended": "Chrome 或 Edge 最新稳定版"
+    },
+    {
+      "item": "后端运行环境",
+      "minimum": "Python 3.10，内存 8 GB",
+      "recommended": "Python 3.12，内存 16 GB"
+    },
+    {
+      "item": "前端构建环境",
+      "minimum": "Node.js 18，pnpm 9.x",
+      "recommended": "Node.js 20，pnpm 9.x"
+    },
+    {
+      "item": "大模型访问",
+      "minimum": "DashScope Qwen API Key，或开启 USE_MOCK_LLM 模拟模式",
+      "recommended": "DashScope Qwen API Key（qwen-max / qwen-plus）"
+    }
+  ],
+  "faq": [
+    {
+      "question": "没有 Qwen API Key 能跑通流程吗？",
+      "answer": "可以。在 backend/.env 中设置 USE_MOCK_LLM=true，系统用模拟输出跑通完整七阶段流程；但模拟结果不可用于正式科研提交，仅用于体验与调试。"
+    },
+    {
+      "question": "Pipeline 启动后卡住或失败怎么办？",
+      "answer": "多数失败源于 LLM API 超时或欠费，而非软件本体的逻辑问题。可在设置页确认 Key 有效后重试；前端会在修复状态区显示“修复中/已修复”，失败重试通常在工作流页可见。"
+    },
+    {
+      "question": "联邦学习功能在哪里开启？",
+      "answer": "在“新建项目”页把项目模式选为 federated learning，并选择 FL 档位与领域标签；通用模式下联邦相关面板自动隐藏，调用会返回 FL MODE REQUIRED。"
+    },
+    {
+      "question": "报告如何导出供提交或参赛？",
+      "answer": "在“研究报告”或报告中心打开报告，点击“导出 PDF/Markdown”下载正文，点击“导出审计链”下载 JSONL 决策记录，二者配合即可作为可追溯的科研交付物。"
+    },
+    {
+      "question": "人在回路审核 Gate 是什么，必须处理吗？",
+      "answer": "它是关键节点的专家审核弹窗，用于通过或退回假设与报告。未处理时流程会暂停，必须由专家选择通过或退回后才能继续，目的是在失控前纠偏。"
+    }
+  ],
+  "glossary": [
+    {
+      "term": "Pipeline（科研流水线）",
+      "definition": "系统把科研过程拆成的七阶段标准流程：问题理解、文献挖掘、知识缺口、假设生成、假设评审、迭代实验、报告生成，按顺序由智能体执行。"
+    },
+    {
+      "term": "Fact 白名单",
+      "definition": "文献挖掘从论文中提取的结构化事实清单，每条事实有唯一 fact_id 与来源块标识；后续生成只能引用白名单中的真实事实，防止编造引用。"
+    },
+    {
+      "term": "大家长 Agent（CoordinatorAgent）",
+      "definition": "贯穿全流程的协调智能体，负责各智能体间的记忆管理、全局质量监控、报告自动修复与基于预设规则的主动拦截。"
+    },
+    {
+      "term": "人在回路（HITL）",
+      "definition": "Human-in-the-Loop，在关键节点设置人工审核 Gate，允许专家通过或退回系统产出，实现人工纠偏。"
+    },
+    {
+      "term": "综合质量分（CQS）",
+      "definition": "系统对每阶段产出计算的质量评分，结合预设错误规则与人工 Gate，用于判断是否需要拦截或修复。"
+    },
+    {
+      "term": "审计链",
+      "definition": "Pipeline 运行过程中记录的事件、决策与质量趋势清单（JSONL），可导出回放，证明每一步结论的依据。"
+    },
+    {
+      "term": "联邦学习 Starter Pack",
+      "definition": "系统以内容注入方式提供的联邦学习文献种子、数据集元数据与本地可跑脚本，作为通用科研能力的扩展演示场景，非核心技术主体。"
+    },
+    {
+      "term": "科学影响力预测（评分表系统）",
+      "definition": "延伸模块，对生成报告做四维（文本质量/声誉网络/未来影响/偏差公平）早期影响力评估，并量化不确定性、识别光环效应等偏差。"
+    }
+  ],
+  "model_authored": true,
+  "external_research_notes": "",
+  "confirmation_required": true,
+  "user_confirmed": true,
+  "confirmation_stage": "business",
+  "next_action": "请确认 草稿/业务理解.md 中的软件用途、行业、目标用户、核心功能、手册结构和申请口径；确认后运行 confirm_stage.py --stage business。",
+  "review_notes": [
+    "请确认模型判断的行业领域、目标用户和主要功能是否符合实际申报口径。",
+    "请确认操作手册结构是否按真实页面和流程展开，而不是套用抽象功能列表。"
+  ],
+  "confirmation_note": "重新确认：业务理解口径与首次确认一致，仅将手册自检标记的'闭环/代码'措辞改为用户视角描述（运行过程时间线/多轮实验决策/软件本体的逻辑问题）",
+  "confirmed_at": "2026-08-28T12:42:12+00:00"
+}

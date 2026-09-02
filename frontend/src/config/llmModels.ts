@@ -16,19 +16,19 @@ export type QwenModelGroup = {
 /** 按代际分组的 Qwen 模型（不含第三方与历史快照） */
 export const QWEN_MODEL_GROUPS: QwenModelGroup[] = [
   {
-    label: 'Qwen3.7（最新推荐）',
+    label: 'Qwen3.6（默认）',
     models: [
-      { id: 'qwen3.7-max', hint: '最强推理，1M 上下文' },
-      { id: 'qwen3.7-plus', hint: '能力与成本均衡，推荐首选' },
+      { id: 'qwen3.6-plus', hint: '默认推荐，1M 上下文，工具调用' },
+      { id: 'qwen3.6-max-preview', hint: '旗舰预览' },
+      { id: 'qwen3.6-flash', hint: '高性价比' },
+      { id: 'qwen3.6-27b', hint: '开源规格，部分账号仍有免费额度' },
     ],
   },
   {
-    label: 'Qwen3.6',
+    label: 'Qwen3.7',
     models: [
-      { id: 'qwen3.6-max-preview', hint: '旗舰预览' },
-      { id: 'qwen3.6-plus', hint: '1M 上下文，工具调用' },
-      { id: 'qwen3.6-flash', hint: '高性价比' },
-      { id: 'qwen3.6-27b', hint: '开源规格，部分账号仍有免费额度' },
+      { id: 'qwen3.7-max', hint: '最强推理，1M 上下文' },
+      { id: 'qwen3.7-plus', hint: '能力与成本均衡' },
     ],
   },
   {

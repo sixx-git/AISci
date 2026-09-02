@@ -212,6 +212,16 @@ class IterativeExperimentService:
     def _sx_id(self, exp: Dict[str, Any]) -> str:
         return exp.get("shaxiang_experiment_id") or exp.get("id") or ""
 
+    def _ensure_shaxiang_record(self, exp: Dict[str, Any]) -> None:
+        """JSON 有记录但 shaxiang DB 缺失时回填，避免设计脚本/投影报「实验不存在」。"""
+        if not exp or not use_shaxiang():
+            return
+        from app.integrations.shaxiang import bridge
+
+        if not self._sx_id(exp):
+            return
+        bridge.upsert_experiment_from_aisci(exp)
+
     def list(self, project_id: str) -> List[Dict[str, Any]]:
         store = _load(project_id)
         exps = list(store.get("experiments") or [])
@@ -222,6 +232,7 @@ class IterativeExperimentService:
                 sx_id = self._sx_id(e) if e else ""
                 if sx_id:
                     try:
+                        self._ensure_shaxiang_record(e)
                         refreshed.append(self.refresh_from_shaxiang(project_id, e["id"]))
                         continue
                     except Exception as exc:
@@ -335,6 +346,7 @@ class IterativeExperimentService:
         exp = self.get(project_id, experiment_id)
         if not exp:
             raise ValueError("实验不存在")
+        self._ensure_shaxiang_record(exp)
         if exp.get("executor_type") != "sandbox":
             raise ValueError("模拟实验无需推荐数据集")
         feedback = human_feedback or ""
@@ -550,6 +562,7 @@ class IterativeExperimentService:
         exp = self.get(project_id, experiment_id)
         if not exp:
             raise ValueError("实验不存在")
+        self._ensure_shaxiang_record(exp)
         cfg = data_config or exp.get("data_config")
         if not isinstance(cfg, dict) or not (cfg.get("source_path") or cfg.get("file_name")):
             raise ValueError("尚未绑定可用数据，已阻断设计脚本（对齐 shaxiang）")

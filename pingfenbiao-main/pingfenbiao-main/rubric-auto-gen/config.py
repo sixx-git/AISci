@@ -64,8 +64,8 @@ class Config:
 
     # 高级参数
     temperature: float = 0.3
-    max_retries: int = 3
-    timeout: int = 120
+    max_retries: int = 4
+    timeout: int = 360
     verbose: bool = True
 
     def __post_init__(self):

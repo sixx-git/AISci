@@ -53,12 +53,16 @@ _OPERATIONAL_LINE_PATTERNS = [
     ]
 ]
 
-# 整行删除：明显属于系统实现而非科学内容
+# 整行删除：明显属于系统实现而非科学内容。
+# 注意：不得用裸「大语言模型/大模型/LLM」作整行删除——它们常是研究对象（如 PEFT），
+# 否则摘要会被删空后只剩护栏短句。
 _DROP_LINE_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"qwen|千问|通义|百炼|dashscope",
-        r"大语言模型|大模型|llm\b|gpt-?[34]",
+        r"(?:通义)?千问|qwen|dashscope|阿里云百炼",
+        # 非研究对象的外部模型品牌；平台「用 LLM 生成报告」语境
+        r"\bgpt-?[34]\b|\bclaude\b|\bllama(?:-\d+)?\b",
+        r"大模型与智能体|由大模型生成|使用\s*LLM\s*(?:生成|完成|撰写)|LLM\s*生成",
         # 仅拦截平台/流水线语境；保留「多智能体系统」等科研表述
         r"(?:报告|假设|文献|评审|生成)智能体|智能体(?:平台|流水线)|ai\s*智能体",
         r"\bRAG\b|向量检索|faiss|embedding",
@@ -72,6 +76,20 @@ _DROP_LINE_PATTERNS = [
         r"^run_mode\s*:",
         r"^provider\s*:\s*shaxiang",
     ]
+]
+
+# 命中平台模式但行内仍有科研正文时：去掉平台词，保留其余
+_PLATFORM_TOKEN_RE = re.compile(
+    r"(?:通义)?千问|Qwen|DashScope|阿里云百炼|\bGPT-?[34]\b|\bClaude\b|\bLlama(?:-\d+)?\b",
+    re.I,
+)
+_PLATFORM_PHRASE_SOFT = [
+    (re.compile(r"结合(?:通义)?(?:千问|Qwen)?\s*大模型与智能体生成", re.I), "围绕"),
+    (re.compile(r"大模型与智能体(?:生成)?", re.I), ""),
+    (re.compile(r"由大模型生成的?", re.I), ""),
+    (re.compile(r"使用\s*LLM\s*(?:生成|完成|撰写)的?", re.I), ""),
+    (re.compile(r"LLM\s*生成的?", re.I), ""),
+    (re.compile(r"与智能体生成", re.I), ""),
 ]
 
 # 短语替换：保留句子但去掉平台措辞（勿误伤「多智能体系统」）
@@ -121,21 +139,56 @@ _METRIC_DROP_KEYS = frozenset(
 )
 
 _METRIC_LABEL_MAP = {
-    "dummy_accuracy_mean": "随机基线准确率均值",
-    "dummy_accuracy": "随机基线准确率",
-    "rf_accuracy_mean": "随机森林准确率均值",
-    "rf_accuracy": "随机森林准确率",
-    "rf_f1_macro_mean": "随机森林宏平均F1均值",
-    "rf_f1_macro": "随机森林宏平均F1",
-    "accuracy": "准确率",
-    "accuracy_mean": "准确率均值",
-    "f1": "F1分数",
-    "f1_macro": "宏平均F1",
-    "f1_macro_mean": "宏平均F1均值",
-    "primary_metric": "主指标",
-    "r2": "决定系数R²",
-    "mae": "平均绝对误差",
-    "rmse": "均方根误差",
+    "dummy_accuracy_mean": "dummy accuracy (mean)",
+    "dummy_accuracy": "dummy accuracy",
+    "rf_accuracy_mean": "random forest accuracy (mean)",
+    "rf_accuracy": "random forest accuracy",
+    "rf_f1_macro_mean": "random forest macro-F1 (mean)",
+    "rf_f1_macro": "random forest macro-F1",
+    "accuracy": "accuracy",
+    "accuracy_mean": "accuracy (mean)",
+    "accuracy_std": "accuracy (std)",
+    "f1": "F1",
+    "f1_score_mean": "F1 (mean)",
+    "f1_score_std": "F1 (std)",
+    "f1_macro": "macro-F1",
+    "f1_macro_mean": "macro-F1 (mean)",
+    "auc_roc_mean": "AUC (mean)",
+    "convergence_proxy": "convergence proxy",
+    "high_complexity_f1": "high-complexity F1",
+    "low_complexity_f1": "low-complexity F1",
+    "complexity_median": "complexity median",
+    "dynamic_f1_mean": "dynamic F1 (mean)",
+    "dynamic_f1_std": "dynamic F1 (std)",
+    "dynamic_acc_mean": "dynamic accuracy (mean)",
+    "dynamic_auc_mean": "dynamic AUC (mean)",
+    "dynamic_mcc_mean": "dynamic MCC (mean)",
+    "dynamic_mcc_std": "dynamic MCC (std)",
+    "dynamic_high_f1": "dynamic high-complexity F1",
+    "dynamic_low_f1": "dynamic low-complexity F1",
+    "fixed_f1_mean": "fixed F1 (mean)",
+    "fixed_acc_mean": "fixed accuracy (mean)",
+    "fixed_auc_mean": "fixed AUC (mean)",
+    "fixed_mcc_mean": "fixed MCC (mean)",
+    "fixed_accuracy": "fixed accuracy",
+    "fixed_f1": "fixed F1",
+    "fixed_training_time": "fixed training time",
+    "fixed_feature_dims": "fixed feature dims",
+    "dynamic_accuracy": "dynamic accuracy",
+    "dynamic_f1": "dynamic F1",
+    "dynamic_training_time": "dynamic training time",
+    "dynamic_feature_dims": "dynamic feature dims",
+    "accuracy_improvement": "accuracy improvement",
+    "f1_improvement": "F1 improvement",
+    "time_efficiency_ratio": "time efficiency ratio",
+    "high_complexity_fixed_accuracy": "high-complexity fixed accuracy",
+    "high_complexity_dynamic_accuracy": "high-complexity dynamic accuracy",
+    "high_complexity_accuracy_improvement": "high-complexity accuracy improvement",
+    "criteria_relative_gain": "criteria relative gain",
+    "primary_metric": "primary metric",
+    "r2": "R²",
+    "mae": "MAE",
+    "rmse": "RMSE",
 }
 
 _POSITIVE_CLAIM_PAT = re.compile(
@@ -244,33 +297,25 @@ def strip_english_literature_bleed(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+_PREPRINT_NOTE_RE = re.compile(
+    r"[（(]\s*预印本\s*/\s*在线优先[，,]\s*引用时请核对正式出版信息\s*[）)][。.]?"
+)
+
+
 def annotate_preprint_references(refs: Any, *, current_year: Optional[int] = None) -> Any:
-    """对近年在线优先 / 预印本条目标注状态。"""
+    """参考文献不再附加「预印本/在线优先…」说明；若已有则剥离。"""
+    del current_year  # 保留参数兼容旧调用
     if not isinstance(refs, list):
         return refs
-    if current_year is None:
-        from datetime import datetime
-
-        current_year = datetime.now().year
     out: List[Any] = []
     for item in refs:
         if not isinstance(item, str):
             out.append(item)
             continue
-        text = item
-        year_m = re.search(r"\b(20\d{2})\b", text)
-        needs = False
-        if re.search(r"(?i)\b(preprint|arxiv|biorxiv|medrxiv)\b", text):
-            needs = True
-        if year_m:
-            year = int(year_m.group(1))
-            # 当年及以后，或近一年且为 EB/OL 在线文献
-            if year >= current_year:
-                needs = True
-            elif year >= current_year - 1 and re.search(r"EB/?OL|online", text, re.I):
-                needs = True
-        if needs and "预印本" not in text and "在线优先" not in text:
-            text = text.rstrip("。.;； ") + "（预印本/在线优先，引用时请核对正式出版信息）。"
+        text = _PREPRINT_NOTE_RE.sub("", item).rstrip("。.;； ").strip()
+        if text and not text.endswith(("。", ".", "；", ";")):
+            # 原条目若以句号结尾被剥落后，不强行补句号（GB/T 行本身常已完整）
+            pass
         out.append(text)
     return out
 
@@ -323,6 +368,14 @@ def clean_iteration_summary(text: Any) -> str:
     s = re.sub(r"\[smoke[_\s-]?only[^\]]*\]\s*", "", s, flags=re.I)
     s = re.sub(r"run[_\s-]?scope\s*[:=]\s*\w+\s*", "", s, flags=re.I)
     s = re.sub(r"(?i)\b[A-Z]:\\(?:[^\\\r\n]+\\)*[^\\\r\n]*", "[本地数据集]", s)
+    # 破损超参片段：class_weight=； / sample_weights= 
+    s = re.sub(r"class_weight\s*=\s*[；;,]?", "类别权重设置", s, flags=re.I)
+    s = re.sub(r"sample_weights?\s*=\s*[\d.]*[；;,]?", "样本权重设置", s, flags=re.I)
+    # 调试式「数据: NxM | 指标: ...」尾巴
+    s = re.sub(r"[|；]\s*数据\s*[:：].*$", "", s)
+    s = re.sub(r"[|；]\s*指标\s*[:：].*$", "", s)
+    s = re.sub(r"[|；]\s*图表\s*[:：].*$", "", s)
+    s = re.sub(r"[；;]{2,}", "；", s)
     return re.sub(r"[ \t]{2,}", " ", s).strip()
 
 
@@ -421,9 +474,13 @@ def format_metric_label(key: str) -> str:
     low = k.lower()
     if low in _METRIC_LABEL_MAP:
         return _METRIC_LABEL_MAP[low]
+    snake = re.sub(r"[\s\-]+", "_", low)
+    if snake in _METRIC_LABEL_MAP:
+        return _METRIC_LABEL_MAP[snake]
+    # 默认保留英文指标键（学术报告常用），仅对明显调试词做轻量替换
     pretty = k.replace("_", " ")
-    pretty = re.sub(r"\brf\b", "随机森林", pretty, flags=re.I)
-    pretty = re.sub(r"\bdummy\b", "随机基线", pretty, flags=re.I)
+    pretty = re.sub(r"\brf\b", "random forest", pretty, flags=re.I)
+    pretty = re.sub(r"\bdummy\b", "dummy baseline", pretty, flags=re.I)
     return pretty.strip() or k
 
 
@@ -458,12 +515,13 @@ def evidence_flags_from_small_validation(sv: Optional[Dict[str, Any]]) -> Dict[s
 
     trivial = False
     negative_fit = False
+    poor_performance = False
     for k, v in metrics.items():
         try:
             fv = float(v)
         except (TypeError, ValueError):
             continue
-        kl = str(k).lower()
+        kl = str(k).lower().replace(" ", "_")
         if "r2" in kl or "r²" in kl or kl.endswith("_r2"):
             if fv < 0:
                 negative_fit = True
@@ -471,6 +529,11 @@ def evidence_flags_from_small_validation(sv: Optional[Dict[str, Any]]) -> Dict[s
             trivial = True
         if "importance" in kl and abs(fv) < 1e-12:
             trivial = True
+        # 分类任务明显低于可用水平：不得解读为正向支持
+        if kl in {"accuracy_mean", "accuracy", "dynamic_acc_mean", "fixed_acc_mean"} and 0 <= fv < 0.45:
+            poor_performance = True
+        if kl in {"f1_score_mean", "f1", "f1_macro_mean", "dynamic_f1_mean", "fixed_f1_mean"} and 0 <= fv < 0.35:
+            poor_performance = True
 
     vals = []
     for k, v in metrics.items():
@@ -487,14 +550,34 @@ def evidence_flags_from_small_validation(sv: Optional[Dict[str, Any]]) -> Dict[s
         or actual.get("counterexamples")
         or (actual.get("iteration_evidence") or {}).get("failed_rounds")
     )
+    # 诊断图/评估标注为 significant_issue 时视为负向证据
+    plots = (
+        sandbox.get("plots")
+        or artifacts.get("plots")
+        or actual.get("sandbox_plots")
+        or []
+    )
+    if isinstance(plots, list):
+        for pl in plots:
+            if not isinstance(pl, dict):
+                continue
+            assess = str(pl.get("overall_assessment") or "").lower()
+            kind = str(pl.get("chart_kind") or "").lower()
+            if assess in {"significant_issue", "failed", "failure"} or kind == "diagnostic_counterexample":
+                poor_performance = True
+                break
+
     verdict = str(
         narr.get("evidence_verdict") or brief.get("evidence_verdict") or ""
     ).strip()
+    if poor_performance and verdict in {"", "supported", "inconclusive"}:
+        verdict = "contradicted"
     return {
         "partial_run": partial,
         "smoke": smoke,
         "trivial_solution": trivial,
         "negative_fit": negative_fit,
+        "poor_performance": poor_performance,
         "has_failures": failed,
         "metrics": metrics,
         "progress": progress,
@@ -503,9 +586,82 @@ def evidence_flags_from_small_validation(sv: Optional[Dict[str, Any]]) -> Dict[s
     }
 
 
+def _soften_platform_line(text: str) -> str:
+    """去掉平台产品/生成器措辞，保留科研主句。"""
+    s = _PLATFORM_TOKEN_RE.sub("", str(text or ""))
+    for pat, repl in _PLATFORM_PHRASE_SOFT:
+        s = pat.sub(repl, s)
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    s = re.sub(r"\s+([,.;，。；])", r"\1", s)
+    s = re.sub(r"结合\s*与", "结合", s)
+    return s.strip(" ，、；;.")
+
+
+def _first_sentences(text: str, *, max_chars: int = 180, max_sentences: int = 2) -> str:
+    raw = re.sub(r"\s+", " ", strip_unprintable(str(text or ""))).strip()
+    if not raw:
+        return ""
+    parts = re.split(r"(?<=[。！？])", raw)
+    out: List[str] = []
+    total = 0
+    for part in parts:
+        s = part.strip()
+        if not s:
+            continue
+        if s.startswith("**") and "。**" not in s[:20]:
+            s = re.sub(r"^\*\*[^*]+\*\*[。:]?\s*", "", s).strip()
+        if not s:
+            continue
+        out.append(s)
+        total += len(s)
+        if len(out) >= max_sentences or total >= max_chars:
+            break
+    return "".join(out).strip()
+
+
+def compose_paper_abstract_from_chapters(
+    chapters: Optional[Dict[str, Any]] = None,
+    *,
+    sv: Optional[Dict[str, Any]] = None,
+    paper_title: str = "",
+) -> str:
+    """摘要被误删/过短时，从问题/方法/结果拼一段可读摘要。"""
+    ch = chapters if isinstance(chapters, dict) else {}
+    bits: List[str] = []
+    title = str(paper_title or "").strip()
+    ps = _first_sentences(ch.get("problem_statement") or "", max_chars=120, max_sentences=2)
+    if ps:
+        bits.append(ps)
+    elif title:
+        bits.append(f"本文围绕「{title}」展开研究。")
+    methods = _first_sentences(ch.get("methods") or "", max_chars=100, max_sentences=1)
+    if methods and "最小代理实验" not in "".join(bits):
+        bits.append(methods)
+    results_raw = ch.get("results")
+    if isinstance(results_raw, dict):
+        results_raw = (
+            results_raw.get("discussion")
+            or results_raw.get("actual_results")
+            or results_raw.get("summary")
+            or ""
+        )
+    results = _first_sentences(str(results_raw or ""), max_chars=120, max_sentences=2)
+    # 结果章常含 markdown 标题，再收一层
+    results = re.sub(r"^#+\s*", "", results).strip()
+    if results and "执行状态" not in results[:20]:
+        bits.append(results)
+    body = "".join(bits).strip()
+    if not body:
+        return ""
+    return align_paper_abstract(body, sv)
+
+
 def align_paper_abstract(abstract: Any, sv: Optional[Dict[str, Any]] = None) -> str:
     """摘要与实测证据对齐：阶段性/否定性结果不得过度包装（幂等、不叠句）。"""
     text = strip_unprintable(str(abstract or "")).strip()
+    # 无正文时不单独用护栏句充当摘要（否则 PDF 摘要区只剩一句免责声明）
+    if not text:
+        return ""
     flags = evidence_flags_from_small_validation(sv)
     prefixes: List[str] = []
     verdict = str(flags.get("evidence_verdict") or "").strip()
@@ -524,6 +680,7 @@ def align_paper_abstract(abstract: Any, sv: Optional[Dict[str, Any]] = None) -> 
     if (
         flags.get("trivial_solution")
         or flags.get("negative_fit")
+        or flags.get("poor_performance")
         or flags.get("has_failures")
         or weak_verdict
     ):
@@ -534,7 +691,13 @@ def align_paper_abstract(abstract: Any, sv: Optional[Dict[str, Any]] = None) -> 
                 "实测表明当前设定下出现平凡解或无效分裂风险，结论仅作方法边界提示，"
                 "不得外推为稳健验证。"
             )
-        if flags.get("negative_fit") and "拟合" not in text[-80:]:
+        if flags.get("poor_performance") and "分类性能" not in text:
+            text = (text.rstrip("。") + "。") if text else ""
+            text += (
+                "阶段性实测显示分类性能偏低，动态与固定策略差距有限，"
+                "现有证据更支持方法边界提示而非假设成立。"
+            )
+        if flags.get("negative_fit") and not flags.get("poor_performance") and "拟合" not in text[-80:]:
             text = (text.rstrip("。") + "。") if text else ""
             text += " 拟合与关联检验未达到预期，当前证据更支持假设在该协议下难以成立或需修正。"
         has_stage_claim = bool(
@@ -632,6 +795,26 @@ def strip_operational_bracket_sections(text: str) -> str:
     return "\n".join(collapsed).strip()
 
 
+def normalize_report_section_headings(text: Any) -> str:
+    """将结果章节中的英汉混排小节标题规范为中文。"""
+    if text is None:
+        return ""
+    s = str(text).replace("\\n", "\n")
+    replacements = [
+        (r"(?im)^#{2,3}\s*Actual\s*Results(?:\s*[（(]实际分析结果[）)])?\s*$", "### 实际分析结果"),
+        (r"(?im)^#{2,3}\s*Experiment\s*Run(?:\s*[（(][^）)]+[）)])?\s*$", "### 初步实验验证"),
+        (r"(?im)^#{2,3}\s*Counterexamples(?:\s*[（(][^）)]+[）)])?\s*$", "### 失败轮次与反例证据"),
+        (r"(?im)^#{2,3}\s*Modeling\s*Results(?:\s*[（(][^）)]+[）)])?\s*$", "### 数据建模评估"),
+        (r"(?im)^#{2,3}\s*Expected\s*Results(?:\s*[（(]预期结果[）)])?\s*$", "### 预期结果"),
+        (r"(?im)^#{2,3}\s*Simulated\s*Results(?:\s*[（(]模拟结果[）)])?\s*$", "### 模拟结果"),
+    ]
+    for pat, repl in replacements:
+        s = re.sub(pat, repl, s)
+    s = re.sub(r"(?i)以下\s*Results\s*以", "以下结果以", s)
+    s = re.sub(r"(?i)沙箱图表", "实验图表", s)
+    return s
+
+
 _ACTUAL_RESULTS_HEADING = re.compile(
     r"(?im)^#{2,3}\s*(?:Actual\s*Results(?:\s*[（(]实际分析结果[）)])?|实际分析结果)\s*$"
 )
@@ -645,7 +828,7 @@ def strip_empty_actual_results_section(text: Any) -> str:
     """无实测内容时删除空的 Actual Results / 实际分析结果 小节标题。"""
     if text is None:
         return ""
-    raw = str(text).replace("\\n", "\n")
+    raw = normalize_report_section_headings(str(text).replace("\\n", "\n"))
     if not raw.strip():
         return ""
     if not _ACTUAL_RESULTS_HEADING.search(raw):
@@ -692,6 +875,7 @@ def strip_empty_actual_results_section(text: Any) -> str:
 def _sanitize_results_chapter(results: Any) -> Any:
     if not isinstance(results, dict):
         text = strip_operational_bracket_sections(sanitize_text(results))
+        text = normalize_report_section_headings(text)
         return strip_empty_actual_results_section(text)
 
     cleaned: Dict[str, Any] = {}
@@ -703,6 +887,7 @@ def _sanitize_results_chapter(results: Any) -> Any:
                 text = strip_operational_bracket_sections(
                     sanitize_text(item, preserve_platform_terms=False)
                 ).strip()
+                text = normalize_report_section_headings(text)
                 if not text or _is_operational_line(text):
                     continue
                 if text in seen:
@@ -716,6 +901,7 @@ def _sanitize_results_chapter(results: Any) -> Any:
             text = strip_operational_bracket_sections(
                 sanitize_text(val, preserve_platform_terms=False)
             ).strip()
+            text = normalize_report_section_headings(text)
             if key == "actual_results":
                 text = strip_empty_actual_results_section(text)
                 if not text:
@@ -732,19 +918,36 @@ def _clean_line(line: str, *, preserve_platform_terms: bool = False) -> Optional
     stripped = line.strip()
     if not stripped:
         return ""
+    drop_hit = False
     for pat in _DROP_LINE_PATTERNS:
-        if preserve_platform_terms and "qwen" in pat.pattern.lower():
+        if preserve_platform_terms and re.search(
+            r"qwen|千问|通义|百炼|dashscope", pat.pattern, re.I
+        ):
             continue
         if pat.search(stripped):
+            drop_hit = True
+            break
+    if drop_hit:
+        softened = _soften_platform_line(stripped)
+        # 含足量汉字科研正文时保留，避免主题摘要被删成空
+        if len(_CJK_RE.findall(softened)) >= 10:
+            text = softened
+        else:
             return None
-    text = line
+    else:
+        text = line
     for pat, repl in _PHRASE_REPLACEMENTS:
         text = pat.sub(repl, text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([,.;，。；])", r"\1", text)
     text = strip_unprintable(text)
-    if re.fullmatch(r"[A-Za-z0-9 ,.;:'\"()/-]{1,40}", text.strip()) and len(text.strip()) < 24:
-        if not re.search(r"(accuracy|baseline|metric|dataset|figure|table)", text, re.I):
+    if re.fullmatch(r"[A-Za-z0-9 ,.;:'\"()/%+\-]{1,40}", text.strip()) and len(text.strip()) < 24:
+        if not re.search(
+            r"(accuracy|baseline|metric|dataset|figure|table|f1|mcc|auc|rmse|mae|"
+            r"training\s*time|feature\s*dims?|improvement|efficiency|precision|recall)",
+            text,
+            re.I,
+        ):
             return None
     return text.rstrip()
 
@@ -845,14 +1048,44 @@ def sanitize_report_result(
         out["chapters"] = sanitize_chapters(chapters)
         out["markdown_content"] = ""
     sv = small_validation or out.get("_small_validation")
-    if out.get("paper_abstract"):
-        out["paper_abstract"] = align_paper_abstract(
-            sanitize_text(out["paper_abstract"]),
-            sv if isinstance(sv, dict) else None,
+    sv_dict = sv if isinstance(sv, dict) else None
+    raw_abstract = str(out.get("paper_abstract") or "").strip()
+    if raw_abstract:
+        cleaned = sanitize_text(raw_abstract)
+        # 净化误删科研主题摘要时回退：软清洗原文，再不行从章节拼装
+        if len(cleaned) < 40 and len(raw_abstract) >= 40:
+            softened = _soften_platform_line(raw_abstract)
+            softened = re.sub(r"[ \t]{2,}", " ", softened).strip()
+            if len(_CJK_RE.findall(softened)) >= 10 and len(softened) > len(cleaned):
+                cleaned = softened
+        if len(cleaned) < 80:
+            filled = compose_paper_abstract_from_chapters(
+                out.get("chapters") if isinstance(out.get("chapters"), dict) else {},
+                sv=sv_dict,
+                paper_title=str(out.get("paper_title") or out.get("title") or ""),
+            )
+            if len(str(filled or "")) > max(len(cleaned), 40):
+                out["paper_abstract"] = dedupe_repeated_sentences(filled)
+            elif cleaned:
+                out["paper_abstract"] = dedupe_repeated_sentences(
+                    align_paper_abstract(cleaned, sv_dict)
+                )
+            else:
+                out["paper_abstract"] = ""
+        else:
+            out["paper_abstract"] = align_paper_abstract(cleaned, sv_dict)
+            out["paper_abstract"] = dedupe_repeated_sentences(out["paper_abstract"])
+    else:
+        # LLM 漏写摘要：从章节回填
+        filled = compose_paper_abstract_from_chapters(
+            out.get("chapters") if isinstance(out.get("chapters"), dict) else {},
+            sv=sv_dict,
+            paper_title=str(out.get("paper_title") or out.get("title") or ""),
         )
-        out["paper_abstract"] = dedupe_repeated_sentences(out["paper_abstract"])
-    elif out.get("markdown_content"):
-        out["markdown_content"] = sanitize_markdown_document(out["markdown_content"])
+        if filled:
+            out["paper_abstract"] = dedupe_repeated_sentences(filled)
+        elif out.get("markdown_content"):
+            out["markdown_content"] = sanitize_markdown_document(out["markdown_content"])
     # 讨论字段同步去重
     if isinstance(out.get("results"), dict) and out["results"].get("discussion"):
         out["results"] = {
