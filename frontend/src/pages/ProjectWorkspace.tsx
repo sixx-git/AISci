@@ -4,7 +4,7 @@ import {
   HelpCircle,
   BookOpen, Lightbulb, FlaskConical,
   FileText, TrendingUp, Play,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -28,7 +28,8 @@ import {
   resolveProjectDisplayStatus,
 } from '@/lib/projectStatus';
 import type { ProjectOverview, PipelineRunResult, PipelineRunSummary } from '@/types';
-import { LEGACY_PROJECT_TAB_REDIRECTS, VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { LEGACY_PROJECT_TAB_REDIRECTS, PRIMARY_PROJECT_TABS, VALID_PROJECT_TAB_IDS } from '@/config/projectTabs';
+import { SixGWorkspace } from '@/components/emergency/SixGWorkspace';
 import { AdvancedTabNotice } from '@/components/workspace/AdvancedTabNotice';
 import { researchQuestionKey } from '@/lib/storageKeys';
 import { resolveResearchField } from '@/lib/researchField';
@@ -577,16 +578,24 @@ export function ProjectWorkspace() {
 
   // --- 研究领域 ---
   const resolvedProjectMode = project?.project_mode || 'general';
+  const isEmergencyProject = resolvedProjectMode === 'emergency_6g';
   const projectModeLabel =
     resolvedProjectMode === 'federated_learning'
       ? '联邦学习（资源包）'
-      : 'General AISci';
+      : isEmergencyProject
+        ? '6G专业应用'
+        : 'General AISci';
   const flPackSummary = project?.config?.fl_pack?.summary || project?.config?.fl_pack;
   const flPackMounted = Boolean(
     resolvedProjectMode === 'federated_learning'
     && project?.config?.fl_pack_mounted
     && flPackSummary,
   );
+
+  useEffect(() => {
+    if (!isEmergencyProject || searchParams.get('tab')) return;
+    setSearchParams({ tab: 'emergency' }, { replace: true });
+  }, [isEmergencyProject, searchParams, setSearchParams]);
 
   const resolvedResearchField = useMemo(
     () => resolveResearchField(project, id, latestRunStages),
@@ -750,6 +759,8 @@ export function ProjectWorkspace() {
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'emergency':
+        return <SixGWorkspace projectId={id} />;
       case 'overview':
         return (
           <ProjectOverview
@@ -852,7 +863,15 @@ export function ProjectWorkspace() {
         onRunPipeline={() => navigate(`/projects/${project.id}?tab=workflow`)}
       />
 
-      <ProjectTabNav activeTab={activeTab} onTabChange={handleTabChange} />
+      <ProjectTabNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        tabs={
+          isEmergencyProject
+            ? [{ id: 'emergency', label: '6G专题', icon: Radio }, ...PRIMARY_PROJECT_TABS]
+            : PRIMARY_PROJECT_TABS
+        }
+      />
 
       <div className="animate-fade-in">
         {renderTabContent()}

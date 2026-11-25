@@ -40,6 +40,9 @@ export const PROJECT_TABS: ProjectTabItem[] = [
   ...ADVANCED_PROJECT_TABS,
 ];
 
-export const VALID_PROJECT_TAB_IDS = new Set(PROJECT_TABS.map((t) => t.id));
+export const VALID_PROJECT_TAB_IDS = new Set([
+  ...PROJECT_TABS.map((t) => t.id),
+  'emergency',
+]);
 
 export type ProjectTabId = (typeof PROJECT_TABS)[number]['id'];

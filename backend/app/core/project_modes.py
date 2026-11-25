@@ -1,4 +1,4 @@
-"""项目运行模式：general + federated_learning（Starter Pack，非多机 runtime）。"""
+"""项目运行模式：general、federated_learning，以及 6G 应急通信应用。"""
 from __future__ import annotations
 
 from enum import Enum
@@ -8,11 +8,13 @@ from typing import Any, Dict
 class ProjectMode(str, Enum):
     GENERAL = "general"
     FEDERATED_LEARNING = "federated_learning"
+    EMERGENCY_6G = "emergency_6g"
 
 
 VALID_PROJECT_MODES = {
     ProjectMode.GENERAL.value,
     ProjectMode.FEDERATED_LEARNING.value,
+    ProjectMode.EMERGENCY_6G.value,
 }
 
 
@@ -28,14 +30,21 @@ def is_federated_learning_mode(mode: str | None) -> bool:
     return normalize_project_mode(mode) == ProjectMode.FEDERATED_LEARNING.value
 
 
+def is_emergency_6g_mode(mode: str | None) -> bool:
+    """是否为 6G 应急通信方案评审项目。"""
+    return normalize_project_mode(mode) == ProjectMode.EMERGENCY_6G.value
+
+
 PROJECT_MODE_LABELS = {
     ProjectMode.GENERAL.value: "General AI Scientist",
     ProjectMode.FEDERATED_LEARNING.value: "Federated Learning (Starter Pack)",
+    ProjectMode.EMERGENCY_6G.value: "6G Emergency Communications Review",
 }
 
 PROJECT_MODE_LABELS_ZH = {
     ProjectMode.GENERAL.value: "通用 AI Scientist 模式",
     ProjectMode.FEDERATED_LEARNING.value: "联邦学习（资源包）模式",
+    ProjectMode.EMERGENCY_6G.value: "6G应急通信方案智能评审",
 }
 
 # 联邦仿真后端（仅 federated_learning；与通用沙箱隔离）

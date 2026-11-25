@@ -1,16 +1,18 @@
-import { PRIMARY_PROJECT_TABS } from '@/config/projectTabs';
+import { PRIMARY_PROJECT_TABS, type ProjectTabItem } from '@/config/projectTabs';
 import { cn } from '@/lib/utils';
 
 interface ProjectTabNavProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  tabs?: ProjectTabItem[];
 }
 
-export function ProjectTabNav({ activeTab, onTabChange }: ProjectTabNavProps) {
+export function ProjectTabNav({ activeTab, onTabChange, tabs }: ProjectTabNavProps) {
+  const items = tabs ?? PRIMARY_PROJECT_TABS;
   return (
     <div className="bp-tab-nav">
       <nav className="flex gap-1 overflow-x-auto -mb-px">
-        {PRIMARY_PROJECT_TABS.map((tab) => {
+        {items.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

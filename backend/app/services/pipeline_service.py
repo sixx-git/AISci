@@ -4339,6 +4339,10 @@ class PipelineService:
             project_mode=project_mode,
         )
         result_dict = self._safe_model_dump(result)
+        if project_id:
+            from app.services.sixg.records import append_sixg_to_report_dict
+
+            result_dict = append_sixg_to_report_dict(self.db, project_id, result_dict)
         result_dict["iterative_experiment_ref"] = {
             "primary_experiment_id": ie.get("primary_experiment_id"),
             "report_experiment_ids": ie.get("report_experiment_ids") or [],

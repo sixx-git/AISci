@@ -99,6 +99,25 @@ class ProjectService:
             config=config or None,
         )
         
+        if mode == "emergency_6g":
+            from app.services.sixg.profile import apply_sixg_profile
+            from app.services.sixg.topics import EMERGENCY_TOPIC
+
+            apply_sixg_profile(
+                project,
+                topic_id=getattr(data, "sixg_topic", None),
+                execution_mode=getattr(data, "sixg_execution", None),
+                user_question=data.research_question,
+            )
+            topic_id = (project.config or {}).get("sixg_app", {}).get("topic_id")
+            if topic_id == EMERGENCY_TOPIC:
+                self.db.add(project)
+                self.db.commit()
+                self.db.refresh(project)
+                from app.services.emergency_comm.service import EmergencyCommService
+
+                EmergencyCommService(self.db).ensure(project.id)
+
         self.db.add(project)
         self.db.commit()
         self.db.refresh(project)

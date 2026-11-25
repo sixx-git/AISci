@@ -581,6 +581,45 @@ class CoordinatorAgent:
             "timestamp": datetime.now().isoformat(),
         })
 
+    def coordinate_emergency_precheck(
+        self,
+        check: Dict[str, Any],
+        suggestions: List[Dict[str, Any]],
+        status: str,
+        summary: str,
+    ) -> Dict[str, Any]:
+        """记录 6G 应急通信预检结果。不调用大模型，也不改写七阶段流水线。"""
+        applicable = [
+            item for item in suggestions
+            if item.get("applicable") and item.get("requires_user_confirmation")
+        ]
+        if status == "pass":
+            suggestion = "record_pass"
+            message = summary
+        elif applicable:
+            suggestion = "await_user_confirm"
+            message = (
+                f"{summary} 可确认的修订不会新增回传、无人机或续航；"
+                "确认后生成新版本，并由同一套规则重新检查。"
+            )
+        else:
+            suggestion = "await_user_parameter_change"
+            message = (
+                f"{summary} 当前冲突无法在不新增资源、不擅自降低保障需求的前提下自动修订，"
+                "请调整场景参数后重新检查。"
+            )
+        record = {
+            "agent": "CoordinatorAgent",
+            "type": "hint",
+            "suggestion": suggestion,
+            "message": message,
+            "failed_ids": list(check.get("failed_ids") or []),
+            "status": status,
+        }
+        self._hints.append(record)
+        self.record_remediation_action(record)
+        return record
+
     # ── 主动协调 ──
 
     def check_project_readiness(self, project_info: Dict[str, Any]) -> Dict[str, Any]:

@@ -15,7 +15,7 @@ export interface ApiResponse<T = unknown> {
 
 // ==================== 项目 ====================
 
-export type ProjectMode = 'general' | 'federated_learning';
+export type ProjectMode = 'general' | 'federated_learning' | 'emergency_6g';
 
 export type FlSimBackend = 'local_pack' | 'flower' | 'fedml';
 

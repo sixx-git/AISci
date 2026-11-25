@@ -21,6 +21,7 @@ class ProjectMode(str, Enum):
     """项目运行模式"""
     GENERAL = "general"
     FEDERATED_LEARNING = "federated_learning"
+    EMERGENCY_6G = "emergency_6g"
 
 
 class DataSpecHints(BaseModel):
@@ -74,7 +75,7 @@ class ProjectCreate(BaseModel):
     expected_output: Optional[str] = Field(None, description="期望输出")
     project_mode: Optional[ProjectMode] = Field(
         default=ProjectMode.GENERAL,
-        description="项目模式: general | federated_learning（挂载 FL Starter Pack）",
+        description="项目模式: general | federated_learning | emergency_6g",
     )
     fl_setting: Optional[str] = Field(
         None,
@@ -97,6 +98,14 @@ class ProjectCreate(BaseModel):
     fl_sim_backend: Optional[str] = Field(
         None,
         description="联邦仿真后端: local_pack | flower | fedml（仅 federated_learning；general 忽略）",
+    )
+    sixg_topic: Optional[str] = Field(
+        None,
+        description="6G 专题: emergency_comm | edge_computing | isac | custom",
+    )
+    sixg_execution: Optional[str] = Field(
+        None,
+        description="6G 执行方式: quick | full",
     )
     fl_sim_spec: Optional[Dict[str, Any]] = Field(
         None,
