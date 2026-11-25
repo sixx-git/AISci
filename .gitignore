@@ -144,3 +144,80 @@ InternAgent-main/
 
 
 shaxiang-main/shaxiang-main/data/
+# local secret backups
+.env.bak*
+
+# =========================
+# 非产品：论文 / 开题 / 本地写作
+# =========================
+/论文思路/
+/未来规划.md
+/paper2/
+/paper3/
+/paper4/
+/paper5/
+/paper4_drafts/
+/aisci_journal_regression_*/
+/docs/superpowers/
+
+# =========================
+# 非产品：竞赛评分 / 对照实验 / 一次性脚本
+# =========================
+/competition/
+/demo/
+/sources/
+/report-scorer-suite/
+/archive/
+/frontier/
+/scripts/paper/
+/scripts/build_ppt_from_images.py
+
+# 仓库根目录临时实验脚本（产品脚本在 backend/、scripts/ 子目录）
+/_*.py
+/_browse_*.txt
+/_browse_*.py
+/_tmp_*
+
+# Agent 本地规划 scratch（Manus / superpowers）
+/.planning/
+/.superpowers/
+/findings.md
+/progress.md
+/task_plan.md
+
+# =========================
+# 软著 / 申请材料（与开源产品无关）
+# =========================
+/软件著作权申请资料/
+
+# =========================
+# 本地临时与测试垃圾
+# =========================
+/tmp/
+/pip-unpack-*/
+/pytest-of-*/
+/backend/pytest-of-*/
+/backend/tmp*/
+
+# backend/data 本地库与导出包（保留 reference/ 等产品数据）
+backend/data/*.db
+backend/data/*.db-*
+backend/data/*.bak
+backend/data/*.bak-*
+backend/data/export_cloud/
+backend/data/corrupt_backup_*/
+backend/data/skill_runtime.json
+
+# pingfenbiao 样例与测试报告 PDF（保留服务源码）
+pingfenbiao-main/**/样例/
+pingfenbiao-main/**/测试报告/
+
+# LaTeX / 文档编译中间产物
+*.aux
+*.bbl
+*.blg
+*.synctex.gz
+*.xdv
+*.fls
+*.fdb_latexmk
+*.out
